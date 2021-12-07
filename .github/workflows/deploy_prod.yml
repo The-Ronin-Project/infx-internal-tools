@@ -4,13 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches: [master]
-    paths: [hashi/**]
 
 jobs:
   python-test:
     uses: projectronin/github/.github/workflows/python_test.yml@master
-    with:
-      base-directory: './hashi'
     secrets:
       codecov-token: ${{ secrets.HASHI_CODECOV_TOKEN }}
 
@@ -36,7 +33,6 @@ jobs:
     uses: projectronin/github/.github/workflows/image_push.yml@master
     with:
       image-tag: ${{ github.sha }}
-      base-directory: './hashi'
       repo: 'hashi'
     secrets:
       username: ${{ secrets.ACR_USERNAME }}
@@ -45,7 +41,6 @@ jobs:
   helm:
     uses: projectronin/github/.github/workflows/helm_push.yml@master
     with:
-      base-directory: './hashi'
       repo: 'hashi'
     secrets:
       helm-repo: ${{ secrets.HELM_REPO }}
@@ -60,7 +55,6 @@ jobs:
       resource-group: rg-infra-k8s-prod
       helm-tag: ${{ needs.get-tags.outputs.helm_tag }}
       image-tag: ${{ github.sha }}
-      base-directory: './hashi'
       repo: 'hashi'
     secrets:
       helm-repo: ${{ secrets.HELM_REPO }}
