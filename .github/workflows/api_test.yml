@@ -2,12 +2,9 @@ name: Hashi API Unit Tests
 
 on:
   pull_request:
-    paths: [hashi/**]
 
 jobs:
   python-test:
     uses: projectronin/github/.github/workflows/python_test.yml@master
-    with:
-      base-directory: './hashi'
     secrets:
       codecov-token: ${{ secrets.HASHI_CODECOV_TOKEN  }}
