@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ include "hashi.fullname" . }}
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: hashi.{{ .Values.infra.env }}.projectronin.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "hashi.fullname" . }}
+                port:
+                  number: 80
+    - host: hashi-ds.{{ .Values.infra.env }}.projectronin.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "hashi.fullname" . }}
+                port:
+                  number: 80

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hashi
+---
+apiVersion: v1 
+data:
+  K8S_ENV: "prod"
+  DATABASE_NAME: "clinical-content"
+  DATABASE_HOST: "psql-clinical-content-prod-centralus.postgres.database.azure.com"
+  DATABASE_USER: "hashi_user"
+kind: ConfigMap
+metadata:
+  name: hashi-config
+  namespace: hashi
