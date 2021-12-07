@@ -27,7 +27,6 @@ jobs:
         TAG=$(cat deployment/helm/hashi/Chart.yaml | grep version | egrep -o '[0-9]+\.[0-9]+\.[0-9]+')
         echo ${TAG}
         echo ::set-output name=helm_tag::$(echo ${TAG})
-      working-directory: './hashi'
 
   image-push:
     uses: projectronin/github/.github/workflows/image_push.yml@master
