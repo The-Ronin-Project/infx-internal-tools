@@ -1,0 +1,10 @@
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ include "hashi.fullname" . }}
+spec:
+  minAvailable: {{ .Values.disruption.minAvailable }}
+  selector:
+    matchLabels:
+      app:  {{ template "hashi.fullname" . }}

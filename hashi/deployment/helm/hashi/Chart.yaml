@@ -1,0 +1,10 @@
+apiVersion: v1
+name: hashi
+version: 1.0.0
+description: Informatics Api
+home: https://github.com/projectronin/ichi/tree/master/informatics/hashi
+sources:
+  - https://github.com/projectronin/ichi/tree/master/informatics/hashi
+maintainers:
+  - name: developer experience
+    email: developer-experience@projectronin.com
