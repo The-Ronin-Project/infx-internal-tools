@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ include "hashi.fullname" . }}-config
+data:
+  K8S_ENV: {{ .Values.infra.env }}
+  ROLLBAR_ENDPOINT: "http://rollbar.com"
+  DATABASE_HOST: "database_host"
+  DATABASE_USER: "database_user"
+  DD_SERVICE: "{{ include "hashi.fullname" . }}"
