@@ -14,6 +14,16 @@ If release name contains chart name it will be used as a full name.
   valueFrom:
     fieldRef:
       fieldPath: status.hostIP
+- name: DD_SERVICE
+  valueFrom:
+    configMapKeyRef:
+      name: hashi-config
+      key: DD_SERVICE
+- name: DD_ENV
+  valueFrom:
+    configMapKeyRef:
+      name: hashi-config
+      key: K8S_ENV
 - name: K8S_ENV
   valueFrom:
     configMapKeyRef:
