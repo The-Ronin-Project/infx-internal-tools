@@ -2,6 +2,8 @@ from io import StringIO
 from flask import Flask, jsonify, request, Response
 from app.models.value_sets import *
 from app.models.surveys import *
+from ddtrace import patch_all
+patch_all()
 
 app = Flask(__name__)
 app.config['MOCK_DB'] = False
