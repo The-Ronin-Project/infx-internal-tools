@@ -18,3 +18,8 @@ resources:
 
 disruption:
   minAvailable: 2
+
+database:
+  name: "clinical-content"
+  host: ""
+  user: "hashi_user"
