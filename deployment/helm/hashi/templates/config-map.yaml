@@ -8,4 +8,5 @@ data:
   ROLLBAR_ENDPOINT: "http://rollbar.com"
   DATABASE_HOST: "{{ .Values.database.host}}"
   DATABASE_USER: "{{ .Values.database.user}}"
+  DATABASE_NAME: "{{ .Values.database.name}}"
   DD_SERVICE: "{{ include "hashi.fullname" . }}"
