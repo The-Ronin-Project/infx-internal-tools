@@ -274,6 +274,43 @@ class ValueSet:
     return value_set
 
   @classmethod
+  def load_all_value_set_metadata(cls, active_only=True):
+    conn = get_db()
+
+    if active_only is True:
+      results = conn.execute(text(
+        """
+        select * from value_sets.value_set
+        where uuid in 
+        (select value_set_uuid from value_sets.value_set_version
+        where status='Active')
+        """
+      ))
+    else:
+      results = conn.execute(text(
+        """
+        select * from value_sets.value_set
+        where uuid in 
+        (select value_set_uuid from value_sets.value_set_version)
+        """
+      ))
+
+    return [
+      {
+        'uuid': x.uuid,
+        'name': x.name,
+        'title': x.title,
+        'publisher': x.publisher,
+        'contact': x.contact,
+        'description': x.description,
+        'immutable': x.immutable,
+        'experimental': x.experimental,
+        'purpose': x.purpose,
+        'type': x.type
+      } for x in results
+    ]
+
+  @classmethod
   def load_version_metadata(cls, name):
     conn = get_db()
     results = conn.execute(text(
@@ -592,6 +629,7 @@ class ValueSetVersion:
       "effective_start": self.effective_start,
       "effective_end": self.effective_end,
       "version": self.version,
+      "version_uuid": self.uuid,
       "status": self.status,
       "expansion": {
         "contains": [x.serialize() for x in self.expansion]

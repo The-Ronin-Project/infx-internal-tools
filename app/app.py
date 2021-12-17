@@ -1,9 +1,8 @@
 from io import StringIO
+import re
 from flask import Flask, jsonify, request, Response
 from app.models.value_sets import *
 from app.models.surveys import *
-from ddtrace import patch_all
-patch_all()
 
 app = Flask(__name__)
 app.config['MOCK_DB'] = False
@@ -19,6 +18,11 @@ def expand_value_set(uuid):
     vs_version = ValueSetVersion.load(uuid)
     vs_version.expand(force_new=force_new)
     return jsonify(vs_version.serialize())
+
+@app.route('/ValueSets/')
+def get_all_value_sets_metadata():
+    active_only = False if request.values.get('active_only') == 'false' else True
+    return jsonify(ValueSet.load_all_value_set_metadata(active_only))
 
 @app.route('/ValueSets/<string:name>/versions/')
 def get_value_set_versions(name):
