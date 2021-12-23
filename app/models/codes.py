@@ -5,6 +5,15 @@ class Code:
         self.code = code
         self.display = display
 
+    def __repr__(self):
+        return f"Code({self.code}, {self.display}, {self.system}, {self.version})"
+
+    def __hash__(self) -> int:
+        return hash(self.__repr__)
+
+    def __eq__(self, other: object) -> bool:
+        return (self.code == other.code) and (self.display == other.display) and (self.system == other.system) and (self.version == other.version)
+
     def serialize(self, with_system_and_version=True):
         serialized = {
             "system": self.system,
