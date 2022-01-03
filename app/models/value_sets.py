@@ -241,6 +241,16 @@ class RxNormRule(VSRule):
     results = [Code(self.fhir_system, self.terminology_version, x.rxcui, x.str) for x in results_data]
     self.results = set(results)
 
+# class GroupingValueSetRule(VSRule):
+#   def most_recent_active_version(self):
+#     version = ValueSet.load_most_recent_active_version(name)
+#     version.expand()
+#     results = [Code(self.fhir_system, self.terminology_version, x.conceptid, x.term) for x in results_data]
+#     self.results = set(results)
+
+#   def specific_version(self):
+#     pass
+
 class ValueSet:
   def __init__(self, uuid, name, title, publisher, contact, description, immutable, experimental, purpose, vs_type):
     self.uuid = uuid
@@ -569,10 +579,21 @@ class ValueSetVersion:
         
       include_rules = [x for x in rules if x.include is True]
       exclude_rules = [x for x in rules if x.include is False]
+
+      # print("")
+      # print("INCLUSION RULES")
+      # print("")
+      # for x in include_rules:
+      #   print(x.description, x.property, x.operator, x.value)
+      #   print([y.__hash__() for y in x.results])
       
       terminology_set = include_rules.pop(0).results
+      # todo: if it's a grouping value set, we should use union instead of intersection
       for x in include_rules: terminology_set = terminology_set.intersection(x.results)
-      for x in exclude_rules: terminology_set = terminology_set - x.results
+
+      for x in exclude_rules: 
+        remove_set = terminology_set.intersection(x.results)
+        terminology_set = terminology_set - remove_set
         
       self.expansion = self.expansion.union(terminology_set)
 
