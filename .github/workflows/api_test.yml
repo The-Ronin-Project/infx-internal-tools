@@ -1,4 +1,4 @@
-name: Hashi API Unit Tests
+name: infx-api API Unit Tests
 
 on:
   pull_request:
@@ -7,4 +7,4 @@ jobs:
   python-test:
     uses: projectronin/github/.github/workflows/python_test.yml@master
     secrets:
-      codecov-token: ${{ secrets.HASHI_CODECOV_TOKEN  }}
+      codecov-token: ${{ secrets.INFX_API_CODECOV_TOKEN  }}

@@ -1,0 +1,10 @@
+apiVersion: v1
+name: infx-api
+version: 1.0.0
+description: Informatics Api
+home: https://github.com/projectronin/ichi/tree/master/informatics/infx-api
+sources:
+  - https://github.com/projectronin/ichi/tree/master/informatics/infx-api
+maintainers:
+  - name: developer experience
+    email: developer-experience@projectronin.com
