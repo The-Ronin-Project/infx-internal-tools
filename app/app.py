@@ -34,10 +34,25 @@ def get_most_recent_version(name):
     version.expand()
     return jsonify(version.serialize())
 
+@app.route('/ValueSets/expansions/<string:expansion_uuid>/report')
+def load_expansion_report(expansion_uuid):
+    report = ValueSetVersion.load_expansion_report(expansion_uuid)
+    file_buffer = StringIO()
+    file_buffer.write(report)
+    file_buffer.seek(0)
+    response = Response(
+        file_buffer,
+        mimetype="text/plain",
+        headers={
+            f"Content-Disposition": "attachment; filename={expansion_uuid}-report.csv"
+        }
+    )
+    return response
+
 @app.route('/surveys/<string:survey_uuid>')
 def export_survey(survey_uuid):
     organization_uuid = request.values.get("organization_uuid")
-    print(survey_uuid, organization_uuid)
+    # print(survey_uuid, organization_uuid)
     exporter = SurveyExporter(survey_uuid, organization_uuid)
 
     file_buffer = StringIO()
