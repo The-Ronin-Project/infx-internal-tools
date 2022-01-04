@@ -116,7 +116,6 @@ class ICD10CMRule(VSRule):
       }
     )
     results = [Code(self.fhir_system, self.terminology_version, x.code, x.display) for x in results_data]
-    print('results', results)
     self.results = set(results)
   
   def descendent_of(self):
