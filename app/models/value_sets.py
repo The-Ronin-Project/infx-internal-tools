@@ -9,7 +9,7 @@ from app.database import get_db
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io/MAIN/concepts"
 
 class VSRule:
-  def __init__(self, uuid, position, description, prop, operator, value, include, value_set_version, fhir_system, terminology_version):
+  def __init__(self, uuid, position, description, prop, operator, value, include, value_set_version, fhir_system, terminology_version, terminology_version_uuid=None):
     self.uuid = uuid
     self.position = uuid
     self.description = description
@@ -21,6 +21,7 @@ class VSRule:
     if self.include == 0: self.include = False
     self.value_set_version = value_set_version
     self.terminology_version = terminology_version
+    self.terminology_version_uuid = terminology_version_uuid
     self.fhir_system = fhir_system
     
     self.results = set()
@@ -28,6 +29,8 @@ class VSRule:
   def execute(self):
     if self.operator == 'descendent-of':
       self.descendent_of()
+    elif self.operator == 'self-and-descendents':
+      self.self_and_descendents()
     elif self.operator == 'direct-child':
       self.direct_child()
     elif self.operator == 'is-a':
@@ -67,6 +70,54 @@ class ICD10PCSRule(VSRule):
 class ICD10CMRule(VSRule):
   def direct_child(self):
     pass
+
+  def self_and_descendents(self):
+    conn = get_db()
+    query = ""
+    
+    if self.property == 'code':
+      # Lookup UUIDs for provided codes
+      codes = self.value.split(',')
+      
+      # Get all descendants of the provided codes through a recursive query
+      query = """
+      with recursive icd_hierarchy as (
+        select parent_code_uuid parent_uuid, uuid child_uuid
+        from icd_10_cm.code
+        where parent_code_uuid in
+        (select uuid
+        from icd_10_cm.code
+        where code in :codes
+        and version_uuid=:version_uuid)
+        union all
+        select code.parent_code_uuid, code.uuid
+        from icd_10_cm.code
+        join icd_hierarchy on code.parent_code_uuid=icd_hierarchy.child_uuid
+      )
+      select code, display from icd_hierarchy
+      join icd_10_cm.code
+      on code.uuid=child_uuid
+      union all
+      (select code, display from icd_10_cm.code 
+      where code in :codes 
+      and version_uuid=:version_uuid)
+      order by code
+      """
+      # See link for tutorial in recursive queries: https://www.cybertec-postgresql.com/en/recursive-queries-postgresql/
+      
+    converted_query = text(
+        query
+      ).bindparams(bindparam('codes', expanding=True))
+
+    results_data = conn.execute(
+      converted_query, {
+        'codes': codes,
+        'version_uuid': self.terminology_version_uuid
+      }
+    )
+    results = [Code(self.fhir_system, self.terminology_version, x.code, x.display) for x in results_data]
+    print('results', results)
+    self.results = set(results)
   
   def descendent_of(self):
     conn = get_db()
@@ -79,20 +130,20 @@ class ICD10CMRule(VSRule):
       # Get all descendants of the provided codes through a recursive query
       query = """
       with recursive icd_hierarchy as (
-          select parent_uuid, child_uuid
-          from icd_10_cm.code_hierarchy
-          where parent_uuid in
-            (select uuid
-            from icd_10_cm.codes
-            where code in :codes)
-          union all
-          select icd_hier.parent_uuid, icd_hier.child_uuid
-          from icd_10_cm.code_hierarchy icd_hier
-          join icd_hierarchy on icd_hier.parent_uuid=icd_hierarchy.child_uuid
+        select parent_code_uuid parent_uuid, uuid child_uuid
+        from icd_10_cm.code
+        where parent_code_uuid in
+        (select uuid
+        from icd_10_cm.code
+        where code in :codes)
+        union all
+        select code.parent_code_uuid, code.uuid
+        from icd_10_cm.code
+        join icd_hierarchy on code.parent_code_uuid=icd_hierarchy.child_uuid
       )
       select code, display from icd_hierarchy
-      join icd_10_cm.codes codes
-      on codes.uuid=child_uuid
+      join icd_10_cm.code
+      on code.uuid=child_uuid
       """
       # See link for tutorial in recursive queries: https://www.cybertec-postgresql.com/en/recursive-queries-postgresql/
       
@@ -106,6 +157,7 @@ class ICD10CMRule(VSRule):
       }
     )
     results = [Code(self.fhir_system, self.terminology_version, x.code, x.display) for x in results_data]
+    print('results', results)
     self.results = set(results)
       
 class SNOMEDRule(VSRule):
@@ -477,11 +529,11 @@ class ValueSetVersion:
       rule = None
       
       if terminology == "ICD-10 CM":
-        rule = ICD10CMRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, x.version)
+        rule = ICD10CMRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, x.version, terminology_version_uuid=x.terminology_version)
       elif terminology == "SNOMED CT":
-        rule = SNOMEDRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, x.version)
+        rule = SNOMEDRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, x.version, terminology_version_uuid=x.terminology_version)
       elif terminology == "RxNorm":
-        rule = RxNormRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, x.version)
+        rule = RxNormRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, x.version, terminology_version_uuid=x.terminology_version)
         
       if terminology in self.rules:
         self.rules[terminology].append(rule)
