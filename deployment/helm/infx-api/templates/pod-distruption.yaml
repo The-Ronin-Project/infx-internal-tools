@@ -2,9 +2,9 @@ apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
   namespace: {{ .Release.Namespace }}
-  name: {{ include "hashi.fullname" . }}
+  name: {{ include "infx-api.fullname" . }}
 spec:
   minAvailable: {{ .Values.disruption.minAvailable }}
   selector:
     matchLabels:
-      app:  {{ template "hashi.fullname" . }}
+      app:  {{ template "infx-api.fullname" . }}
