@@ -705,6 +705,7 @@ class ValueSetVersion:
         serialized_rules = [x.serialize() for x in rules]
         serialized.append({
           'system': key.fhir_uri,
+          'version': key.version,
           'filter': serialized_rules
         })
 
