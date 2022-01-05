@@ -50,7 +50,7 @@ def test_intensional_vs_rxnorm():
     compose = response.json.get('compose')
     include = compose.get('include')[0]
 
-    assert include.get('system') == 'RxNorm'
+    assert include.get('system') == 'http://www.nlm.nih.gov/research/umls/rxnorm'
     assert 'expansion' in response.json
     assert 'contains' in response.json.get('expansion')
 
