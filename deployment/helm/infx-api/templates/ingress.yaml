@@ -6,7 +6,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: infx-api.{{ .Values.infra.env }}.projectronin.io
+    - host: hashi.{{ .Values.infra.env }}.projectronin.io
       http:
         paths:
           - path: /
@@ -16,7 +16,7 @@ spec:
                 name: {{ include "infx-api.fullname" . }}
                 port:
                   number: 80
-    - host: infx-api-ds.{{ .Values.infra.env }}.projectronin.io
+    - host: hashi-ds.{{ .Values.infra.env }}.projectronin.io
       http:
         paths:
           - path: /
