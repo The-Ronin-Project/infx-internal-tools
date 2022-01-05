@@ -1,6 +1,7 @@
 import requests
 from sqlalchemy import create_engine, text
 from uuid import uuid1
+from datetime import datetime
 
 from sqlalchemy.sql.expression import bindparam
 from app.models.codes import Code
@@ -156,7 +157,6 @@ class ICD10CMRule(VSRule):
       }
     )
     results = [Code(self.fhir_system, self.terminology_version, x.code, x.display) for x in results_data]
-    print('results', results)
     self.results = set(results)
       
 class SNOMEDRule(VSRule):
@@ -585,21 +585,24 @@ class ValueSetVersion:
         )
       )
 
-  def save_expansion(self):
+  def save_expansion(self, report=None):
     conn = get_db()
     expansion_uuid = uuid1()
 
     # Create a new expansion entry in the value_sets.expansion table
+    current_time_string = datetime.now() # Must explicitly create this, since SQLite can't use now()
     conn.execute(text(
       """
       insert into value_sets.expansion
-      (uuid, vs_version_uuid, timestamp)
+      (uuid, vs_version_uuid, timestamp, report)
       values
-      (:expansion_uuid, :version_uuid, now())
+      (:expansion_uuid, :version_uuid, :curr_time, :report)
       """
     ), {
-      'expansion_uuid': expansion_uuid,
-      'version_uuid': self.uuid
+      'expansion_uuid': str(expansion_uuid),
+      'version_uuid': str(self.uuid),
+      'report': report,
+      'curr_time': current_time_string
     })
 
     # Save contents of self.expansion to new expansion
@@ -612,7 +615,7 @@ class ValueSetVersion:
         (:expansion_uuid, :code, :display, :system, :version)
         """
       ), {
-        'expansion_uuid': expansion_uuid,
+        'expansion_uuid': str(expansion_uuid),
         'code': code.code,
         'display': code.display,
         'system': code.system,
@@ -622,8 +625,11 @@ class ValueSetVersion:
   def create_expansion(self):
     self.expansion = set()
     terminologies = self.rules.keys()
+    expansion_report = ""
     
     for terminology in terminologies:
+      expansion_report += f"\n\n\nProcessing rules for terminology {terminology}\n"
+
       rules = self.rules.get(terminology)
       
       for rule in rules: rule.execute()
@@ -631,25 +637,38 @@ class ValueSetVersion:
       include_rules = [x for x in rules if x.include is True]
       exclude_rules = [x for x in rules if x.include is False]
 
-      # print("")
-      # print("INCLUSION RULES")
-      # print("")
-      # for x in include_rules:
-      #   print(x.description, x.property, x.operator, x.value)
-      #   print([y.__hash__() for y in x.results])
+      expansion_report += "\nInclusion Rules\n"
+      for x in include_rules:
+        expansion_report += f"{x.description}, {x.property}, {x.operator}, {x.value}\n"
+      expansion_report += "\nExclusion Rules\n"
+      for x in exclude_rules:
+        expansion_report += f"{x.description}, {x.property}, {x.operator}, {x.value}\n"
       
       terminology_set = include_rules.pop(0).results
       # todo: if it's a grouping value set, we should use union instead of intersection
       for x in include_rules: terminology_set = terminology_set.intersection(x.results)
 
+      expansion_report += "\nIntersection of Inclusion Rules\n"
+      for x in terminology_set:
+        expansion_report += f"{x.code}, {x.display}, {x.system}, {x.version}\n"
+
       for x in exclude_rules: 
         remove_set = terminology_set.intersection(x.results)
         terminology_set = terminology_set - remove_set
+
+        expansion_report += f"\nProcessing Exclusion Rule: {x.description}, {x.property}, {x.operator}, {x.value}\n"
+        expansion_report += "The following codes were removed from the set:\n"
+        for removed in remove_set:
+          expansion_report += f"{removed.code}, {removed.display}, {removed.system}, {removed.version}\n"
         
       self.expansion = self.expansion.union(terminology_set)
 
+      expansion_report += f"\nThe expansion will contain the following codes for the terminology {terminology}:\n"
+      for x in terminology_set:
+        expansion_report += f"{x.code}, {x.display}, {x.system}, {x.version}\n"
+
     if self.value_set.type == 'intensional':
-      self.save_expansion()
+      self.save_expansion(report=expansion_report)
     
     return self.expansion
 
@@ -715,3 +734,18 @@ class ValueSetVersion:
     if self.value_set.type == 'extensional': serialized.pop('expansion')
 
     return serialized
+
+  @classmethod
+  def load_expansion_report(cls, expansion_uuid):
+    conn = get_db()
+    result = conn.execute(
+      text(
+        """
+        select * from value_sets.expansion
+        where uuid=:expansion_uuid
+        """
+      ), {
+        'expansion_uuid': expansion_uuid
+      }
+    ).first()
+    return result.report

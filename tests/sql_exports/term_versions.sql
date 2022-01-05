@@ -5,7 +5,7 @@
 -- Dumped from database version 11.11
 -- Dumped by pg_dump version 13.3
 
--- Started on 2021-10-19 11:44:22 MDT
+-- Started on 2022-01-04 17:10:52 MST
 
 -- SET statement_timeout = 0;
 -- SET lock_timeout = 0;
@@ -34,7 +34,7 @@ CREATE TABLE terminology_versions (
 
 
 --
--- TOC entry 4491 (class 0 OID 87669)
+-- TOC entry 4547 (class 0 OID 87669)
 -- Dependencies: 269
 -- Data for Name: terminology_versions; Type: TABLE DATA; Schema: public; Owner: -
 --
@@ -42,18 +42,13 @@ CREATE TABLE terminology_versions (
 INSERT INTO terminology_versions VALUES ('0191c3e4-215b-11ec-9621-0242ac130002', 'ICD-10 CM', '2021', NULL, NULL, 'http://hl7.org/fhir/sid/icd-10-cm');
 INSERT INTO terminology_versions VALUES ('3b07a086-2227-11ec-9621-0242ac130002', 'SNOMED CT', '2021', NULL, NULL, 'http://snomed.info/sct');
 INSERT INTO terminology_versions VALUES ('85d038ea-2857-11ec-9621-0242ac130002', 'RxNorm', '2021', NULL, NULL, 'http://www.nlm.nih.gov/research/umls/rxnorm');
+INSERT INTO terminology_versions VALUES ('1ea19640-63e6-4e1b-b82f-be444ba395b4', 'ICD-10 CM', '2022', NULL, NULL, 'http://hl7.org/fhir/sid/icd-10-cm');
+INSERT INTO terminology_versions VALUES ('6c6219c8-5ef3-11ec-8f16-acde48001122', 'CPT', '2022', '2022-01-01', '2022-12-31', 'http://www.ama-assn.org/go/cpt');
+INSERT INTO terminology_versions VALUES ('bb8576cd-f1d4-4815-8609-d21b2444e6c1', 'HCPCS', 'Jan 2022', '2022-01-01', '2022-03-31', 'http://www.cms.gov/Medicare/Coding/HCPCSReleaseCodeSets');
+INSERT INTO terminology_versions VALUES ('afb82f16-a129-40dc-bb3f-c7d05532f522', 'Value Sets', 'N/A', NULL, NULL, 'N/A');
 
 
---
--- TOC entry 4367 (class 2606 OID 87676)
--- Name: terminology_versions terminology_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
--- ALTER TABLE ONLY terminology_versions
---     ADD CONSTRAINT terminology_versions_pkey PRIMARY KEY (uuid);
-
-
--- Completed on 2021-10-19 11:44:25 MDT
+-- Completed on 2022-01-04 17:10:59 MST
 
 --
 -- PostgreSQL database dump complete
