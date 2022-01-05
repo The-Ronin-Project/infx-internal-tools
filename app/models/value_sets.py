@@ -1,6 +1,7 @@
 import requests
 from sqlalchemy import create_engine, text
 from uuid import uuid1
+from datetime import datetime
 
 from sqlalchemy.sql.expression import bindparam
 from app.models.codes import Code
@@ -590,17 +591,19 @@ class ValueSetVersion:
     expansion_uuid = uuid1()
 
     # Create a new expansion entry in the value_sets.expansion table
+    current_time_string = datetime.now() # Must explicitly create this, since SQLite can't use now()
     conn.execute(text(
       """
       insert into value_sets.expansion
       (uuid, vs_version_uuid, timestamp, report)
       values
-      (:expansion_uuid, :version_uuid, now(), :report)
+      (:expansion_uuid, :version_uuid, :curr_time, :report)
       """
     ), {
       'expansion_uuid': expansion_uuid,
       'version_uuid': self.uuid,
-      'report': report
+      'report': report,
+      'curr_time': current_time_string
     })
 
     # Save contents of self.expansion to new expansion

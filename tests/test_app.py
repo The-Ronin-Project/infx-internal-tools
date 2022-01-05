@@ -9,7 +9,7 @@ def test_extensional_vs():
     # assert response.json.get('version') == "1.0"
     # assert 'url' in response.json
     assert response.json.get('title') == "Extensional Value Set Test"
-    assert response.json.get('status') == "Draft"
+    assert response.json.get('status') == "draft"
     assert 'purpose' in response.json
     assert 'publisher' in response.json
     assert 'name' in response.json
@@ -75,6 +75,12 @@ def test_intensional_vs_icd_snomed():
 
     assert 'expansion' in response.json
     assert 'contains' in response.json.get('expansion')
+
+def test_expansion_report():
+    app.app.config['MOCK_DB'] = True
+    response = app.app.test_client().get('/ValueSets/expansions/3257aed4-6da1-11ec-bd74-aa665a30495f/report')
+    print('hex digest', hashlib.md5(response.data).hexdigest())
+    assert hashlib.md5(response.data).hexdigest() == "ca5613af2d0a65e32d7505849fd1c1d2"
 
 def test_survey_export():
     app.app.config['MOCK_DB'] = True
