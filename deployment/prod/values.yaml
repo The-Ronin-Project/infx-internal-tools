@@ -4,4 +4,4 @@ infra:
 database:
   name: "clinical-content"
   host: "psql-clinical-content-prod-centralus.postgres.database.azure.com"
-  user: "infx-api_user"
+  user: "hashi_user"
