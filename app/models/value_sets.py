@@ -5,12 +5,13 @@ from datetime import datetime
 
 from sqlalchemy.sql.expression import bindparam
 from app.models.codes import Code
+from app.models.terminologies import Terminology
 from app.database import get_db
 
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io/MAIN/concepts"
 
 class VSRule:
-  def __init__(self, uuid, position, description, prop, operator, value, include, value_set_version, fhir_system, terminology_version, terminology_version_uuid=None):
+  def __init__(self, uuid, position, description, prop, operator, value, include, value_set_version, fhir_system, terminology_version):
     self.uuid = uuid
     self.position = uuid
     self.description = description
@@ -22,7 +23,6 @@ class VSRule:
     if self.include == 0: self.include = False
     self.value_set_version = value_set_version
     self.terminology_version = terminology_version
-    self.terminology_version_uuid = terminology_version_uuid
     self.fhir_system = fhir_system
     
     self.results = set()
@@ -113,10 +113,10 @@ class ICD10CMRule(VSRule):
     results_data = conn.execute(
       converted_query, {
         'codes': codes,
-        'version_uuid': self.terminology_version_uuid
+        'version_uuid': self.terminology_version.uuid
       }
     )
-    results = [Code(self.fhir_system, self.terminology_version, x.code, x.display) for x in results_data]
+    results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
     self.results = set(results)
   
   def descendent_of(self):
@@ -135,7 +135,8 @@ class ICD10CMRule(VSRule):
         where parent_code_uuid in
         (select uuid
         from icd_10_cm.code
-        where code in :codes)
+        where code in :codes
+        and version_uuid=:version_uuid)
         union all
         select code.parent_code_uuid, code.uuid
         from icd_10_cm.code
@@ -153,41 +154,43 @@ class ICD10CMRule(VSRule):
 
     results_data = conn.execute(
       converted_query, {
-        'codes': codes
+        'codes': codes,
+        'version_uuid': self.terminology_version.uuid
       }
     )
-    results = [Code(self.fhir_system, self.terminology_version, x.code, x.display) for x in results_data]
+    results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
     self.results = set(results)
       
 class SNOMEDRule(VSRule):
-  def direct_child(self):
-    conn = get_db()
-    query = ""
+  # # Deprecating because we prefer ECL
+  # def direct_child(self):
+  #   conn = get_db()
+  #   query = ""
     
-    if self.property == 'concept':
-      # Lookup UUIDs for provided codes
-      codes = self.value.split(',')
+  #   if self.property == 'concept':
+  #     # Lookup UUIDs for provided codes
+  #     codes = self.value.split(',')
       
-      # Get all descendants of the provided codes through a recursive query
-      query = """
-      select * from snomedct.relationship_f rel
-      join snomedct.description_f descr
-      on descr.conceptid=rel.sourceid
-      and descr.typeid='900000000000003001'
-      where destinationid in :codes 
-      and rel.typeid='116680003'
-      """
-      # See link for tutorial in recursive queries: https://www.cybertec-postgresql.com/en/recursive-queries-postgresql/
+  #     # Get all descendants of the provided codes through a recursive query
+  #     query = """
+  #     select * from snomedct.relationship_f rel
+  #     join snomedct.description_f descr
+  #     on descr.conceptid=rel.sourceid
+  #     and descr.typeid='900000000000003001'
+  #     where destinationid in :codes 
+  #     and rel.typeid='116680003'
+  #     """
+  #     # See link for tutorial in recursive queries: https://www.cybertec-postgresql.com/en/recursive-queries-postgresql/
       
-    results_data = conn.execute(
-      text(
-        query
-      ).bindparams(bindparam('codes', expanding=True)), {
-        'codes': codes
-      }
-    )
-    results = [Code(self.fhir_system, self.terminology_version, x.conceptid, x.term) for x in results_data]
-    self.results = set(results)
+  #   results_data = conn.execute(
+  #     text(
+  #       query
+  #     ).bindparams(bindparam('codes', expanding=True)), {
+  #       'codes': codes
+  #     }
+  #   )
+  #   results = [Code(self.fhir_system, self.terminology_version, x.conceptid, x.term) for x in results_data]
+  #   self.results = set(results)
 
   def concept_in(self):
     conn = get_db()
@@ -205,7 +208,7 @@ class SNOMEDRule(VSRule):
         'value': self.value
       }
     )
-    results = [Code(self.fhir_system, self.terminology_version, x.conceptid, x.term) for x in results_data]
+    results = [Code(self.fhir_system, self.terminology_version.version, x.conceptid, x.term) for x in results_data]
     self.results = set(results)
 
   def ecl_query(self):
@@ -213,7 +216,7 @@ class SNOMEDRule(VSRule):
       'ecl': self.value
     })
     data = r.json().get("items")
-    results = [Code(self.fhir_system, self.terminology_version, x.get("conceptId"), x.get("fsn").get("term")) for x in data]
+    results = [Code(self.fhir_system, self.terminology_version.version, x.get("conceptId"), x.get("fsn").get("term")) for x in data]
     self.results = set(results)
 
 class RxNormRule(VSRule):
@@ -510,6 +513,8 @@ class ValueSetVersion:
     and the value is a list of rules for that terminology within this value set version.
     """
     conn = get_db()
+
+    terminologies = Terminology.load_terminologies_for_value_set_version(self.uuid)
     
     rules_data = conn.execute(text(
       """
@@ -524,15 +529,15 @@ class ValueSetVersion:
     })
     
     for x in rules_data:
-      terminology = x.terminology
+      terminology = terminologies.get(x.terminology_version)
       rule = None
       
-      if terminology == "ICD-10 CM":
-        rule = ICD10CMRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, x.version, terminology_version_uuid=x.terminology_version)
-      elif terminology == "SNOMED CT":
-        rule = SNOMEDRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, x.version, terminology_version_uuid=x.terminology_version)
-      elif terminology == "RxNorm":
-        rule = RxNormRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, x.version, terminology_version_uuid=x.terminology_version)
+      if terminology.name == "ICD-10 CM":
+        rule = ICD10CMRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
+      elif terminology.name == "SNOMED CT":
+        rule = SNOMEDRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
+      elif terminology.name == "RxNorm":
+        rule = RxNormRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
         
       if terminology in self.rules:
         self.rules[terminology].append(rule)
@@ -628,7 +633,7 @@ class ValueSetVersion:
     expansion_report = ""
     
     for terminology in terminologies:
-      expansion_report += f"\n\n\nProcessing rules for terminology {terminology}\n"
+      expansion_report += f"\n\n\nProcessing rules for terminology {terminology.name} version {terminology.version}\n"
 
       rules = self.rules.get(terminology)
       
@@ -699,7 +704,7 @@ class ValueSetVersion:
         rules = include_rules.get(key)
         serialized_rules = [x.serialize() for x in rules]
         serialized.append({
-          'system': key,
+          'system': key.fhir_uri,
           'filter': serialized_rules
         })
 
