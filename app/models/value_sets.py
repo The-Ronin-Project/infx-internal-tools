@@ -157,7 +157,6 @@ class ICD10CMRule(VSRule):
       }
     )
     results = [Code(self.fhir_system, self.terminology_version, x.code, x.display) for x in results_data]
-    print('results', results)
     self.results = set(results)
       
 class SNOMEDRule(VSRule):
@@ -586,7 +585,7 @@ class ValueSetVersion:
         )
       )
 
-  def save_expansion(self, report=""):
+  def save_expansion(self, report=None):
     conn = get_db()
     expansion_uuid = uuid1()
 
@@ -600,8 +599,8 @@ class ValueSetVersion:
       (:expansion_uuid, :version_uuid, :curr_time, :report)
       """
     ), {
-      'expansion_uuid': expansion_uuid,
-      'version_uuid': self.uuid,
+      'expansion_uuid': str(expansion_uuid),
+      'version_uuid': str(self.uuid),
       'report': report,
       'curr_time': current_time_string
     })
@@ -616,7 +615,7 @@ class ValueSetVersion:
         (:expansion_uuid, :code, :display, :system, :version)
         """
       ), {
-        'expansion_uuid': expansion_uuid,
+        'expansion_uuid': str(expansion_uuid),
         'code': code.code,
         'display': code.display,
         'system': code.system,

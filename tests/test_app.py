@@ -56,7 +56,7 @@ def test_intensional_vs_rxnorm():
 
 def test_intensional_vs_icd_snomed():
     app.app.config['MOCK_DB'] = True
-    response = app.app.test_client().get('/ValueSet/f38a3352-214c-11ec-9621-0242ac130002/$expand')
+    response = app.app.test_client().get('/ValueSet/f38a3352-214c-11ec-9621-0242ac130002/$expand?force_new=true')
     assert 'version' in response.json
     # assert 'url' in response.json
     assert 'title' in response.json
