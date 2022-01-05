@@ -44,7 +44,7 @@ def load_expansion_report(expansion_uuid):
         file_buffer,
         mimetype="text/plain",
         headers={
-            f"Content-Disposition": "attachment; filename={expansion_uuid}-report.csv"
+            "Content-Disposition": f"attachment; filename={expansion_uuid}-report.csv"
         }
     )
     return response
