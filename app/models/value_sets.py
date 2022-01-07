@@ -628,7 +628,7 @@ class ValueSetVersion:
     expansion_uuid = uuid1()
 
     # Create a new expansion entry in the value_sets.expansion table
-    current_time_string = datetime.now() + timedelta(days=1) # Must explicitly create this, since SQLite can't use now()
+    current_time_string = datetime.now() # Must explicitly create this, since SQLite can't use now()
     conn.execute(text(
       """
       insert into value_sets.expansion
