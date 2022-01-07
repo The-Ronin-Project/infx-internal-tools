@@ -1,6 +1,7 @@
 import math
 import requests
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, MetaData, Table, Column, String
+from sqlalchemy.dialects.postgresql import UUID
 from uuid import uuid1
 from datetime import datetime
 
@@ -11,6 +12,16 @@ from app.database import get_db
 
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io/MAIN/concepts"
 SNOSTORM_LIMIT = 500
+
+metadata = MetaData()
+expansion_member = Table('expansion_member', metadata,
+  Column('expansion_uuid', UUID, nullable=False),
+  Column('code', String, nullable=False),
+  Column('display', String, nullable=False),
+  Column('system', String, nullable=False),
+  Column('version', String, nullable=False),
+  schema='value_sets'
+)
 
 class VSRule:
   def __init__(self, uuid, position, description, prop, operator, value, include, value_set_version, fhir_system, terminology_version):
@@ -628,15 +639,7 @@ class ValueSetVersion:
       'curr_time': current_time_string
     })
 
-    # Save contents of self.expansion to new expansion
-    conn.execute(text(
-      """
-      insert into value_sets.expansion_member
-      (expansion_uuid, code, display, system, version)
-      values
-      (:expansion_uuid, :code, :display, :system, :version)
-      """
-    ), [{
+    conn.execute(expansion_member.insert(), [{
       'expansion_uuid': str(expansion_uuid),
       'code': code.code,
       'display': code.display,
