@@ -1,3 +1,4 @@
+import math
 import requests
 from sqlalchemy import create_engine, text
 from uuid import uuid1
@@ -9,6 +10,7 @@ from app.models.terminologies import Terminology
 from app.database import get_db
 
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io/MAIN/concepts"
+SNOSTORM_LIMIT = 500
 
 class VSRule:
   def __init__(self, uuid, position, description, prop, operator, value, include, value_set_version, fhir_system, terminology_version):
@@ -212,12 +214,30 @@ class SNOMEDRule(VSRule):
     self.results = set(results)
 
   def ecl_query(self):
-    r = requests.get(ECL_SERVER_PATH, params={
-      'ecl': self.value
-    })
-    data = r.json().get("items")
-    results = [Code(self.fhir_system, self.terminology_version.version, x.get("conceptId"), x.get("fsn").get("term")) for x in data]
-    self.results = set(results)
+    offset = 0
+    self.results = set()
+    results_complete = False
+
+    while results_complete is False:
+      r = requests.get(ECL_SERVER_PATH, params={
+        'ecl': self.value,
+        'limit': SNOSTORM_LIMIT,
+        'offset': offset
+      })
+
+      # Handle pagination
+      total_results = r.json().get("total")
+      pages = int(math.ceil(total_results / SNOSTORM_LIMIT))
+      offset += SNOSTORM_LIMIT
+      if offset >= pages * SNOSTORM_LIMIT:
+        results_complete = True
+
+      print("total results", total_results, "pages", pages, "offset", offset)
+
+      # Add data to results
+      data = r.json().get("items")
+      results = [Code(self.fhir_system, self.terminology_version.version, x.get("conceptId"), x.get("fsn").get("term")) for x in data]
+      self.results.update(set(results))
 
 class RxNormRule(VSRule):
   def rxnorm_source(self):
