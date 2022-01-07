@@ -12,9 +12,9 @@ deployment:
 resources:
   requests:
     cpu: .5
-    memory: 128Mi
+    memory: 256Mi
   limits:
-    memory: 128Mi
+    memory: 1Gi
 
 disruption:
   minAvailable: 2
