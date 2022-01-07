@@ -688,7 +688,7 @@ class ValueSetVersion:
         
       self.expansion = self.expansion.union(terminology_set)
 
-      expansion_report += f"\nThe expansion will contain the following codes for the terminology {terminology}:\n"
+      expansion_report += f"\nThe expansion will contain the following codes for the terminology {terminology.name}:\n"
       for x in terminology_set:
         expansion_report += f"{x.code}, {x.display}, {x.system}, {x.version}\n"
 
