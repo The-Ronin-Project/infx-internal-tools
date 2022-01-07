@@ -3,7 +3,7 @@ import requests
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String
 from sqlalchemy.dialects.postgresql import UUID
 from uuid import uuid1
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy.sql.expression import bindparam
 from app.models.codes import Code
@@ -236,6 +236,10 @@ class SNOMEDRule(VSRule):
         'offset': offset
       })
 
+      if r.status_code == 400:
+        pass
+        # todo: error handling
+
       # Handle pagination
       total_results = r.json().get("total")
       pages = int(math.ceil(total_results / SNOSTORM_LIMIT))
@@ -376,7 +380,7 @@ class ValueSet:
         select * from value_sets.value_set
         where uuid in 
         (select value_set_uuid from value_sets.value_set_version
-        where status='Active')
+        where status='active')
         """
       ))
     else:
@@ -624,7 +628,7 @@ class ValueSetVersion:
     expansion_uuid = uuid1()
 
     # Create a new expansion entry in the value_sets.expansion table
-    current_time_string = datetime.now() # Must explicitly create this, since SQLite can't use now()
+    current_time_string = datetime.now() + timedelta(days=1) # Must explicitly create this, since SQLite can't use now()
     conn.execute(text(
       """
       insert into value_sets.expansion
