@@ -25,6 +25,7 @@ requests = "*"
 numpy = "*"
 python-decouple = "*"
 ddtrace = "*"
+pysnooper = "*"
 
 [dev-packages]
 pytest = "*"

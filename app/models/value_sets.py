@@ -232,8 +232,6 @@ class SNOMEDRule(VSRule):
       if offset >= pages * SNOSTORM_LIMIT:
         results_complete = True
 
-      print("total results", total_results, "pages", pages, "offset", offset)
-
       # Add data to results
       data = r.json().get("items")
       results = [Code(self.fhir_system, self.terminology_version.version, x.get("conceptId"), x.get("fsn").get("term")) for x in data]
@@ -631,21 +629,20 @@ class ValueSetVersion:
     })
 
     # Save contents of self.expansion to new expansion
-    for code in self.expansion:
-      conn.execute(text(
-        """
-        insert into value_sets.expansion_member
-        (expansion_uuid, code, display, system, version)
-        values
-        (:expansion_uuid, :code, :display, :system, :version)
-        """
-      ), {
-        'expansion_uuid': str(expansion_uuid),
-        'code': code.code,
-        'display': code.display,
-        'system': code.system,
-        'version': code.version
-      })
+    conn.execute(text(
+      """
+      insert into value_sets.expansion_member
+      (expansion_uuid, code, display, system, version)
+      values
+      (:expansion_uuid, :code, :display, :system, :version)
+      """
+    ), [{
+      'expansion_uuid': str(expansion_uuid),
+      'code': code.code,
+      'display': code.display,
+      'system': code.system,
+      'version': code.version
+    } for code in self.expansion])
 
   def create_expansion(self):
     self.expansion = set()
@@ -674,8 +671,9 @@ class ValueSetVersion:
       for x in include_rules: terminology_set = terminology_set.intersection(x.results)
 
       expansion_report += "\nIntersection of Inclusion Rules\n"
-      for x in terminology_set:
-        expansion_report += f"{x.code}, {x.display}, {x.system}, {x.version}\n"
+      
+      # .join w/ a list comprehension used for performance reasons
+      expansion_report += "".join([f"{x.code}, {x.display}, {x.system}, {x.version}\n" for x in terminology_set])
 
       for x in exclude_rules: 
         remove_set = terminology_set.intersection(x.results)
@@ -683,14 +681,16 @@ class ValueSetVersion:
 
         expansion_report += f"\nProcessing Exclusion Rule: {x.description}, {x.property}, {x.operator}, {x.value}\n"
         expansion_report += "The following codes were removed from the set:\n"
-        for removed in remove_set:
-          expansion_report += f"{removed.code}, {removed.display}, {removed.system}, {removed.version}\n"
+        # for removed in remove_set:
+        #   expansion_report += f"{removed.code}, {removed.display}, {removed.system}, {removed.version}\n"
+        expansion_report += "".join([f"{removed.code}, {removed.display}, {removed.system}, {removed.version}\n" for removed in remove_set])
         
       self.expansion = self.expansion.union(terminology_set)
 
       expansion_report += f"\nThe expansion will contain the following codes for the terminology {terminology.name}:\n"
-      for x in terminology_set:
-        expansion_report += f"{x.code}, {x.display}, {x.system}, {x.version}\n"
+      
+      # .join w/ a list comprehension used for performance reasons
+      expansion_report += "".join([f"{x.code}, {x.display}, {x.system}, {x.version}\n" for x in terminology_set])
 
     if self.value_set.type == 'intensional':
       self.save_expansion(report=expansion_report)
