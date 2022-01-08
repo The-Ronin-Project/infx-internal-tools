@@ -14,7 +14,7 @@ def test_extensional_vs():
     assert 'publisher' in response.json
     assert 'name' in response.json
     assert response.json.get('immutable') == False
-    assert 'identifier' in response.json
+    assert 'id' in response.json
     assert response.json.get('experimental') == True
     assert 'effective_start' in response.json
     assert 'effective_end' in response.json
@@ -39,7 +39,7 @@ def test_intensional_vs_rxnorm():
     assert 'publisher' in response.json
     assert 'name' in response.json
     assert 'immutable' in response.json
-    assert 'identifier' in response.json
+    assert 'id' in response.json
     assert 'experimental' in response.json
     assert 'effective_start' in response.json
     assert 'effective_end' in response.json
@@ -65,7 +65,7 @@ def test_intensional_vs_icd_snomed():
     assert 'publisher' in response.json
     assert 'name' in response.json
     assert 'immutable' in response.json
-    assert 'identifier' in response.json
+    assert 'id' in response.json
     assert 'experimental' in response.json
     assert 'effective_start' in response.json
     assert 'effective_end' in response.json
