@@ -741,7 +741,7 @@ class ValueSetVersion:
   def serialize(self):
     serialized = {
       # "url": self.value_set.url,
-      "identifier": self.value_set.uuid,
+      "id": self.value_set.uuid,
       "name": self.value_set.name,
       "title": self.value_set.title,
       "publisher": self.value_set.publisher,
@@ -761,7 +761,8 @@ class ValueSetVersion:
       "compose": {
         "include": self.serialize_include(),
         "exclude": None
-      }
+      },
+      "resourceType": "ValueSet"
     }
 
     if self.value_set.type == 'extensional': serialized.pop('expansion')
