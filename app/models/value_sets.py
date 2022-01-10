@@ -266,7 +266,7 @@ class RxNormRule(VSRule):
       'value': value
     })
 
-    results = [Code(self.fhir_system, self.terminology_version, x.rxcui, x.str) for x in results_data]
+    results = [Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str) for x in results_data]
     self.results = set(results)
 
   def rxnorm_term_type(self):
@@ -282,7 +282,7 @@ class RxNormRule(VSRule):
       'value': value
     })
 
-    results = [Code(self.fhir_system, self.terminology_version, x.rxcui, x.str) for x in results_data]
+    results = [Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str) for x in results_data]
     self.results = set(results)
 
 
@@ -304,7 +304,7 @@ class RxNormRule(VSRule):
       'rel': self.property
     })
 
-    results = [Code(self.fhir_system, self.terminology_version, x.rxcui, x.str) for x in results_data]
+    results = [Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str) for x in results_data]
     self.results = set(results)
 
   def rxnorm_relationship_type(self):
@@ -325,7 +325,7 @@ class RxNormRule(VSRule):
       'rel': self.property
     })
 
-    results = [Code(self.fhir_system, self.terminology_version, x.rxcui, x.str) for x in results_data]
+    results = [Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str) for x in results_data]
     self.results = set(results)
 
 # class GroupingValueSetRule(VSRule):
