@@ -752,7 +752,7 @@ class ValueSetVersion:
       "purpose": self.value_set.purpose,
       "effective_start": self.effective_start,
       "effective_end": self.effective_end,
-      "version": self.version,
+      "version": str(self.version), # Version must be a string
       "version_uuid": self.uuid,
       "status": self.status,
       "expansion": {
