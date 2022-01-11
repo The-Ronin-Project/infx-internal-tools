@@ -4,6 +4,8 @@ from sqlalchemy import create_engine, text, MetaData, Table, Column, String
 from sqlalchemy.dialects.postgresql import UUID
 from uuid import uuid1
 from datetime import date, datetime, timedelta
+from dateutil import parser
+from werkzeug.exceptions import BadRequest, NotFound
 
 from sqlalchemy.sql.expression import bindparam
 from app.models.codes import Code
@@ -480,6 +482,8 @@ class ValueSetVersion:
     ), {
       'uuid': uuid
     }).first()
+
+    if vs_version_data is None: raise NotFound(f'Value Set Version with uuid {uuid} not found')
     
     value_set = ValueSet.load(vs_version_data.value_set_uuid)
     
@@ -607,14 +611,20 @@ class ValueSetVersion:
 
     expansion_metadata = conn.execute(text(
       """
-      select uuid from value_sets.expansion
+      select uuid, timestamp from value_sets.expansion
       where vs_version_uuid=:version_uuid
       order by timestamp desc
       limit 1
       """
-    )).first()
-    expansion_uuid = expansion_member.uuid
+    ), {
+      'version_uuid': self.uuid
+    }).first()
+    expansion_uuid = expansion_metadata.uuid
+
+    print(expansion_metadata.timestamp, type(expansion_metadata.timestamp))
     self.expansion_timestamp = expansion_metadata.timestamp
+    if isinstance(self.expansion_timestamp, str):
+      self.expansion_timestamp = parser.parse(self.expansion_timestamp)
 
     query = conn.execute(text(
       """
@@ -765,7 +775,7 @@ class ValueSetVersion:
       "status": self.status,
       "expansion": {
         "contains": [x.serialize() for x in self.expansion],
-        "timestamp": self.expansion_timestamp.strftime("%Y-%m-%d")
+        "timestamp": self.expansion_timestamp.strftime("%Y-%m-%d") if self.expansion_timestamp is not None else None
       },
       "compose": {
         "include": self.serialize_include(),

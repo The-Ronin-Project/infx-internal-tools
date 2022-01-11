@@ -16,8 +16,8 @@ def test_extensional_vs():
     assert response.json.get('immutable') == False
     assert 'id' in response.json
     assert response.json.get('experimental') == True
-    assert 'effective_start' in response.json
-    assert 'effective_end' in response.json
+    # assert 'effective_start' in response.json
+    # assert 'effective_end' in response.json
     assert 'contact' in response.json
     assert 'description' in response.json
     assert 'compose' in response.json
@@ -41,8 +41,6 @@ def test_intensional_vs_rxnorm():
     assert 'immutable' in response.json
     assert 'id' in response.json
     assert 'experimental' in response.json
-    assert 'effective_start' in response.json
-    assert 'effective_end' in response.json
     assert 'contact' in response.json
     assert 'description' in response.json
     assert 'compose' in response.json
@@ -56,7 +54,9 @@ def test_intensional_vs_rxnorm():
 
 def test_intensional_vs_icd_snomed():
     app.app.config['MOCK_DB'] = True
-    response = app.app.test_client().get('/ValueSet/f38a3352-214c-11ec-9621-0242ac130002/$expand?force_new=true')
+    response = app.app.test_client().get('/ValueSet/c447c800-6343-11ec-9b51-4fc98501ea85/$expand')
+    print(response)
+    print(response.json)
     assert 'version' in response.json
     # assert 'url' in response.json
     assert 'title' in response.json
@@ -67,8 +67,6 @@ def test_intensional_vs_icd_snomed():
     assert 'immutable' in response.json
     assert 'id' in response.json
     assert 'experimental' in response.json
-    assert 'effective_start' in response.json
-    assert 'effective_end' in response.json
     assert 'contact' in response.json
     assert 'description' in response.json
     assert 'compose' in response.json
@@ -79,7 +77,7 @@ def test_intensional_vs_icd_snomed():
 def test_expansion_report():
     app.app.config['MOCK_DB'] = True
     response = app.app.test_client().get('/ValueSets/expansions/3257aed4-6da1-11ec-bd74-aa665a30495f/report')
-    print('hex digest', hashlib.md5(response.data).hexdigest())
+    # print('hex digest', hashlib.md5(response.data).hexdigest())
     assert hashlib.md5(response.data).hexdigest() == "ca5613af2d0a65e32d7505849fd1c1d2"
 
 def test_survey_export():
