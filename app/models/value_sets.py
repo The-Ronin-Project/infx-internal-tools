@@ -745,7 +745,8 @@ class ValueSetVersion:
       "name": self.value_set.name,
       "title": self.value_set.title,
       "publisher": self.value_set.publisher,
-      "contact": self.value_set.contact,
+      "contact": [{
+        'name': self.value_set.contact}],
       "description": self.value_set.description + ' ' + self.description,
       "immutable": self.value_set.immutable,
       "experimental": self.value_set.experimental,
