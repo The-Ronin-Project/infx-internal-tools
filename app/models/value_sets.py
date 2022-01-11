@@ -467,6 +467,7 @@ class ValueSetVersion:
     
     self.rules = {}
     self.expansion = set()
+    self.expansion_timestamp = None
     self.extensional_codes = {}
   
   @classmethod
@@ -603,17 +604,25 @@ class ValueSetVersion:
 
   def load_current_expansion(self):
     conn = get_db()
+
+    expansion_metadata = conn.execute(text(
+      """
+      select uuid from value_sets.expansion
+      where vs_version_uuid=:version_uuid
+      order by timestamp desc
+      limit 1
+      """
+    )).first()
+    expansion_uuid = expansion_member.uuid
+    self.expansion_timestamp = expansion_metadata.timestamp
+
     query = conn.execute(text(
       """
       select * from value_sets.expansion_member
-      where expansion_uuid in
-      (select uuid from value_sets.expansion
-      where vs_version_uuid=:version_uuid
-      order by timestamp desc
-      limit 1)
+      where expansion_uuid = :expansion_uuid
       """
     ), {
-      'version_uuid': self.uuid
+      'expansion_uuid': expansion_uuid
     })
 
     for x in query:
@@ -629,6 +638,7 @@ class ValueSetVersion:
 
     # Create a new expansion entry in the value_sets.expansion table
     current_time_string = datetime.now() # + timedelta(days=1) # Must explicitly create this, since SQLite can't use now()
+    self.expansion_timestamp = current_time_string
     conn.execute(text(
       """
       insert into value_sets.expansion
@@ -751,19 +761,22 @@ class ValueSetVersion:
       "immutable": self.value_set.immutable,
       "experimental": self.value_set.experimental,
       "purpose": self.value_set.purpose,
-      "effective_start": self.effective_start,
-      "effective_end": self.effective_end,
       "version": str(self.version), # Version must be a string
-      "version_uuid": self.uuid,
       "status": self.status,
       "expansion": {
-        "contains": [x.serialize() for x in self.expansion]
+        "contains": [x.serialize() for x in self.expansion],
+        "timestamp": self.expansion_timestamp.strftime("%Y-%m-%d")
       },
       "compose": {
         "include": self.serialize_include(),
         "exclude": [] # Must be an array, not null
       },
-      "resourceType": "ValueSet"
+      "resourceType": "ValueSet",
+      "additionalData": {  # Place to put custom values that aren't part of the FHIR spec
+        "effective_start": self.effective_start,
+        "effective_end": self.effective_end,
+        "version_uuid": self.uuid,
+      }
     }
 
     if self.value_set.type == 'extensional': serialized.pop('expansion')
