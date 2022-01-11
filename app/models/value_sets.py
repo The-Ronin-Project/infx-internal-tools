@@ -761,7 +761,7 @@ class ValueSetVersion:
       },
       "compose": {
         "include": self.serialize_include(),
-        "exclude": None
+        "exclude": [] # Must be an array, not null
       },
       "resourceType": "ValueSet"
     }
