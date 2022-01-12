@@ -758,6 +758,26 @@ class ValueSetVersion:
 
       return serialized
 
+  def serialize_exclude(self):
+    if self.value_set.type == 'intensional':
+      exclude_rules = self.exclude_rules
+      terminology_keys = exclude_rules.keys()
+      serialized = []
+      
+      for key in terminology_keys:
+        rules = exclude_rules.get(key)
+        serialized_rules = [x.serialize() for x in rules]
+        serialized.append({
+          'system': key.fhir_uri,
+          'version': key.version,
+          'filter': serialized_rules
+        })
+
+      return serialized
+    
+    else:
+      return []
+
   def serialize(self):
     serialized = {
       # "url": self.value_set.url,
@@ -778,8 +798,7 @@ class ValueSetVersion:
         "timestamp": self.expansion_timestamp.strftime("%Y-%m-%d") if self.expansion_timestamp is not None else None
       },
       "compose": {
-        "include": self.serialize_include(),
-        "exclude": [] # Must be an array, not null
+        "include": self.serialize_include()
       },
       "resourceType": "ValueSet",
       "additionalData": {  # Place to put custom values that aren't part of the FHIR spec
@@ -788,6 +807,10 @@ class ValueSetVersion:
         "version_uuid": self.uuid,
       }
     }
+
+    serialized_exclude = self.serialize_exclude()
+    if serialized_exclude:
+      serialized['compose']['exclude'] = serialized_exclude
 
     if self.value_set.type == 'extensional': serialized.pop('expansion')
 

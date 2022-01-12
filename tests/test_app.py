@@ -30,6 +30,7 @@ def test_extensional_vs():
 
 def test_intensional_vs_rxnorm():
     app.app.config['MOCK_DB'] = True
+    # Load RxNorm value set
     response = app.app.test_client().get('/ValueSet/64c5d2c2-2857-11ec-9621-0242ac130002/$expand')
     assert 'version' in response.json
     # assert 'url' in response.json
@@ -48,12 +49,16 @@ def test_intensional_vs_rxnorm():
     compose = response.json.get('compose')
     include = compose.get('include')[0]
 
+    # Validate there are not any exclusion rules
+    assert 'exclude' not in compose
+
     assert include.get('system') == 'http://www.nlm.nih.gov/research/umls/rxnorm'
     assert 'expansion' in response.json
     assert 'contains' in response.json.get('expansion')
 
 def test_intensional_vs_icd_snomed():
     app.app.config['MOCK_DB'] = True
+    # Load breast-cancer value set
     response = app.app.test_client().get('/ValueSet/c447c800-6343-11ec-9b51-4fc98501ea85/$expand')
     print(response)
     print(response.json)
@@ -70,6 +75,12 @@ def test_intensional_vs_icd_snomed():
     assert 'contact' in response.json
     assert 'description' in response.json
     assert 'compose' in response.json
+
+    # Validate that there are exclusion rules
+    compose = response.json.get('compose')
+    assert 'exclude' in compose
+    exclude = compose.get('exclude')
+    assert len(exclude[0].get('filter')) > 3
 
     assert 'expansion' in response.json
     assert 'contains' in response.json.get('expansion')
