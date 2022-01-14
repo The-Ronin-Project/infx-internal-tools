@@ -93,7 +93,7 @@ class ICD10CMRule(VSRule):
     
     if self.property == 'code':
       # Lookup UUIDs for provided codes
-      codes = self.value.split(',')
+      codes = self.value.replace(' ', '').split(',')
       
       # Get all descendants of the provided codes through a recursive query
       query = """
