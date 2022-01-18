@@ -183,7 +183,7 @@ class SurveyExporter:
 
     def get_list_of_symptoms_in_survey(self):
         first_questions = self.get_first_question_for_each_symptom_after_symptom_select()
-        labels = [self.symptom_uuid_to_symptom_map.get(parse_array_in_sqlite(x.symptom_uuids)[0]).get("patient_label") if x.symptom_uuids else None for x in first_questions]
+        labels = [self.symptom_uuid_to_symptom_map.get(parse_array_in_sqlite(x.symptom_uuids)[0]).get("patient_label") if x.symptom_uuids else "No label" for x in first_questions]
         return [x.replace('Nausea', 'Nausea/Vomiting') for x in labels]
 
     def get_slugs_for_symptom_start(self):
