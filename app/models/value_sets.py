@@ -466,6 +466,7 @@ class ValueSetVersion:
     self.status = status
     self.description = description
     self.version = version
+    self.expansion_uuid = None
     
     self.rules = {}
     self.expansion = set()
@@ -619,9 +620,9 @@ class ValueSetVersion:
     ), {
       'version_uuid': self.uuid
     }).first()
-    expansion_uuid = expansion_metadata.uuid
+    self.expansion_uuid = expansion_metadata.uuid
 
-    print(expansion_metadata.timestamp, type(expansion_metadata.timestamp))
+    # print(expansion_metadata.timestamp, type(expansion_metadata.timestamp))
     self.expansion_timestamp = expansion_metadata.timestamp
     if isinstance(self.expansion_timestamp, str):
       self.expansion_timestamp = parser.parse(self.expansion_timestamp)
@@ -632,7 +633,7 @@ class ValueSetVersion:
       where expansion_uuid = :expansion_uuid
       """
     ), {
-      'expansion_uuid': expansion_uuid
+      'expansion_uuid': self.expansion_uuid
     })
 
     for x in query:
@@ -644,7 +645,7 @@ class ValueSetVersion:
 
   def save_expansion(self, report=None):
     conn = get_db()
-    expansion_uuid = uuid1()
+    self.expansion_uuid = uuid1()
 
     # Create a new expansion entry in the value_sets.expansion table
     current_time_string = datetime.now() # + timedelta(days=1) # Must explicitly create this, since SQLite can't use now()
@@ -657,14 +658,14 @@ class ValueSetVersion:
       (:expansion_uuid, :version_uuid, :curr_time, :report)
       """
     ), {
-      'expansion_uuid': str(expansion_uuid),
+      'expansion_uuid': str(self.expansion_uuid),
       'version_uuid': str(self.uuid),
       'report': report,
       'curr_time': current_time_string
     })
 
     conn.execute(expansion_member.insert(), [{
-      'expansion_uuid': str(expansion_uuid),
+      'expansion_uuid': str(self.expansion_uuid),
       'code': code.code,
       'display': code.display,
       'system': code.system,
@@ -805,6 +806,7 @@ class ValueSetVersion:
         "effective_start": self.effective_start,
         "effective_end": self.effective_end,
         "version_uuid": self.uuid,
+        "expansion_uuid": self.expansion_uuid
       }
     }
 

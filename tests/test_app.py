@@ -16,11 +16,15 @@ def test_extensional_vs():
     assert response.json.get('immutable') == False
     assert 'id' in response.json
     assert response.json.get('experimental') == True
-    # assert 'effective_start' in response.json
-    # assert 'effective_end' in response.json
     assert 'contact' in response.json
     assert 'description' in response.json
     assert 'compose' in response.json
+
+    additional_data = response.json.get('additionalData')
+    assert 'effective_start' in additional_data
+    assert 'effective_end' in additional_data
+    assert 'expansion_uuid' in additional_data
+    assert 'version_uuid' in additional_data
 
     compose = response.json.get('compose')
     include = compose.get('include')[0]
