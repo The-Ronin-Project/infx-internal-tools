@@ -98,5 +98,5 @@ def test_expansion_report():
 def test_survey_export():
     app.app.config['MOCK_DB'] = True
     response = app.app.test_client().get('/surveys/34775510-1267-11ec-b9a3-77c9d91ff3f2?organization_uuid=866632f0-ff85-11eb-9f47-ffa6d132f8a4')
-    # print(hashlib.md5(response.data).hexdigest())
-    assert hashlib.md5(response.data).hexdigest() == "d1addd7f781c6e0d732e75cd83b1c76b"
+    print(hashlib.md5(response.data).hexdigest())
+    assert hashlib.md5(response.data).hexdigest() == "d8d184f61545f542f2a42c7064a90148"
