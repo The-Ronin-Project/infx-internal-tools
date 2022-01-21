@@ -46,6 +46,10 @@ class SurveyExporter:
         and organization_uuid=:organization_uuid
         left join surveys.branching_logic bl
         on sp_an.specific_answer_uuid=bl.answer_uuid
+        and bl.question_group_uuid in 
+        (select question_group_uuid
+        from surveys.survey_question_group_link
+        where survey_uuid=:survey_uuid)
         """), {
             'survey_uuid': self.survey_uuid,
             'organization_uuid': self.organization_uuid
