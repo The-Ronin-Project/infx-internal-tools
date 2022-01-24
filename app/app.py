@@ -62,7 +62,7 @@ def export_survey(survey_uuid):
         file_buffer, 
         mimetype="text/csv",
         headers={
-            "Content-Disposition": "attachment; filename=export.csv"
+            "Content-Disposition": f"attachment; filename={exporter.survey_title} {exporter.organization_name}.csv"
         })
     return response
 

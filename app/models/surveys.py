@@ -18,6 +18,40 @@ class SurveyExporter:
         self.next_question_uuid = {}
 
         self.conn = get_db()
+        self.organization_name = None
+        self.survey_title = None
+        self.load_metadata()
+
+    def load_metadata(self):
+        # Load name of survey and name of organization
+        survey_title_query = self.conn.execute(
+            text(
+                """
+                select title
+                from surveys.survey
+                where uuid=:survey_uuid
+                """
+            ), {
+                'survey_uuid': self.survey_uuid
+            }
+        )
+        self.survey_title = survey_title_query.first().title
+
+        organization_title_query = self.conn.execute(
+            text(
+                """
+                select org.uuid, org.name child_name, org2.name parent_name from organizations.organizations org
+                left join organizations.hierarchy hier
+                on hier.target_organization_uuid=org.uuid
+                left join organizations.organizations org2
+                on hier.source_organization_uuid=org2.uuid
+                where org.uuid=:org_uuid
+                """
+            ), {
+                'org_uuid': self.organization_uuid
+            }
+        ).first()
+        self.organization_name = organization_title_query.child_name + " - " + organization_title_query.parent_name
 
     def load_symptoms(self):
         """Load data from symptom table"""

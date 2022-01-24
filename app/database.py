@@ -12,6 +12,7 @@ def get_db():
             g.db.execute("attach database 'tests/dbs/icd_10_cm.db' as icd_10_cm")
             g.db.execute("attach database 'tests/dbs/rxndirty.db' as rxnormDirty")
             g.db.execute("attach database 'tests/dbs/surveys.db' as surveys")
+            g.db.execute("attach database 'tests/dbs/organizations.db' as organizations")
         else:
             engine = create_engine(f"postgresql://{config('DATABASE_USER')}@{config('DATABASE_HOST')}:{config('DATABASE_PASSWORD')}@{config('DATABASE_HOST')}/{config('DATABASE_NAME')}", connect_args={'sslmode':'require'})
             g.db = engine.connect()
