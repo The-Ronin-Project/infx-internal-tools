@@ -387,6 +387,7 @@ class LOINCRule(VSRule):
     query = """
     select * from loinc.code
     where loinc_num = any(:value)
+    and status = 'ACTIVE'
     order by long_common_name
     """    
     self.loinc_rule(query)
@@ -395,6 +396,7 @@ class LOINCRule(VSRule):
     query = """
     select * from loinc.code
     where long_common_name ilike any(:value)
+    and status = 'ACTIVE'
     order by long_common_name
     """
     self.loinc_rule(query)
@@ -403,6 +405,7 @@ class LOINCRule(VSRule):
     query = """
     select * from loinc.code
     where method_typ = any(:value)
+    and status = 'ACTIVE'
     order by long_common_name
     """
     self.loinc_rule(query)
@@ -411,6 +414,7 @@ class LOINCRule(VSRule):
     query = """
     select * from loinc.code
     where time_aspct = any(:value)
+    and status = 'ACTIVE'
     order by long_common_name
     """
     self.loinc_rule(query)
@@ -419,6 +423,7 @@ class LOINCRule(VSRule):
     query = """
     select * from loinc.code
     where system = any(:value)
+    and status = 'ACTIVE'
     order by long_common_name
     """
     self.loinc_rule(query)
@@ -427,6 +432,7 @@ class LOINCRule(VSRule):
     query = """
     select * from loinc.code
     where component = any(:value)
+    and status = 'ACTIVE'
     order by long_common_name
     """
     self.loinc_rule(query)
@@ -435,6 +441,7 @@ class LOINCRule(VSRule):
     query = """
     select * from loinc.code
     where scale_typ = any(:value)
+    and status = 'ACTIVE'
     order by long_common_name
     """
     self.loinc_rule(query)
@@ -443,6 +450,7 @@ class LOINCRule(VSRule):
     query = """
     select * from loinc.code
     where property = any(:value)
+    and status = 'ACTIVE'
     order by long_common_name
     """
     self.loinc_rule(query)
