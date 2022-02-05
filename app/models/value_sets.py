@@ -53,8 +53,6 @@ class VSRule:
       self.direct_child()
     elif self.operator == 'in' and self.property == 'concept':
       self.concept_in()
-    elif self.operator == 'in' and self.property == 'code':
-      self.code_in()
 
     if self.property == 'code' and self.operator == 'in':
       self.code_rule()
@@ -110,7 +108,7 @@ class ICD10CMRule(VSRule):
   def direct_child(self):
     pass
 
-  def code_in(self):
+  def code_rule(self):
     conn = get_db()
     query = ""
     
