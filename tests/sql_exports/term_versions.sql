@@ -5,7 +5,7 @@
 -- Dumped from database version 11.11
 -- Dumped by pg_dump version 13.3
 
--- Started on 2022-01-04 17:10:52 MST
+-- Started on 2022-02-04 18:52:12 MST
 
 -- SET statement_timeout = 0;
 -- SET lock_timeout = 0;
@@ -19,7 +19,7 @@
 -- SET row_security = off;
 
 --
--- TOC entry 269 (class 1259 OID 87669)
+-- TOC entry 267 (class 1259 OID 87669)
 -- Name: terminology_versions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -34,21 +34,22 @@ CREATE TABLE terminology_versions (
 
 
 --
--- TOC entry 4547 (class 0 OID 87669)
--- Dependencies: 269
+-- TOC entry 4559 (class 0 OID 87669)
+-- Dependencies: 267
 -- Data for Name: terminology_versions; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 INSERT INTO terminology_versions VALUES ('0191c3e4-215b-11ec-9621-0242ac130002', 'ICD-10 CM', '2021', NULL, NULL, 'http://hl7.org/fhir/sid/icd-10-cm');
-INSERT INTO terminology_versions VALUES ('3b07a086-2227-11ec-9621-0242ac130002', 'SNOMED CT', '2021', NULL, NULL, 'http://snomed.info/sct');
 INSERT INTO terminology_versions VALUES ('85d038ea-2857-11ec-9621-0242ac130002', 'RxNorm', '2021', NULL, NULL, 'http://www.nlm.nih.gov/research/umls/rxnorm');
-INSERT INTO terminology_versions VALUES ('1ea19640-63e6-4e1b-b82f-be444ba395b4', 'ICD-10 CM', '2022', NULL, NULL, 'http://hl7.org/fhir/sid/icd-10-cm');
 INSERT INTO terminology_versions VALUES ('6c6219c8-5ef3-11ec-8f16-acde48001122', 'CPT', '2022', '2022-01-01', '2022-12-31', 'http://www.ama-assn.org/go/cpt');
 INSERT INTO terminology_versions VALUES ('bb8576cd-f1d4-4815-8609-d21b2444e6c1', 'HCPCS', 'Jan 2022', '2022-01-01', '2022-03-31', 'http://www.cms.gov/Medicare/Coding/HCPCSReleaseCodeSets');
 INSERT INTO terminology_versions VALUES ('afb82f16-a129-40dc-bb3f-c7d05532f522', 'Value Sets', 'N/A', NULL, NULL, 'N/A');
+INSERT INTO terminology_versions VALUES ('1ea19640-63e6-4e1b-b82f-be444ba395b4', 'ICD-10 CM', '2022', '2022-01-01', '2022-12-31', 'http://hl7.org/fhir/sid/icd-10-cm');
+INSERT INTO terminology_versions VALUES ('3b07a086-2227-11ec-9621-0242ac130002', 'SNOMED CT', '2021', '2021-01-01', '2021-12-31', 'http://snomed.info/sct');
+INSERT INTO terminology_versions VALUES ('7c19e704-19d9-412b-90c3-79c5fb99ebe8', 'LOINC', '2.71', NULL, NULL, 'http://loinc.org');
 
 
--- Completed on 2022-01-04 17:10:59 MST
+-- Completed on 2022-02-04 18:52:18 MST
 
 --
 -- PostgreSQL database dump complete

@@ -60,6 +60,12 @@ def test_intensional_vs_rxnorm():
     assert 'expansion' in response.json
     assert 'contains' in response.json.get('expansion')
 
+def test_loinc_valueset():
+    response = app.app.test_client().get('/ValueSet/c5ac2d30-83b4-11ec-9a73-9942f9fcf805/$expand?force_new=true')
+    print(response.json)
+    assert 'name' in response.json
+
+
 def test_intensional_vs_icd_snomed():
     app.app.config['MOCK_DB'] = True
     # Load breast-cancer value set
