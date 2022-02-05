@@ -5,7 +5,7 @@
 -- Dumped from database version 11.11
 -- Dumped by pg_dump version 13.3
 
--- Started on 2022-01-11 15:58:33 MST
+-- Started on 2022-02-04 17:30:54 MST
 
 -- SET statement_timeout = 0;
 -- SET lock_timeout = 0;
@@ -38,20 +38,25 @@ CREATE TABLE value_sets.value_set (
 
 
 --
--- TOC entry 4553 (class 0 OID 56704)
+-- TOC entry 4565 (class 0 OID 56704)
 -- Dependencies: 244
 -- Data for Name: value_set; Type: TABLE DATA; Schema: value_sets; Owner: -
 --
 
+INSERT INTO value_sets.value_set VALUES ('1cdb27d0-73cc-11ec-a7b4-098fdcb4878b', 'CO2', 'CO2', 'Project Ronin', 'Stephen Weaver', 'LOINC codes representing serum of blood analysis of CO2', false, false, 'to provide a list of LOINC codes for the ED Risk model feature titled CO2', 'intensional');
+INSERT INTO value_sets.value_set VALUES ('00af0270-7fcf-11ec-98e3-815e2184efcb', 'Thoracic Cancer Survey Assignment', 'Thoracic Cancer Survey Assignment', 'Project Ronin', 'Hao Sun', 'SNOMED codes of thoracic cancers', false, false, 'To power the logic that assigns the thoracic cancer survey to patients based on their diagnosis list', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('e1ba9050-4c8e-11ec-99d0-6d735801ea9a', 'Bladder Cancer Combined', 'bladder-cancer-combined', 'Project Ronin', 'Hao Sun', 'This valueset contains the diagnosis codes for bladder cancer and diseases that are clinically treated as bladder cancer. It contains both ICD-10 and SNOMED.', false, false, 'This valueset is multipurpose and is used in the ED Risk model, BI patient categorization and to identify patients for implementation purposes.', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('18550ff0-6364-11ec-bee7-1b2cefdcd5ad', 'Protein Kinase Inhibitors', 'Protein Kinase Inhibitors', 'Project Ronin', 'Hao Sun', 'RxNorm drugs, ingredients of protein kinase inhibitors ', false, false, 'This valueset will be used for ED prediction models, categorization of patients', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('ca1f9350-6cff-11ec-a5f0-91e137910fd5', 'AFP', 'AFP', 'Project Ronin', 'Stephen Weaver', 'Alpha-1 Fetoprotein LOINC Codes', false, false, 'ED Risk Model Lab Features', 'intensional');
+INSERT INTO value_sets.value_set VALUES ('9b2c3110-73cc-11ec-a7b4-098fdcb4878b', 'Chloride', 'Chloride', 'Project Ronin', 'Stephen Weaver', 'LOINC Codes for indicating serum analysis of Chloride', false, false, 'to provide reference for clinical data for the ED risk model feature titled ''Chloride''', 'intensional');
+INSERT INTO value_sets.value_set VALUES ('2de1fcc0-8065-11ec-8e45-2386c46ddcaa', 'GU Cancer Survey', 'GU Cancer Survey', 'Project Ronin', 'Kurt Weber', 'standard codes for cancer that is clinically treated as GU cancer', false, false, 'The intention of this value set is to assign surveys to cohorts of patients based on the common treatment approaches at our customer sites, ‘example: GU cancer vs. breast cancer’.', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('11192c20-6d01-11ec-a5f0-91e137910fd5', 'CA27.29', 'CA27.29', 'Project Ronin', 'Stephen Weaver', 'LOINC codes indicating CA27.29 measurement', false, false, 'To provide features for the ED risk model', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('b070fe00-6d02-11ec-a5f0-91e137910fd5', 'CADM70K', 'CADM70K', 'Project Ronin', 'Stephen Weaver', 'LOINC codes indicating Cancer Ag DM/70K measurement', false, false, 'To provide features for the ED risk model', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('c4f97e10-6d02-11ec-a5f0-91e137910fd5', 'CA549', 'CA549', 'Project Ronin', 'Stephen Weaver', 'LOINC codes indicating CA549 measurement', false, false, 'To provide features for the ED risk model', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('ea625dc0-6d02-11ec-a5f0-91e137910fd5', 'CA242', 'CA242', 'Project Ronin', 'Stephen Weaver', 'LOINC codes indicating the measurement of CA242', false, false, 'To provide features for the ED risk model', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('55ce84d0-6d03-11ec-a5f0-91e137910fd5', 'CA50', 'CA50', 'Project Ronin', 'Stephen Weaver', 'LOINC codes indicating the measurement of CA50', false, false, 'To provide features for the ED risk model', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('d6d2c730-6d03-11ec-a5f0-91e137910fd5', 'Glucose', 'Glucose', 'Project Ronin', 'Stephen Weaver', 'LOINC codes indicating the measurement of Glucose', false, false, 'To provide features for the ED risk model', 'intensional');
+INSERT INTO value_sets.value_set VALUES ('32092a60-8459-11ec-ba0f-9bb3b1c70421', 'Acute Problems', 'Acute Problems', 'Project Ronin', 'Hao Sun', 'ICD10 and SNOMED codes for acute problems associated with ED visits - Top 20 most common ER diagnoses (https://www.definitivehc.com/blog/top-20-most-common-er-diagnoses)', false, false, 'ED visit prediction modeling ', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('2b6f9c90-636e-11ec-a609-b5614185f7a5', 'Ureter Cancer Combined', 'Ureter Cancer Combined', 'Project Ronin', 'Katelin Brown', 'This valueset contains the diagnosis codes for ureter cancer and diseases that are clinically treated as ureter cancer. It contains both ICD-10 and SNOMED.', false, false, 'This valueset is multipurpose and is used in the ED Risk model, BI patient categorization and to identify patients for implementation purposes.', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('abd4ff40-6410-11ec-8daa-b365d151d4db', 'Cytotoxic Antibiotics and Related', 'Cytotoxic Antibiotics and Related', 'Project Ronin', 'Katelin', 'RxNorm drugs, ingredients of Cytotoxic Antibiotics and Related', false, false, 'This valueset will be used for ED prediction models, categorization of patients', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('98b92730-6413-11ec-9cfa-b7767fcb0438', 'Alkylating Agents', 'Alkylating Agents', 'Project Ronin', 'Katelin', 'RxNorm drugs, ingredients of Alkylating Agents and Related', false, false, 'This valueset will be used for ED prediction models, categorization of patients', 'intensional');
@@ -130,9 +135,10 @@ INSERT INTO value_sets.value_set VALUES ('9309a820-6e52-11ec-9ea2-c7238c39a6c5',
 INSERT INTO value_sets.value_set VALUES ('57d28c80-6e53-11ec-a288-9761f3821129', 'Peripheral Vascular Disorder', 'Peripheral Vascular Disorder', 'Project Ronin', 'Hao Sun', 'SNOMED and ICD10 codes for the condition of peripheral vascular disorder', false, false, 'Multipurpose; ED prediction model and patient cohorting ', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('b2fba890-6e57-11ec-8eff-a944250eaa2c', 'Chronic Pulmonary Disease', 'Chronic Pulmonary Disease', 'Project Ronin', 'Hao Sun', 'SNOMED and ICD10 codes for the condition of Chronic Pulmonary Disease', false, false, 'Multipurpose; ED prediction model and patient cohorting ', 'intensional');
 INSERT INTO value_sets.value_set VALUES ('328b1fc4-27a8-11ec-9621-0242ac130002', 'extensional-test', 'Extensional Value Set Test', 'Project Ronin', 'Rey', 'Used for automated tests', false, true, 'testing', 'extensional');
+INSERT INTO value_sets.value_set VALUES ('08d51640-7f95-11ec-a69c-7956c6320982', 'Breast Cancer Survey Assignment', 'Breast Cancer Survey Assignment ', 'Project Ronin', 'Stephen Weaver', 'standard codes for cancer that is clinically treated as breast cancer not only limited to located in the breast', false, false, 'to power the logic that assigns the breast cancer survey to patients based on their diagnosis list', 'intensional');
 
 
--- Completed on 2022-01-11 15:58:39 MST
+-- Completed on 2022-02-04 17:30:58 MST
 
 --
 -- PostgreSQL database dump complete
