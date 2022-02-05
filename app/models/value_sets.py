@@ -53,8 +53,11 @@ class VSRule:
       self.direct_child()
     elif self.operator == 'in' and self.property == 'concept':
       self.concept_in()
-    elif self.operator == 'in' and self.property == 'code':
-      self.code_in()
+
+    if self.property == 'code' and self.operator == 'in':
+      self.code_rule()
+    elif self.property == 'display' and self.operator == 'in':
+      self.display_rule()
 
     # RxNorm Specific
     if self.property == 'SAB':
@@ -65,8 +68,24 @@ class VSRule:
       self.rxnorm_relationship() 
     if self.property in ['permuted_term_of', 'has_quantified_form', 'constitutes', 'has_active_moiety', 'doseformgroup_of', 'ingredients_of', 'precise_active_ingredient_of', 'has_product_monograph_title', 'sort_version_of', 'precise_ingredient_of', 'has_part', 'reformulation_of', 'has_precise_ingredient', 'has_precise_active_ingredient', 'mapped_from', 'included_in', 'has_inactive_ingredient', 'has_ingredients', 'active_moiety_of', 'is_modification_of', 'isa', 'has_form', 'has_member', 'consists_of', 'form_of', 'has_entry_version', 'part_of', 'dose_form_of', 'has_print_name', 'contained_in', 'mapped_to', 'has_ingredient', 'has_basis_of_strength_substance', 'has_doseformgroup', 'has_tradename', 'basis_of_strength_substance_of', 'has_dose_form', 'inverse_isa', 'has_sort_version', 'has_active_ingredient', 'product_monograph_title_of', 'member_of', 'quantified_form_of', 'contains', 'includes', 'active_ingredient_of', 'entry_version_of', 'inactive_ingredient_of', 'reformulated_to', 'has_modification', 'ingredient_of', 'has_permuted_term', 'tradename_of', 'print_name_of']:
       self.rxnorm_relationship_type()
+    
+    # SNOMED
     if self.property == 'ecl':
       self.ecl_query()
+
+    # LOINC
+    if self.property == 'property':
+      self.property_rule()
+    elif self.property == 'timing':
+      self.timing_rule()
+    elif self.property == 'system':
+      self.system_rule()
+    elif self.property == 'component':
+      self.component_rule()
+    elif self.property == 'scale':
+      self.scale_rule()
+    elif self.property == 'method':
+      self.method_rule()
       
   def direct_child(self):
     pass
@@ -89,7 +108,7 @@ class ICD10CMRule(VSRule):
   def direct_child(self):
     pass
 
-  def code_in(self):
+  def code_rule(self):
     conn = get_db()
     query = ""
     
@@ -362,6 +381,126 @@ class RxNormRule(VSRule):
     results = [Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str) for x in results_data]
     self.results = set(results)
 
+class LOINCRule(VSRule):
+
+  def loinc_rule(self, query):
+    conn = get_db()
+
+    converted_query = text(
+        query
+      ).bindparams(bindparam('value', expanding=True))
+
+    results_data = conn.execute(
+      converted_query, 
+      {
+        'value': self.split_value
+      }
+    )
+    results = [Code(self.fhir_system, self.terminology_version.version, x.loinc_num, x.long_common_name) for x in results_data]
+    self.results = set(results)
+
+  @property
+  def split_value(self):
+    """
+    ReTool saves arrays like this: {"Alpha-1-Fetoprotein","Alpha-1-Fetoprotein Ab","Alpha-1-Fetoprotein.tumor marker"}
+    Sometimes, we also save arrays like this: Alpha-1-Fetoprotein,Alpha-1-Fetoprotein Ab,Alpha-1-Fetoprotein.tumor marker
+
+    This function will handle both formats and output a python list of strings
+    """
+    new_value = self.value
+    if new_value[:1] == '{' and new_value[-1:] == '}': 
+      new_value = new_value[1:]
+      new_value = new_value[:-1]
+    new_value = new_value.split(',')
+    new_value = [(x[1:] if x[:1]=='"' else x) for x in new_value]
+    new_value = [(x[:-1] if x[-1:]=='"' else x) for x in new_value]
+    return new_value
+    
+  def code_rule(self):
+    query = """
+    select * from loinc.code
+    where loinc_num in :value
+    and status = 'ACTIVE'
+    order by long_common_name
+    """    
+    self.loinc_rule(query)
+
+  def display_rule(self):
+    # Cannot use "ilike any(...)" because thats Postgres specific
+    conn = get_db()
+
+    query = f"""
+    select * from loinc.code
+    where lower(long_common_name) like '{self.split_value[0].lower()}'"""
+    
+    if self.split_value[1:]:
+      for item in self.split_value[1:]:
+        query += f""" or lower(long_common_name) like {item} """
+    
+    query += """ and status = 'ACTIVE'
+    order by long_common_name
+    """
+
+    results_data = conn.execute(
+      text(query)
+    )
+    results = [Code(self.fhir_system, self.terminology_version.version, x.loinc_num, x.long_common_name) for x in results_data]
+    self.results = set(results)
+
+  def method_rule(self):
+    query = """
+    select * from loinc.code
+    where method_typ in :value
+    and status = 'ACTIVE'
+    order by long_common_name
+    """
+    self.loinc_rule(query)
+
+  def timing_rule(self):
+    query = """
+    select * from loinc.code
+    where time_aspct in :value
+    and status = 'ACTIVE'
+    order by long_common_name
+    """
+    self.loinc_rule(query)
+
+  def system_rule(self):
+    query = """
+    select * from loinc.code
+    where system in :value
+    and status = 'ACTIVE'
+    order by long_common_name
+    """
+    self.loinc_rule(query)
+
+  def component_rule(self):
+    query = """
+    select * from loinc.code
+    where component in :value
+    and status = 'ACTIVE'
+    order by long_common_name
+    """
+    self.loinc_rule(query)
+
+  def scale_rule(self):
+    query = """
+    select * from loinc.code
+    where scale_typ in :value
+    and status = 'ACTIVE'
+    order by long_common_name
+    """
+    self.loinc_rule(query)
+
+  def property_rule(self):
+    query = """
+    select * from loinc.code
+    where property in :value
+    and status = 'ACTIVE'
+    order by long_common_name
+    """
+    self.loinc_rule(query)
+
 # class GroupingValueSetRule(VSRule):
 #   def most_recent_active_version(self):
 #     version = ValueSet.load_most_recent_active_version(name)
@@ -609,6 +748,8 @@ class ValueSetVersion:
         rule = SNOMEDRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
       elif terminology.name == "RxNorm":
         rule = RxNormRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
+      elif terminology.name == "LOINC":
+        rule = LOINCRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
         
       if terminology in self.rules:
         self.rules[terminology].append(rule)
