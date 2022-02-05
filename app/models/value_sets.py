@@ -356,10 +356,13 @@ class LOINCRule(VSRule):
   def loinc_rule(self, query):
     conn = get_db()
 
-    results_data = conn.execute(
-      text(
+    converted_query = text(
         query
-      ), {
+      ).bindparams(bindparam('value', expanding=True))
+
+    results_data = conn.execute(
+      converted_query, 
+      {
         'value': self.split_value
       }
     )
@@ -386,25 +389,38 @@ class LOINCRule(VSRule):
   def code_rule(self):
     query = """
     select * from loinc.code
-    where loinc_num = any(:value)
+    where loinc_num in :value
     and status = 'ACTIVE'
     order by long_common_name
     """    
     self.loinc_rule(query)
 
   def display_rule(self):
-    query = """
+    # Cannot use "ilike any(...)" because thats Postgres specific
+    conn = get_db()
+
+    query = f"""
     select * from loinc.code
-    where long_common_name ilike any(:value)
-    and status = 'ACTIVE'
+    where lower(long_common_name) like '{self.split_value[0].lower()}'"""
+    
+    if self.split_value[1:]:
+      for item in self.split_value[1:]:
+        query += f""" or lower(long_common_name) like {item} """
+    
+    query += """ and status = 'ACTIVE'
     order by long_common_name
     """
-    self.loinc_rule(query)
+
+    results_data = conn.execute(
+      text(query)
+    )
+    results = [Code(self.fhir_system, self.terminology_version.version, x.loinc_num, x.long_common_name) for x in results_data]
+    self.results = set(results)
 
   def method_rule(self):
     query = """
     select * from loinc.code
-    where method_typ = any(:value)
+    where method_typ in :value
     and status = 'ACTIVE'
     order by long_common_name
     """
@@ -413,7 +429,7 @@ class LOINCRule(VSRule):
   def timing_rule(self):
     query = """
     select * from loinc.code
-    where time_aspct = any(:value)
+    where time_aspct in :value
     and status = 'ACTIVE'
     order by long_common_name
     """
@@ -422,7 +438,7 @@ class LOINCRule(VSRule):
   def system_rule(self):
     query = """
     select * from loinc.code
-    where system = any(:value)
+    where system in :value
     and status = 'ACTIVE'
     order by long_common_name
     """
@@ -431,7 +447,7 @@ class LOINCRule(VSRule):
   def component_rule(self):
     query = """
     select * from loinc.code
-    where component = any(:value)
+    where component in :value
     and status = 'ACTIVE'
     order by long_common_name
     """
@@ -440,7 +456,7 @@ class LOINCRule(VSRule):
   def scale_rule(self):
     query = """
     select * from loinc.code
-    where scale_typ = any(:value)
+    where scale_typ in :value
     and status = 'ACTIVE'
     order by long_common_name
     """
@@ -449,7 +465,7 @@ class LOINCRule(VSRule):
   def property_rule(self):
     query = """
     select * from loinc.code
-    where property = any(:value)
+    where property in :value
     and status = 'ACTIVE'
     order by long_common_name
     """
