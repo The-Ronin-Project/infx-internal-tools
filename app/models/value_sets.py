@@ -53,6 +53,8 @@ class VSRule:
       self.direct_child()
     elif self.operator == 'in' and self.property == 'concept':
       self.concept_in()
+    elif self.operator == 'in' and self.property == 'code':
+      self.code_in()
 
     if self.property == 'code' and self.operator == 'in':
       self.code_rule()
@@ -107,6 +109,36 @@ class ICD10PCSRule(VSRule):
 class ICD10CMRule(VSRule):
   def direct_child(self):
     pass
+
+  def code_in(self):
+    conn = get_db()
+    query = ""
+    
+    if self.property == 'code':
+      # Lookup UUIDs for provided codes
+      codes = self.value.replace(' ', '').split(',')
+      
+      # Get all descendants of the provided codes through a recursive query
+      query = """
+      select code, display from icd_10_cm.code 
+      where code in :codes 
+      and version_uuid=:version_uuid
+      order by code
+      """
+      # See link for tutorial in recursive queries: https://www.cybertec-postgresql.com/en/recursive-queries-postgresql/
+      
+    converted_query = text(
+        query
+      ).bindparams(bindparam('codes', expanding=True))
+
+    results_data = conn.execute(
+      converted_query, {
+        'codes': codes,
+        'version_uuid': self.terminology_version.uuid
+      }
+    )
+    results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
+    self.results = set(results)
 
   def self_and_descendents(self):
     conn = get_db()
