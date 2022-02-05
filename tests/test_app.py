@@ -64,7 +64,8 @@ def test_loinc_valueset():
     response = app.app.test_client().get('/ValueSet/c5ac2d30-83b4-11ec-9a73-9942f9fcf805/$expand?force_new=true')
     print(response.json)
     assert 'name' in response.json
-
+    assert 'expansion' in response.json
+    assert len(response.json.get('expansion').get('contains')) == 10
 
 def test_intensional_vs_icd_snomed():
     app.app.config['MOCK_DB'] = True
