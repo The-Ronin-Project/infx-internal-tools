@@ -49,6 +49,13 @@ def load_expansion_report(expansion_uuid):
     )
     return response
 
+@app.route('/ValueSets/rule_set/execute', methods=['POST'])
+def process_rule_set():
+    """ Allows for the real-time execution of rules, used on the front-end to preview output of a rule set"""
+    rules_input = request.get_json()
+    result = execute_rules(rules_input)
+    return jsonify(result)
+
 @app.route('/surveys/<string:survey_uuid>')
 def export_survey(survey_uuid):
     organization_uuid = request.values.get("organization_uuid")

@@ -1,4 +1,5 @@
 import math
+import json
 import requests
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String
 from sqlalchemy.dialects.postgresql import UUID
@@ -56,6 +57,8 @@ class VSRule:
 
     if self.property == 'code' and self.operator == 'in':
       self.code_rule()
+    if self.property == 'display' and self.operator == 'regex':
+      self.display_regex()
     elif self.property == 'display' and self.operator == 'in':
       self.display_rule()
 
@@ -501,6 +504,72 @@ class LOINCRule(VSRule):
     """
     self.loinc_rule(query)
 
+class CPTRule(VSRule):
+  def parse_input_array(self, input_array):
+    try:
+      if type(input_array) == list:
+        return input_array
+      elif type(input_array) == str:
+        return json.loads(input_array)
+    except:
+      return self.parse_retool_array(input_array)
+
+  def parse_retool_array(self, retool_array):
+    array_string_copy = retool_array
+    array_string_copy = array_string_copy[1:]
+    array_string_copy = array_string_copy[:-1]
+    array_string_copy = '[' + array_string_copy + ']'
+    python_array = json.loads(array_string_copy)
+    return [json.loads(x) for x in python_array]
+
+  def parse_code_number_and_letter(self, code):
+    if code.isnumeric():
+      code_number = code
+      code_letter = None
+    else:
+      code_number = code[:-1]
+      code_letter = code[-1]
+    return code_number, code_letter
+
+  def code_rule(self):
+    """ Process CPT rules where property=code and operator=in, where we are selecting codes from a range """
+    parsed_value = self.parse_input_array(self.value)
+    ranges = [x.get('range') for x in parsed_value]
+
+    # Since each range in the above array may include multiple ranges, we need to re-join them and then split them apart
+    ranges = ','.join(ranges)
+    ranges = ranges.replace(' ', '')
+    ranges = ranges.split(',')
+
+    where_clauses = []
+
+    for x in ranges:
+      if '-' in x:
+        start, end = x.split('-')
+        start_number, start_letter = self.parse_code_number_and_letter(start)
+        end_number, end_letter = self.parse_code_number_and_letter(end)
+
+        if start_letter != end_letter:
+          raise Exception(f'Letters in CPT code range do not match: {start_letter} and {end_letter}')
+
+        where_clauses.append(f"(code_number between {start_number} and {end_number} and code_letter is null)")
+      else:
+        code_number, code_letter = self.parse_code_number_and_letter(x)
+        where_clauses.append(f"(code_number={code_number} and code_letter={code_letter})")
+
+    query = "select * from cpt.code where " + ' or '.join(where_clauses)
+
+    conn = get_db()
+    results_data = conn.execute(
+      text(query)
+    )
+    results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.long_description) for x in results_data]
+    self.results = set(results)
+
+  def display_regex(self):
+    """ Process CPT rules where property=display and operator=regex, where we are string matching to displays """
+    pass
+
 # class GroupingValueSetRule(VSRule):
 #   def most_recent_active_version(self):
 #     version = ValueSet.load_most_recent_active_version(name)
@@ -750,6 +819,8 @@ class ValueSetVersion:
         rule = RxNormRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
       elif terminology.name == "LOINC":
         rule = LOINCRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
+      elif terminology.name == "CPT":
+        rule = CPTRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
         
       if terminology in self.rules:
         self.rules[terminology].append(rule)
@@ -1005,3 +1076,67 @@ class ValueSetVersion:
       }
     ).first()
     return result.report
+
+def execute_rules(rules_json):
+  """ 
+  This function will receive a single JSON encoded rule group and execute it to provide output. It can be used on the front end to preview the output of a rule group 
+
+  Sample input JSON:
+  [
+    {
+      "property": "code",
+      "operator": "in",
+      "value": [{"category_name": "Endovascular Revascularization Open or Percutaneous, Transcatheter* (Arteries and Veins)", "range": " 37220-37239,37246-37249"}, {"category_name": "Venous, Direct or With Catheter  (Arteries and Veins)", "range": "34401-34490"}, {"category_name": "Endovascular Repair of Abdominal Aorta and/or Iliac Arteries*  (Arteries and Veins)", "range": "34701-34834"}],
+      "include": true,
+      "terminology_version": "6c6219c8-5ef3-11ec-8f16-acde48001122"
+    }
+  ]
+  """
+  conn = get_db()
+
+  # Lookup terminology names
+  terminology_versions_query = conn.execute(text(
+    """
+    select * from terminology_versions
+    """
+  ))
+  terminology_versions = [x for x in terminology_versions_query]
+
+  uuid_to_name_map = {str(x.uuid): x for x in terminology_versions}
+
+  rules = []
+  for rule in rules_json:
+    terminology_name = uuid_to_name_map.get(rule.get('terminology_version')).terminology
+    fhir_uri = uuid_to_name_map.get(rule.get('terminology_version')).fhir_uri
+    terminology_version = uuid_to_name_map.get(rule.get('terminology_version'))
+    rule_property = rule.get('property')
+    operator = rule.get('operator')
+    value = rule.get('value')
+    include = rule.get('include')
+
+    if terminology_name == "ICD-10 CM":
+      rule = ICD10CMRule(None, None, None, rule_property, operator, value, include, None, fhir_uri, terminology_version)
+    elif terminology_name == "SNOMED CT":
+      rule = SNOMEDRule(None, None, None, rule_property, operator, value, include, None, fhir_uri, terminology_version)
+    elif terminology_name == "RxNorm":
+      rule = RxNormRule(None, None, None, rule_property, operator, value, include, None, fhir_uri, terminology_version)
+    elif terminology_name == "LOINC":
+      rule = LOINCRule(None, None, None, rule_property, operator, value, include, None, fhir_uri, terminology_version)
+    elif terminology_name == "CPT":
+      rule = CPTRule(None, None, None, rule_property, operator, value, include, None, fhir_uri, terminology_version)
+
+    rules.append(rule)
+
+  for rule in rules: rule.execute()
+        
+  include_rules = [x for x in rules if x.include is True]
+  exclude_rules = [x for x in rules if x.include is False]
+
+  terminology_set = include_rules.pop(0).results
+  for x in include_rules: terminology_set = terminology_set.intersection(x.results)
+
+  for x in exclude_rules: 
+        remove_set = terminology_set.intersection(x.results)
+        terminology_set = terminology_set - remove_set
+
+  return [x.serialize() for x in list(terminology_set)]
