@@ -1,4 +1,5 @@
 import re
+import json
 import pytest
 import hashlib
 from app import app 
@@ -107,3 +108,20 @@ def test_survey_export():
     response = app.app.test_client().get('/surveys/34775510-1267-11ec-b9a3-77c9d91ff3f2?organization_uuid=866632f0-ff85-11eb-9f47-ffa6d132f8a4')
     print(hashlib.md5(response.data).hexdigest())
     assert hashlib.md5(response.data).hexdigest() == "d8d184f61545f542f2a42c7064a90148"
+
+def test_execute_rules_directly():
+    app.app.config['MOCK_DB'] = True
+    response = app.app.test_client().post(
+        '/ValueSets/rule_set/execute',
+        data = json.dumps(
+        [{
+            "property": "component",
+            "operator": "in",
+            "value": "{\"Alpha-1-Fetoprotein\",\"Alpha-1-Fetoprotein.tumor marker\",\"Alpha-1-Fetoprotein^^adjusted\",\"Alpha-1-Fetoprotein^^unadjusted\",\"Alpha-1-Fetoprotein^^adjusted for diabetes\",\"Alpha-1-Fetoprotein^^adjusted for weight\",\"Alpha-1-Fetoprotein^^adjusted for diabetes+weight\",\"Alpha-1-Fetoprotein^^adjusted for multiple gestations\"}",
+            "include": True,
+            "terminology_version": "7c19e704-19d9-412b-90c3-79c5fb99ebe8"
+            }]
+        ),
+        content_type='application/json'
+        )
+    assert len(response.json) == 34
