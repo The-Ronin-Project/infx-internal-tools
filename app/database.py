@@ -1,5 +1,6 @@
 from flask import current_app, g
 from sqlalchemy import create_engine
+from elasticsearch import Elasticsearch
 from decouple import config
 
 def get_db():
@@ -18,6 +19,11 @@ def get_db():
             engine = create_engine(f"postgresql://{config('DATABASE_USER')}@{config('DATABASE_HOST')}:{config('DATABASE_PASSWORD')}@{config('DATABASE_HOST')}/{config('DATABASE_NAME')}", connect_args={'sslmode':'require'})
             g.db = engine.connect()
     return g.db
+
+def get_elasticsearch():
+    if 'es' not in g:
+        g.es = Elasticsearch(f"https://{config('ELASTICSEARCH_USER')}:{config('ELASTICSEARCH_PASSWORD')}@{config('ELASTICSEARCH_HOST')}/")
+    return g.es
 
 def close_db(e=None):
     db = g.pop('db', None)
