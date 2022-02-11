@@ -26,6 +26,7 @@ numpy = "*"
 python-decouple = "*"
 ddtrace = "*"
 pysnooper = "*"
+elasticsearch = "*"
 
 [dev-packages]
 pytest = "*"
