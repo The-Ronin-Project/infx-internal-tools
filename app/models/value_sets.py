@@ -11,10 +11,12 @@ from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
 from app.models.codes import Code
 from app.models.terminologies import Terminology
-from app.database import get_db
+from app.database import get_db, get_elasticsearch
 
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io/MAIN/concepts"
 SNOSTORM_LIMIT = 500
+
+MAX_ES_SIZE = 1000
 
 metadata = MetaData()
 expansion_member = Table('expansion_member', metadata,
@@ -568,7 +570,23 @@ class CPTRule(VSRule):
 
   def display_regex(self):
     """ Process CPT rules where property=display and operator=regex, where we are string matching to displays """
-    pass
+    es = get_elasticsearch()
+
+    results = es.search(
+      query={
+        "simple_query_string": {
+          "fields": ["display"],
+          "query": self.value,
+          }
+        },
+      index="cpt_codes",
+      size=MAX_ES_SIZE
+    )
+
+    search_results = [x.get('_source') for x in results.get('hits').get('hits')]
+    final_results = [Code(self.fhir_system, self.terminology_version.version, x.get('code'), x.get('display')) for x in search_results]
+    self.results = set(final_results)
+    
 
 # class GroupingValueSetRule(VSRule):
 #   def most_recent_active_version(self):
