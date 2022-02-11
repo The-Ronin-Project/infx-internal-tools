@@ -44,9 +44,24 @@ If release name contains chart name it will be used as a full name.
     configMapKeyRef:
       name: infx-api-config
       key: DATABASE_USER
+- name: ELASTICSEARCH_HOST
+  valueFrom:
+    configMapKeyRef:
+      name: infx-api-config
+      key: ELASTICSEARCH_HOST
+- name: ELASTICSEARCH_USER
+  valueFrom:
+    configMapKeyRef:
+      name: infx-api-config
+      key: ELASTICSEARCH_USER
 - name: DATABASE_PASSWORD
   valueFrom:
     secretKeyRef:
       name: infx-api-secrets
       key: DATABASE_PASSWORD
+- name: ELASTICSEARCH_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: infx-api-secrets
+      key: ELASTICSEARCH_PASSWORD
 {{- end -}}

@@ -9,4 +9,6 @@ data:
   DATABASE_HOST: "{{ .Values.database.host}}"
   DATABASE_USER: "{{ .Values.database.user}}"
   DATABASE_NAME: "{{ .Values.database.name}}"
+  ELASTICSEARCH_HOST: "{{ .Values.elasticsearch.host }}"
+  ELASTICSEARCH_USER: "{{ .Values.elasticsearch.user }}"
   DD_SERVICE: "{{ include "infx-api.fullname" . }}"
