@@ -23,3 +23,7 @@ database:
   name: "clinical-content"
   host: ""
   user: "infx-api_user"
+
+elasticsearch:
+  host: ""
+  user: "elastic"
