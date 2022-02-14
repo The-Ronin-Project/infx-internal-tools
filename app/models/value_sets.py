@@ -668,6 +668,21 @@ class ValueSet:
     ]
 
   @classmethod
+  def load_all_value_sets_by_status(cls, status):
+    conn = get_db()
+    query = text(
+      """
+      select uuid from value_sets.value_set_version
+      where status in :status
+      """
+      ).bindparams(bindparam('status', expanding=True))
+    results = conn.execute(query, {
+        'status': status
+      })
+
+    return [ValueSetVersion.load(x.uuid) for x in results]
+
+  @classmethod
   def load_version_metadata(cls, name):
     conn = get_db()
     results = conn.execute(text(

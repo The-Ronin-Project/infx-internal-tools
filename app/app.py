@@ -24,6 +24,14 @@ def get_all_value_sets_metadata():
     active_only = False if request.values.get('active_only') == 'false' else True
     return jsonify(ValueSet.load_all_value_set_metadata(active_only))
 
+@app.route('/ValueSets/all/')
+def get_all_value_sets():
+    status = request.values.get('status').split(',')
+    value_sets = ValueSet.load_all_value_sets_by_status(status)
+    for x in value_sets: x.expand()
+    serialized = [x.serialize() for x in value_sets]
+    return jsonify(serialized)
+
 @app.route('/ValueSets/<string:name>/versions/')
 def get_value_set_versions(name):
     return jsonify(ValueSet.load_version_metadata(name))
