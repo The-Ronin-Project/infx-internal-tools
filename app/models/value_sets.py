@@ -728,6 +728,169 @@ class ValueSet:
     recent_version = results.first()
     return ValueSetVersion.load(recent_version.uuid)
 
+class RuleGroup:
+  def __init__(self, vs_version_uuid, rule_group_id):
+    self.vs_version_uuid = vs_version_uuid
+    self.rule_group_id = rule_group_id
+    self.expansion = set()
+    self.rules = {}
+    self.load_rules()
+
+  # Move load rules to here, at version level, just load distinct rule groups and instantiate this class
+  def load_rules(self):
+    """
+    Rules will be structured as a dictionary where each key is a terminology 
+    and the value is a list of rules for that terminology within this value set version.
+    """
+    conn = get_db()
+
+    terminologies = Terminology.load_terminologies_for_value_set_version(self.vs_version_uuid)
+    
+    rules_data = conn.execute(text(
+      """
+      select * 
+      from value_sets.value_set_rule 
+      join terminology_versions
+      on terminology_version=terminology_versions.uuid
+      where value_set_version=:vs_version
+      and rule_group=:rule_group
+      """
+    ), {
+      'vs_version': self.vs_version_uuid,
+      'rule_group': self.rule_group_id
+    })
+    
+    for x in rules_data:
+      terminology = terminologies.get(x.terminology_version)
+      rule = None
+      
+      if terminology.name == "ICD-10 CM":
+        rule = ICD10CMRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
+      elif terminology.name == "SNOMED CT":
+        rule = SNOMEDRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
+      elif terminology.name == "RxNorm":
+        rule = RxNormRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
+      elif terminology.name == "LOINC":
+        rule = LOINCRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
+      elif terminology.name == "CPT":
+        rule = CPTRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
+        
+      if terminology in self.rules:
+        self.rules[terminology].append(rule)
+      else:
+        self.rules[terminology] = [rule]
+  
+  # Move execute, so that the logic previously kept at a version level is now at a rule group level
+  def generate_expansion(self):
+    self.expansion = set()
+    terminologies = self.rules.keys()
+    expansion_report = f"EXPANDING RULE GROUP {self.rule_group_id}\n"
+    
+    for terminology in terminologies:
+      expansion_report += f"\nProcessing rules for terminology {terminology.name} version {terminology.version}\n"
+
+      rules = self.rules.get(terminology)
+      
+      for rule in rules: rule.execute()
+        
+      include_rules = [x for x in rules if x.include is True]
+      exclude_rules = [x for x in rules if x.include is False]
+
+      expansion_report += "\nInclusion Rules\n"
+      for x in include_rules:
+        expansion_report += f"{x.description}, {x.property}, {x.operator}, {x.value}\n"
+      expansion_report += "\nExclusion Rules\n"
+      for x in exclude_rules:
+        expansion_report += f"{x.description}, {x.property}, {x.operator}, {x.value}\n"
+      
+      terminology_set = include_rules.pop(0).results
+      # todo: if it's a grouping value set, we should use union instead of intersection
+      for x in include_rules: terminology_set = terminology_set.intersection(x.results)
+
+      expansion_report += "\nIntersection of Inclusion Rules\n"
+      
+      # .join w/ a list comprehension used for performance reasons
+      expansion_report += "".join([f"{x.code}, {x.display}, {x.system}, {x.version}\n" for x in terminology_set])
+
+      for x in exclude_rules: 
+        remove_set = terminology_set.intersection(x.results)
+        terminology_set = terminology_set - remove_set
+
+        expansion_report += f"\nProcessing Exclusion Rule: {x.description}, {x.property}, {x.operator}, {x.value}\n"
+        expansion_report += "The following codes were removed from the set:\n"
+        # for removed in remove_set:
+        #   expansion_report += f"{removed.code}, {removed.display}, {removed.system}, {removed.version}\n"
+        expansion_report += "".join([f"{removed.code}, {removed.display}, {removed.system}, {removed.version}\n" for removed in remove_set])
+        
+      self.expansion = self.expansion.union(terminology_set)
+
+      expansion_report += f"\nThe expansion will contain the following codes for the terminology {terminology.name}:\n"
+      
+      # .join w/ a list comprehension used for performance reasons
+      expansion_report += "".join([f"{x.code}, {x.display}, {x.system}, {x.version}\n" for x in terminology_set])
+      expansion_report += "\n"
+    
+    return self.expansion, expansion_report
+  
+  # Move serialization logic for rule groups here
+  def serialize_include(self):
+    include_rules = self.include_rules
+    terminology_keys = include_rules.keys()
+    serialized = []
+    
+    for key in terminology_keys:
+      rules = include_rules.get(key)
+      serialized_rules = [x.serialize() for x in rules]
+      serialized.append({
+        'system': key.fhir_uri,
+        'version': key.version,
+        'filter': serialized_rules
+      })
+    return serialized
+
+  def serialize_exclude(self):
+    exclude_rules = self.exclude_rules
+    terminology_keys = exclude_rules.keys()
+    serialized = []
+    
+    for key in terminology_keys:
+      rules = exclude_rules.get(key)
+      serialized_rules = [x.serialize() for x in rules]
+      serialized.append({
+        'system': key.fhir_uri,
+        'version': key.version,
+        'filter': serialized_rules
+      })
+
+    return serialized
+  
+  # Move include and exclude rule properties to here
+  @property
+  def include_rules(self):
+    keys = self.rules.keys()
+    include_rules = {}
+    
+    for key in keys:
+      rules_for_terminology = self.rules.get(key)
+      include_rules_for_terminology = [x for x in rules_for_terminology if x.include is True]
+      if include_rules_for_terminology:
+        include_rules[key] = include_rules_for_terminology
+    
+    return include_rules
+
+  @property
+  def exclude_rules(self):
+    keys = self.rules.keys()
+    exclude_rules = {}
+    
+    for key in keys:
+      rules_for_terminology = self.rules.get(key)
+      exclude_rules_for_terminology = [x for x in rules_for_terminology if x.include is False]
+      if exclude_rules_for_terminology:
+        exclude_rules[key] = exclude_rules_for_terminology
+    
+    return exclude_rules
+
 
 class ValueSetVersion:
   def __init__(self, uuid, effective_start, effective_end, version, value_set, status, description):
@@ -741,7 +904,8 @@ class ValueSetVersion:
     self.version = version
     self.expansion_uuid = None
     
-    self.rules = {}
+    # self.rules = {}
+    self.rule_groups = []
     self.expansion = set()
     self.expansion_timestamp = None
     self.extensional_codes = {}
@@ -792,73 +956,22 @@ class ValueSetVersion:
           value_set_version.extensional_codes[(item.fhir_uri, item.version)].append(code)
 
     return value_set_version
-  
-  @property
-  def include_rules(self):
-    keys = self.rules.keys()
-    include_rules = {}
-    
-    for key in keys:
-      rules_for_terminology = self.rules.get(key)
-      include_rules_for_terminology = [x for x in rules_for_terminology if x.include is True]
-      if include_rules_for_terminology:
-        include_rules[key] = include_rules_for_terminology
-    
-    return include_rules
-
-  @property
-  def exclude_rules(self):
-    keys = self.rules.keys()
-    exclude_rules = {}
-    
-    for key in keys:
-      rules_for_terminology = self.rules.get(key)
-      exclude_rules_for_terminology = [x for x in rules_for_terminology if x.include is False]
-      if exclude_rules_for_terminology:
-        exclude_rules[key] = exclude_rules_for_terminology
-    
-    return exclude_rules
 
   def load_rules(self):
-    """
-    Rules will be structured as a dictionary where each key is a terminology 
-    and the value is a list of rules for that terminology within this value set version.
-    """
     conn = get_db()
-
-    terminologies = Terminology.load_terminologies_for_value_set_version(self.uuid)
-    
-    rules_data = conn.execute(text(
-      """
-      select * 
-      from value_sets.value_set_rule 
-      join terminology_versions
-      on terminology_version=terminology_versions.uuid
-      where value_set_version=:vs_version
-      """
-    ), {
-      'vs_version': self.uuid
-    })
-    
-    for x in rules_data:
-      terminology = terminologies.get(x.terminology_version)
-      rule = None
-      
-      if terminology.name == "ICD-10 CM":
-        rule = ICD10CMRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
-      elif terminology.name == "SNOMED CT":
-        rule = SNOMEDRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
-      elif terminology.name == "RxNorm":
-        rule = RxNormRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
-      elif terminology.name == "LOINC":
-        rule = LOINCRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
-      elif terminology.name == "CPT":
-        rule = CPTRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
-        
-      if terminology in self.rules:
-        self.rules[terminology].append(rule)
-      else:
-        self.rules[terminology] = [rule]
+    rule_groups_query = conn.execute(
+      text(
+        """
+        select distinct rule_group
+        from value_sets.value_set_rule
+        where value_set_version=:vs_version_uuid
+        """
+      ), {
+        'vs_version_uuid': self.uuid
+      }
+    )
+    rule_group_ids = [x.rule_group for x in rule_groups_query]
+    self.rule_groups = [RuleGroup(self.uuid, x) for x in rule_group_ids]
 
   def expand(self, force_new=False):
     if force_new is True:
@@ -951,56 +1064,15 @@ class ValueSetVersion:
 
   def create_expansion(self):
     self.expansion = set()
-    terminologies = self.rules.keys()
-    expansion_report = ""
-    
-    for terminology in terminologies:
-      expansion_report += f"\n\n\nProcessing rules for terminology {terminology.name} version {terminology.version}\n"
+    expansion_report_combined = ""
 
-      rules = self.rules.get(terminology)
-      
-      for rule in rules: rule.execute()
-        
-      include_rules = [x for x in rules if x.include is True]
-      exclude_rules = [x for x in rules if x.include is False]
-
-      expansion_report += "\nInclusion Rules\n"
-      for x in include_rules:
-        expansion_report += f"{x.description}, {x.property}, {x.operator}, {x.value}\n"
-      expansion_report += "\nExclusion Rules\n"
-      for x in exclude_rules:
-        expansion_report += f"{x.description}, {x.property}, {x.operator}, {x.value}\n"
-      
-      terminology_set = include_rules.pop(0).results
-      # todo: if it's a grouping value set, we should use union instead of intersection
-      for x in include_rules: terminology_set = terminology_set.intersection(x.results)
-
-      expansion_report += "\nIntersection of Inclusion Rules\n"
-      
-      # .join w/ a list comprehension used for performance reasons
-      expansion_report += "".join([f"{x.code}, {x.display}, {x.system}, {x.version}\n" for x in terminology_set])
-
-      for x in exclude_rules: 
-        remove_set = terminology_set.intersection(x.results)
-        terminology_set = terminology_set - remove_set
-
-        expansion_report += f"\nProcessing Exclusion Rule: {x.description}, {x.property}, {x.operator}, {x.value}\n"
-        expansion_report += "The following codes were removed from the set:\n"
-        # for removed in remove_set:
-        #   expansion_report += f"{removed.code}, {removed.display}, {removed.system}, {removed.version}\n"
-        expansion_report += "".join([f"{removed.code}, {removed.display}, {removed.system}, {removed.version}\n" for removed in remove_set])
-        
-      self.expansion = self.expansion.union(terminology_set)
-
-      expansion_report += f"\nThe expansion will contain the following codes for the terminology {terminology.name}:\n"
-      
-      # .join w/ a list comprehension used for performance reasons
-      expansion_report += "".join([f"{x.code}, {x.display}, {x.system}, {x.version}\n" for x in terminology_set])
+    for rule_group in self.rule_groups:
+      expansion, expansion_report = rule_group.generate_expansion()
+      self.expansion = self.expansion.union(expansion)
+      expansion_report_combined += expansion_report
 
     if self.value_set.type == 'intensional':
-      self.save_expansion(report=expansion_report)
-    
-    return self.expansion
+      self.save_expansion(report=expansion_report_combined)
 
   def serialize_include(self):
     if self.value_set.type == 'extensional':
@@ -1021,39 +1093,21 @@ class ValueSetVersion:
       return serialized
 
     elif self.value_set.type == 'intensional':
-      include_rules = self.include_rules
-      terminology_keys = include_rules.keys()
       serialized = []
-      
-      for key in terminology_keys:
-        rules = include_rules.get(key)
-        serialized_rules = [x.serialize() for x in rules]
-        serialized.append({
-          'system': key.fhir_uri,
-          'version': key.version,
-          'filter': serialized_rules
-        })
-
+      for group in self.rule_groups:
+        serialized_rules = group.serialize_include()
+        for rule in serialized_rules: serialized.append(rule)
       return serialized
 
   def serialize_exclude(self):
     if self.value_set.type == 'intensional':
-      exclude_rules = self.exclude_rules
-      terminology_keys = exclude_rules.keys()
       serialized = []
-      
-      for key in terminology_keys:
-        rules = exclude_rules.get(key)
-        serialized_rules = [x.serialize() for x in rules]
-        serialized.append({
-          'system': key.fhir_uri,
-          'version': key.version,
-          'filter': serialized_rules
-        })
-
+      for item in [x.serialize_exclude() for x in self.rule_groups]:
+        if item != []: 
+          for rule in item: serialized.append(rule)
       return serialized
     
-    else:
+    else: # No exclude for extensional
       return []
 
   def serialize(self):
@@ -1110,6 +1164,7 @@ class ValueSetVersion:
     ).first()
     return result.report
 
+# Clarification: this stand-alone method is deliberately not part of the above class
 def execute_rules(rules_json):
   """ 
   This function will receive a single JSON encoded rule group and execute it to provide output. It can be used on the front end to preview the output of a rule group 
