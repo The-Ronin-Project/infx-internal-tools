@@ -52,7 +52,7 @@ def test_intensional_vs_rxnorm():
     assert 'compose' in response.json
 
     compose = response.json.get('compose')
-    include = compose.get('include')[0]
+    include = compose.get('include')[0][0]
 
     # Validate there are not any exclusion rules
     assert 'exclude' not in compose
@@ -91,7 +91,7 @@ def test_intensional_vs_icd_snomed():
     # Validate that there are exclusion rules
     compose = response.json.get('compose')
     assert 'exclude' in compose
-    exclude = compose.get('exclude')
+    exclude = compose.get('exclude')[0]
     assert len(exclude[0].get('filter')) > 3
 
     assert 'expansion' in response.json
