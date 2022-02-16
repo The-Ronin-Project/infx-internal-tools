@@ -1093,13 +1093,18 @@ class ValueSetVersion:
       return serialized
 
     elif self.value_set.type == 'intensional':
-      return [x.serialize_include() for x in self.rule_groups]
+      serialized = []
+      for group in self.rule_groups:
+        serialized_rules = group.serialize_include()
+        for rule in serialized_rules: serialized.append(rule)
+      return serialized
 
   def serialize_exclude(self):
     if self.value_set.type == 'intensional':
       serialized = []
       for item in [x.serialize_exclude() for x in self.rule_groups]:
-        if item != []: serialized.append(item)
+        if item != []: 
+          for rule in item: serialized.append(rule)
       return serialized
     
     else: # No exclude for extensional
