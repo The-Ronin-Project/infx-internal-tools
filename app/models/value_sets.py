@@ -3,7 +3,7 @@ import json
 import requests
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String
 from sqlalchemy.dialects.postgresql import UUID
-from uuid import uuid1
+import uuid
 from datetime import date, datetime, timedelta
 from dateutil import parser
 from werkzeug.exceptions import BadRequest, NotFound
@@ -696,18 +696,35 @@ class ValueSet:
     return [ValueSetVersion.load(x.uuid) for x in results]
 
   @classmethod
-  def load_version_metadata(cls, name):
+  def name_to_uuid(cls, identifier):
+    """ Returns the UUID for a ValueSet, given either a name or UUID"""
+    try:
+      return uuid.UUID(identifier)
+    except ValueError:
+      conn = get_db()
+      result = conn.execute(
+        text(
+          """
+          select uuid, name from value_sets.value_set
+          where name=:name
+          """
+        ), {
+          'name': identifier
+        }
+      ).first()
+      return result.uuid
+
+  @classmethod
+  def load_version_metadata(cls, uuid):
     conn = get_db()
     results = conn.execute(text(
       """
       select * from value_sets.value_set_version
-      where value_set_uuid in
-      (select uuid from value_sets.value_set
-      where name=:vs_name)
+      where value_set_uuid = :uuid
       order by version desc
       """
     ), {
-      'vs_name': name
+      'uuid': uuid
     })
     return [
       {
@@ -722,21 +739,19 @@ class ValueSet:
     ]
 
   @classmethod
-  def load_most_recent_active_version(cls, name):
+  def load_most_recent_active_version(cls, uuid):
     conn = get_db()
     query = text(
       """
       select * from value_sets.value_set_version
-      where value_set_uuid in
-      (select uuid from value_sets.value_set
-      where name=:vs_name)
+      where value_set_uuid = :uuid
       and status='active'
       order by version desc
       limit 1
       """
       )
     results = conn.execute(query, {
-      'vs_name': name
+      'uuid': uuid
     })
     recent_version = results.first()
     return ValueSetVersion.load(recent_version.uuid)
@@ -1048,7 +1063,7 @@ class ValueSetVersion:
 
   def save_expansion(self, report=None):
     conn = get_db()
-    self.expansion_uuid = uuid1()
+    self.expansion_uuid = uuid.uuid1()
 
     # Create a new expansion entry in the value_sets.expansion table
     current_time_string = datetime.now() # + timedelta(days=1) # Must explicitly create this, since SQLite can't use now()
