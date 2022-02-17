@@ -1,4 +1,5 @@
 from io import StringIO
+from uuid import UUID
 import re
 from flask import Flask, jsonify, request, Response
 from app.models.value_sets import *
@@ -32,13 +33,15 @@ def get_all_value_sets():
     serialized = [x.serialize() for x in value_sets]
     return jsonify(serialized)
 
-@app.route('/ValueSets/<string:name>/versions/')
-def get_value_set_versions(name):
-    return jsonify(ValueSet.load_version_metadata(name))
+@app.route('/ValueSets/<string:identifier>/versions/')
+def get_value_set_versions(identifier):
+    uuid = ValueSet.name_to_uuid(identifier)
+    return jsonify(ValueSet.load_version_metadata(uuid))
 
-@app.route('/ValueSets/<string:name>/most_recent_active_version')
-def get_most_recent_version(name):
-    version = ValueSet.load_most_recent_active_version(name)
+@app.route('/ValueSets/<string:identifier>/most_recent_active_version')
+def get_most_recent_version(identifier):
+    uuid = ValueSet.name_to_uuid(identifier)
+    version = ValueSet.load_most_recent_active_version(uuid)
     version.expand()
     return jsonify(version.serialize())
 
