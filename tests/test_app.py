@@ -88,6 +88,11 @@ def test_intensional_vs_icd_snomed():
     assert 'description' in response.json
     assert 'compose' in response.json
 
+    # Validate the synonyms are loaded
+    additional_data = response.json.get('additionalData')
+    synonyms = additional_data.get('synonyms')
+    assert synonyms.get("TEST") == "Breast Cancer"
+
     # Validate that there are exclusion rules
     compose = response.json.get('compose')
     assert 'exclude' in compose

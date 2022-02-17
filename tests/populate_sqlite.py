@@ -13,6 +13,7 @@ cursor.execute("attach database 'dbs/loinc.db' as loinc")
 
 sql_files = [
     "sql_exports/term_versions.sql", 
+    "sql_exports/resource_synonyms.sql",
     "sql_exports/snomed_schema.sql", 
     "sql_exports/icd10cm.sql", 
     "sql_exports/rxndirty.sql",

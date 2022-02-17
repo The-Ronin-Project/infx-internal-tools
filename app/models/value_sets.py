@@ -599,7 +599,7 @@ class CPTRule(VSRule):
 #     pass
 
 class ValueSet:
-  def __init__(self, uuid, name, title, publisher, contact, description, immutable, experimental, purpose, vs_type):
+  def __init__(self, uuid, name, title, publisher, contact, description, immutable, experimental, purpose, vs_type, synonyms={}):
     self.uuid = uuid
     self.name = name
     self.title = title
@@ -612,6 +612,7 @@ class ValueSet:
     if self.experimental == 0: self.experimental = False
     self.purpose = purpose
     self.type = vs_type
+    self.synonyms=synonyms
   
   @classmethod
   def load(cls, uuid):
@@ -623,11 +624,23 @@ class ValueSet:
     ), {
       'uuid': uuid
     }).first()
+
+    synonym_data = conn.execute(text(
+      """
+      select context, synonym
+      from resource_synonyms
+      where resource_uuid=:uuid
+      """
+    ), {
+      'uuid': uuid
+    })
+    synonyms = {x.context: x.synonym for x in synonym_data}
     
     value_set = cls(vs_data.uuid, 
                vs_data.name, vs_data.title, vs_data.publisher, 
                vs_data.contact, vs_data.description, 
-               vs_data.immutable, vs_data.experimental, vs_data.purpose, vs_data.type)
+               vs_data.immutable, vs_data.experimental, vs_data.purpose, vs_data.type,
+               synonyms)
     return value_set
 
   @classmethod
@@ -1137,7 +1150,8 @@ class ValueSetVersion:
         "effective_start": self.effective_start,
         "effective_end": self.effective_end,
         "version_uuid": self.uuid,
-        "expansion_uuid": self.expansion_uuid
+        "expansion_uuid": self.expansion_uuid,
+        "synonyms": self.value_set.synonyms
       }
     }
 
