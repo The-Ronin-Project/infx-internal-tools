@@ -398,7 +398,8 @@ class LOINCRule(VSRule):
     results_data = conn.execute(
       converted_query, 
       {
-        'value': self.split_value
+        'value': self.split_value,
+        'terminology_version_uuid': self.terminology_version.uuid
       }
     )
     results = [Code(self.fhir_system, self.terminology_version.version, x.loinc_num, x.long_common_name) for x in results_data]
@@ -426,6 +427,7 @@ class LOINCRule(VSRule):
     select * from loinc.code
     where loinc_num in :value
     and status = 'ACTIVE'
+    and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """    
     self.loinc_rule(query)
@@ -443,11 +445,14 @@ class LOINCRule(VSRule):
         query += f""" or lower(long_common_name) like {item} """
     
     query += """ and status = 'ACTIVE'
+    and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
 
     results_data = conn.execute(
-      text(query)
+      text(query), {
+        'terminology_version_uuid': self.terminology_version.uuid
+      }
     )
     results = [Code(self.fhir_system, self.terminology_version.version, x.loinc_num, x.long_common_name) for x in results_data]
     self.results = set(results)
@@ -457,6 +462,7 @@ class LOINCRule(VSRule):
     select * from loinc.code
     where method_typ in :value
     and status = 'ACTIVE'
+    and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
     self.loinc_rule(query)
@@ -466,6 +472,7 @@ class LOINCRule(VSRule):
     select * from loinc.code
     where time_aspct in :value
     and status = 'ACTIVE'
+    and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
     self.loinc_rule(query)
@@ -475,6 +482,7 @@ class LOINCRule(VSRule):
     select * from loinc.code
     where system in :value
     and status = 'ACTIVE'
+    and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
     self.loinc_rule(query)
@@ -484,6 +492,7 @@ class LOINCRule(VSRule):
     select * from loinc.code
     where component in :value
     and status = 'ACTIVE'
+    and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
     self.loinc_rule(query)
@@ -493,6 +502,7 @@ class LOINCRule(VSRule):
     select * from loinc.code
     where scale_typ in :value
     and status = 'ACTIVE'
+    and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
     self.loinc_rule(query)
@@ -502,6 +512,7 @@ class LOINCRule(VSRule):
     select * from loinc.code
     where property in :value
     and status = 'ACTIVE'
+    and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
     self.loinc_rule(query)

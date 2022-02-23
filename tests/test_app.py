@@ -122,11 +122,11 @@ def test_execute_rules_directly():
         [{
             "property": "component",
             "operator": "in",
-            "value": "{\"Alpha-1-Fetoprotein\",\"Alpha-1-Fetoprotein.tumor marker\",\"Alpha-1-Fetoprotein^^adjusted\",\"Alpha-1-Fetoprotein^^unadjusted\",\"Alpha-1-Fetoprotein^^adjusted for diabetes\",\"Alpha-1-Fetoprotein^^adjusted for weight\",\"Alpha-1-Fetoprotein^^adjusted for diabetes+weight\",\"Alpha-1-Fetoprotein^^adjusted for multiple gestations\"}",
+            "value": "{\"Alpha-1-Fetoprotein\"}",
             "include": True,
             "terminology_version": "7c19e704-19d9-412b-90c3-79c5fb99ebe8"
             }]
         ),
         content_type='application/json'
         )
-    assert len(response.json) == 34
+    assert len(response.json) == 6
