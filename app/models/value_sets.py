@@ -1170,11 +1170,17 @@ class ValueSetVersion:
       }
     }
 
+    if self.value_set.type == 'extensional':
+      all_extensional_codes = []
+      for terminology, codes in self.extensional_codes.items():
+        all_extensional_codes += codes
+      serialized['expansion']['contains'] = [x.serialize() for x in all_extensional_codes]
+
     serialized_exclude = self.serialize_exclude()
     if serialized_exclude:
       serialized['compose']['exclude'] = serialized_exclude
 
-    if self.value_set.type == 'extensional': serialized.pop('expansion')
+    # if self.value_set.type == 'extensional': serialized.pop('expansion')
 
     return serialized
 
