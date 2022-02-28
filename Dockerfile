@@ -1,4 +1,4 @@
-FROM https://docker-proxy.devops.projectronin.io/v2/ronin/python-builder/manifests/latest as builder
+FROM docker-proxy.devops.projectronin.io/ronin/python-builder:latest as builder
 
 WORKDIR /app
 COPY Pipfile Pipfile.lock ./
