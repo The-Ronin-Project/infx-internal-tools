@@ -1,4 +1,4 @@
-FROM tiangolo/uwsgi-nginx:python3.9 as builder
+FROM https://docker-proxy.devops.projectronin.io/v2/ronin/python-builder/manifests/latest as builder
 
 WORKDIR /app
 COPY Pipfile Pipfile.lock ./
