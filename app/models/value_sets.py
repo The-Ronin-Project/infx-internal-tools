@@ -10,6 +10,7 @@ from werkzeug.exceptions import BadRequest, NotFound
 
 from sqlalchemy.sql.expression import bindparam
 from app.models.codes import Code
+from app.models.concept_maps import ConceptMap
 from app.models.terminologies import Terminology
 from app.database import get_db, get_elasticsearch
 
@@ -518,6 +519,14 @@ class LOINCRule(VSRule):
     self.loinc_rule(query)
 
 class CPTRule(VSRule):
+  def parse_cpt_retool_array(retool_array):
+    array_string_copy = retool_array
+    array_string_copy = array_string_copy[1:]
+    array_string_copy = array_string_copy[:-1]
+    array_string_copy = '[' + array_string_copy + ']'
+    python_array = json.loads(array_string_copy)
+    return [json.loads(x) for x in python_array]
+
   def parse_input_array(self, input_array):
     try:
       if type(input_array) == list:
@@ -525,15 +534,7 @@ class CPTRule(VSRule):
       elif type(input_array) == str:
         return json.loads(input_array)
     except:
-      return self.parse_retool_array(input_array)
-
-  def parse_retool_array(self, retool_array):
-    array_string_copy = retool_array
-    array_string_copy = array_string_copy[1:]
-    array_string_copy = array_string_copy[:-1]
-    array_string_copy = '[' + array_string_copy + ']'
-    python_array = json.loads(array_string_copy)
-    return [json.loads(x) for x in python_array]
+      return parse_cpt_retool_array(input_array)
 
   def parse_code_number_and_letter(self, code):
     if code.isnumeric():
@@ -1110,8 +1111,55 @@ class ValueSetVersion:
       self.expansion = self.expansion.union(expansion)
       expansion_report_combined += expansion_report
 
+    self.process_mapping_inclusions()
+
     if self.value_set.type == 'intensional':
       self.save_expansion(report=expansion_report_combined)
+
+  def parse_mapping_inclusion_retool_array(self, retool_array):
+    array_string_copy = retool_array
+    array_string_copy = array_string_copy[1:]
+    array_string_copy = array_string_copy[:-1]
+    array_string_copy = '[' + array_string_copy + ']'
+    python_array = json.loads(array_string_copy)
+    return python_array
+
+  def process_mapping_inclusions(self):
+    # Load mapping inclusion rules for version
+    conn = get_db()
+    mapping_inclusions_query = conn.execute(
+      text(
+        """
+        select * from value_sets.mapping_inclusion
+        where vs_version_uuid=:version_uuid
+        """
+      ), {
+        'version_uuid': self.uuid
+      }
+    )
+    mapping_inclusions = [x for x in mapping_inclusions_query]
+
+    for inclusion in mapping_inclusions:
+      print("Inclusion", inclusion)
+      # Load appropriate concept maps
+      allowed_relationship_types = self.parse_mapping_inclusion_retool_array(inclusion.relationship_types)
+      concept_map = ConceptMap(None, allowed_relationship_types, inclusion.concept_map_name)
+      
+      if inclusion.match_source_or_target == 'source':
+        mappings = concept_map.source_code_to_target_map
+      elif inclusion.match_source_or_target == 'target':
+        mappings = concept_map.target_code_to_source_map
+
+      # Identify mapped codes and insert into expansion
+      codes_to_add_to_expansion = []
+      for item in self.expansion:
+        if item.code in mappings:
+          print("Adding codes", mappings[item.code])
+          codes_to_add_to_expansion.extend(mappings[item.code])
+
+      set_to_add_to_expansion = set(codes_to_add_to_expansion)
+      self.expansion = self.expansion.union(set_to_add_to_expansion)
+      
 
   def serialize_include(self):
     if self.value_set.type == 'extensional':
