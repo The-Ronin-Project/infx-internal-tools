@@ -44,7 +44,7 @@ spec:
             limits:
               memory: {{ .Values.resources.limits.memory }}
           ports:
-            - containerPort: 80
+            - containerPort: 8000
           env:
             {{- include "infx-api.env" . | nindent 10 }}
           livenessProbe:
@@ -52,7 +52,7 @@ spec:
             httpGet:
               path: /ping
               scheme: HTTP
-              port: 80
+              port: 8000
             timeoutSeconds: 5
             periodSeconds: 60
             failureThreshold: 5
@@ -61,6 +61,6 @@ spec:
             httpGet:
               path: /ping
               scheme: HTTP
-              port: 80
+              port: 8000
             timeoutSeconds: 2
       restartPolicy: Always
