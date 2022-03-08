@@ -519,6 +519,7 @@ class LOINCRule(VSRule):
     self.loinc_rule(query)
 
 class CPTRule(VSRule):
+  @staticmethod
   def parse_cpt_retool_array(retool_array):
     array_string_copy = retool_array
     array_string_copy = array_string_copy[1:]
@@ -534,7 +535,7 @@ class CPTRule(VSRule):
       elif type(input_array) == str:
         return json.loads(input_array)
     except:
-      return parse_cpt_retool_array(input_array)
+      return self.parse_cpt_retool_array(input_array)
 
   def parse_code_number_and_letter(self, code):
     if code.isnumeric():
@@ -548,7 +549,12 @@ class CPTRule(VSRule):
   def code_rule(self):
     """ Process CPT rules where property=code and operator=in, where we are selecting codes from a range """
     parsed_value = self.parse_input_array(self.value)
-    ranges = [x.get('range') for x in parsed_value]
+
+    # Input may be list of dicts with a 'range' key, or may be list of ranges directly
+    if type(parsed_value[0]) == dict:
+      ranges = [x.get('range') for x in parsed_value]
+    else:
+      ranges = [x for x in parsed_value]
 
     # Since each range in the above array may include multiple ranges, we need to re-join them and then split them apart
     ranges = ','.join(ranges)
@@ -561,15 +567,17 @@ class CPTRule(VSRule):
       if '-' in x:
         start, end = x.split('-')
         start_number, start_letter = self.parse_code_number_and_letter(start)
+        print(start_number, start_letter)
         end_number, end_letter = self.parse_code_number_and_letter(end)
 
         if start_letter != end_letter:
           raise Exception(f'Letters in CPT code range do not match: {start_letter} and {end_letter}')
 
-        where_clauses.append(f"(code_number between {start_number} and {end_number} and code_letter is null)")
+        where_clauses.append(f"(code_number between {start_number} and {end_number} and code_letter {'=' if start_letter is not None else 'is'} {start_letter if start_letter is not None else 'null'})")
       else:
         code_number, code_letter = self.parse_code_number_and_letter(x)
-        where_clauses.append(f"(code_number={code_number} and code_letter={code_letter})")
+        print(code_number, code_letter)
+        where_clauses.append(f"(code_number={code_number} and code_letter {'=' if code_letter is not None else 'is'} {code_letter if code_letter is not None else 'null'})")
 
     query = "select * from cpt.code where " + ' or '.join(where_clauses)
 
