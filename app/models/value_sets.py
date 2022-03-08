@@ -567,7 +567,6 @@ class CPTRule(VSRule):
       if '-' in x:
         start, end = x.split('-')
         start_number, start_letter = self.parse_code_number_and_letter(start)
-        print(start_number, start_letter)
         end_number, end_letter = self.parse_code_number_and_letter(end)
 
         if start_letter != end_letter:
@@ -576,7 +575,6 @@ class CPTRule(VSRule):
         where_clauses.append(f"(code_number between {start_number} and {end_number} and code_letter {'=' if start_letter is not None else 'is'} {start_letter if start_letter is not None else 'null'})")
       else:
         code_number, code_letter = self.parse_code_number_and_letter(x)
-        print(code_number, code_letter)
         where_clauses.append(f"(code_number={code_number} and code_letter {'=' if code_letter is not None else 'is'} {code_letter if code_letter is not None else 'null'})")
 
     query = "select * from cpt.code where " + ' or '.join(where_clauses)
