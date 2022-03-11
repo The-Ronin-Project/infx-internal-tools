@@ -6,7 +6,6 @@ from app import app
 
 def test_extensional_vs():
     app.app.config['MOCK_DB'] = True
-    app.app.config['ENABLE_DATADOG_APM'] = False
     response = app.app.test_client().get('/ValueSet/987ffe8a-27a8-11ec-9621-0242ac130002/$expand')
     # assert response.json.get('version') == "1.0"
     # assert 'url' in response.json
@@ -36,7 +35,6 @@ def test_extensional_vs():
 
 def test_intensional_vs_rxnorm():
     app.app.config['MOCK_DB'] = True
-    app.app.config['ENABLE_DATADOG_APM'] = False
     # Load RxNorm value set
     response = app.app.test_client().get('/ValueSet/64c5d2c2-2857-11ec-9621-0242ac130002/$expand')
     assert 'version' in response.json
@@ -72,7 +70,6 @@ def test_loinc_valueset():
 
 def test_intensional_vs_icd_snomed():
     app.app.config['MOCK_DB'] = True
-    app.app.config['ENABLE_DATADOG_APM'] = False
     # Load breast-cancer value set
     response = app.app.test_client().get('/ValueSet/c447c800-6343-11ec-9b51-4fc98501ea85/$expand')
     print(response)
@@ -107,21 +104,18 @@ def test_intensional_vs_icd_snomed():
 
 def test_expansion_report():
     app.app.config['MOCK_DB'] = True
-    app.app.config['ENABLE_DATADOG_APM'] = False
     response = app.app.test_client().get('/ValueSets/expansions/3257aed4-6da1-11ec-bd74-aa665a30495f/report')
     # print('hex digest', hashlib.md5(response.data).hexdigest())
     assert hashlib.md5(response.data).hexdigest() == "ca5613af2d0a65e32d7505849fd1c1d2"
 
 def test_survey_export():
     app.app.config['MOCK_DB'] = True
-    app.app.config['ENABLE_DATADOG_APM'] = False
     response = app.app.test_client().get('/surveys/34775510-1267-11ec-b9a3-77c9d91ff3f2?organization_uuid=866632f0-ff85-11eb-9f47-ffa6d132f8a4')
     print(hashlib.md5(response.data).hexdigest())
     assert hashlib.md5(response.data).hexdigest() == "d8d184f61545f542f2a42c7064a90148"
 
 def test_execute_rules_directly():
     app.app.config['MOCK_DB'] = True
-    app.app.config['ENABLE_DATADOG_APM'] = False
     response = app.app.test_client().post(
         '/ValueSets/rule_set/execute',
         data = json.dumps(
