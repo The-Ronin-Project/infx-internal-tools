@@ -87,3 +87,13 @@ virtualenv should work fine with pipenv
 We recommend splitting integration tests and unit tests into separate directories. Code coverage should be calculated using unit tests. We can guide to this platonic ideal.
 
 Our current structure calls for tests to be outside of the app at the top level of the directory. Pytest will discover them.
+
+### Setting up a dev environment
+
+Prerequisites:
+- Docker
+- Git
+- IDE (VSCode, PyCharm, etc.)
+- Postman
+
+First, follow these directions: https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account
