@@ -27,6 +27,7 @@ python-decouple = "*"
 ddtrace = "*"
 pysnooper = "*"
 elasticsearch = "*"
+structlog = "*"
 
 [dev-packages]
 pytest = "*"
