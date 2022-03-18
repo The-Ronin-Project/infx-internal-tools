@@ -1,6 +1,9 @@
 from io import StringIO
 from uuid import UUID
 import re
+import logging
+from app.helpers.structlog import config_structlog, common_handler
+import structlog
 import os
 from flask import Flask, jsonify, request, Response
 from app.models.value_sets import *
