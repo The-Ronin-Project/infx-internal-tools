@@ -32,7 +32,7 @@ common_formatter = structlog.stdlib.ProcessorFormatter(
     processors=[
         structlog.stdlib.ProcessorFormatter.remove_processors_meta,
         structlog.processors.add_log_level,
-        structlog.processors.TimeStamper(),
+        structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.ExceptionPrettyPrinter(),
         structlog.processors.JSONRenderer(),
     ],
