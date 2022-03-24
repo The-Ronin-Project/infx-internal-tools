@@ -13,6 +13,7 @@ from app.models.codes import Code
 from app.models.concept_maps import ConceptMap
 from app.models.terminologies import Terminology
 from app.database import get_db, get_elasticsearch
+from flask import current_app
 
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io/MAIN/concepts"
 SNOSTORM_LIMIT = 500
@@ -1166,6 +1167,23 @@ class ValueSetVersion:
       set_to_add_to_expansion = set(codes_to_add_to_expansion)
       self.expansion = self.expansion.union(set_to_add_to_expansion)
       
+  def extensional_vs_time_last_modified(self):
+    conn = get_db()
+    last_modified_query = conn.execute(
+      text(
+        """
+      select * from value_sets.history
+      where table_name='extensional_member'
+      and (new_val->>'vs_version_uuid' = :vs_version_uuid or old_val->>'vs_version_uuid' = :vs_version_uuid)
+      order by timestamp desc
+      limit 1
+      """
+      ), {
+        'vs_version_uuid': str(self.uuid)
+      }
+    )
+    result = last_modified_query.first()
+    return result.timestamp
 
   def serialize_include(self):
     if self.value_set.type == 'extensional':
@@ -1240,6 +1258,11 @@ class ValueSetVersion:
       for terminology, codes in self.extensional_codes.items():
         all_extensional_codes += codes
       serialized['expansion']['contains'] = [x.serialize() for x in all_extensional_codes]
+      if current_app.config['MOCK_DB'] is False: # Postgres-specific code, skip during tests
+        # timestamp derived from date version was last updated
+        serialized['expansion']['timestamp'] = self.extensional_vs_time_last_modified().strftime("%Y-%m-%d")
+        # expansion UUID derived from a hash of when timestamp was last updated and the UUID of the ValueSets terminology version from `public.terminology_versions`
+        serialized['additionalData']['expansion_uuid'] = uuid.uuid3(namespace=uuid.UUID('{e3dbd59c-aa26-11ec-b909-0242ac120002}'), name=str(self.extensional_vs_time_last_modified()))
 
     serialized_exclude = self.serialize_exclude()
     if serialized_exclude:
