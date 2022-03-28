@@ -94,5 +94,6 @@ def create_app(script_info=None):
                 "Content-Disposition": f"attachment; filename={exporter.survey_title} {exporter.organization_name}.csv"
             })
         return response
+    return app
 
 application = create_app()
