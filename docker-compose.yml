@@ -1,6 +1,21 @@
 version: "3.8"
+
 services:
   app:
-    build: .
+    image: app
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    volumes:
+      - './app:/app/app:z'
+    command:
+      - "python"
+      - "-m"
+      - "app"
+      - "--reload"
     ports:
-      - "80:8000"
+      - 8000:8000
+    environment:
+      - APP_NAME=infx_content
+      - PYTHONUNBUFFERED=0
+       - SECRET_KEY=change_me_in_prod

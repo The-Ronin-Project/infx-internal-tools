@@ -28,6 +28,9 @@ ddtrace = "*"
 pysnooper = "*"
 elasticsearch = "*"
 structlog = "*"
+waitress = "*"
+python-json-logger = "*"
+hupper = "*"
 
 [dev-packages]
 pytest = "*"
