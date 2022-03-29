@@ -1248,6 +1248,7 @@ class ValueSetVersion:
         "effective_start": self.effective_start,
         "effective_end": self.effective_end,
         "version_uuid": self.uuid,
+        "value_set_uuid": self.value_set.uuid,
         "expansion_uuid": self.expansion_uuid,
         "synonyms": self.value_set.synonyms
       }
