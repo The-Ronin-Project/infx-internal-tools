@@ -41,6 +41,7 @@ flask-testing = "*"
 "flake8" = "*"
 "tox" = "*"
 "tox-pipenv" = "*"
+"pytest-structlog" = "*"
 
 [requires]
 python_version = "3.9"
