@@ -9,7 +9,7 @@ jobs:
   infx-content_test:
     uses: projectronin/github/.github/workflows/python_test.yml@master
     secrets:
-      codecov-token: ${{ secrets.CODECOV_TOKEN }}
+      codecov-token: ${{ secrets.INFX_API_CODECOV_TOKEN }}
 
   image-push:
     uses: projectronin/github/.github/workflows/image_push.yml@master
