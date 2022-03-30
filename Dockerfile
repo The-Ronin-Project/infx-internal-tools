@@ -1,11 +1,11 @@
-FROM docker-proxy.devops.projectronin.io/ronin/python-builder:1.0.0 as builder
+FROM docker-proxy.devops.projectronin.io/ronin/python-builder:latest as builder
 
 COPY --chown=ronin:ronin Pipfile ./
 COPY --chown=ronin:ronin Pipfile.lock ./
 
 RUN pipenv install --system --deploy
 
-FROM docker-proxy.devops.projectronin.io/ronin/python-base:1.0.0 as runtime
+FROM docker-proxy.devops.projectronin.io/ronin/python-base:latest as runtime
 COPY --from=builder --chown=ronin:ronin /app/.local/ /app/.local
 COPY --chown=ronin:ronin app ./app
 
