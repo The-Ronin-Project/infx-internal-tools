@@ -8,6 +8,18 @@ import os
 from flask import Flask, jsonify, request, Response
 from app.models.value_sets import *
 from app.models.surveys import *
+from werkzeug.exceptions import HTTPException
+
+# Configure the logger when the application is imported. This ensures that
+# everything below uses the same configured logger.
+config_structlog()
+logger = structlog.getLogger()
+
+# This configures _all other loggers_ including every dependent module that
+# has logging implemented to have the format defined in the helper module.
+root_logger = logging.getLogger().root
+root_logger.addHandler(common_handler)
+
 
 def create_app(script_info=None):
 
@@ -22,7 +34,12 @@ def create_app(script_info=None):
     @app.route('/ping')
     def ping():
         return 'OK'
-
+    
+    @app.errorhandler(HTTPException)
+    def handle_exception(e):
+        logger.critical(e.description, stack_info=True)
+        return jsonify({"message": e.description}), e.code
+    
     # FHIR endpoint
     @app.route('/ValueSet/<string:uuid>/$expand')
     def expand_value_set(uuid):
