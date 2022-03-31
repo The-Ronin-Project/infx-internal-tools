@@ -313,6 +313,16 @@ class SNOMEDRule(VSRule):
       self.results.update(set(results))
 
 class RxNormRule(VSRule):
+  def rxnorm_related_info_class_members(self):
+    rela_source = None
+    class_id = None
+    relationship = None
+    hierarchy = None
+    term_type = None
+    #insert code 
+    results = [Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str) for x in results_data] 
+    self.results = set(results)
+
   def rxnorm_source(self):
     conn = get_db()
     query = text("""
