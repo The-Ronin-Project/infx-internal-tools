@@ -3,13 +3,14 @@ from uuid import UUID
 import re
 import os
 from flask import Flask, jsonify, request, Response
+from decouple import config
 from app.models.value_sets import *
 from app.models.surveys import *
 
 
 app = Flask(__name__)
-app.config['MOCK_DB'] = bool(os.environ.get('MOCK_DB', False))
-app.config['ENABLE_DATADOG_APM'] = bool(os.environ.get('ENABLE_DATADOG_APM', True))
+app.config['MOCK_DB'] = config('MOCK_DB', default=False)
+app.config['ENABLE_DATADOG_APM'] = config('ENABLE_DATADOG_APM', default=True)
 
 if app.config['ENABLE_DATADOG_APM']:
     from ddtrace import patch_all
