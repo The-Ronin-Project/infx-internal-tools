@@ -75,7 +75,9 @@ class VSRule:
       self.rxnorm_relationship() 
     if self.property in ['permuted_term_of', 'has_quantified_form', 'constitutes', 'has_active_moiety', 'doseformgroup_of', 'ingredients_of', 'precise_active_ingredient_of', 'has_product_monograph_title', 'sort_version_of', 'precise_ingredient_of', 'has_part', 'reformulation_of', 'has_precise_ingredient', 'has_precise_active_ingredient', 'mapped_from', 'included_in', 'has_inactive_ingredient', 'has_ingredients', 'active_moiety_of', 'is_modification_of', 'isa', 'has_form', 'has_member', 'consists_of', 'form_of', 'has_entry_version', 'part_of', 'dose_form_of', 'has_print_name', 'contained_in', 'mapped_to', 'has_ingredient', 'has_basis_of_strength_substance', 'has_doseformgroup', 'has_tradename', 'basis_of_strength_substance_of', 'has_dose_form', 'inverse_isa', 'has_sort_version', 'has_active_ingredient', 'product_monograph_title_of', 'member_of', 'quantified_form_of', 'contains', 'includes', 'active_ingredient_of', 'entry_version_of', 'inactive_ingredient_of', 'reformulated_to', 'has_modification', 'ingredient_of', 'has_permuted_term', 'tradename_of', 'print_name_of']:
       self.rxnorm_relationship_type()
-    
+    if self.property == 'term_type_within_class':
+      self.term_type_within_class()
+
     # SNOMED
     if self.property == 'ecl':
       self.ecl_query()
@@ -313,14 +315,19 @@ class SNOMEDRule(VSRule):
       self.results.update(set(results))
 
 class RxNormRule(VSRule):
-  def rxnorm_related_info_class_members(self):
+  def term_type_within_class(self):
     rela_source = None
     class_id = None
     relationship = None
     hierarchy = None
     term_type = None
-    #insert code 
-    results = [Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str) for x in results_data] 
+    
+    #insert code here
+
+    # results = [Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str) for x in results_data] 
+    results = [
+      Code(self.fhir_system, self.terminology_version.version, '1547545', 'pembrolizumab')
+    ]
     self.results = set(results)
 
   def rxnorm_source(self):
