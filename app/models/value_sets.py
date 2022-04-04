@@ -14,6 +14,9 @@ from app.models.concept_maps import ConceptMap
 from app.models.terminologies import Terminology
 from app.database import get_db, get_elasticsearch
 from flask import current_app
+import pandas as pd
+import numpy as np
+from pandas import json_normalize
 
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io/MAIN/concepts"
 SNOSTORM_LIMIT = 500
@@ -315,20 +318,69 @@ class SNOMEDRule(VSRule):
       self.results.update(set(results))
 
 class RxNormRule(VSRule):
+  def json_extract(self, obj, key):
+    """Recursively fetch values from nested JSON."""
+    def extract(obj, arr, key):
+        """Recursively search for values of key in JSON tree."""
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if isinstance(v, (dict, list)):
+                    extract(v, arr, key)
+                elif k == key:
+                    arr.append(v)
+        elif isinstance(obj, list):
+            for item in obj:
+                extract(item, arr, key)
+        return arr
+
+    arr = []
+    values = extract(obj, arr, key)
+    return values
+
   def term_type_within_class(self):
-    rela_source = None
-    class_id = None
+    rela_source = 'ATC'
+    class_id = 'L01E'
     relationship = None
     hierarchy = None
-    term_type = None
+    term_type = ['IN', 'PIN']
     
     #insert code here
+    #This calls the RxClass API to get its members 
+    payload = {'classId': class_id, 'relaSource': rela_source}
+    class_request = requests.get('https://rxnav.nlm.nih.gov/REST/rxclass/classMembers.json?', params=payload)
+    #Extracts a list of RxCUIs from the JSON response
+    rxcuis = self.json_extract(class_request.json(),'rxcui')
+    #Calls the related info RxNorm API to get additional members of the drug class      
+    related_info = []
+    for rxcui in rxcuis:
+      related_info.append(requests.get('https://rxnav.nlm.nih.gov/REST/rxcui/'+rxcui+'/allrelated.json?').json())
+    related_rxcuis = [self.json_extract(x,'rxcui') for x in related_info]
+    #Appending RxCUIs to the first list of RxCUIs and removing empty RxCUIs
+    flat_list = [item for sublist in related_rxcuis for item in sublist]
+    de_duped_list = list(set(flat_list))
+    de_duped_list.remove('')
+    rxcuis.extend(de_duped_list)
+    #Calls the concept property RxNorm API 
+    concept_properties = []
+    for rxcui in rxcuis:
+      concept_properties.append(requests.get('https://rxnav.nlm.nih.gov/REST/rxcui/'+rxcui+'/properties.json?').json())
+    #Making a final list of RxNorm codes 
+    final_rxnorm_codes = []
+    for item in concept_properties: 
+      properties = item.get('properties')
+      result_term_type = properties.get('tty')
+      display = properties.get('name')
+      code = properties.get('rxcui')
+      if result_term_type in term_type:
+        final_rxnorm_codes.append(Code(self.fhir_system, self.terminology_version.version, code, display))
+
+    
 
     # results = [Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str) for x in results_data] 
-    results = [
-      Code(self.fhir_system, self.terminology_version.version, '1547545', 'pembrolizumab')
-    ]
-    self.results = set(results)
+    #results = [
+    #  Code(self.fhir_system, self.terminology_version.version, '1547545', 'pembrolizumab')
+    #]
+    self.results = set(final_rxnorm_codes)
 
   def rxnorm_source(self):
     conn = get_db()
