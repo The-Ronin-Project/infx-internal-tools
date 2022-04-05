@@ -1,9 +1,9 @@
-name: Reference API Deployment to K8s
+name: INFX Content API Deployment to K8s
 
 on:
   workflow_dispatch:
   push:
-    #branches: [master]
+    branches: [master]
 
 jobs:
   infx-content_test:
