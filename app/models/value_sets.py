@@ -995,7 +995,7 @@ class ValueSetVersion:
       extensional_data = [x for x in extensional_members_data]
 
       for item in extensional_data:
-        code = Code(item.terminology, item.version, item.code, item.display)
+        code = Code(item.fhir_uri, item.version, item.code, item.display)
 
         if (item.fhir_uri, item.version) not in value_set_version.extensional_codes:
           value_set_version.extensional_codes[(item.fhir_uri, item.version)] = [code]

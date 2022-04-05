@@ -6,6 +6,7 @@ from app.helpers.structlog import config_structlog, common_handler
 import structlog
 import os
 from flask import Flask, jsonify, request, Response
+from decouple import config
 from app.models.value_sets import *
 from app.models.surveys import *
 from werkzeug.exceptions import HTTPException
@@ -14,7 +15,6 @@ from werkzeug.exceptions import HTTPException
 # everything below uses the same configured logger.
 config_structlog()
 logger = structlog.getLogger()
-
 # This configures _all other loggers_ including every dependent module that
 # has logging implemented to have the format defined in the helper module.
 root_logger = logging.getLogger().root
