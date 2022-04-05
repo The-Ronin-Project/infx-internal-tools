@@ -1,6 +1,7 @@
 import math
 import json
 import requests
+import concurrent.futures
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -20,6 +21,9 @@ from pandas import json_normalize
 
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io/MAIN/concepts"
 SNOSTORM_LIMIT = 500
+
+# RXNORM_BASE_URL = "https://rxnav.nlm.nih.gov/REST/"
+RXNORM_BASE_URL = "http://localhost:4000/REST/"
 
 MAX_ES_SIZE = 1000
 
@@ -337,34 +341,49 @@ class RxNormRule(VSRule):
     values = extract(obj, arr, key)
     return values
 
+  def load_rxnorm_properties(self, rxcui):
+    return requests.get(f'{RXNORM_BASE_URL}rxcui/{rxcui}/properties.json?').json()
+
+  def load_additional_members_of_class(self, rxcui):
+    data = requests.get(f'{RXNORM_BASE_URL}rxcui/{rxcui}/allrelated.json?').json()
+    return self.json_extract(data,'rxcui')
+
   def term_type_within_class(self):
-    rela_source = 'ATC'
-    class_id = 'L01E'
-    relationship = None
-    hierarchy = None
-    term_type = ['IN', 'PIN']
+    json_value = json.loads(self.value)
+    rela_source = json_value.get('rela_source')
+    class_id = json_value.get('class_id')
+    term_type = json_value.get('term_type')
     
-    #insert code here
-    #This calls the RxClass API to get its members 
+    # This calls the RxClass API to get its members 
     payload = {'classId': class_id, 'relaSource': rela_source}
-    class_request = requests.get('https://rxnav.nlm.nih.gov/REST/rxclass/classMembers.json?', params=payload)
-    #Extracts a list of RxCUIs from the JSON response
+    class_request = requests.get(f'{RXNORM_BASE_URL}rxclass/classMembers.json?', params=payload)
+    
+    # Extracts a list of RxCUIs from the JSON response
     rxcuis = self.json_extract(class_request.json(),'rxcui')
-    #Calls the related info RxNorm API to get additional members of the drug class      
-    related_info = []
-    for rxcui in rxcuis:
-      related_info.append(requests.get('https://rxnav.nlm.nih.gov/REST/rxcui/'+rxcui+'/allrelated.json?').json())
-    related_rxcuis = [self.json_extract(x,'rxcui') for x in related_info]
-    #Appending RxCUIs to the first list of RxCUIs and removing empty RxCUIs
+
+    # Calls the related info RxNorm API to get additional members of the drug class      
+    related_rxcuis = []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+      results = pool.map(self.load_additional_members_of_class, rxcuis)
+      for result in results:
+        related_rxcuis.append(result)
+
+    # Appending RxCUIs to the first list of RxCUIs and removing empty RxCUIs
     flat_list = [item for sublist in related_rxcuis for item in sublist]
     de_duped_list = list(set(flat_list))
-    de_duped_list.remove('')
+    if '' in de_duped_list:
+      de_duped_list.remove('')
     rxcuis.extend(de_duped_list)
-    #Calls the concept property RxNorm API 
+
+    # Calls the concept property RxNorm API 
     concept_properties = []
-    for rxcui in rxcuis:
-      concept_properties.append(requests.get('https://rxnav.nlm.nih.gov/REST/rxcui/'+rxcui+'/properties.json?').json())
-    #Making a final list of RxNorm codes 
+    with concurrent.futures.ThreadPoolExecutor(max_workers=25) as pool:
+      results = pool.map(self.load_rxnorm_properties, rxcuis)
+      for result in results:
+        concept_properties.append(result)
+
+    # Making a final list of RxNorm codes 
     final_rxnorm_codes = []
     for item in concept_properties: 
       properties = item.get('properties')
@@ -374,12 +393,6 @@ class RxNormRule(VSRule):
       if result_term_type in term_type:
         final_rxnorm_codes.append(Code(self.fhir_system, self.terminology_version.version, code, display))
 
-    
-
-    # results = [Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str) for x in results_data] 
-    #results = [
-    #  Code(self.fhir_system, self.terminology_version.version, '1547545', 'pembrolizumab')
-    #]
     self.results = set(final_rxnorm_codes)
 
   def rxnorm_source(self):
