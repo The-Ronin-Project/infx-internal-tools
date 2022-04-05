@@ -6,6 +6,8 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
+    env_file:
+      - .env
     volumes:
       - './app:/app/app:z'
     command:
@@ -15,7 +17,3 @@ services:
       - "--reload"
     ports:
       - 8000:8000
-    environment:
-      - APP_NAME=infx_content
-      - PYTHONUNBUFFERED=0
-       - SECRET_KEY=change_me_in_prod
