@@ -27,6 +27,10 @@ python-decouple = "*"
 ddtrace = "*"
 pysnooper = "*"
 elasticsearch = "*"
+structlog = "*"
+waitress = "*"
+python-json-logger = "*"
+hupper = "*"
 
 [dev-packages]
 pytest = "*"
@@ -37,6 +41,7 @@ flask-testing = "*"
 "flake8" = "*"
 "tox" = "*"
 "tox-pipenv" = "*"
+"pytest-structlog" = "*"
 
 [requires]
 python_version = "3.9"

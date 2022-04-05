@@ -2,11 +2,11 @@ import re
 import json
 import pytest
 import hashlib
-from app import app 
-
+from app.app import create_app 
+app = create_app()
 def test_extensional_vs():
-    app.app.config['MOCK_DB'] = True
-    response = app.app.test_client().get('/ValueSet/987ffe8a-27a8-11ec-9621-0242ac130002/$expand')
+    app.config['MOCK_DB'] = True
+    response = app.test_client().get('/ValueSet/987ffe8a-27a8-11ec-9621-0242ac130002/$expand')
     # assert response.json.get('version') == "1.0"
     # assert 'url' in response.json
     assert response.json.get('title') == "Extensional Value Set Test"
@@ -34,9 +34,9 @@ def test_extensional_vs():
     assert len(include.get('concept')) == 2
 
 def test_intensional_vs_rxnorm():
-    app.app.config['MOCK_DB'] = True
+    app.config['MOCK_DB'] = True
     # Load RxNorm value set
-    response = app.app.test_client().get('/ValueSet/64c5d2c2-2857-11ec-9621-0242ac130002/$expand')
+    response = app.test_client().get('/ValueSet/64c5d2c2-2857-11ec-9621-0242ac130002/$expand')
     assert 'version' in response.json
     # assert 'url' in response.json
     assert 'title' in response.json
@@ -62,16 +62,16 @@ def test_intensional_vs_rxnorm():
     assert 'contains' in response.json.get('expansion')
 
 def test_loinc_valueset():
-    response = app.app.test_client().get('/ValueSet/c5ac2d30-83b4-11ec-9a73-9942f9fcf805/$expand?force_new=true')
+    response = app.test_client().get('/ValueSet/c5ac2d30-83b4-11ec-9a73-9942f9fcf805/$expand?force_new=true')
     print(response.json)
     assert 'name' in response.json
     assert 'expansion' in response.json
     assert len(response.json.get('expansion').get('contains')) == 10
 
 def test_intensional_vs_icd_snomed():
-    app.app.config['MOCK_DB'] = True
+    app.config['MOCK_DB'] = True
     # Load breast-cancer value set
-    response = app.app.test_client().get('/ValueSet/c447c800-6343-11ec-9b51-4fc98501ea85/$expand')
+    response = app.test_client().get('/ValueSet/c447c800-6343-11ec-9b51-4fc98501ea85/$expand')
     print(response)
     print(response.json)
     assert 'version' in response.json
@@ -103,20 +103,20 @@ def test_intensional_vs_icd_snomed():
     assert 'contains' in response.json.get('expansion')
 
 def test_expansion_report():
-    app.app.config['MOCK_DB'] = True
-    response = app.app.test_client().get('/ValueSets/expansions/3257aed4-6da1-11ec-bd74-aa665a30495f/report')
+    app.config['MOCK_DB'] = True
+    response = app.test_client().get('/ValueSets/expansions/3257aed4-6da1-11ec-bd74-aa665a30495f/report')
     # print('hex digest', hashlib.md5(response.data).hexdigest())
     assert hashlib.md5(response.data).hexdigest() == "ca5613af2d0a65e32d7505849fd1c1d2"
 
 def test_survey_export():
-    app.app.config['MOCK_DB'] = True
-    response = app.app.test_client().get('/surveys/34775510-1267-11ec-b9a3-77c9d91ff3f2?organization_uuid=866632f0-ff85-11eb-9f47-ffa6d132f8a4')
+    app.config['MOCK_DB'] = True
+    response = app.test_client().get('/surveys/34775510-1267-11ec-b9a3-77c9d91ff3f2?organization_uuid=866632f0-ff85-11eb-9f47-ffa6d132f8a4')
     print(hashlib.md5(response.data).hexdigest())
     assert hashlib.md5(response.data).hexdigest() == "d8d184f61545f542f2a42c7064a90148"
 
 def test_execute_rules_directly():
-    app.app.config['MOCK_DB'] = True
-    response = app.app.test_client().post(
+    app.config['MOCK_DB'] = True
+    response = app.test_client().post(
         '/ValueSets/rule_set/execute',
         data = json.dumps(
         [{
