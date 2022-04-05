@@ -24,8 +24,8 @@ root_logger.addHandler(common_handler)
 def create_app(script_info=None):
 
     app = Flask(__name__)
-    app.config['MOCK_DB'] = bool(os.environ.get('MOCK_DB', False))
-    app.config['ENABLE_DATADOG_APM'] = bool(os.environ.get('ENABLE_DATADOG_APM', True))
+    app.config['MOCK_DB'] = config('MOCK_DB', False)
+    app.config['ENABLE_DATADOG_APM'] = config('ENABLE_DATADOG_APM', True)
  
     if app.config['ENABLE_DATADOG_APM']:
         from ddtrace import patch_all
