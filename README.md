@@ -97,3 +97,9 @@ Prerequisites:
 - Postman
 
 First, follow these directions: https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account
+
+
+### Running a dev server 
+In the code editor terminal, run command "python -m app.app".
+If the API request is calling to RxNav-in-a-box, make sure that container is running in Docker first.
+
