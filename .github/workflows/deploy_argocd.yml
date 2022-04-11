@@ -3,7 +3,7 @@ name: INFX Content API Deployment to K8s
 on:
   workflow_dispatch:
   push:
-    branches: [master]
+    branches: [QUAL-652-waitress]
 
 jobs:
   infx-content_test:
@@ -33,6 +33,15 @@ jobs:
     needs: [argocd_dev]
     with:
       environment: stage
+      image-tag: ${{ github.sha }}
+    secrets:
+      argocd-svc-automation: ${{ secrets.ARGOCD_SVC_AUTOMATION }}
+
+  argocd_prod:
+    uses: projectronin/github/.github/workflows/argocd_deploy.yml@master
+    needs: [argocd_stage]
+    with:
+      environment: prod
       image-tag: ${{ github.sha }}
     secrets:
       argocd-svc-automation: ${{ secrets.ARGOCD_SVC_AUTOMATION }}
