@@ -5,7 +5,8 @@ import app.models.terminologies
 import app.models.codes
 from app.database import get_db
 
-class ConceptMap:
+# This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
+class DeprecatedConceptMap:
     def __init__(self, uuid, relationship_types, concept_map_name):
         self.uuid = uuid
         self.relationship_types = relationship_types
@@ -70,5 +71,53 @@ class ConceptMap:
                 result[code].append(mapped_code_object)
         return result
 
-# class Mapping:
-#     pass
+# This is the new maps system
+class ConceptMap:
+    def __init__(self, uuid):
+        self.uuid = uuid
+        # self.name = None
+        self.title = None
+        self.description = None
+        self.purpose = None
+        self.publisher = None
+        self.experimental = None
+        self.author = None
+        self.created_date = None
+
+        self.load_data()
+
+    def load_data(self):
+        pass
+
+class ConceptMapVersion:
+    def __init__(self, uuid):
+        self.uuid = uuid
+        self.concept_map = ConceptMap(None)
+        self.description = None
+        self.comments = None
+        self.status = None
+        self.created_date = None
+        self.effective_start = None
+        self.effective_end = None
+        self.version = None
+        
+        self.load_data()
+
+    def load_data(self):
+        pass
+
+    def serialize(self):
+        combined_description = str(self.concept_map.description) + ' ' + str(self.description)
+
+        return {
+            'title': self.concept_map.title,
+            'description': combined_description,
+            'purpose': self.concept_map.purpose,
+            # todo: publisher, experimental, author all need to be loaded from parent
+            # todo: comments, status, effective_start, effective_end, and version should be loaded from the ConceptMapVersion
+
+            # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and not required for our use cases at this time
+        }
+
+class Mapping:
+    pass

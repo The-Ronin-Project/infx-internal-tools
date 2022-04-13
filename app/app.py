@@ -8,6 +8,7 @@ import os
 from flask import Flask, jsonify, request, Response
 from decouple import config
 from app.models.value_sets import *
+from app.models.concept_maps import *
 from app.models.surveys import *
 from werkzeug.exceptions import HTTPException
 
@@ -113,7 +114,15 @@ def create_app(script_info=None):
                 "Content-Disposition": f"attachment; filename={exporter.survey_title} {exporter.organization_name}.csv"
             })
         return response
+
+    # Concept Map Endpoints
+    @app.route('/ConceptMaps/<string:version_uuid>')
+    def get_concept_map_version(version_uuid):
+        concept_map_version = ConceptMapVersion(version_uuid)
+        return jsonify(concept_map_version.serialize())
+
     return app
+
 
 application = create_app()
 
