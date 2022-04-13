@@ -87,12 +87,31 @@ class ConceptMap:
         self.load_data()
 
     def load_data(self):
-        pass
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """
+                select * from concept_maps.concept_map
+                where uuid=:concept_map_uuid
+                """
+            ), {
+                'concept_map_uuid': self.uuid
+            }
+        ).first()
+
+        self.title = data.title
+        self.description = data.description
+        self.purpose = data.purpose
+        self.publisher = data.publisher
+        self.experimental = data.experimental
+        self.author = data.author
+        self.created_date = data.created_date
+
 
 class ConceptMapVersion:
     def __init__(self, uuid):
         self.uuid = uuid
-        self.concept_map = ConceptMap(None)
+        self.concept_map = None
         self.description = None
         self.comments = None
         self.status = None
@@ -104,10 +123,23 @@ class ConceptMapVersion:
         self.load_data()
 
     def load_data(self):
-        pass
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """
+                select * from concept_maps.concept_map_version
+                where uuid=:version_uuid
+                """
+            ), {
+                'version_uuid': self.uuid
+            }
+        ).first()
+
+        self.concept_map = ConceptMap(data.concept_map_uuid)
+        # todo: implement here
 
     def serialize(self):
-        combined_description = str(self.concept_map.description) + ' ' + str(self.description)
+        combined_description = str(self.concept_map.description) + ' Version-specific notes:' + str(self.description)
 
         return {
             'title': self.concept_map.title,
