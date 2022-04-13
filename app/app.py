@@ -40,6 +40,7 @@ def create_app(script_info=None):
         logger.critical(e.description, stack_info=True)
         return jsonify({"message": e.description}), e.code
     
+    # Value Set Endpoints
     # FHIR endpoint
     @app.route('/ValueSet/<string:uuid>/$expand')
     def expand_value_set(uuid):
@@ -95,6 +96,7 @@ def create_app(script_info=None):
         result = execute_rules(rules_input)
         return jsonify(result)
 
+    # Survey Endpoints
     @app.route('/surveys/<string:survey_uuid>')
     def export_survey(survey_uuid):
         organization_uuid = request.values.get("organization_uuid")
