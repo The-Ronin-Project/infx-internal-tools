@@ -97,10 +97,11 @@ Our current structure calls for tests to be outside of the app at the top level 
 ### Setting up a dev environment
 
 Prerequisites:
-- Docker
-- Git
+- Docker Desktop
+- Git (can be installed via xcode command line tools)
 - IDE (VSCode, PyCharm, etc.)
 - Postman
+- Homebrew (https://brew.sh)
 
 First, follow these directions: https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account
 
