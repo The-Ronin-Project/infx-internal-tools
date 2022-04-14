@@ -10,12 +10,6 @@ A .gitignore is here as well. any subdirs or files not to be checked should have
 
 Our basic convention is CLIN-{ticket-number}-lower-case-identifier
 
-### Software for dev environment
-- Homebrew (https://brew.sh)
-- Docker Desktop
-- Postman
-- Visual Studio Code (or other IDE)
-
 ### Python Versions and Virtualenvs
 
 You can still use pyenv to manage different versions of python and you can stil use virtualenv. However, do to automation needs we are now using the preferred [pipenv](https://github.com/pypa/pipenv)
@@ -108,6 +102,7 @@ Prerequisites:
 - IDE (VSCode, PyCharm, etc.)
 - Postman
 - Homebrew (https://brew.sh)
+- Postgres (install via Homebrew with `brew install postgresql`)
 
 First, follow these directions: https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account
 
