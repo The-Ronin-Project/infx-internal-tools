@@ -39,6 +39,12 @@ We still recommend [pyenv](https://github.com/pyenv/pyenv) for managing particul
 Load pyenv automatically by appending
 the following to ~/.zshrc:
 
+open .zshrc using `open ~/.zshrc`
+
+If the file does not already exist, create it using `touch ~/.zshrc`
+
+Then append the following line to the end of the file. 
+
 `eval "$(pyenv init -)"`
 
 To list the all available versions of Python, including Anaconda, Jython, pypy, and stackless, use:
