@@ -144,7 +144,6 @@ class ConceptMapVersion:
         self.effective_end = data.effective_end
         self.version = data.version
         
-
     def serialize(self):
         combined_description = str(self.concept_map.description) + ' Version-specific notes:' + str(self.description)
 
@@ -154,12 +153,11 @@ class ConceptMapVersion:
             'purpose': self.concept_map.purpose,
             'publisher': self.concept_map.purpose,
             'experimental': self.concept_map.experimental,
-            'comments': self.concept_map_version.comments,
-            'status': self.concpet_map_version.status,
-            'effective_start': self.concept_map_version.effective_start,
-            'effective_end': self.concept_map_version.effective_end,
-            'version': self.concept_map_version.version
-            
+            'comments': self.comments,
+            'status': self.status,
+            'effective_start': self.effective_start,
+            'effective_end': self.effective_end,
+            'version': self.version
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and not required for our use cases at this time
         }
 
