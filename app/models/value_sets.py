@@ -58,6 +58,8 @@ class VSRule:
       self.direct_child()
     elif self.operator == 'in' and self.property == 'concept':
       self.concept_in()
+    elif self.operator == 'in-section':
+      self.in_section()
 
     if self.property == 'code' and self.operator == 'in':
       self.code_rule()
@@ -233,6 +235,27 @@ class ICD10CMRule(VSRule):
     )
     results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
     self.results = set(results)
+
+  def in_section(self):
+    conn = get_db()
+
+    query = """
+      select * from icd_10_cm.code
+      where section_uuid=:section_uuid
+      and version_uuid = :version_uuid
+    """
+
+    results_data = conn.execute(
+      text(
+        query
+      ), {
+        'section_uuid': self.value,
+        'version_uuid': self.terminology_version.uuid
+      }
+    )
+    results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
+    self.results = set(results)
+
       
 class SNOMEDRule(VSRule):
   # # Deprecating because we prefer ECL
