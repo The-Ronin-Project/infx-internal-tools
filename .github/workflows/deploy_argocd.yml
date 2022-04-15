@@ -1,9 +1,9 @@
-name: INFX Content API Deployment to K8s
+name: INFX Content API Deployment to K8s PROD
 
 on:
   workflow_dispatch:
   push:
-    branches: [QUAL-652-waitress]
+    branches: [master]
 
 jobs:
   infx-content_test:
@@ -19,27 +19,9 @@ jobs:
       username: ${{ secrets.ACR_USERNAME }}
       password: ${{ secrets.ACR_PASSWORD }}
 
-  argocd_dev:
-    uses: projectronin/github/.github/workflows/argocd_deploy.yml@master
-    needs: [infx-content_test,image-push]
-    with:
-      environment: dev
-      image-tag: ${{ github.sha }}
-    secrets:
-      argocd-svc-automation: ${{ secrets.ARGOCD_SVC_AUTOMATION }}
-
-  argocd_stage:
-    uses: projectronin/github/.github/workflows/argocd_deploy.yml@master
-    needs: [argocd_dev]
-    with:
-      environment: stage
-      image-tag: ${{ github.sha }}
-    secrets:
-      argocd-svc-automation: ${{ secrets.ARGOCD_SVC_AUTOMATION }}
-
   argocd_prod:
     uses: projectronin/github/.github/workflows/argocd_deploy.yml@master
-    needs: [argocd_stage]
+    needs: [infx-content_test, image-push]
     with:
       environment: prod
       image-tag: ${{ github.sha }}
