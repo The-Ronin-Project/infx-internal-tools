@@ -1,4 +1,4 @@
-name: INFX Content API Deployment to K8s
+name: INFX Content API Deployment to K8s PROD
 
 on:
   workflow_dispatch:
@@ -19,20 +19,11 @@ jobs:
       username: ${{ secrets.ACR_USERNAME }}
       password: ${{ secrets.ACR_PASSWORD }}
 
-  argocd_dev:
+  argocd_prod:
     uses: projectronin/github/.github/workflows/argocd_deploy.yml@master
-    needs: [infx-content_test,image-push]
+    needs: [infx-content_test, image-push]
     with:
-      environment: dev
-      image-tag: ${{ github.sha }}
-    secrets:
-      argocd-svc-automation: ${{ secrets.ARGOCD_SVC_AUTOMATION }}
-
-  argocd_stage:
-    uses: projectronin/github/.github/workflows/argocd_deploy.yml@master
-    needs: [argocd_dev]
-    with:
-      environment: stage
+      environment: prod
       image-tag: ${{ github.sha }}
     secrets:
       argocd-svc-automation: ${{ secrets.ARGOCD_SVC_AUTOMATION }}
