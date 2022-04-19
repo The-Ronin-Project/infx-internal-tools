@@ -149,3 +149,22 @@ def test_icd_10_cm_in_section():
         content_type='application/json'
         )
     assert len(response.json) == 32
+
+def test_icd_10_cm_in_chapter():
+    app.config['MOCK_DB'] = True
+    response = app.test_client().post(
+        '/ValueSets/rule_set/execute',
+        data = json.dumps(
+        [
+            {
+                "property": "code",
+                "operator": "in-chapter",
+                "value": "3f830074-5ed1-11ec-8f1f-00163e90ea35",
+                "include": True,
+                "terminology_version": "1ea19640-63e6-4e1b-b82f-be444ba395b4"
+            }
+        ]
+        ),
+        content_type='application/json'
+        )
+    assert len(response.json) == 931

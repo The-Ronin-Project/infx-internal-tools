@@ -60,6 +60,8 @@ class VSRule:
       self.concept_in()
     elif self.operator == 'in-section':
       self.in_section()
+    elif self.operator == 'in-chapter':
+      self.in_chapter()
 
     if self.property == 'code' and self.operator == 'in':
       self.code_rule()
@@ -261,8 +263,10 @@ class ICD10CMRule(VSRule):
 
     query = """
     select * from icd_10_cm.code
-    where chapter_uuid = :chapterchapter_uuid
-    and version_uuid = :version_uuid
+    where section_uuid in 
+    (select uuid from icd_10_cm.section 
+    where chapter = :chapter_uuid
+    and version_uuid = :version_uuid)
     """
 
     results_data = conn.execute(
