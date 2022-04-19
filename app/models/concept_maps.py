@@ -4,6 +4,7 @@ from sqlalchemy import text
 import app.models.terminologies
 import app.models.codes
 from app.database import get_db
+from models.codes import Code
 
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
 class DeprecatedConceptMap:
@@ -119,6 +120,7 @@ class ConceptMapVersion:
         self.effective_start = None
         self.effective_end = None
         self.version = None
+        self.mappings = []
         
         self.load_data()
 
@@ -143,6 +145,37 @@ class ConceptMapVersion:
         self.effective_start = data.effective_start
         self.effective_end = data.effective_end
         self.version = data.version
+
+        self.load_mappings()
+
+    def load_mappings(self):
+        conn = get_db()
+        source_system = None
+        source_version = None
+        target_system = None
+        target_version = None
+
+        query = """
+            -- query goes here
+        """ # todo: write this query
+
+        results = conn.execute(
+            text(
+                query
+            ), {
+                'concept_map_version_uuid': self.uuid,
+                # add any other parameters here
+            }
+        )
+
+        for item in results:
+            source_code = Code(source_system, source_version, item.source_code, item.source_display) # todo: replace item.source_code and item.source_display with item.[whatever comes through in the query results]
+            target_code = None # todo: finish
+            equivalence = None # todo: finish
+
+            mapping = Mapping(source_code, equivalence, target_code)
+            self.mappings.append(mapping)
+            # todo: Fill this out
         
     def serialize(self):
         combined_description = str(self.concept_map.description) + ' Version-specific notes:' + str(self.description)
@@ -162,4 +195,7 @@ class ConceptMapVersion:
         }
 
 class Mapping:
-    pass
+    def __init__(self, source_code, equivalence, target_code):
+        self.source_code = source_code
+        self.equivalence = equivalence # relationship code
+        self.target_code = target_code
