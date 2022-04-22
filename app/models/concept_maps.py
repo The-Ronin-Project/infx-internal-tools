@@ -1,4 +1,5 @@
 from elasticsearch import TransportError
+from numpy import source
 from sqlalchemy import text
 import app.models.terminologies
 import app.models.codes
@@ -186,35 +187,56 @@ class ConceptMapVersion:
                 self.mappings[source_code].append(mapping)
             else:
                 self.mappings[source_code]=[mapping]
-            # todo: Fill this out
         
     def serialize_mappings(self):
-        source_uri= None
-        source_version= None
-        target_uri= None
-        target_version = None
-        #iterate through mapping and convert to JSON
-        
-        return [
-            {
-              "source": source_uri,
-              "sourceVersion": source_uri,
-              "target": target_uri,
-              "targetVersion": target_version,
-              "element":[
-                  {
-                    "code": "263204007",
-                    "target": [
+        # Identify all the source terminology / target terminology pairings in the mappings
+        source_target_pairs_set = set()
+
+        for source_code, mappings in self.mappings.items():
+            source_uri = source_code.system
+            source_version = source_code.version
+            for mapping in mappings:
+                target_uri = mapping.target_code.system
+                target_version = mapping.target_code.version
+
+                source_target_pairs_set.add(
+                    (source_uri, source_version, target_uri, target_version)
+                )
+
+        # Serialize the mappings
+        groups = []
+
+        for source_uri, source_version, target_uri, target_version in source_target_pairs_set:
+            elements = []
+            for source_code, mappings in self.mappings.items():
+                if source_code.system == source_uri and source_code.version == source_version:
+                    filtered_mappings = [x for x in mappings if x.target_code.system == target_uri and x.target_code.version == target_version]
+                    elements.append(
                         {
-                        "code": "S52.209A",
-                        "equivalence": "narrower",
-                        "comment": "The target mapping to ICD-10-CM is narrower, since additional patient data on the encounter (initial vs. subsequent) and fracture type is required for a valid ICD-10-CM mapping."
+                            "code": source_code.code,
+                            "display": source_code.display,
+                            "target": [
+                                {
+                                    "code": mapping.target_code.code,
+                                    "display": mapping.target_code.display,
+                                    "equivalence": mapping.equivalence,
+                                    "comment": None
+                                } 
+                                for mapping in filtered_mappings]
                         }
-                    ]
-                    },
-              ]  
-            }
-        ]
+                    )
+        
+            groups.append(
+                    {
+                    "source": source_uri,
+                    "sourceVersion": source_uri,
+                    "target": target_uri,
+                    "targetVersion": target_version,
+                    "element": elements
+                    }
+            )
+        
+        return groups
 
     def serialize(self):
         combined_description = str(self.concept_map.description) + ' Version-specific notes:' + str(self.description)
@@ -231,7 +253,6 @@ class ConceptMapVersion:
             'effective_end': self.effective_end,
             'version': self.version,
             'group': self.serialize_mappings()
-
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and not required for our use cases at this time
         }
 
@@ -240,3 +261,6 @@ class Mapping:
         self.source_code = source_code
         self.equivalence = equivalence #relationship code
         self.target_code = target_code
+
+    def __repr__(self):
+        return f"Mapping({self.source_code.code}, {self.equivalence}, {self.target_code.code})"
