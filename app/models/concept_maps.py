@@ -1,10 +1,9 @@
 from elasticsearch import TransportError
 from sqlalchemy import text
-
 import app.models.terminologies
 import app.models.codes
 from app.database import get_db
-from models.codes import Code
+from app.models.codes import Code
 
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
 class DeprecatedConceptMap:
@@ -120,7 +119,7 @@ class ConceptMapVersion:
         self.effective_start = None
         self.effective_end = None
         self.version = None
-        self.mappings = []
+        self.mappings = {}
         
         self.load_data()
 
@@ -150,33 +149,73 @@ class ConceptMapVersion:
 
     def load_mappings(self):
         conn = get_db()
-        source_system = None
-        source_version = None
-        target_system = None
-        target_version = None
-
         query = """
-            -- query goes here
-        """ # todo: write this query
+            select source_concept.code as source_code, source_concept.display as source_display, source_concept.system as source_system, 
+            tv_source.version as source_version, tv_source.fhir_uri as source_fhir_uri,
+            relationship_codes.code as relationship_code, 
+            concept_relationship.target_concept_code, concept_relationship.target_concept_display,
+            concept_relationship.target_concept_system_version_uuid as target_system,
+            tv_target.version as target_version, tv_target.fhir_uri as target_fhir_uri
+            from concept_maps.source_concept
+            right join concept_maps.concept_relationship
+            on concept_relationship.source_concept_uuid = source_concept.uuid
+            join concept_maps.relationship_codes
+            on relationship_codes.uuid = concept_relationship.relationship_code_uuid
+            join public.terminology_versions as tv_source
+            on tv_source.uuid = source_concept.system::uuid
+            join public.terminology_versions as tv_target
+            on tv_target.uuid = concept_relationship.target_concept_system_version_uuid
+            where source_concept.concept_map_version_uuid =:concept_map_version_uuid
+        """
 
         results = conn.execute(
             text(
                 query
             ), {
                 'concept_map_version_uuid': self.uuid,
-                # add any other parameters here
             }
         )
 
         for item in results:
-            source_code = Code(source_system, source_version, item.source_code, item.source_display) # todo: replace item.source_code and item.source_display with item.[whatever comes through in the query results]
-            target_code = None # todo: finish
-            equivalence = None # todo: finish
+            source_code = Code(item.source_fhir_uri, item.source_version, item.source_code, item.source_display)
+            target_code = Code(item.target_fhir_uri, item.target_version, item.target_concept_code, item.target_concept_display)
+            equivalence = item.relationship_code
 
             mapping = Mapping(source_code, equivalence, target_code)
-            self.mappings.append(mapping)
+            if source_code in self.mappings:
+                self.mappings[source_code].append(mapping)
+            else:
+                self.mappings[source_code]=[mapping]
             # todo: Fill this out
         
+    def serialize_mappings(self):
+        source_uri= None
+        source_version= None
+        target_uri= None
+        target_version = None
+        #iterate through mapping and convert to JSON
+        
+        return [
+            {
+              "source": source_uri,
+              "sourceVersion": source_uri,
+              "target": target_uri,
+              "targetVersion": target_version,
+              "element":[
+                  {
+                    "code": "263204007",
+                    "target": [
+                        {
+                        "code": "S52.209A",
+                        "equivalence": "narrower",
+                        "comment": "The target mapping to ICD-10-CM is narrower, since additional patient data on the encounter (initial vs. subsequent) and fracture type is required for a valid ICD-10-CM mapping."
+                        }
+                    ]
+                    },
+              ]  
+            }
+        ]
+
     def serialize(self):
         combined_description = str(self.concept_map.description) + ' Version-specific notes:' + str(self.description)
 
@@ -190,12 +229,14 @@ class ConceptMapVersion:
             'status': self.status,
             'effective_start': self.effective_start,
             'effective_end': self.effective_end,
-            'version': self.version
+            'version': self.version,
+            'group': self.serialize_mappings()
+
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and not required for our use cases at this time
         }
 
 class Mapping:
     def __init__(self, source_code, equivalence, target_code):
         self.source_code = source_code
-        self.equivalence = equivalence # relationship code
+        self.equivalence = equivalence #relationship code
         self.target_code = target_code
