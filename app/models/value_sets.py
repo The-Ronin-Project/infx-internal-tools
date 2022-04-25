@@ -23,7 +23,7 @@ ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io/MAIN/concepts"
 SNOSTORM_LIMIT = 500
 
 # RXNORM_BASE_URL = "https://rxnav.nlm.nih.gov/REST/"
-RXNORM_BASE_URL = "http://localhost:4000/REST/"
+RXNORM_BASE_URL = "https://rxnav.prod.projectronin.io/REST/"
 
 MAX_ES_SIZE = 1000
 
