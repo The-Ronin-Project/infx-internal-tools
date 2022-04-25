@@ -1,6 +1,7 @@
 import math
 import json
 import requests
+import concurrent.futures
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -14,9 +15,15 @@ from app.models.concept_maps import ConceptMap
 from app.models.terminologies import Terminology
 from app.database import get_db, get_elasticsearch
 from flask import current_app
+import pandas as pd
+import numpy as np
+from pandas import json_normalize
 
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io/MAIN/concepts"
 SNOSTORM_LIMIT = 500
+
+# RXNORM_BASE_URL = "https://rxnav.nlm.nih.gov/REST/"
+RXNORM_BASE_URL = "https://rxnav.prod.projectronin.io/REST/"
 
 MAX_ES_SIZE = 1000
 
@@ -79,7 +86,9 @@ class VSRule:
       self.rxnorm_relationship() 
     if self.property in ['permuted_term_of', 'has_quantified_form', 'constitutes', 'has_active_moiety', 'doseformgroup_of', 'ingredients_of', 'precise_active_ingredient_of', 'has_product_monograph_title', 'sort_version_of', 'precise_ingredient_of', 'has_part', 'reformulation_of', 'has_precise_ingredient', 'has_precise_active_ingredient', 'mapped_from', 'included_in', 'has_inactive_ingredient', 'has_ingredients', 'active_moiety_of', 'is_modification_of', 'isa', 'has_form', 'has_member', 'consists_of', 'form_of', 'has_entry_version', 'part_of', 'dose_form_of', 'has_print_name', 'contained_in', 'mapped_to', 'has_ingredient', 'has_basis_of_strength_substance', 'has_doseformgroup', 'has_tradename', 'basis_of_strength_substance_of', 'has_dose_form', 'inverse_isa', 'has_sort_version', 'has_active_ingredient', 'product_monograph_title_of', 'member_of', 'quantified_form_of', 'contains', 'includes', 'active_ingredient_of', 'entry_version_of', 'inactive_ingredient_of', 'reformulated_to', 'has_modification', 'ingredient_of', 'has_permuted_term', 'tradename_of', 'print_name_of']:
       self.rxnorm_relationship_type()
-    
+    if self.property == 'term_type_within_class':
+      self.term_type_within_class()
+
     # SNOMED
     if self.property == 'ecl':
       self.ecl_query()
@@ -359,6 +368,79 @@ class SNOMEDRule(VSRule):
       self.results.update(set(results))
 
 class RxNormRule(VSRule):
+  def json_extract(self, obj, key):
+    """Recursively fetch values from nested JSON."""
+    def extract(obj, arr, key):
+        """Recursively search for values of key in JSON tree."""
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if isinstance(v, (dict, list)):
+                    extract(v, arr, key)
+                elif k == key:
+                    arr.append(v)
+        elif isinstance(obj, list):
+            for item in obj:
+                extract(item, arr, key)
+        return arr
+
+    arr = []
+    values = extract(obj, arr, key)
+    return values
+
+  def load_rxnorm_properties(self, rxcui):
+    return requests.get(f'{RXNORM_BASE_URL}rxcui/{rxcui}/properties.json?').json()
+
+  def load_additional_members_of_class(self, rxcui):
+    data = requests.get(f'{RXNORM_BASE_URL}rxcui/{rxcui}/allrelated.json?').json()
+    return self.json_extract(data,'rxcui')
+
+  def term_type_within_class(self):
+    json_value = json.loads(self.value)
+    rela_source = json_value.get('rela_source')
+    class_id = json_value.get('class_id')
+    term_type = json_value.get('term_type')
+    
+    # This calls the RxClass API to get its members 
+    payload = {'classId': class_id, 'relaSource': rela_source}
+    class_request = requests.get(f'{RXNORM_BASE_URL}rxclass/classMembers.json?', params=payload)
+    
+    # Extracts a list of RxCUIs from the JSON response
+    rxcuis = self.json_extract(class_request.json(),'rxcui')
+
+    # Calls the related info RxNorm API to get additional members of the drug class      
+    related_rxcuis = []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+      results = pool.map(self.load_additional_members_of_class, rxcuis)
+      for result in results:
+        related_rxcuis.append(result)
+
+    # Appending RxCUIs to the first list of RxCUIs and removing empty RxCUIs
+    flat_list = [item for sublist in related_rxcuis for item in sublist]
+    de_duped_list = list(set(flat_list))
+    if '' in de_duped_list:
+      de_duped_list.remove('')
+    rxcuis.extend(de_duped_list)
+
+    # Calls the concept property RxNorm API 
+    concept_properties = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=25) as pool:
+      results = pool.map(self.load_rxnorm_properties, rxcuis)
+      for result in results:
+        concept_properties.append(result)
+
+    # Making a final list of RxNorm codes 
+    final_rxnorm_codes = []
+    for item in concept_properties: 
+      properties = item.get('properties')
+      result_term_type = properties.get('tty')
+      display = properties.get('name')
+      code = properties.get('rxcui')
+      if result_term_type in term_type:
+        final_rxnorm_codes.append(Code(self.fhir_system, self.terminology_version.version, code, display))
+
+    self.results = set(final_rxnorm_codes)
+
   def rxnorm_source(self):
     conn = get_db()
     query = text("""
