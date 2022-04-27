@@ -5,6 +5,6 @@ on:
 
 jobs:
   python-test:
-    uses: projectronin/github/.github/workflows/python_test.yml@QUAL-703
+    uses: projectronin/github/.github/workflows/python_test.yml@master
     secrets:
       codecov-token: ${{ secrets.INFX_API_CODECOV_TOKEN  }}
