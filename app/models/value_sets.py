@@ -20,7 +20,7 @@ import pandas as pd
 import numpy as np
 from pandas import json_normalize
 
-ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io/MAIN/concepts"
+ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io"
 SNOSTORM_LIMIT = 500
 
 # RXNORM_BASE_URL = "https://rxnav.nlm.nih.gov/REST/"
@@ -346,14 +346,15 @@ class SNOMEDRule(VSRule):
     results_complete = False
 
     while results_complete is False:
-      r = requests.get(ECL_SERVER_PATH, params={
+      branch = "MAIN"
+      r = requests.get(f"{ECL_SERVER_PATH}/{branch}/{self.terminology_version.version}/concepts", params={
         'ecl': self.value,
         'limit': SNOSTORM_LIMIT,
         'offset': offset
       })
 
       if r.status_code == 400:
-        pass
+        print(r.json())
         # todo: error handling
 
       # Handle pagination
