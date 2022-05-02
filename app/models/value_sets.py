@@ -11,7 +11,7 @@ from werkzeug.exceptions import BadRequest, NotFound
 
 from sqlalchemy.sql.expression import bindparam
 from app.models.codes import Code
-from app.models.concept_maps import ConceptMap
+from app.models.concept_maps import DeprecatedConceptMap
 from app.models.terminologies import Terminology
 from app.database import get_db, get_elasticsearch
 from flask import current_app
@@ -1278,7 +1278,7 @@ class ValueSetVersion:
       print("Inclusion", inclusion)
       # Load appropriate concept maps
       allowed_relationship_types = self.parse_mapping_inclusion_retool_array(inclusion.relationship_types)
-      concept_map = ConceptMap(None, allowed_relationship_types, inclusion.concept_map_name)
+      concept_map = DeprecatedConceptMap(None, allowed_relationship_types, inclusion.concept_map_name)
       
       if inclusion.match_source_or_target == 'source':
         mappings = concept_map.source_code_to_target_map
