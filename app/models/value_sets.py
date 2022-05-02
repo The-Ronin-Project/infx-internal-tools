@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import date, datetime, timedelta
 from dateutil import parser
+import werkzeug
 from werkzeug.exceptions import BadRequest, NotFound
 
 from sqlalchemy.sql.expression import bindparam
@@ -901,6 +902,8 @@ class ValueSet:
       'uuid': uuid
     })
     recent_version = results.first()
+    if recent_version is None:
+      raise BadRequest(f'No active published version of ValueSet with UUID: {uuid}')
     return ValueSetVersion.load(recent_version.uuid)
 
 class RuleGroup:
