@@ -353,9 +353,8 @@ class SNOMEDRule(VSRule):
         'offset': offset
       })
 
-      if r.status_code == 400:
-        print(r.json())
-        # todo: error handling
+      if 'error' in r.json():
+        raise BadRequest(r.json().get('message'))
 
       # Handle pagination
       total_results = r.json().get("total")
