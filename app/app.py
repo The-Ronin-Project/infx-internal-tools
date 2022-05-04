@@ -1,3 +1,4 @@
+from bdb import effective
 from io import StringIO
 from uuid import UUID
 import re
@@ -67,6 +68,15 @@ def create_app(script_info=None):
     def get_value_set_versions(identifier):
         uuid = ValueSet.name_to_uuid(identifier)
         return jsonify(ValueSet.load_version_metadata(uuid))
+
+    @app.route('/ValueSets/<string:identifier>/versions/new', methods=['POST'])
+    def create_new_vs_version(identifier):
+        value_set = ValueSet.load(identifier)
+        effective_start = request.json.get('effective_start')
+        effective_end = request.json.get('effective_end')
+        description = request.json.get('description')
+        new_version_uuid = value_set.create_new_version(effective_start, effective_end, description)
+        return str(new_version_uuid), 201
 
     @app.route('/ValueSets/<string:identifier>/most_recent_active_version')
     def get_most_recent_version(identifier):
