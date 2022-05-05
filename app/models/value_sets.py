@@ -872,7 +872,7 @@ class ValueSet:
       order by version desc
       """
     ), {
-      'uuid': uuid
+      'uuid': str(uuid)
     })
     return [
       {
@@ -934,7 +934,7 @@ class ValueSet:
         (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version)
         """
       ), {
-        'new_version_uuid': new_version_uuid,
+        'new_version_uuid': str(new_version_uuid),
         'effective_start': effective_start,
         'effective_end': effective_end,
         'value_set_uuid': self.uuid,
@@ -956,8 +956,8 @@ class ValueSet:
         where value_set_version = :previous_version_uuid
         """
       ), {
-        'previous_version_uuid': most_recent_vs_version.uuid,
-        'new_version_uuid': new_version_uuid
+        'previous_version_uuid': str(most_recent_vs_version.uuid),
+        'new_version_uuid': str(new_version_uuid)
       }
     )
 

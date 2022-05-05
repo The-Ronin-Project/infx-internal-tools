@@ -172,7 +172,38 @@ def test_icd_10_cm_in_chapter():
 def test_create_new_version():
     """ This test will create a new version and then delete it """
     app.config['MOCK_DB'] = True
-    response = app.test_client().post(
-        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/new'
+
+    metadata = app.test_client().get(
+        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
     )
-    print(response.json)
+    num_versions = len(metadata.json)
+
+    response = app.test_client().post(
+        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/new',
+        data = json.dumps({
+            'effective_start': '2022-01-01',
+            'effective_end': '2022-12-31',
+            'description': 'test version'
+        }),
+        content_type='application/json'
+    )
+    new_version_uuid = response.text
+    
+    metadata = app.test_client().get(
+        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
+    )
+    new_num_versions = len(metadata.json)
+
+    assert num_versions + 1 == new_num_versions
+
+    # Now delete the new version
+    app.test_client().delete(
+        f'/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/{new_version_uuid}'
+    )
+
+    metadata = app.test_client().get(
+        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
+    )
+    new_num_versions = len(metadata.json)
+
+    assert num_versions == new_num_versions
