@@ -648,6 +648,10 @@ class LOINCRule(VSRule):
     """
     self.loinc_rule(query)
 
+class ICD10PCSRule(VSRule):
+  # todo: Theresa, implement ICD-10 PCS rules here
+  pass
+
 class CPTRule(VSRule):
   @staticmethod
   def parse_cpt_retool_array(retool_array):
