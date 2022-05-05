@@ -168,3 +168,11 @@ def test_icd_10_cm_in_chapter():
         content_type='application/json'
         )
     assert len(response.json) == 931
+
+def test_create_new_version():
+    """ This test will create a new version and then delete it """
+    app.config['MOCK_DB'] = True
+    response = app.test_client().post(
+        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/new'
+    )
+    print(response.json)

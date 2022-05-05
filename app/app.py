@@ -78,6 +78,14 @@ def create_app(script_info=None):
         new_version_uuid = value_set.create_new_version(effective_start, effective_end, description)
         return str(new_version_uuid), 201
 
+    @app.route('/ValueSets/<string:value_set_uuid>/versions/<string:vs_version_uuid>', methods=['DELETE'])
+    def delete_vs_version(value_set_uuid, vs_version_uuid):
+        vs_version = ValueSetVersion.load(vs_version_uuid)
+        if str(vs_version.value_set.uuid) != str(value_set_uuid):
+            raise BadRequest(f"{vs_version_uuid} is not a version of value set with uuid {value_set_uuid}")
+        vs_version.delete()
+        return "Deleted", 200
+
     @app.route('/ValueSets/<string:identifier>/most_recent_active_version')
     def get_most_recent_version(identifier):
         uuid = ValueSet.name_to_uuid(identifier)

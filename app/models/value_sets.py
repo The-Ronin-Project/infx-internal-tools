@@ -1374,6 +1374,65 @@ class ValueSetVersion:
     result = last_modified_query.first()
     return result.timestamp
 
+  def delete(self):
+    """
+    Deleting a value set version is only allowed if it was only in draft status and never published--typically if it was created in error.
+    Once a value set version has been published, it must be kept indefinitely.
+    """
+    # Make sure value set is eligible for deletion
+    if self.status != 'pending':
+      raise BadRequest('ValueSet version is not eligible for deletion because its status is not `pending`')
+
+    # Identify any expansions, delete their contents, then delete the expansions themselves
+    conn = get_db()
+    conn.execute(
+      text(
+        """
+        delete from value_sets.expansion_member
+        where expansion_uuid in
+        (select expansion_uuid from value_sets.expansion
+        where vs_version_uuid=:vs_version_uuid)
+        """
+      ), {
+        'vs_version_uuid': self.uuid
+      }
+    )
+
+    conn.execute(
+      text(
+        """
+        delete from value_sets.expansion
+        where vs_version_uuid=:vs_version_uuid
+        """
+      ), {
+        'vs_version_uuid': self.uuid
+      }
+    )
+
+    # Delete associated rules for value set version
+    conn.execute(
+      text(
+        """
+        delete from value_sets.value_set_rule
+        where value_set_version=:vs_version_uuid
+        """
+      ), {
+        'vs_version_uuid': self.uuid
+      }
+    )
+
+    # Delete value set version
+    conn.execute(
+      text(
+        """
+        delete from value_sets.value_set_version
+        where uuid=:vs_version_uuid
+        """
+      ), {
+        'vs_version_uuid': self.uuid
+      }
+    )
+
   def serialize_include(self):
     if self.value_set.type == 'extensional':
       keys = self.extensional_codes.keys()
