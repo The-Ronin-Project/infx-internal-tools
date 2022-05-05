@@ -872,7 +872,7 @@ class ValueSet:
       order by version desc
       """
     ), {
-      'uuid': uuid
+      'uuid': str(uuid)
     })
     return [
       {
@@ -905,6 +905,65 @@ class ValueSet:
     if recent_version is None:
       raise BadRequest(f'No active published version of ValueSet with UUID: {uuid}')
     return ValueSetVersion.load(recent_version.uuid)
+
+  def create_new_version(self, effective_start, effective_end, description):
+    """
+    This will identify the most recent version of the value set and clone it, incrementing the version by 1, to create a new version
+    """
+    conn = get_db()
+    most_recent_vs_version = conn.execute(
+      text(
+        """
+        select * from value_sets.value_set_version
+        where value_set_uuid=:value_set_uuid
+        order by version desc
+        """
+      ), {
+        'value_set_uuid': self.uuid
+      }
+    ).first()
+
+    # Create new version
+    new_version_uuid = uuid.uuid4()
+    conn.execute(
+      text(
+        """
+        insert into value_sets.value_set_version
+        (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)
+        values
+        (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version)
+        """
+      ), {
+        'new_version_uuid': str(new_version_uuid),
+        'effective_start': effective_start,
+        'effective_end': effective_end,
+        'value_set_uuid': self.uuid,
+        'status': 'pending',
+        'description': description,
+        'created_date': datetime.now(),
+        'version': most_recent_vs_version.version + 1
+      }
+    )
+
+    # Copy rules from previous version to new version
+    if current_app.config['MOCK_DB'] is False:
+      conn.execute(
+        text(
+          """
+          insert into value_sets.value_set_rule
+          (position, description, property, operator, value, include, terminology_version, value_set_version)
+          select position, description, property, operator, value, include, terminology_version, :new_version_uuid
+          from value_sets.value_set_rule
+          where value_set_version = :previous_version_uuid
+          """
+        ), {
+          'previous_version_uuid': str(most_recent_vs_version.uuid),
+          'new_version_uuid': str(new_version_uuid)
+        }
+      )
+
+    return new_version_uuid
+        
 
 class RuleGroup:
   def __init__(self, vs_version_uuid, rule_group_id):
@@ -1315,6 +1374,65 @@ class ValueSetVersion:
     )
     result = last_modified_query.first()
     return result.timestamp
+
+  def delete(self):
+    """
+    Deleting a value set version is only allowed if it was only in draft status and never published--typically if it was created in error.
+    Once a value set version has been published, it must be kept indefinitely.
+    """
+    # Make sure value set is eligible for deletion
+    if self.status != 'pending':
+      raise BadRequest('ValueSet version is not eligible for deletion because its status is not `pending`')
+
+    # Identify any expansions, delete their contents, then delete the expansions themselves
+    conn = get_db()
+    conn.execute(
+      text(
+        """
+        delete from value_sets.expansion_member
+        where expansion_uuid in
+        (select expansion_uuid from value_sets.expansion
+        where vs_version_uuid=:vs_version_uuid)
+        """
+      ), {
+        'vs_version_uuid': self.uuid
+      }
+    )
+
+    conn.execute(
+      text(
+        """
+        delete from value_sets.expansion
+        where vs_version_uuid=:vs_version_uuid
+        """
+      ), {
+        'vs_version_uuid': self.uuid
+      }
+    )
+
+    # Delete associated rules for value set version
+    conn.execute(
+      text(
+        """
+        delete from value_sets.value_set_rule
+        where value_set_version=:vs_version_uuid
+        """
+      ), {
+        'vs_version_uuid': self.uuid
+      }
+    )
+
+    # Delete value set version
+    conn.execute(
+      text(
+        """
+        delete from value_sets.value_set_version
+        where uuid=:vs_version_uuid
+        """
+      ), {
+        'vs_version_uuid': self.uuid
+      }
+    )
 
   def serialize_include(self):
     if self.value_set.type == 'extensional':
