@@ -946,20 +946,21 @@ class ValueSet:
     )
 
     # Copy rules from previous version to new version
-    conn.execute(
-      text(
-        """
-        insert into value_sets.value_set_rule
-        (position, description, property, operator, value, include, terminology_version, value_set_version)
-        select position, description, property, operator, value, include, terminology_version, :new_version_uuid
-        from value_sets.value_set_rule
-        where value_set_version = :previous_version_uuid
-        """
-      ), {
-        'previous_version_uuid': str(most_recent_vs_version.uuid),
-        'new_version_uuid': str(new_version_uuid)
-      }
-    )
+    if current_app.config['MOCK_DB'] is False:
+      conn.execute(
+        text(
+          """
+          insert into value_sets.value_set_rule
+          (position, description, property, operator, value, include, terminology_version, value_set_version)
+          select position, description, property, operator, value, include, terminology_version, :new_version_uuid
+          from value_sets.value_set_rule
+          where value_set_version = :previous_version_uuid
+          """
+        ), {
+          'previous_version_uuid': str(most_recent_vs_version.uuid),
+          'new_version_uuid': str(new_version_uuid)
+        }
+      )
 
     return new_version_uuid
         
