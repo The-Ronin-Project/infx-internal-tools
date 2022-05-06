@@ -70,6 +70,18 @@ class VSRule:
       self.in_section()
     elif self.operator == 'in-chapter':
       self.in_chapter()
+    elif self.operator == 'has-body-system':
+      self.has_body_system()
+    elif self.operator == 'has-root-operation':
+      self.has_root_operation()
+    elif self.operator == 'has-body-part':
+      self.has_body_part()
+    elif self.operator == 'has-qualifer':
+      self.has_qualifier()
+    elif self.operator == 'has-approach':
+      self.has_approach()
+    elif self.operator == "has-device":
+      self.has_device()              
 
     if self.property == 'code' and self.operator == 'in':
       self.code_rule()
@@ -120,10 +132,6 @@ class VSRule:
       "op": self.operator,
       "value": self.value
     }
-
-class ICD10PCSRule(VSRule):
-  def direct_child(self):
-      return super().direct_child()
 
 class ICD10CMRule(VSRule):
   def direct_child(self):
@@ -649,8 +657,82 @@ class LOINCRule(VSRule):
     self.loinc_rule(query)
 
 class ICD10PCSRule(VSRule):
-  # todo: Theresa, implement ICD-10 PCS rules here
-  pass
+
+  def icd_10_pcs_rule(self, query):
+    conn = get_db()
+
+    converted_query = text(
+        query
+    ).bindparams(bindparam('value', expanding=True))
+
+    results_data = conn.execute(
+      converted_query,
+      {
+        'value': json.loads(self.value),
+        'version_uuid': self.version_uuid
+      }
+    )
+    results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
+    self.results = set(results)
+
+  def in_section(self):
+    query = """
+    select * from icd_10_pcs.code
+    where section = :value
+    and version_uuid = :version_uuid
+    """
+    self.icd_10_pcs_rule(query)
+
+  def has_body_system(self):
+    query = """
+    select * from icd_10_pcs.code
+    where body_system = :value
+    and version_uuid = :version_uuid
+    """
+    self.icd_10_pcs_rule(query)
+
+  def has_root_operation(self):
+    query = """
+    select * from icd_10_pcs.code
+    where root_operation = :value
+    and version_uuid = :version_uuid
+    """
+    self.icd_10_pcs_rule(query)
+
+  def has_body_part(self):
+    query = """
+    select * from icd_10_pcs.code
+    where body_part = :value
+    and version_uuid = :version_uuid
+    """
+    self.icd_10_pcs_rule(query)
+  
+  def has_approach(self):
+    query = """
+    select * from icd_10_pcs.code
+    where approach = :value
+    and version_uuid = :version_uuid
+    """
+    self.icd_10_pcs_rule(query)
+  
+  def has_device(self):
+    query = """
+    select * from icd_10_pcs.code
+    where device in :value
+    and version_uuid = :version_uuid
+    
+    """
+    self.icd_10_pcs_rule(query)
+  
+  def has_qualifier(self):
+    query = """
+    select * from icd_10_pcs.code
+    where qualifier = :value
+    and version_uuid = :version_uuid
+    """
+    self.icd_10_pcs_rule(query)
+   
+
 
 class CPTRule(VSRule):
   @staticmethod
@@ -1471,6 +1553,8 @@ def execute_rules(rules_json):
       rule = LOINCRule(None, None, None, rule_property, operator, value, include, None, fhir_uri, terminology_version)
     elif terminology_name == "CPT":
       rule = CPTRule(None, None, None, rule_property, operator, value, include, None, fhir_uri, terminology_version)
+    elif terminology_name == "ICD-10 PCS":
+      rule = ICD10PCSRule(None, None, None, rule_property, operator, value, include, None, fhir_uri, terminology_version)  
 
     rules.append(rule)
 
