@@ -668,8 +668,8 @@ class ICD10PCSRule(VSRule):
     results_data = conn.execute(
       converted_query,
       {
-        'value': json.loads(self.value),
-        'version_uuid': self.version_uuid
+        'value': self.value,
+        'version_uuid': self.terminology_version.uuid
       }
     )
     results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
