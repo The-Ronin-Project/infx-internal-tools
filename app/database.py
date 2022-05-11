@@ -8,6 +8,7 @@ def get_db():
         if current_app.config['MOCK_DB'] is True:
             engine = create_engine('sqlite:///tests/dbs/public.db')
             g.db = engine.connect()
+            g.db.execute("attach database 'tests/dbs/concept_maps.db' as concept_maps")
             g.db.execute("attach database 'tests/dbs/value_sets.db' as value_sets")
             g.db.execute("attach database 'tests/dbs/snomedct.db' as snomedct")
             g.db.execute("attach database 'tests/dbs/icd_10_cm.db' as icd_10_cm")

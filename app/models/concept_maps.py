@@ -158,15 +158,15 @@ class ConceptMapVersion:
             concept_relationship.target_concept_system_version_uuid as target_system,
             tv_target.version as target_version, tv_target.fhir_uri as target_fhir_uri
             from concept_maps.source_concept
-            right join concept_maps.concept_relationship
-            on concept_relationship.source_concept_uuid = source_concept.uuid
+            left join concept_maps.concept_relationship
+            on source_concept.uuid = concept_relationship.source_concept_uuid
             join concept_maps.relationship_codes
             on relationship_codes.uuid = concept_relationship.relationship_code_uuid
-            join public.terminology_versions as tv_source
-            on tv_source.uuid = source_concept.system::uuid
-            join public.terminology_versions as tv_target
+            join terminology_versions as tv_source
+            on cast(tv_source.uuid as uuid) = cast(source_concept.system as uuid)
+            join terminology_versions as tv_target
             on tv_target.uuid = concept_relationship.target_concept_system_version_uuid
-            where source_concept.concept_map_version_uuid =:concept_map_version_uuid
+            where source_concept.concept_map_version_uuid = :concept_map_version_uuid
         """
 
         results = conn.execute(
@@ -189,6 +189,7 @@ class ConceptMapVersion:
                 self.mappings[source_code]=[mapping]
         
     def serialize_mappings(self):
+        print("SERIALIZING MAPPINGS")
         # Identify all the source terminology / target terminology pairings in the mappings
         source_target_pairs_set = set()
 
@@ -229,7 +230,7 @@ class ConceptMapVersion:
             groups.append(
                     {
                     "source": source_uri,
-                    "sourceVersion": source_uri,
+                    "sourceVersion": source_version,
                     "target": target_uri,
                     "targetVersion": target_version,
                     "element": elements

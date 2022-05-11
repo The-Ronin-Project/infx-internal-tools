@@ -169,8 +169,8 @@ def test_icd_10_cm_in_chapter():
         )
     assert len(response.json) == 931
 
-def test_create_new_version():
-    """ This test will create a new version and then delete it """
+def test_create_new_version_value_set():
+    """ This test will create a new version of a value set and then delete it """
     app.config['MOCK_DB'] = True
 
     metadata = app.test_client().get(
@@ -207,3 +207,10 @@ def test_create_new_version():
     new_num_versions = len(metadata.json)
 
     assert num_versions == new_num_versions
+
+def test_concept_map_load():
+    app.config['MOCK_DB'] = True
+    concept_map = app.test_client().get(
+        '/ConceptMaps/cbe12636-102f-4ab0-9616-a8684c9f2a21'
+    )
+    assert len(concept_map.json.get('group')[0].get('element')) == 313
