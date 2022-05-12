@@ -189,7 +189,6 @@ class ConceptMapVersion:
                 self.mappings[source_code]=[mapping]
         
     def serialize_mappings(self):
-        print("SERIALIZING MAPPINGS")
         # Identify all the source terminology / target terminology pairings in the mappings
         source_target_pairs_set = set()
 
