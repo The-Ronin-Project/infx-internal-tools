@@ -168,3 +168,119 @@ def test_icd_10_cm_in_chapter():
         content_type='application/json'
         )
     assert len(response.json) == 931
+
+def test_icd_10_pcs_has_body_system():
+    app.config['MOCK_DB'] = True
+    response = app.test_client().post(
+        '/ValueSets/rule_set/execute',
+        data = json.dumps(
+        [
+            {
+               "property": "code",
+                "operator": "has-body-system",
+                "value": [" Eye "],
+                "include": True,
+                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
+            }
+        ]    
+        ),
+        content_type='application/json'
+        )
+    assert len(response.json) == 1
+
+def test_icd_10_pcs_has_root_operation():
+    app.config['MOCK_DB'] = True
+    response = app.test_client().post(
+        '/ValueSets/rule_set/execute',
+        data = json.dumps(
+        [
+            {
+               "property": "code",
+                "operator": "has-root-operation",
+                "value": [" Magnetic Resonance Imaging (MRI) "],
+                "include": True,
+                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
+            }
+        ]    
+        ),
+        content_type='application/json'
+        )
+    print(response.json)  
+    assert len(response.json) == 10
+
+def test_icd_10_pcs_has_device():
+    app.config['MOCK_DB'] = True
+    response = app.test_client().post(
+        '/ValueSets/rule_set/execute',
+        data = json.dumps(
+        [
+            {
+               "property": "code",
+                "operator": "has-device",
+                "value": [" Unenhanced and Enhanced "],
+                "include": True,
+                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
+            }
+        ]    
+        ),
+        content_type='application/json'
+        )
+    assert len(response.json) ==  1
+
+def test_icd_10_pcs_has_body_part():
+    app.config['MOCK_DB'] = True
+    response = app.test_client().post(
+        '/ValueSets/rule_set/execute',
+        data = json.dumps(
+        [
+            {
+               "property": "code",
+                "operator": "has-body-part",
+                "value": [" Coronary Arteries Multiple "],
+                "include": True,
+                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
+            }
+        ]    
+        ),
+        content_type='application/json'
+        )
+    assert len (response.json) == 1
+
+def test_icd_10_pcs_has_approach():
+    app.config['MOCK_DB'] = True
+    response = app.test_client().post(
+        '/ValueSets/rule_set/execute',
+        data = json.dumps(
+        [
+            {
+               "property": "code",
+                "operator": "has-approach",
+                "value": [" High Osmolar "],
+                "include": True,
+                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
+            }
+        ]    
+        ),
+        content_type='application/json'
+        )
+    assert len(response.json) == 1
+
+    
+def test_icd_10_pcs_has_qualifier():
+    app.config['MOCK_DB'] = True
+    response = app.test_client().post(
+        '/ValueSets/rule_set/execute',
+        data = json.dumps(
+        [
+            {
+               "property": "code",
+                "operator": "has-qualifier",
+                "value": [" Intraoperative "],
+                "include": True,
+                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
+            }
+        ]    
+        ),
+        content_type='application/json'
+        )
+    assert len(response.json) == 1
