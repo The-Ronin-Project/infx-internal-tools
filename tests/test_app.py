@@ -186,7 +186,7 @@ def test_icd_10_pcs_has_body_system():
         ),
         content_type='application/json'
         )
-    assert len(response.json) == 1
+    assert len(response.json) == 1290
 
 def test_icd_10_pcs_has_root_operation():
     app.config['MOCK_DB'] = True
@@ -206,7 +206,7 @@ def test_icd_10_pcs_has_root_operation():
         content_type='application/json'
         )
     print(response.json)  
-    assert len(response.json) == 10
+    assert len(response.json) == 421
 
 def test_icd_10_pcs_has_device():
     app.config['MOCK_DB'] = True
@@ -264,7 +264,6 @@ def test_icd_10_pcs_has_approach():
         content_type='application/json'
         )
     assert len(response.json) == 1
-
     
 def test_icd_10_pcs_has_qualifier():
     app.config['MOCK_DB'] = True
@@ -284,3 +283,49 @@ def test_icd_10_pcs_has_qualifier():
         content_type='application/json'
         )
     assert len(response.json) == 1
+
+def test_create_new_version_value_set():
+    """ This test will create a new version of a value set and then delete it """
+    app.config['MOCK_DB'] = True
+
+    metadata = app.test_client().get(
+        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
+    )
+    num_versions = len(metadata.json)
+
+    response = app.test_client().post(
+        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/new',
+        data = json.dumps({
+            'effective_start': '2022-01-01',
+            'effective_end': '2022-12-31',
+            'description': 'test version'
+        }),
+        content_type='application/json'
+    )
+    new_version_uuid = response.text
+    
+    metadata = app.test_client().get(
+        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
+    )
+    new_num_versions = len(metadata.json)
+
+    assert num_versions + 1 == new_num_versions
+
+    # Now delete the new version
+    app.test_client().delete(
+        f'/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/{new_version_uuid}'
+    )
+
+    metadata = app.test_client().get(
+        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
+    )
+    new_num_versions = len(metadata.json)
+
+    assert num_versions == new_num_versions
+
+def test_concept_map_load():
+    app.config['MOCK_DB'] = True
+    concept_map = app.test_client().get(
+        '/ConceptMaps/cbe12636-102f-4ab0-9616-a8684c9f2a21'
+    )
+    assert len(concept_map.json.get('group')[0].get('element')) == 313
