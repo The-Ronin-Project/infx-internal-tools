@@ -12,6 +12,7 @@ def get_db():
             g.db.execute("attach database 'tests/dbs/value_sets.db' as value_sets")
             g.db.execute("attach database 'tests/dbs/snomedct.db' as snomedct")
             g.db.execute("attach database 'tests/dbs/icd_10_cm.db' as icd_10_cm")
+            g.db.execute("attach database 'tests/dbs/icd_10_pcs.db' as icd_10_pcs")
             g.db.execute("attach database 'tests/dbs/rxndirty.db' as rxnormDirty")
             g.db.execute("attach database 'tests/dbs/surveys.db' as surveys")
             g.db.execute("attach database 'tests/dbs/loinc.db' as loinc")
