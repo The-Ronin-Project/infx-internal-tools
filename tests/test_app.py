@@ -319,6 +319,13 @@ def test_icd_10_pcs_multi_rule():
                 "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
             },
             {
+                 "property": "code",
+                 "operator": "in",
+                 "value": ["001U077"],
+                 "include": False,
+                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
+            },
+            {
                 "property": "code",
                 "operator": "has-approach",
                 "value": [" Open "],
@@ -336,7 +343,7 @@ def test_icd_10_pcs_multi_rule():
         ),
         content_type='application/json'
         )
-    assert len(response.json) == 5
+    assert len(response.json) == 4
 
 def test_create_new_version_value_set():
     """ This test will create a new version of a value set and then delete it """
