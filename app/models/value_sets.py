@@ -76,7 +76,7 @@ class VSRule:
       self.has_root_operation()
     elif self.operator == 'has-body-part':
       self.has_body_part()
-    elif self.operator == 'has-qualifer':
+    elif self.operator == 'has-qualifier':
       self.has_qualifier()
     elif self.operator == 'has-approach':
       self.has_approach()
@@ -678,7 +678,7 @@ class ICD10PCSRule(VSRule):
   def in_section(self):
     query = """
     select * from icd_10_pcs.code
-    where section = :value
+    where section in :value
     and version_uuid = :version_uuid
     """
     self.icd_10_pcs_rule(query)
@@ -686,7 +686,7 @@ class ICD10PCSRule(VSRule):
   def has_body_system(self):
     query = """
     select * from icd_10_pcs.code
-    where body_system = :value
+    where body_system in :value
     and version_uuid = :version_uuid
     """
     self.icd_10_pcs_rule(query)
@@ -694,7 +694,7 @@ class ICD10PCSRule(VSRule):
   def has_root_operation(self):
     query = """
     select * from icd_10_pcs.code
-    where root_operation = :value
+    where root_operation in :value
     and version_uuid = :version_uuid
     """
     self.icd_10_pcs_rule(query)
@@ -702,7 +702,7 @@ class ICD10PCSRule(VSRule):
   def has_body_part(self):
     query = """
     select * from icd_10_pcs.code
-    where body_part = :value
+    where body_part in :value
     and version_uuid = :version_uuid
     """
     self.icd_10_pcs_rule(query)
@@ -710,7 +710,7 @@ class ICD10PCSRule(VSRule):
   def has_approach(self):
     query = """
     select * from icd_10_pcs.code
-    where approach = :value
+    where approach in :value
     and version_uuid = :version_uuid
     """
     self.icd_10_pcs_rule(query)
@@ -720,14 +720,13 @@ class ICD10PCSRule(VSRule):
     select * from icd_10_pcs.code
     where device in :value
     and version_uuid = :version_uuid
-    
     """
     self.icd_10_pcs_rule(query)
   
   def has_qualifier(self):
     query = """
     select * from icd_10_pcs.code
-    where qualifier = :value
+    where qualifier in :value
     and version_uuid = :version_uuid
     """
     self.icd_10_pcs_rule(query)

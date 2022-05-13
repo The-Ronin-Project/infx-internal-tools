@@ -225,7 +225,7 @@ def test_icd_10_pcs_has_device():
         ),
         content_type='application/json'
         )
-    assert len(response.json) ==  1
+    assert len(response.json) ==  314
 
 def test_icd_10_pcs_has_body_part():
     app.config['MOCK_DB'] = True
@@ -236,7 +236,7 @@ def test_icd_10_pcs_has_body_part():
             {
                "property": "code",
                 "operator": "has-body-part",
-                "value": [" Coronary Arteries Multiple "],
+                "value": [" Spinal Canal "],
                 "include": True,
                 "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
             }
@@ -244,7 +244,7 @@ def test_icd_10_pcs_has_body_part():
         ),
         content_type='application/json'
         )
-    assert len (response.json) == 1
+    assert len (response.json) == 152
 
 def test_icd_10_pcs_has_approach():
     app.config['MOCK_DB'] = True
@@ -263,7 +263,7 @@ def test_icd_10_pcs_has_approach():
         ),
         content_type='application/json'
         )
-    assert len(response.json) == 1
+    assert len(response.json) == 581
     
 def test_icd_10_pcs_has_qualifier():
     app.config['MOCK_DB'] = True
@@ -274,7 +274,7 @@ def test_icd_10_pcs_has_qualifier():
             {
                "property": "code",
                 "operator": "has-qualifier",
-                "value": [" Intraoperative "],
+                "value": [" Atrium"],
                 "include": True,
                 "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
             }
@@ -282,7 +282,61 @@ def test_icd_10_pcs_has_qualifier():
         ),
         content_type='application/json'
         )
-    assert len(response.json) == 1
+    assert len(response.json) == 18
+
+def test_icd_10_pcs_multi_rule():
+    app.config['MOCK_DB'] = True
+    response = app.test_client().post(
+        '/ValueSets/rule_set/execute',
+        data = json.dumps(
+        [
+            {
+                "property": "code",
+                 "operator": "in-section",
+                 "value": ["Medical and Surgical "],
+                 "include": True,
+                 "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
+            },
+            {
+                "property": "code",
+                "operator": "has-body-system",
+                "value": [" Central Nervous System and Cranial Nerves "],
+                "include": True,
+                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
+            },
+            {
+                "property": "code",
+                "operator": "has-root-operation",
+                "value": [" Bypass "],
+                "include": True,
+                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
+             },
+             {
+                "property": "code",
+                "operator": "has-body-part",
+                "value": [" Spinal Canal "],
+                "include": True,
+                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
+            },
+            {
+                "property": "code",
+                "operator": "has-approach",
+                "value": [" Open "],
+                "include": True,
+                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
+             },
+             {
+                "property": "code",
+                "operator": "has-device",
+                "value": [" Autologous Tissue Substitute "],
+                "include": True,
+                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
+             }
+        ]
+        ),
+        content_type='application/json'
+        )
+    assert len(response.json) == 5
 
 def test_create_new_version_value_set():
     """ This test will create a new version of a value set and then delete it """
