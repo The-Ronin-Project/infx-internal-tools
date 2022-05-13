@@ -675,6 +675,14 @@ class ICD10PCSRule(VSRule):
     results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
     self.results = set(results)
 
+  def code_rule(self):
+    query = """
+    select * from icd_10_pcs.code
+    where code in :value
+    and version_uuid = :version_uuid
+    """
+    self.icd_10_pcs_rule(query)
+
   def in_section(self):
     query = """
     select * from icd_10_pcs.code
