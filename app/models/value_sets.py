@@ -665,10 +665,14 @@ class ICD10PCSRule(VSRule):
         query
     ).bindparams(bindparam('value', expanding=True))
 
+    value_param = self.value
+    if type(self.value) != list: 
+      value_param = json.loads(value_param)
+
     results_data = conn.execute(
       converted_query,
       {
-        'value': self.value,
+        'value': value_param,
         'version_uuid': self.terminology_version.uuid
       }
     )
@@ -1129,10 +1133,10 @@ class RuleGroup:
 
       expansion_report += "\nInclusion Rules\n"
       for x in include_rules:
-        expansion_report += f"{x.description}, {x.property}, {x.operator}, {x.value}\n"
+        expansion_report += f"{x.description}, {x.property}, {x.operator}, {x.value}, {len(x.results)} codes included\n"
       expansion_report += "\nExclusion Rules\n"
       for x in exclude_rules:
-        expansion_report += f"{x.description}, {x.property}, {x.operator}, {x.value}\n"
+        expansion_report += f"{x.description}, {x.property}, {x.operator}, {x.value}, {len(x.results)} codes excluded\n"
       
       terminology_set = include_rules.pop(0).results
       # todo: if it's a grouping value set, we should use union instead of intersection
@@ -1385,13 +1389,14 @@ class ValueSetVersion:
       'curr_time': current_time_string
     })
 
-    conn.execute(expansion_member.insert(), [{
-      'expansion_uuid': str(self.expansion_uuid),
-      'code': code.code,
-      'display': code.display,
-      'system': code.system,
-      'version': code.version
-    } for code in self.expansion])
+    if self.expansion:
+      conn.execute(expansion_member.insert(), [{
+        'expansion_uuid': str(self.expansion_uuid),
+        'code': code.code,
+        'display': code.display,
+        'system': code.system,
+        'version': code.version
+      } for code in self.expansion])
 
   def create_expansion(self):
     self.expansion = set()
