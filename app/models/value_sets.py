@@ -1104,7 +1104,8 @@ class RuleGroup:
         rule = LOINCRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
       elif terminology.name == "CPT":
         rule = CPTRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
-        
+      elif terminology.name == "ICD-10 PCS":
+        rule = ICD10PCSRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))  
       if terminology in self.rules:
         self.rules[terminology].append(rule)
       else:
