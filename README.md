@@ -1,7 +1,4 @@
-# infx-api
-Infx-api is the repository for clinical intelligence APIs.
-
-Upon any changes to the below directory structure, those changes should have their current status documented here.
+# infx-internal-tools
 
 A .gitignore is here as well. any subdirs or files not to be checked should have their relative paths set there.
 
@@ -37,7 +34,7 @@ open .zshrc using `open ~/.zshrc`
 
 If the file does not already exist, create it using `touch ~/.zshrc`
 
-Then append the following line to the end of the file. 
+Then append the following line to the end of the file.
 
 `eval "$(pyenv init -)"`
 
@@ -107,7 +104,6 @@ Prerequisites:
 First, follow these directions: https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account
 
 
-### Running a dev server 
+### Running a dev server
 In the code editor terminal, run command "python -m app.app".
 If the API request is calling to RxNav-in-a-box, make sure that container is running in Docker first.
-
