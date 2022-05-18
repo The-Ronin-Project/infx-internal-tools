@@ -1,4 +1,4 @@
-name: infx-api API Unit Tests
+name: infx-internal-tools Unit Tests
 
 on:
   pull_request:

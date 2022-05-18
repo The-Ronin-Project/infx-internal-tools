@@ -1,4 +1,4 @@
-name: INFX Content API Deployment to K8s PROD
+name: INFX Internal Tools Deployment
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     branches: [master]
 
 jobs:
-  infx-content_test:
+  infx-internal-tools_test:
     uses: projectronin/github/.github/workflows/python_test.yml@master
     secrets:
       codecov-token: ${{ secrets.INFX_API_CODECOV_TOKEN }}
