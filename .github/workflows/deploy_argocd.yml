@@ -11,19 +11,19 @@ jobs:
     secrets:
       codecov-token: ${{ secrets.INFX_API_CODECOV_TOKEN }}
 
-  image-push:
-    uses: projectronin/github/.github/workflows/image_push.yml@master
-    with:
-      image-tag: ${{ github.sha }}
-    secrets:
-      username: ${{ secrets.ACR_USERNAME }}
-      password: ${{ secrets.ACR_PASSWORD }}
+  # image-push:
+  #   uses: projectronin/github/.github/workflows/image_push.yml@master
+  #   with:
+  #     image-tag: ${{ github.sha }}
+  #   secrets:
+  #     username: ${{ secrets.ACR_USERNAME }}
+  #     password: ${{ secrets.ACR_PASSWORD }}
 
-  argocd_prod:
-    uses: projectronin/github/.github/workflows/argocd_deploy.yml@master
-    needs: [infx-content_test, image-push]
-    with:
-      environment: prod
-      image-tag: ${{ github.sha }}
-    secrets:
-      argocd-svc-automation: ${{ secrets.ARGOCD_SVC_AUTOMATION }}
+  # argocd_prod:
+  #   uses: projectronin/github/.github/workflows/argocd_deploy.yml@master
+  #   needs: [infx-content_test, image-push]
+  #   with:
+  #     environment: prod
+  #     image-tag: ${{ github.sha }}
+  #   secrets:
+  #     argocd-svc-automation: ${{ secrets.ARGOCD_SVC_AUTOMATION }}
