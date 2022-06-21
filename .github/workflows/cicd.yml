@@ -1,0 +1,34 @@
+name: CICD
+on:
+  push:
+    branches: [master]
+
+jobs:
+  ###############################################
+  # Run tests and publish coverage to codecov.io
+  ###############################################
+  test:
+    uses: projectronin/github/.github/workflows/python_test.yml@master
+    secrets:
+      codecov-token: ${{ secrets.INFX_API_CODECOV_TOKEN  }}
+
+  application-image:
+    if: github.ref == 'refs/heads/master'
+    name: Push image to Azure
+    uses: projectronin/github/.github/workflows/image_push.yml@master
+    needs:
+      - test
+    with:
+      image-tag: ${{ github.sha }}
+    secrets:
+      username: ${{ secrets.ACR_USERNAME }}
+      password: ${{ secrets.ACR_PASSWORD }}
+
+  argocd_prod:
+    uses: projectronin/github/.github/workflows/argocd_deploy.yml@master
+    needs: [ application-image ]
+    with:
+      environment: prod
+      image-tag: ${{ github.sha }}
+    secrets:
+      argocd-svc-automation: ${{ secrets.ARGOCD_SVC_AUTOMATION }}
