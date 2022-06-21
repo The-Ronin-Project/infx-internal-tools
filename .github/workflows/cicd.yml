@@ -14,15 +14,16 @@ jobs:
 
   application-image:
     if: github.ref == 'refs/heads/master'
-    name: Push image to Azure
-    uses: projectronin/github/.github/workflows/image_push.yml@master
+    name: Push multiplatform application image to Nexus
+    uses: projectronin/github/.github/workflows/image_push_nexus.yml@master
     needs:
       - test
     with:
       image-tag: ${{ github.sha }}
+      repo: "infx-internal-tools"
     secrets:
-      username: ${{ secrets.ACR_USERNAME }}
-      password: ${{ secrets.ACR_PASSWORD }}
+      username: ${{ secrets.NEXUS_DOCKER_USERNAME }}
+      password: ${{ secrets.NEXUS_DOCKER_PASSWORD }}
 
   argocd_prod:
     uses: projectronin/github/.github/workflows/argocd_deploy.yml@master
