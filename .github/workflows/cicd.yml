@@ -1,0 +1,36 @@
+name: CICD
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+
+jobs:
+  ###############################################
+  # Run tests and publish coverage to codecov.io
+  ###############################################
+  test:
+    uses: projectronin/github/.github/workflows/python_test.yml@master
+    secrets:
+      codecov-token: ${{ secrets.INFX_API_CODECOV_TOKEN  }}
+
+  application-image:
+    if: github.ref == 'refs/heads/master'
+    name: Push multiplatform application image to Nexus
+    uses: projectronin/github/.github/workflows/image_push_nexus.yml@master
+    needs:
+      - test
+    with:
+      image-tag: ${{ github.sha }}
+      repo: "infx-internal-tools"
+    secrets:
+      username: ${{ secrets.NEXUS_DOCKER_USERNAME }}
+      password: ${{ secrets.NEXUS_DOCKER_PASSWORD }}
+
+  argocd_prod:
+    uses: projectronin/github/.github/workflows/argocd_deploy.yml@master
+    needs: [ application-image ]
+    with:
+      environment: prod
+      image-tag: ${{ github.sha }}
+    secrets:
+      argocd-svc-automation: ${{ secrets.ARGOCD_SVC_AUTOMATION }}
