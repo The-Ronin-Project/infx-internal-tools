@@ -11,6 +11,7 @@ from decouple import config
 from app.models.value_sets import *
 from app.models.concept_maps import *
 from app.models.surveys import *
+from app.models.patient_edu import *
 from werkzeug.exceptions import HTTPException
 
 # Configure the logger when the application is imported. This ensures that
@@ -138,6 +139,13 @@ def create_app(script_info=None):
     def get_concept_map_version(version_uuid):
         concept_map_version = ConceptMapVersion(version_uuid)
         return jsonify(concept_map_version.serialize())
+
+    # Patient Education Endpoints
+    @app.route('/PatientEducation/<language>/<resource_id>', methods=['POST', 'GET'])
+    def external_resource_download(language, resource_id):
+        ex_resource = ExternalResource.locate_ex_resource(language, resource_id)
+        # /PatientEducation/English/d6ca37e7-5d88-4ca0-a63f-ab16af51a32e
+        return jsonify(ex_resource)
 
     return app
 
