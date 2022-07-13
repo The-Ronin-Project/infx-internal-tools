@@ -143,9 +143,9 @@ def create_app(script_info=None):
     # Patient Education Endpoints
     @app.route('/PatientEducation/<language>/<resource_id>', methods=['POST', 'GET'])
     def external_resource_download(language, resource_id):
-        ex_resource = ExternalResource.locate_ex_resource(language, resource_id)
+        ex_resource = ExternalResource.locate_external_resource(language, resource_id)
         # /PatientEducation/English/d6ca37e7-5d88-4ca0-a63f-ab16af51a32e
-        return jsonify(ex_resource)
+        return "Resource already exists" if not ex_resource else jsonify(ex_resource)
 
     return app
 
