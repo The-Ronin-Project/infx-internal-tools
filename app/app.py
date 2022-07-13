@@ -141,11 +141,14 @@ def create_app(script_info=None):
         return jsonify(concept_map_version.serialize())
 
     # Patient Education Endpoints
-    @app.route('/PatientEducation/<language>/<resource_id>', methods=['POST', 'GET'])
-    def external_resource_download(language, resource_id):
-        ex_resource = ExternalResource.locate_external_resource(language, resource_id)
-        # /PatientEducation/English/d6ca37e7-5d88-4ca0-a63f-ab16af51a32e
+    @app.route('/PatientEducation/<language>/<ex_resource_id>', methods=['POST', 'GET'])
+    def external_resource_download(language, ex_resource_id):
+        ex_resource = ExternalResource.locate_external_resource(language, ex_resource_id)
         return "Resource already exists" if not ex_resource else jsonify(ex_resource)
+
+    @app.route('/PatientEducation/<title>/<body>/<resource_uuid>', methods=['POST'])
+    def create_resource(title, body, resource_uuid):
+        pass
 
     return app
 

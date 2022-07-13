@@ -30,15 +30,15 @@ class ExternalResource:
     url: str
 
     @staticmethod
-    def locate_external_resource(language, resource_id):
+    def locate_external_resource(language, ex_resource_id):
         """ given the url, locate resource and perform checks before loading into db """
         url = config('EXTERNAL_RESOURCE_URL')
-        resource_url = f"{url}{language}/{resource_id}"
+        resource_url = f"{url}{language}/{ex_resource_id}"
         response = requests.get(resource_url)
         xml_data = response.text
         xml_soup = Soup(xml_data, 'html.parser')
         version = xml_soup.find('meta', {'name': 'revisedDate'})['content'],
-        does_exist = ExternalResource.check_if_resource_exists(version, resource_id)
+        does_exist = ExternalResource.check_if_resource_exists(version, ex_resource_id)
 
         if not does_exist:
             title = xml_soup.title.get_text()
@@ -55,7 +55,7 @@ class ExternalResource:
                 'version': version,
                 'title': title,
                 'body': body,
-                'external_resource_id': resource_id
+                'external_resource_id': ex_resource_id
             }
             return ExternalResource.load_resource(external_resource)
 
