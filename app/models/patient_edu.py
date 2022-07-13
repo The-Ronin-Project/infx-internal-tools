@@ -1,13 +1,13 @@
 import os
 import requests
 import uuid
-import json
 
 from sqlalchemy import text
 from markdownify import markdownify as md
 from bs4 import BeautifulSoup as Soup
 from app.database import get_db
 from dataclasses import dataclass
+from typing import Optional
 from enum import Enum, unique
 from decouple import config
 
@@ -115,4 +115,29 @@ class ExternalResource:
 @dataclass
 class Resource:
     """ related to local or tenant resources """
-    pass
+    language: str
+    title: str
+    body: str
+    resource_uuid: Optional = None
+    status: Optional[str] = 'Pending'
+
+    def __post_init__(self):
+        self.resource_uuid = uuid.uuid1()
+
+    def create_local_or_tenant_resource(self):
+        """ create/insert new resource into db, return inserted data to user """
+        conn = get_db()
+        resource = conn.execute(text(
+            """
+            INSERT INTO patient_education.resource_version
+            (uuid, title, body, language, status) 
+            VALUES (:uuid, :title, :body, :language, :status);
+            """
+        ), {
+            'uuid': self.resource_uuid,
+            'title': self.title,
+            'body': self.body,
+            'language': self.language,
+            'status': self.status
+        })
+        return resource

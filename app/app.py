@@ -146,9 +146,11 @@ def create_app(script_info=None):
         ex_resource = ExternalResource.locate_external_resource(language, ex_resource_id)
         return "Resource already exists" if not ex_resource else jsonify(ex_resource)
 
-    @app.route('/PatientEducation/<title>/<body>/<resource_uuid>', methods=['POST'])
-    def create_resource(title, body, resource_uuid):
-        pass
+    @app.route('/PatientEducation/<language>/<title>/<body>', methods=['POST', 'GET'])
+    def create_resource(language, title, body):
+        resource = Resource(language, title, body)
+        print(resource)
+        return jsonify(resource)
 
     return app
 
