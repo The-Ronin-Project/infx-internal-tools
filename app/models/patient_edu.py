@@ -11,6 +11,8 @@ from typing import Optional
 from enum import Enum, unique
 from decouple import config
 
+# TODO: create helper function for linking local resource to tenant resource
+
 
 @unique
 class ResourceType(str, Enum):
@@ -35,15 +37,15 @@ class ExternalResource:
         url = config('EXTERNAL_RESOURCE_URL')
         resource_url = f"{url}{language}/{ex_resource_id}"
         response = requests.get(resource_url)
-        xml_data = response.text
-        xml_soup = Soup(xml_data, 'html.parser')
-        version = xml_soup.find('meta', {'name': 'revisedDate'})['content'],
+        xhtml_data = response.text
+        xhtml_soup = Soup(xhtml_data, 'html.parser')
+        version = xhtml_soup.find('meta', {'name': 'revisedDate'})['content'],
         does_exist = ExternalResource.check_if_resource_exists(version, ex_resource_id)
 
         if not does_exist:
-            title = xml_soup.title.get_text()
-            resource_language = xml_soup.find('meta', {'name': 'language'})['content']
-            md_text_body = md(xml_data, heading_style='ATX')
+            title = xhtml_soup.title.get_text()
+            resource_language = xhtml_soup.find('meta', {'name': 'language'})['content']
+            md_text_body = md(xhtml_data, heading_style='ATX')
             resource_type = ResourceType.markdown if 'elsevier' in url else ResourceType.external_link
             body = os.linesep.join([empty_lines for empty_lines in md_text_body.splitlines() if empty_lines])
             _uuid = uuid.uuid1()
@@ -118,16 +120,16 @@ class Resource:
     language: str
     title: str
     body: str
-    resource_uuid: Optional = None
+    resource_uuid: Optional = uuid.uuid1()
     status: Optional[str] = 'Pending'
 
     def __post_init__(self):
-        self.resource_uuid = uuid.uuid1()
+        self.create_local_or_tenant_resource()
 
     def create_local_or_tenant_resource(self):
         """ create/insert new resource into db, return inserted data to user """
         conn = get_db()
-        resource = conn.execute(text(
+        conn.execute(text(
             """
             INSERT INTO patient_education.resource_version
             (uuid, title, body, language, status) 
@@ -140,4 +142,4 @@ class Resource:
             'language': self.language,
             'status': self.status
         })
-        return resource
+        return Resource

@@ -144,13 +144,16 @@ def create_app(script_info=None):
     @app.route('/PatientEducation/<language>/<ex_resource_id>', methods=['POST', 'GET'])
     def external_resource_download(language, ex_resource_id):
         ex_resource = ExternalResource.locate_external_resource(language, ex_resource_id)
-        return "Resource already exists" if not ex_resource else jsonify(ex_resource)
+        return "Resource already exists." if not ex_resource else jsonify(ex_resource)
 
     @app.route('/PatientEducation/<language>/<title>/<body>', methods=['POST', 'GET'])
     def create_resource(language, title, body):
         resource = Resource(language, title, body)
-        print(resource)
-        return jsonify(resource)
+        return 'Resource could not be created.' if not resource else jsonify(resource)
+
+    @app.route('/PatientEducation/<language>/<title>/<body>', methods=['POST', 'GET'])
+    def update_resource():
+        pass
 
     return app
 
