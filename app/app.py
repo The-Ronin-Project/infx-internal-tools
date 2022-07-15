@@ -1,6 +1,6 @@
 from bdb import effective
 from io import StringIO
-from uuid import UUID
+from uuid import UUID, uuid4
 import re
 import logging
 from app.helpers.structlog import config_structlog, common_handler
@@ -51,10 +51,36 @@ def create_app(script_info=None):
         vs_version.expand(force_new=force_new)
         return jsonify(vs_version.serialize())
 
-    @app.route('/ValueSets/')
+    @app.route('/ValueSets/', methods=['GET', 'POST'])
     def get_all_value_sets_metadata():
-        active_only = False if request.values.get('active_only') == 'false' else True
-        return jsonify(ValueSet.load_all_value_set_metadata(active_only))
+        if request.method == 'GET':
+            active_only = False if request.values.get('active_only') == 'false' else True
+            return jsonify(ValueSet.load_all_value_set_metadata(active_only))
+        if request.method == 'POST':
+            name = request.json.get('name')
+            title = request.json.get('title')
+            publisher = request.json.get('publisher')
+            contact = request.json.get('contact')
+            description = request.json.get('description')
+            immutable = request.json.get('immutable')
+            experimental = request.json.get('experimental')
+            purpose = request.json.get('purpose')
+            vs_type = request.json.get('vs_type')
+            use_case_uuid = request.json.get('use_case_uuid')
+
+            new_vs = ValueSet.create(
+                name = name,
+                title = title,
+                publisher = publisher,
+                contact = contact,
+                description=description,
+                immutable=immutable,
+                experimental=experimental,
+                purpose=purpose,
+                vs_type=vs_type,
+                use_case_uuid=use_case_uuid
+            )
+            return jsonify(new_vs.serialize())
 
     @app.route('/ValueSets/all/')
     def get_all_value_sets():

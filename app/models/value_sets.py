@@ -860,14 +860,45 @@ class ValueSet:
     self.synonyms=synonyms
   
   @classmethod
-  def load(cls, uuid):
+  def create(cls, name, title, publisher, contact, description, immutable, experimental, purpose, vs_type, use_case_uuid=None):
+    conn = get_db()
+    vs_uuid = uuid.uuid4()
+
+    conn.execute(
+      text(
+        """
+        insert into value_sets.value_set
+        (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type, use_case_uuid)
+        values
+        (:uuid, :name, :title, :publisher, :contact, :description, :immutable, :experimental, :purpose, :type, :use_case_uuid)
+        """
+        ),
+        {
+          "uuid": vs_uuid,
+          "name": name,
+          "title": title,
+          "publisher": publisher,
+          "contact": contact,
+          "description": description,
+          "immutable": immutable,
+          "experimental": experimental,
+          "purpose": purpose,
+          "type": vs_type,
+          "use_case_uuid": use_case_uuid
+        }
+    )
+    conn.execute(text("commit"))
+    return cls.load(vs_uuid)
+
+  @classmethod
+  def load(cls, vs_uuid):
     conn = get_db()
     vs_data = conn.execute(text(
       """
       select * from value_sets.value_set where uuid=:uuid
       """
     ), {
-      'uuid': uuid
+      'uuid': vs_uuid
     }).first()
 
     synonym_data = conn.execute(text(
@@ -877,7 +908,7 @@ class ValueSet:
       where resource_uuid=:uuid
       """
     ), {
-      'uuid': uuid
+      'uuid': vs_uuid
     })
     synonyms = {x.context: x.synonym for x in synonym_data}
     
@@ -887,6 +918,20 @@ class ValueSet:
                vs_data.immutable, vs_data.experimental, vs_data.purpose, vs_data.type,
                synonyms)
     return value_set
+
+  def serialize(self):
+    return {
+          "uuid": self.uuid,
+          "name": self.name,
+          "title": self.title,
+          "publisher": self.publisher,
+          "contact": self.contact,
+          "description": self.description,
+          "immutable": self.immutable,
+          "experimental": self.experimental,
+          "purpose": self.purpose,
+          "type": self.type,
+        }
 
   @classmethod
   def load_all_value_set_metadata(cls, active_only=True):
@@ -1059,8 +1104,7 @@ class ValueSet:
         }
       )
 
-    return new_version_uuid
-        
+    return new_version_uuid        
 
 class RuleGroup:
   def __init__(self, vs_version_uuid, rule_group_id):
