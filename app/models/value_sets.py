@@ -933,6 +933,13 @@ class ValueSet:
           "type": self.type,
         }
 
+  def delete(self):
+    #if there are version associated raise error, cannot be deleted unless it was only in draft status and never published--typically if it was created in error or test
+    if self.:
+      raise BadRequest('ValueSet is not eligible for deletion because it has a Version with status other than `pending` associated')
+
+
+
   @classmethod
   def load_all_value_set_metadata(cls, active_only=True):
     conn = get_db()
@@ -1288,6 +1295,35 @@ class ValueSetVersion:
     self.expansion = set()
     self.expansion_timestamp = None
     self.extensional_codes = {}
+
+  @classmethod
+  def create(cls, efective_start, effective_end, value_set_uuid, status, description, created_date, version, comments):
+    conn = get_db()
+    vsv_uuid = uuid.uuid4()
+
+    conn.execute(
+      text(
+        """
+        insert into value_sets.value_set_version
+        (uuid, efective_start, effective_end, value_set_uuid, status, description, created_date, version, comments)
+        values
+        (:uuid, :efective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version, :comments)
+        """
+        ),
+        {
+          "uuid": vsv_uuid,
+          "efective_start": efective_start,
+          "effective_end": effective_end,
+          "value_set_uuid": value_set_uuid,
+          "status": status,
+          "description": description,
+          "created_date": created_date,
+          "version": version,
+          "comments": comments
+        }
+    )
+    conn.execute(text("commit"))
+    return cls.load(vsv_uuid)
   
   @classmethod
   def load(cls, uuid):
