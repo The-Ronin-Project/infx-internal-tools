@@ -1,3 +1,4 @@
+import collections
 import os
 import requests
 import uuid
@@ -10,14 +11,23 @@ from dataclasses import dataclass
 from typing import Optional
 from enum import Enum, unique
 from decouple import config
+from app.helpers.db_helper import db_cursor
 
-# TODO: create helper function for linking local resource to tenant resource
+# TODO: create helper function for linking local resource to tenant resource?
+# TODO: the link should happen during the download
 
 
 @unique
 class ResourceType(str, Enum):
     external_link: str = 'external link'
     markdown: str = 'markdown'
+
+
+@unique
+class Status(str, Enum):
+    draft: str = 'Draft'
+    under_review: str = 'Under Review'
+    active: str = 'Active'
 
 
 @dataclass
@@ -30,6 +40,9 @@ class ExternalResource:
     version: str
     language: str
     url: str
+
+    def __post_init__(self):
+        self.conn = get_db()
 
     @staticmethod
     def locate_external_resource(language, ex_resource_id):
@@ -49,25 +62,28 @@ class ExternalResource:
             resource_type = ResourceType.markdown if 'elsevier' in url else ResourceType.external_link
             body = os.linesep.join([empty_lines for empty_lines in md_text_body.splitlines() if empty_lines])
             _uuid = uuid.uuid1()
-            external_resource = {
-                'url': resource_url,
-                'language': resource_language,
-                'uuid': _uuid,
-                'type': resource_type,
-                'version': version,
-                'title': title,
-                'body': body,
-                'external_resource_id': ex_resource_id
-            }
-            return ExternalResource.load_resource(external_resource)
+            external_resource = collections.namedtuple(
+                'external_resource', [
+                    'url',
+                    'language',
+                    'uuid',
+                    'type',
+                    'version',
+                    'title',
+                    'body',
+                    'external_resource_id'
+                ]
+            )
+            exr = external_resource(resource_url, language, _uuid, resource_type, version, title, body, ex_resource_id)
+            return ExternalResource.load_resource(exr)
 
         return False
 
     @staticmethod
-    def check_if_resource_exists(version, resource_id):
+    @db_cursor
+    def check_if_resource_exists(cursor, version, resource_id):
         """ check if resource is already exits in db - based on resource_id and revised date/version """
-        conn = get_db()
-        resource_exists = conn.execute(text(
+        resource_exists = cursor.execute(text(
             """
             SELECT * FROM patient_education.external_resource_version WHERE
             version=:version AND external_resource_id=:external_resource_id
@@ -80,33 +96,38 @@ class ExternalResource:
         return True if resource_exists else False
 
     @staticmethod
-    def load_resource(external_resource):
+    @db_cursor
+    def load_resource(cursor, external_resource):
         """ insert external resource into db, return inserted data to user """
-        conn = get_db()
-        conn.execute(text(
+        cursor.execute(text(
             """
             INSERT INTO patient_education.external_resource_version
             (uuid, version, type, url, title, body, language, external_resource_id) 
             VALUES (:uuid, :version, :type, :url, :title, :body, :language, :external_resource_id);
             """
         ), {
-            'uuid': external_resource.get('uuid'),
-            'version': external_resource.get('version'),
-            'type': external_resource.get('type'),
-            'url': external_resource.get('url'),
-            'title': external_resource.get('title'),
-            'body': external_resource.get('body'),
-            'language': external_resource.get('language'),
-            'external_resource_id': external_resource.get('external_resource_id')
+            'uuid': external_resource.uuid,
+            'version': external_resource.version,
+            'type': external_resource.type,
+            'url': external_resource.url,
+            'title': external_resource.title,
+            'body': external_resource.body,
+            'language': external_resource.language,
+            'external_resource_id': external_resource.external_resource_id
         })
 
-        get_inserted_ex_resource = conn.execute(text(
+        check_for_resource = ExternalResource.check_if_exists(external_resource.uuid)
+        return check_for_resource
+
+    @staticmethod
+    @db_cursor
+    def check_if_exists(cursor, external_uuid):
+        get_inserted_ex_resource = cursor.execute(text(
             """
-            SELECT * FROM patient_education.external_resource_version WHERE
-            uuid=:uuid
+            SELECT * FROM patient_education.external_resource_version WHERE uuid=:uuid
             """
         ), {
-            'uuid': external_resource.get('uuid')
+            'uuid': external_uuid
         }).fetchall()
         if not get_inserted_ex_resource:
             return f"Could not return linked data"
@@ -120,16 +141,20 @@ class Resource:
     language: str
     title: str
     body: str
-    resource_uuid: Optional = uuid.uuid1()
-    status: Optional[str] = 'Pending'
+    resource_uuid: Optional = None
+    status: Optional[str] = 'Draft'
 
     def __post_init__(self):
-        self.create_local_or_tenant_resource()
+        self.conn = get_db()
+        if not self.resource_uuid:
+            self.resource_uuid = uuid.uuid1()
+            self.create_local_or_tenant_resource()
+        if self.resource_uuid:
+            self.update_local_or_tenant_resource()
 
     def create_local_or_tenant_resource(self):
         """ create/insert new resource into db, return inserted data to user """
-        conn = get_db()
-        conn.execute(text(
+        self.conn.execute(text(
             """
             INSERT INTO patient_education.resource_version
             (uuid, title, body, language, status) 
@@ -143,3 +168,38 @@ class Resource:
             'status': self.status
         })
         return Resource
+
+    def update_local_or_tenant_resource(self):
+        # TODO does exist check? status check
+        self.conn.execute(text(
+            """
+            UPDATE patient_education.resource_version
+            SET title=:title, body=:body, language=:language, status=:status
+            WHERE uuid=:uuid
+            """
+        ), {
+            'uuid': self.resource_uuid,
+            'title': self.title,
+            'body': self.body,
+            'language': self.language,
+            'status': self.status
+        })
+        return Resource
+
+    @staticmethod
+    @db_cursor
+    def delete(cursor, resource_id):
+        cursor.execute(text(
+            """
+            DELETE FROM patient_education.resource_version WHERE uuid=:uuid
+            """
+        ), {
+            'uuid': resource_id
+        })
+        return resource_id
+
+    def link_local_and_external_resources(self):
+        pass
+
+    def delete_linked_ex_resource(self):
+        pass

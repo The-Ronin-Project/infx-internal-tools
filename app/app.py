@@ -147,12 +147,30 @@ def create_app(script_info=None):
         return "Resource already exists." if not ex_resource else jsonify(ex_resource)
 
     @app.route('/PatientEducation/<language>/<title>/<body>', methods=['POST', 'GET'])
-    def create_resource(language, title, body):
+    def create_local_resource(language, title, body):
+        # /PatientEducation/newLanguage/newTitle/newText
         resource = Resource(language, title, body)
         return 'Resource could not be created.' if not resource else jsonify(resource)
 
-    @app.route('/PatientEducation/<language>/<title>/<body>', methods=['POST', 'GET'])
-    def update_resource():
+    @app.route('/PatientEducation/<language>/<title>/<body>/<resource_id>', methods=['PUT', 'GET'])
+    def update_local_resource(language, title, body, resource_id):
+        # /PatientEducation/newLanguage/newTitle/newText/526eca38-02cd-11ed-9887-4e0ffb458c6f
+        # 18d6867a-0779-11ed-8e54-4e0ffb458c6e
+        resource = Resource(language, title, body, resource_id)
+        return 'Resource could not be updated, no resource found with that ID.' if not resource else jsonify(resource)
+
+    @app.route('/PatientEducation/<resource_id>/delete', methods=['DELETE', 'GET'])
+    def delete_local_resource(resource_id):
+        # /PatientEducation/527989cc-077e-11ed-99b5-4e0ffb458c6e/delete
+        resource = Resource.delete(resource_id)
+        return f"{resource} has been removed." if resource else f"Transaction FAILED for {resource}"
+
+    @app.route('/PatientEducation/<resource_uuid>/version/<ex_resource_uuid>', methods=['PUT', 'GET'])
+    def link_resources():
+        pass
+
+    @app.route('/PatientEducation/', methods=['DELETE', 'GET'])
+    def delete_linked_external_resource():  # will we delete or unlink?
         pass
 
     return app
