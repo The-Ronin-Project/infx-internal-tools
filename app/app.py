@@ -86,6 +86,26 @@ def create_app(script_info=None):
         vs_version.delete()
         return "Deleted", 200
 
+    @app.route('/ValueSets/<string:value_set_uuid>/versions/<string:vs_version_uuid>/explicitly_included_codes/', methods=['POST', 'GET'])
+    def explicitly_included_code_to_vs_version(value_set_uuid, vs_version_uuid):
+        if request.method == 'GET':
+            vs_version = ValueSetVersion.load(vs_version_uuid)
+            explicit_code_inclusions = ExplicitlyIncludedCode.load_all_for_vs_version(vs_version)
+            return jsonify([x.serialize() for x in explicit_code_inclusions])
+
+        if request.method == 'POST':
+            code_uuid = request.json.get('code_uuid')
+            code = Code.load_from_custom_terminology(code_uuid)
+            vs_version = ValueSetVersion.load(vs_version_uuid)
+            
+            new_explicit_code = ExplicitlyIncludedCode(
+                code=code,
+                value_set_version=vs_version,
+                review_status='pending'
+            )
+            new_explicit_code.save()
+            return 'Created', 201
+
     @app.route('/ValueSets/<string:identifier>/most_recent_active_version')
     def get_most_recent_version(identifier):
         uuid = ValueSet.name_to_uuid(identifier)

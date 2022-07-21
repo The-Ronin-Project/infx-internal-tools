@@ -1,5 +1,7 @@
 import math
 import json
+from dataclasses import dataclass, field
+import re
 import requests
 import concurrent.futures
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String
@@ -37,6 +39,10 @@ expansion_member = Table('expansion_member', metadata,
   Column('version', String, nullable=False),
   schema='value_sets'
 )
+
+#
+# Value Set Rules
+#
 
 class VSRule:
   def __init__(self, uuid, position, description, prop, operator, value, include, value_set_version, fhir_system, terminology_version):
@@ -742,8 +748,6 @@ class ICD10PCSRule(VSRule):
     and version_uuid = :version_uuid
     """
     self.icd_10_pcs_rule(query)
-   
-
 
 class CPTRule(VSRule):
   @staticmethod
@@ -832,6 +836,10 @@ class CPTRule(VSRule):
     final_results = [Code(self.fhir_system, self.terminology_version.version, x.get('code'), x.get('display')) for x in search_results]
     self.results = set(final_results)
     
+
+#
+# End of Value Set Rules
+#
 
 # class GroupingValueSetRule(VSRule):
 #   def most_recent_active_version(self):
@@ -1226,7 +1234,6 @@ class RuleGroup:
     
     return exclude_rules
 
-
 class ValueSetVersion:
   def __init__(self, uuid, effective_start, effective_end, version, value_set, status, description):
     self.uuid = uuid
@@ -1244,6 +1251,7 @@ class ValueSetVersion:
     self.expansion = set()
     self.expansion_timestamp = None
     self.extensional_codes = {}
+    self.explicitly_included_codes = []
   
   @classmethod
   def load(cls, uuid):
@@ -1268,6 +1276,8 @@ class ValueSetVersion:
                vs_version_data.status, 
                vs_version_data.description)
     value_set_version.load_rules()
+
+    value_set_version.explicitly_included_codes = ExplicitlyIncludedCode.load_all_for_vs_version(value_set_version)
 
     if value_set.type == 'extensional':
       extensional_members_data = conn.execute(text(
@@ -1399,6 +1409,14 @@ class ValueSetVersion:
       } for code in self.expansion])
 
   def create_expansion(self):
+    """
+    1. Rules are processed
+    2. Mapping inclusions are processed
+    3. Explicitly included codes are added directly to the final expansion
+    """
+    if self.value_set.type == 'extensional':
+      return None
+
     self.expansion = set()
     expansion_report_combined = ""
 
@@ -1409,8 +1427,11 @@ class ValueSetVersion:
 
     self.process_mapping_inclusions()
 
-    if self.value_set.type == 'intensional':
-      self.save_expansion(report=expansion_report_combined)
+    codes_for_explicit_inclusion = [x.code for x in self.explicitly_included_codes]
+    self.expansion = self.expansion.union(set(codes_for_explicit_inclusion))
+
+    self.save_expansion(report=expansion_report_combined)
+
 
   def parse_mapping_inclusion_retool_array(self, retool_array):
     array_string_copy = retool_array
@@ -1635,6 +1656,86 @@ class ValueSetVersion:
       }
     ).first()
     return result.report
+
+@dataclass
+class ExplicitlyIncludedCode:
+  """
+  These are codes that are explicitly added to an intensional value set.
+  """
+  code: Code
+  value_set_version: ValueSetVersion
+  review_status: str
+  uuid: uuid = field(default=uuid.uuid4())
+
+  def save(self):
+    """ Persist newly created object to database """
+    conn = get_db()
+    
+    conn.execute(
+      text(
+        """
+        insert into value_sets.explicitly_included_code
+        (uuid, vs_version_uuid, code_uuid, review_status)
+        values
+        (:uuid, :vs_version_uuid, :code_uuid, :review_status)
+        """
+      ), {
+        'uuid': self.uuid,
+        'vs_version_uuid': self.value_set_version.uuid,
+        'code_uuid': self.code.uuid,
+        'review_status': self.review_status
+      }
+    )
+
+  def serialize(self):
+    return {
+      'uuid': self.uuid,
+      'review_status': self.review_status,
+      'value_set_version_uuid': self.value_set_version.uuid,
+      'code': self.code.serialize(with_system_name=True)
+    }
+
+  @classmethod
+  def load_all_for_vs_version(cls, vs_version: ValueSetVersion):
+    conn = get_db()
+
+    code_data = conn.execute(
+      text(
+        """
+        select eic.uuid as explicit_uuid, code.uuid as code_uuid, code.code, code.display, tv.fhir_uri as system_uri, tv.terminology as system_name, tv.version, eic.review_status
+        from value_sets.explicitly_included_code eic
+        join custom_terminologies.code
+        on eic.code_uuid = code.uuid
+        join terminology_versions tv
+        on code.terminology_version = tv.uuid
+        where vs_version_uuid=:vs_version_uuid
+        """
+      ),
+      {
+        "vs_version_uuid": vs_version.uuid
+      }
+    )
+
+    results = []
+    for x in code_data:
+      code = Code(
+        system=x.system_uri,
+        system_name=x.system_name,
+        version=x.version,
+        code=x.code,
+        display=x.display,
+        uuid=x.code_uuid
+      )
+
+      explicity_code_inclusion = cls(
+        code = code,
+        value_set_version = vs_version,
+        review_status = x.review_status,
+        uuid = x.explicit_uuid
+      )
+      results.append(explicity_code_inclusion)
+    
+    return results
 
 # Clarification: this stand-alone method is deliberately not part of the above class
 def execute_rules(rules_json):
