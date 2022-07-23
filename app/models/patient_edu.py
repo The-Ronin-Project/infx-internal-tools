@@ -14,7 +14,7 @@ from decouple import config
 from app.helpers.db_helper import db_cursor
 
 # TODO: create helper function for linking local resource to tenant resource?
-# TODO: the link should happen during the download
+#  the link should happen during the download
 
 
 @unique
@@ -46,14 +46,14 @@ class ExternalResource:
 
     @staticmethod
     def locate_external_resource(language, ex_resource_id):
-        """ given the url, locate resource and perform checks before loading into db """
+        """ given the url, locate resource and perform checks and format before loading into db """
         url = config('EXTERNAL_RESOURCE_URL')
         resource_url = f"{url}{language}/{ex_resource_id}"
         response = requests.get(resource_url)
         xhtml_data = response.text
         xhtml_soup = Soup(xhtml_data, 'html.parser')
         version = xhtml_soup.find('meta', {'name': 'revisedDate'})['content'],
-        does_exist = ExternalResource.check_if_resource_exists(version, ex_resource_id)
+        does_exist = ExternalResource.check_if_external_resource_exists(version, ex_resource_id)
 
         if not does_exist:
             title = xhtml_soup.title.get_text()
@@ -74,14 +74,17 @@ class ExternalResource:
                     'external_resource_id'
                 ]
             )
-            exr = external_resource(resource_url, language, _uuid, resource_type, version, title, body, ex_resource_id)
+            exr = external_resource(
+                resource_url, resource_language, _uuid, resource_type,
+                version, title, body, ex_resource_id
+            )
             return ExternalResource.load_resource(exr)
 
         return False
 
     @staticmethod
     @db_cursor
-    def check_if_resource_exists(cursor, version, resource_id):
+    def check_if_external_resource_exists(cursor, version, resource_id):
         """ check if resource is already exits in db - based on resource_id and revised date/version """
         resource_exists = cursor.execute(text(
             """
@@ -112,16 +115,41 @@ class ExternalResource:
             'url': external_resource.url,
             'title': external_resource.title,
             'body': external_resource.body,
-            'language': external_resource.language,
+            'language': external_resource.resource_language,
             'external_resource_id': external_resource.external_resource_id
         })
 
-        check_for_resource = ExternalResource.check_if_exists(external_resource.uuid)
-        return check_for_resource
+        check_for_resource = ExternalResource.check_if_inserted(external_resource.uuid)
+        return check_for_resource if check_for_resource else False
 
     @staticmethod
     @db_cursor
-    def check_if_exists(cursor, external_uuid):
+    def link_external_and_internal_resources(cursor, ex_resource_id, resource_id, tenant_id):
+        cursor.execute(text(
+            """
+            INSERT INTO patient_education.additional_resource_link
+            (resource_version_uuid, external_resource_version_uuid, tenant_id)
+            VALUES (:resource_version_uuid, :external_resource_version_uuid, :tenant_id)
+            """
+        ), {
+            'resource_version_uuid': resource_id,
+            'external_resource_version_uuid': ex_resource_id,
+            'tenant_id': tenant_id
+        })
+        # TODO should we reuse check if inserted? - need table and element as a tuple...
+        check_link = cursor.execute(text(
+            """ 
+            SELECT * FROM patient_education.additional_resource_link 
+            WHERE resource_version_uuid=:resource_id 
+            AND external_resource_version_uuid=:ex_resource_id
+            """
+        ))
+        return True if check_link else False
+
+    @staticmethod
+    @db_cursor
+    def check_if_inserted(cursor, external_uuid):
+        """ check if current external resource already exists in db"""
         get_inserted_ex_resource = cursor.execute(text(
             """
             SELECT * FROM patient_education.external_resource_version WHERE uuid=:uuid
@@ -141,13 +169,14 @@ class Resource:
     language: str
     title: str
     body: str
+    status: Optional[Status] = None
     resource_uuid: Optional = None
-    status: Optional[str] = 'Draft'
 
     def __post_init__(self):
         self.conn = get_db()
         if not self.resource_uuid:
             self.resource_uuid = uuid.uuid1()
+            self.status = Status.draft.value
             self.create_local_or_tenant_resource()
         if self.resource_uuid:
             self.update_local_or_tenant_resource()
@@ -170,7 +199,8 @@ class Resource:
         return Resource
 
     def update_local_or_tenant_resource(self):
-        # TODO does exist check? status check
+        # TODO should there be a does exist check? or a status check? if status is active
+        #  create new? -- call create new?
         self.conn.execute(text(
             """
             UPDATE patient_education.resource_version
@@ -188,6 +218,20 @@ class Resource:
 
     @staticmethod
     @db_cursor
+    def get_all_resources_with_linked(cursor):
+        all_resources = cursor.execute(text(
+            """
+            SELECT * FROM patient_education.resource_version rv
+            JOIN patient_education.additional_resource_link arl
+                ON rv.uuid = arl.resource_version_uuid
+            JOIN patient_education.external_resource_version erv
+                ON
+            """
+        ))
+        return all_resources
+
+    @staticmethod
+    @db_cursor
     def delete(cursor, resource_id):
         cursor.execute(text(
             """
@@ -198,8 +242,15 @@ class Resource:
         })
         return resource_id
 
-    def link_local_and_external_resources(self):
-        pass
-
-    def delete_linked_ex_resource(self):
-        pass
+    @staticmethod
+    @db_cursor
+    def delete_linked_ex_resource(cursor, ex_resource_id):
+        cursor.execute(text(
+            """
+            DELETE FROM patient_education.additional_resource_link 
+            WHERE external_resource_version_uuid=:uuid
+            """
+        ), {
+            'external_resource_version_uuid': ex_resource_id
+        })
+        return ex_resource_id
