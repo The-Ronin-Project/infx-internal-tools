@@ -82,6 +82,20 @@ def create_app(script_info=None):
             )
             return jsonify(new_vs.serialize())
 
+    @app.route('/ValueSets/<string:identifier>/duplicate', methods=['POST'])
+    def duplicate_value_set_and_version(identifier):
+        value_set = ValueSet.load(identifier)
+        name = request.json.get('name'),
+        title = request.json.get('title'),
+        contact = request.json.get('contact'),
+        description = request.json.get('description'),
+        purpose = request.json.get('purpose'),
+        effective_start = request.json.get('effective_start')
+        effective_end = request.json.get('effective_end')
+        version_description = request.json.get('version_description')
+        duplicated_value_set_uuid = value_set.duplicate_vs(name, title, contact, description, purpose, use_case_uuid=None, effective_start, effective_end, version_description)
+        return str(duplicated_value_set_uuid), 201
+    
     @app.route('/ValueSets/all/')
     def get_all_value_sets():
         status = request.values.get('status').split(',')
@@ -103,6 +117,11 @@ def create_app(script_info=None):
         description = request.json.get('description')
         new_version_uuid = value_set.create_new_version(effective_start, effective_end, description)
         return str(new_version_uuid), 201
+
+    @app.route('/ValueSets/<string:value_set_uuid>/valueset', methods=['DELETE'])
+    def delet_value_set(value_set_uuid):
+        value_set_uuid.delete()
+        return "Deleted", 200
 
     @app.route('/ValueSets/<string:value_set_uuid>/versions/<string:vs_version_uuid>', methods=['DELETE'])
     def delete_vs_version(value_set_uuid, vs_version_uuid):
