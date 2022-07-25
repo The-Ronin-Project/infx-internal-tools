@@ -742,8 +742,6 @@ class ICD10PCSRule(VSRule):
     and version_uuid = :version_uuid
     """
     self.icd_10_pcs_rule(query)
-   
-
 
 class CPTRule(VSRule):
   @staticmethod
@@ -860,14 +858,66 @@ class ValueSet:
     self.synonyms=synonyms
   
   @classmethod
-  def load(cls, uuid):
+  def create(cls, name, title, publisher, contact, value_set_description, immutable, experimental, purpose, vs_type, effective_start, effective_end, version_description, use_case_uuid=None):
+    conn = get_db()
+    vs_uuid = uuid.uuid4()
+
+    conn.execute(
+      text(
+        """
+        insert into value_sets.value_set
+        (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type, use_case_uuid)
+        values
+        (:uuid, :name, :title, :publisher, :contact, :value_set_description, :immutable, :experimental, :purpose, :vs_type, :use_case_uuid)
+        """
+        ),
+        {
+          "uuid": vs_uuid,
+          "name": name,
+          "title": title,
+          "publisher": publisher,
+          "contact": contact,
+          "value_set_description": value_set_description,
+          "immutable": immutable,
+          "experimental": experimental,
+          "purpose": purpose,
+          "vs_type": vs_type,
+          "use_case_uuid": use_case_uuid
+        }
+    )
+    conn.execute(text("commit"))
+    new_version_uuid = uuid.uuid4()
+    conn.execute(
+      text(
+        """
+        insert into value_sets.value_set_version
+        (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)
+        values
+        (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :version_description, :created_date, :version)
+        """
+      ), {
+        'new_version_uuid': new_version_uuid,
+        'effective_start': effective_start,
+        'effective_end': effective_end,
+        'value_set_uuid': vs_uuid,
+        'status': 'pending',
+        'version_description': version_description,
+        'created_date': datetime.now(),
+        'version': 1
+      }
+    )
+    conn.execute(text("commit"))
+    return cls.load(vs_uuid)
+
+  @classmethod
+  def load(cls, vs_uuid):
     conn = get_db()
     vs_data = conn.execute(text(
       """
       select * from value_sets.value_set where uuid=:uuid
       """
     ), {
-      'uuid': uuid
+      'uuid': vs_uuid
     }).first()
 
     synonym_data = conn.execute(text(
@@ -877,7 +927,7 @@ class ValueSet:
       where resource_uuid=:uuid
       """
     ), {
-      'uuid': uuid
+      'uuid': vs_uuid
     })
     synonyms = {x.context: x.synonym for x in synonym_data}
     
@@ -887,6 +937,46 @@ class ValueSet:
                vs_data.immutable, vs_data.experimental, vs_data.purpose, vs_data.type,
                synonyms)
     return value_set
+
+  def serialize(self):
+    return {
+          "uuid": self.uuid,
+          "name": self.name,
+          "title": self.title,
+          "publisher": self.publisher,
+          "contact": self.contact,
+          "description": self.description,
+          "immutable": self.immutable,
+          "experimental": self.experimental,
+          "purpose": self.purpose,
+          "type": self.type,
+        }
+
+  def delete(self):
+    
+    conn = get_db()
+    #check for a version
+    vs_version_data = conn.execute(text(
+      """
+      select * from value_sets.value_set_version where value_set_uuid=:uuid
+      """
+    ), {
+      'uuid': self.uuid
+    }).first()
+    #reject if has version
+    if vs_version_data is not None: 
+      raise BadRequest('ValueSet version is not eligible for deletion because there is an associated version')
+    else:  
+      conn.execute(
+        text(
+          """
+          delete from value_sets.value_set
+          where uuid=:uuid
+          """
+        ), {
+         'uuid': self.uuid
+        }
+      )   
 
   @classmethod
   def load_all_value_set_metadata(cls, active_only=True):
@@ -1003,6 +1093,84 @@ class ValueSet:
       raise BadRequest(f'No active published version of ValueSet with UUID: {uuid}')
     return ValueSetVersion.load(recent_version.uuid)
 
+  def duplicate_vs(self, name, title, contact, value_set_description, purpose, effective_start, effective_end, version_description,use_case_uuid=None):
+    conn = get_db()
+    #create new value set uuid
+    new_vs_uuid = uuid.uuid4()
+    conn.execute(
+      text(
+        """
+        insert into value_sets.value_set
+        (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type, use_case_uuid)
+        select :new_vs_uuid, :name, :title, publisher, :contact, :value_set_description, immutable, experimental, :purpose, type, :use_case_uuid
+        from value_sets.value_set
+        where uuid = :old_uuid
+        """
+      ), {
+        'new_vs_uuid': str(new_vs_uuid),
+        'name': name,
+        'title': title,
+        'contact': contact,
+        'value_set_description': value_set_description,
+        'purpose': purpose,
+        'use_case_uuid': use_case_uuid,
+        'old_uuid': self.uuid
+      }
+    ) 
+    #get the most recent active version of the value set being duplicated
+    most_recent_vs_version = conn.execute(
+      text(
+        """
+        select * from value_sets.value_set_version
+        where value_set_uuid=:value_set_uuid
+        order by version desc
+        """
+      ), {
+        'value_set_uuid': self.uuid
+      }
+    ).first()
+    
+    #create version in the newly duplicated value set
+    new_version_uuid = uuid.uuid4()
+    conn.execute(
+      text(
+        """
+        insert into value_sets.value_set_version
+        (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)
+        values
+        (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version)
+        """
+      ), {
+        'new_version_uuid': str(new_version_uuid),
+        'effective_start': effective_start,
+        'effective_end': effective_end,
+        'value_set_uuid': new_vs_uuid,
+        'status': 'pending',
+        'description': version_description,
+        'created_date': datetime.now(),
+        'version': 1
+      }
+    )
+
+    # Copy rules from original value set most recent active version into new duplicate version
+    if current_app.config['MOCK_DB'] is False:
+      conn.execute(
+        text(
+          """
+          insert into value_sets.value_set_rule
+          (position, description, property, operator, value, include, terminology_version, value_set_version)
+          select position, description, property, operator, value, include, terminology_version, :new_version_uuid
+          from value_sets.value_set_rule
+          where value_set_version = :previous_version_uuid
+          """
+        ), {
+          'previous_version_uuid': str(most_recent_vs_version.uuid),
+          'new_version_uuid': str(new_version_uuid)
+        }
+      )
+    
+    return (new_vs_uuid)
+
   def create_new_version(self, effective_start, effective_end, description):
     """
     This will identify the most recent version of the value set and clone it, incrementing the version by 1, to create a new version
@@ -1059,8 +1227,7 @@ class ValueSet:
         }
       )
 
-    return new_version_uuid
-        
+    return new_version_uuid        
 
 class RuleGroup:
   def __init__(self, vs_version_uuid, rule_group_id):
@@ -1244,6 +1411,35 @@ class ValueSetVersion:
     self.expansion = set()
     self.expansion_timestamp = None
     self.extensional_codes = {}
+
+  @classmethod
+  def create(cls, efective_start, effective_end, value_set_uuid, status, description, created_date, version, comments):
+    conn = get_db()
+    vsv_uuid = uuid.uuid4()
+
+    conn.execute(
+      text(
+        """
+        insert into value_sets.value_set_version
+        (uuid, efective_start, effective_end, value_set_uuid, status, description, created_date, version, comments)
+        values
+        (:uuid, :efective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version, :comments)
+        """
+        ),
+        {
+          "uuid": vsv_uuid,
+          "efective_start": efective_start,
+          "effective_end": effective_end,
+          "value_set_uuid": value_set_uuid,
+          "status": status,
+          "description": description,
+          "created_date": created_date,
+          "version": version,
+          "comments": comments
+        }
+    )
+    conn.execute(text("commit"))
+    return cls.load(vsv_uuid)
   
   @classmethod
   def load(cls, uuid):
