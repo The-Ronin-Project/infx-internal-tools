@@ -1206,7 +1206,7 @@ class ValueSet:
         'status': 'pending',
         'description': description,
         'created_date': datetime.now(),
-        'version': most_recent_vs_version + 1
+        'version': most_recent_vs_version.version + 1
       }
     )
 
@@ -1898,60 +1898,3 @@ def execute_rules(rules_json):
         terminology_set = terminology_set - remove_set
 
   return [x.serialize() for x in list(terminology_set)]
-
-
-#Report Concepts in Active Value Sets
-  ## could the API handle the mega join (ConceptMapVersions.load_mappings does) or is the python way better?
-"""
-select * from concept_maps.concept_relationship as cr
-join(select code as sc_code, display as sc_display, concept_map_version_uuid as cmv_uuid from concept_maps.source_concept) as sc on cr.concept_map_version_uuid = sc.cmv_uuid
-join(select code as em_code, expansion_uuid as em_ex_uuid from value_sets.expansion_member) as em on cr.target_concept_code = em.em_code
-join(select uuid as ex_uuid, vs_version_uuid as ex_vsv_uuid from value_sets.expansion) as ex on em.em_ex_uuid = ex.ex_uuid
-join(select uuid as vsv_uuid, value_set_uuid as vs_uuid from value_sets.value_set_version) as vsv on ex.ex_vsv_uuid = vsv.vsv_uuid
-join(select uuid as vs_uuid, value_set.title as vs_title from value_sets.value_set) as vs on vsv.vs_uuid = vs.vs_uuid
-where cr.concept_map_version_uuid = ******uuid******
-"""
-"""
-#takes a concept map uuid and returns target concepts in active value sets
-def concept_in_active_vs(cm_uuid):
-  conn = get_db()
-  concept_map = requests.get("http://hashi-ds.prod.projectronin.io/ConceptMaps/<cm_uuid>").json() #variable for 'NLP symptoms...' concept_map_version_uuid in json form
-  mappings = concept_map.get('group')[0].get('element') #pulling the parts of json we want from the concept_map request
-
-  for mapping in mappings: #iterating through the elements of the concept map
-    nlp_string = mapping.get('display') #variable for source display
-    mapped_codes = mapping.get('target') #variable for target data
-
-  all_value_sets = ValueSet.load_all_value_set_versions_by_status() #getting all the active value sets
-
-def code_in_value_sets(code): #function for getting the codes from the value sets
-  value_sets_code_is_in = [] #empty list to hold value set titles
-  
-  for value_set in all_value_sets: #iterating through the value sets
-    value_set_title = value_set.get('title') #variable for title
-    expansion = value_set.get('expansion').get('contains') #variable for expansion elements
-    codes_in_value_set = [x.get('code') for x in expansion] #variable for codes from expansion elements
-    
-  if code in codes_in_value_set: #conditional: if target get code and vaule set code expansion match
-    value_sets_code_is_in.append(value_set_title) #put the title associated with the match in the list
-
-  return list(set(value_sets_code_is_in)) #return titles, no duplicates
-
-report_items = [] #empty list for results
-
-  for mapping in mappings:
-    nlp_code = mapping.get('code') #variable for source code
-    nlp_string = mapping.get('display') #variable for source display
-    mapped_codes = mapping.get('target') #variable for target data
-
-  
-  for code in mapped_codes: #iterate through the target data
-    report_items.append({ #creating a dictionary for the results
-    "source_code":nlp_code,
-    "source_display":nlp_string,
-    "target_code":code.get('code'),
-    "target_display":code.get('display'),
-    "value_set_title":code_in_value_sets(code.get('code'))   
-  })
-"""
-#in databricks we make this a df and then present it with option to download

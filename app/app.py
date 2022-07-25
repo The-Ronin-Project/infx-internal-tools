@@ -1,6 +1,6 @@
 from bdb import effective
 from io import StringIO
-from uuid import UUID, uuid4
+from uuid import UUID
 import re
 import logging
 from app.helpers.structlog import config_structlog, common_handler
