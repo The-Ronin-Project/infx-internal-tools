@@ -61,24 +61,30 @@ def create_app(script_info=None):
             title = request.json.get('title')
             publisher = request.json.get('publisher')
             contact = request.json.get('contact')
-            description = request.json.get('description')
+            value_set_description = request.json.get('description')
             immutable = request.json.get('immutable')
             experimental = request.json.get('experimental')
             purpose = request.json.get('purpose')
-            vs_type = request.json.get('vs_type')
+            vs_type = request.json.get('type')
             use_case_uuid = request.json.get('use_case_uuid')
+            effective_start = request.json.get('effective_start')
+            effective_end = request.json.get('effective_end')
+            version_description = request.json.get('version_description')
 
             new_vs = ValueSet.create(
                 name = name,
                 title = title,
                 publisher = publisher,
                 contact = contact,
-                description=description,
+                value_set_description=value_set_description,
                 immutable=immutable,
                 experimental=experimental,
                 purpose=purpose,
                 vs_type=vs_type,
-                use_case_uuid=use_case_uuid
+                use_case_uuid=use_case_uuid,
+                effective_start = effective_start,
+                effective_end = effective_end,
+                version_description = version_description
             )
             return jsonify(new_vs.serialize())
 
@@ -88,12 +94,12 @@ def create_app(script_info=None):
         name = request.json.get('name'),
         title = request.json.get('title'),
         contact = request.json.get('contact'),
-        description = request.json.get('description'),
+        value_set_description = request.json.get('value_set_description'),
         purpose = request.json.get('purpose'),
         effective_start = request.json.get('effective_start')
         effective_end = request.json.get('effective_end')
         version_description = request.json.get('version_description')
-        duplicated_value_set_uuid = value_set.duplicate_vs(name, title, contact, description, purpose, use_case_uuid=None, effective_start, effective_end, version_description)
+        duplicated_value_set_uuid = value_set.duplicate_vs(name, title, contact, value_set_description, purpose, effective_start, effective_end, version_description, use_case_uuid=None)
         return str(duplicated_value_set_uuid), 201
     
     @app.route('/ValueSets/all/')
@@ -118,9 +124,10 @@ def create_app(script_info=None):
         new_version_uuid = value_set.create_new_version(effective_start, effective_end, description)
         return str(new_version_uuid), 201
 
-    @app.route('/ValueSets/<string:value_set_uuid>/valueset', methods=['DELETE'])
+    @app.route('/ValueSets/<string:value_set_uuid>', methods=['DELETE'])
     def delet_value_set(value_set_uuid):
-        value_set_uuid.delete()
+        value_set = ValueSet.load(value_set_uuid)
+        value_set.delete()
         return "Deleted", 200
 
     @app.route('/ValueSets/<string:value_set_uuid>/versions/<string:vs_version_uuid>', methods=['DELETE'])

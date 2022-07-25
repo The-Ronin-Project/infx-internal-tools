@@ -858,7 +858,7 @@ class ValueSet:
     self.synonyms=synonyms
   
   @classmethod
-  def create(cls, name, title, publisher, contact, description, immutable, experimental, purpose, vs_type, use_case_uuid=None, effective_start, effective_end, version_description):
+  def create(cls, name, title, publisher, contact, value_set_description, immutable, experimental, purpose, vs_type, effective_start, effective_end, version_description, use_case_uuid=None):
     conn = get_db()
     vs_uuid = uuid.uuid4()
 
@@ -868,7 +868,7 @@ class ValueSet:
         insert into value_sets.value_set
         (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type, use_case_uuid)
         values
-        (:uuid, :name, :title, :publisher, :contact, :description, :immutable, :experimental, :purpose, :type, :use_case_uuid)
+        (:uuid, :name, :title, :publisher, :contact, :value_set_description, :immutable, :experimental, :purpose, :vs_type, :use_case_uuid)
         """
         ),
         {
@@ -877,11 +877,11 @@ class ValueSet:
           "title": title,
           "publisher": publisher,
           "contact": contact,
-          "description": description,
+          "value_set_description": value_set_description,
           "immutable": immutable,
           "experimental": experimental,
           "purpose": purpose,
-          "type": vs_type,
+          "vs_type": vs_type,
           "use_case_uuid": use_case_uuid
         }
     )
@@ -893,7 +893,7 @@ class ValueSet:
         insert into value_sets.value_set_version
         (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)
         values
-        (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version)
+        (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :version_description, :created_date, :version)
         """
       ), {
         'new_version_uuid': new_version_uuid,
@@ -901,7 +901,7 @@ class ValueSet:
         'effective_end': effective_end,
         'value_set_uuid': vs_uuid,
         'status': 'pending',
-        'description': version_description,
+        'version_description': version_description,
         'created_date': datetime.now(),
         'version': 1
       }
@@ -958,13 +958,15 @@ class ValueSet:
     #check for a version
     vs_version_data = conn.execute(text(
       """
-      select * from value_sets.value_set_version where uuid=:uuid
+      select * from value_sets.value_set_version where value_set_uuid=:uuid
       """
     ), {
       'uuid': self.uuid
     }).first()
-    #delete if has no version
-    if vs_version_data is None: 
+    #reject if has version
+    if vs_version_data is not None: 
+      raise BadRequest('ValueSet version is not eligible for deletion because there is an associated version')
+    else:  
       conn.execute(
         text(
           """
@@ -974,12 +976,7 @@ class ValueSet:
         ), {
          'uuid': self.uuid
         }
-      )
-    #reject delete if has version   
-    else:
-      raise BadRequest('ValueSet version is not eligible for deletion because there is an associated version')   
-
-
+      )   
 
   @classmethod
   def load_all_value_set_metadata(cls, active_only=True):
@@ -1096,7 +1093,7 @@ class ValueSet:
       raise BadRequest(f'No active published version of ValueSet with UUID: {uuid}')
     return ValueSetVersion.load(recent_version.uuid)
 
-  def duplicate_vs(self, name, title, contact, description, purpose, use_case_uuid=None, effective_start, effective_end, version_description):
+  def duplicate_vs(self, name, title, contact, value_set_description, purpose, effective_start, effective_end, version_description,use_case_uuid=None):
     conn = get_db()
     #create new value set uuid
     new_vs_uuid = uuid.uuid4()
@@ -1104,8 +1101,8 @@ class ValueSet:
       text(
         """
         insert into value_sets.value_set
-        (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, vs_type, use_case_uuid)
-        select :new_vs_uuid, :name, :title, publisher, :contact, :description, immutable, experimental, :purpose, vs_type, use_case_uuid
+        (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type, use_case_uuid)
+        select :new_vs_uuid, :name, :title, publisher, :contact, :value_set_description, immutable, experimental, :purpose, type, :use_case_uuid
         from value_sets.value_set
         where uuid = :old_uuid
         """
@@ -1114,10 +1111,10 @@ class ValueSet:
         'name': name,
         'title': title,
         'contact': contact,
-        'description': description,
+        'value_set_description': value_set_description,
         'purpose': purpose,
-        'use_case_uuid': use_case_uuid
-        'old_uuid': self.uuid()
+        'use_case_uuid': use_case_uuid,
+        'old_uuid': self.uuid
       }
     ) 
     #get the most recent active version of the value set being duplicated
@@ -1147,7 +1144,7 @@ class ValueSet:
         'new_version_uuid': str(new_version_uuid),
         'effective_start': effective_start,
         'effective_end': effective_end,
-        'value_set_uuid': self.uuid,
+        'value_set_uuid': new_vs_uuid,
         'status': 'pending',
         'description': version_description,
         'created_date': datetime.now(),
@@ -1902,6 +1899,7 @@ def execute_rules(rules_json):
 
   return [x.serialize() for x in list(terminology_set)]
 
+
 #Report Concepts in Active Value Sets
   ## could the API handle the mega join (ConceptMapVersions.load_mappings does) or is the python way better?
 """
@@ -1912,6 +1910,7 @@ join(select uuid as ex_uuid, vs_version_uuid as ex_vsv_uuid from value_sets.expa
 join(select uuid as vsv_uuid, value_set_uuid as vs_uuid from value_sets.value_set_version) as vsv on ex.ex_vsv_uuid = vsv.vsv_uuid
 join(select uuid as vs_uuid, value_set.title as vs_title from value_sets.value_set) as vs on vsv.vs_uuid = vs.vs_uuid
 where cr.concept_map_version_uuid = ******uuid******
+"""
 """
 #takes a concept map uuid and returns target concepts in active value sets
 def concept_in_active_vs(cm_uuid):
@@ -1925,7 +1924,7 @@ def concept_in_active_vs(cm_uuid):
 
   all_value_sets = ValueSet.load_all_value_set_versions_by_status() #getting all the active value sets
 
-  def code_in_value_sets(code): #function for getting the codes from the value sets
+def code_in_value_sets(code): #function for getting the codes from the value sets
   value_sets_code_is_in = [] #empty list to hold value set titles
   
   for value_set in all_value_sets: #iterating through the value sets
@@ -1933,27 +1932,26 @@ def concept_in_active_vs(cm_uuid):
     expansion = value_set.get('expansion').get('contains') #variable for expansion elements
     codes_in_value_set = [x.get('code') for x in expansion] #variable for codes from expansion elements
     
-    if code in codes_in_value_set: #conditional: if target get code and vaule set code expansion match
-      value_sets_code_is_in.append(value_set_title) #put the title associated with the match in the list
+  if code in codes_in_value_set: #conditional: if target get code and vaule set code expansion match
+    value_sets_code_is_in.append(value_set_title) #put the title associated with the match in the list
 
   return list(set(value_sets_code_is_in)) #return titles, no duplicates
 
 report_items = [] #empty list for results
 
-for mapping in mappings:
-  nlp_code = mapping.get('code') #variable for source code
-  nlp_string = mapping.get('display') #variable for source display
-  mapped_codes = mapping.get('target') #variable for target data
+  for mapping in mappings:
+    nlp_code = mapping.get('code') #variable for source code
+    nlp_string = mapping.get('display') #variable for source display
+    mapped_codes = mapping.get('target') #variable for target data
 
   
-for code in mapped_codes: #iterate through the target data
-  report_items.append({ #creating a dictionary for the results
-      "source_code":nlp_code,
-      "source_display":nlp_string,
-      "target_code":code.get('code'),
-      "target_display":code.get('display'),
-      "value_set_title":code_in_value_sets(code.get('code'))   
-    })
-
-#in databricks we make this a df and then present it with option to download...
-
+  for code in mapped_codes: #iterate through the target data
+    report_items.append({ #creating a dictionary for the results
+    "source_code":nlp_code,
+    "source_display":nlp_string,
+    "target_code":code.get('code'),
+    "target_display":code.get('display'),
+    "value_set_title":code_in_value_sets(code.get('code'))   
+  })
+"""
+#in databricks we make this a df and then present it with option to download
