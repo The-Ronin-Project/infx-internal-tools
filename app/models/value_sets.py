@@ -1475,7 +1475,8 @@ class ValueSetVersion:
                vs_version_data.description)
     value_set_version.load_rules()
 
-    value_set_version.explicitly_included_codes = ExplicitlyIncludedCode.load_all_for_vs_version(value_set_version)
+    if current_app.config['MOCK_DB'] is False:
+      value_set_version.explicitly_included_codes = ExplicitlyIncludedCode.load_all_for_vs_version(value_set_version)
 
     if value_set.type == 'extensional':
       extensional_members_data = conn.execute(text(
