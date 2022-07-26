@@ -3,7 +3,7 @@ import os
 import requests
 import uuid
 
-from sqlalchemy import text
+from sqlalchemy import text, Table, MetaData
 from markdownify import markdownify as md
 from bs4 import BeautifulSoup as Soup
 from app.database import get_db
@@ -53,9 +53,14 @@ class ExternalResource:
         xhtml_data = response.text
         xhtml_soup = Soup(xhtml_data, 'html.parser')
         version = xhtml_soup.find('meta', {'name': 'revisedDate'})['content'],
-        does_exist = ExternalResource.check_if_external_resource_exists(version, ex_resource_id)
+        table_query = {'name': 'external_resource_version', 'schema': 'patient_education'}
+        data = {
+            'version': version,
+            'external_resource_id': ex_resource_id
+        }
+        resource_exist = ExternalResource.dynamic_select(table_query, data)
 
-        if not does_exist:
+        if not resource_exist:
             title = xhtml_soup.title.get_text()
             resource_language = xhtml_soup.find('meta', {'name': 'language'})['content']
             md_text_body = md(xhtml_data, heading_style='ATX')
@@ -80,23 +85,7 @@ class ExternalResource:
             )
             return ExternalResource.load_resource(exr)
 
-        return False
-
-    @staticmethod
-    @db_cursor
-    def check_if_external_resource_exists(cursor, version, resource_id):
-        """ check if resource is already exits in db - based on resource_id and revised date/version """
-        resource_exists = cursor.execute(text(
-            """
-            SELECT * FROM patient_education.external_resource_version WHERE
-            version=:version AND external_resource_id=:external_resource_id
-            """
-        ), {
-            'version': version,
-            'external_resource_id': resource_id
-        }).fetchall()
-
-        return True if resource_exists else False
+        return resource_exist
 
     @staticmethod
     @db_cursor
@@ -115,16 +104,21 @@ class ExternalResource:
             'url': external_resource.url,
             'title': external_resource.title,
             'body': external_resource.body,
-            'language': external_resource.resource_language,
+            'language': external_resource.language,
             'external_resource_id': external_resource.external_resource_id
         })
 
-        check_for_resource = ExternalResource.check_if_inserted(external_resource.uuid)
+        query_table = {'name': 'external_resource_version', 'schema': 'patient_education'}
+        data = {
+            'uuid': str(external_resource.uuid),
+        }
+        check_for_resource = ExternalResource.dynamic_select(query_table, data)
         return check_for_resource if check_for_resource else False
 
     @staticmethod
     @db_cursor
     def link_external_and_internal_resources(cursor, ex_resource_id, resource_id, tenant_id):
+        uuid_resource_id = uuid.UUID(resource_id)
         cursor.execute(text(
             """
             INSERT INTO patient_education.additional_resource_link
@@ -132,35 +126,30 @@ class ExternalResource:
             VALUES (:resource_version_uuid, :external_resource_version_uuid, :tenant_id)
             """
         ), {
-            'resource_version_uuid': resource_id,
+            'resource_version_uuid': uuid_resource_id,
             'external_resource_version_uuid': ex_resource_id,
-            'tenant_id': tenant_id
+            'tenant_id': tenant_id if tenant_id else None
         })
-        # TODO should we reuse check if inserted? - need table and element as a tuple...
-        check_link = cursor.execute(text(
-            """ 
-            SELECT * FROM patient_education.additional_resource_link 
-            WHERE resource_version_uuid=:resource_id 
-            AND external_resource_version_uuid=:ex_resource_id
-            """
-        ))
+        query_table = {'name': 'additional_resource_link', 'schema': 'patient_education'}
+        data = {
+            'resource_version_uuid': str(uuid_resource_id),
+            'external_resource_version_uuid': str(ex_resource_id)
+        }
+        check_link = ExternalResource.dynamic_select(query_table, data)
         return True if check_link else False
 
     @staticmethod
     @db_cursor
-    def check_if_inserted(cursor, external_uuid):
-        """ check if current external resource already exists in db"""
-        get_inserted_ex_resource = cursor.execute(text(
-            """
-            SELECT * FROM patient_education.external_resource_version WHERE uuid=:uuid
-            """
-        ), {
-            'uuid': external_uuid
-        }).fetchall()
-        if not get_inserted_ex_resource:
-            return f"Could not return linked data"
+    def dynamic_select(cursor, query_table, data):
+        table_name = query_table.get('name')
+        schema = query_table.get('schema')
+        metadata = MetaData()
+        table = Table(table_name, metadata, schema=schema, autoload=True, autoload_with=cursor)
+        query = table.select()
+        for k, v in data.items():
+            query = query.where(getattr(table.columns, k) == v)
 
-        return [dict(row) for row in get_inserted_ex_resource]
+        return [dict(row) for row in cursor.execute(query).all()]
 
 
 @dataclass
@@ -169,6 +158,7 @@ class Resource:
     language: str
     title: str
     body: str
+    version: Optional[int] = None
     status: Optional[Status] = None
     resource_uuid: Optional = None
 
@@ -221,11 +211,14 @@ class Resource:
     def get_all_resources_with_linked(cursor):
         all_resources = cursor.execute(text(
             """
-            SELECT * FROM patient_education.resource_version rv
-            JOIN patient_education.additional_resource_link arl
-                ON rv.uuid = arl.resource_version_uuid
-            JOIN patient_education.external_resource_version erv
-                ON
+            SELECT rv.uuid as internal_uuid, rv.title, rv.language as internal_language, rv.status, 
+            erv.uuid as external_uuid, erv.title as external_title, erv.version as external_version, 
+            erv.language as external_language, external_resource_id
+            FROM patient_education.external_resource_version erv 
+            JOIN patient_education.additional_resource_link arl 
+            ON erv.uuid = arl.external_resource_version_uuid 
+            FULL OUTER JOIN patient_education.resource_version rv 
+            ON arl.resource_version_uuid = rv.uuid
             """
         ))
         return all_resources

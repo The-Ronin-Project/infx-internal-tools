@@ -141,50 +141,45 @@ def create_app(script_info=None):
         return jsonify(concept_map_version.serialize())
 
     # Patient Education Endpoints
-    @app.route('/PatientEducation/external/', methods=['POST', 'GET'])
+    @app.route('/PatientEducation/external/elsevier', methods=['GET', 'POST'])
     def external_resource_download():
         ex_resource_id = request.json.get('ex_resource_id')
         resource_id = request.json.get('internal_resource_id')
         language = request.json.get('language')
         tenant_id = request.json.get('tenant_id')
         ex_resource = ExternalResource.locate_external_resource(language, ex_resource_id)
-        # TODO if resource exists, skip download and jump to link function...
         link_resources = ExternalResource.link_external_and_internal_resources(
-            ex_resource_id, resource_id, tenant_id
+            ex_resource[0].get('uuid'), resource_id, tenant_id
         )
         return jsonify(ex_resource) if ex_resource and link_resources else "Resource already exists."
 
-    @app.route('/PatientEducation/', methods=['POST', 'GET'])
-    def create_local_resource():
-        language = request.json.get('language')
-        title = request.json.get('title')
-        body = request.json.get('body')
-        resource = Resource(language, title, body)
-        return 'Resource could not be created.' if not resource else jsonify(resource)
+    @app.route('/PatientEducation/', methods=['GET', 'POST'])
+    def find_or_create_local_resource():
+        if request.method == 'POST':
+            language = request.json.get('language')
+            title = request.json.get('title')
+            body = request.json.get('body')
+            resource = Resource(language, title, body)
+            return 'Resource could not be created.' if not resource else jsonify(resource)
+        if request.method == 'GET':
+            all_resources = Resource.get_all_resources_with_linked()
+            return all_resources
 
-    @app.route('/PatientEducation/<resource_id>/', methods=['PATCH', 'GET'])
-    def update_local_resource(resource_id):
-        language = request.json.get('language')
-        title = request.json.get('title')
-        body = request.json.get('body')
-        status = request.json.get('status')
-        resource = Resource(language, title, body, status, resource_id)
-        return 'Resource could not be updated, no resource found with that ID.' if not resource else jsonify(resource)
+    @app.route('/PatientEducation/<resource_id>/', methods=['GET', 'PATCH', 'DELETE'])
+    def delete_or_update_local_resource(resource_id):
+        if request.method == 'PATCH':
+            language = request.json.get('language')
+            title = request.json.get('title')
+            body = request.json.get('body')
+            status = request.json.get('status')
+            resource = Resource(language, title, body, status, resource_id)
+            return 'Resource could not be updated, no resource found with that ID.' if not resource else jsonify(resource)
+        if request.method == 'DELETE':
+            resource = Resource.delete(resource_id)
+            return f"{resource} has been removed." if resource else f"Transaction FAILED for {resource}"
 
-    @app.route('/PatientEducation/<resource_id>/delete', methods=['DELETE', 'GET'])
-    def delete_local_resource(resource_id):
-        resource = Resource.delete(resource_id)
-        return f"{resource} has been removed." if resource else f"Transaction FAILED for {resource}"
-
-    @app.route('/PatientEducation', methods=['GET'])
-    def get_all_available_resources():
-        # /<resource_uuid>/version/<ex_resource_uuid>
-        # return all resources with linked external resources if any are found
-        all_resources = Resource.get_all_resources_with_linked()
-        return all_resources
-
-    @app.route('/PatientEducation/remove/link', methods=['DELETE', 'GET'])
-    def delete_linked_external_resource():  # will we delete or unlink?
+    @app.route('/PatientEducation/remove-link/', methods=['DELETE', 'GET'])
+    def delete_linked_external_resource():  # unlink
         ex_resource_id = request.json.get('external_resource_id')
         Resource.delete_linked_ex_resource(ex_resource_id)
 
