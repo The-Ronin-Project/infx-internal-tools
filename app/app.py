@@ -178,12 +178,20 @@ def create_app(script_info=None):
             resource = Resource.delete(resource_id)
             return f"{resource} has been removed." if resource else f"Transaction FAILED for {resource}"
 
-    @app.route('/PatientEducation/status/', methods=['GET', 'PATCH'])
+    @app.route('/PatientEducation/status/', methods=['PATCH'])
     def update_status_local_resource():
         resource_id = request.json.get('resource_id')
         status = request.json.get('status')
         resource, resource_status = Resource.status_update(resource_id, status)
         return f"Resource {resource} has been updated with status {status}"
+
+    @app.route('/PatientEducation/<resource_id>/version/new', methods=['POST'])
+    def create_new_local_version(resource_id):
+        # TODO: select where resource_uuid = uuid, return order by version desc, get first, create new uuid
+        #  insert into resource_version uuid=new_uuid and version_uuid=original_uuid (passed in)
+        #  set status to Draft and bump original_version + 1
+        Resource.new_version(resource_id)
+        pass
 
     @app.route('/PatientEducation/remove-link/', methods=['DELETE', 'GET'])
     def delete_linked_external_resource():  # unlink
