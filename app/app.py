@@ -154,7 +154,7 @@ def create_app(script_info=None):
         return jsonify(ex_resource) if ex_resource and link_resources else "Resource already exists."
 
     @app.route('/PatientEducation/', methods=['GET', 'POST'])
-    def find_or_create_local_resource():
+    def create_or_find_local_resource():
         if request.method == 'POST':
             language = request.json.get('language')
             title = request.json.get('title')
@@ -163,7 +163,7 @@ def create_app(script_info=None):
             return 'Resource could not be created.' if not resource else jsonify(resource)
         if request.method == 'GET':
             all_resources = Resource.get_all_resources_with_linked()
-            return all_resources
+            return jsonify(all_resources)
 
     @app.route('/PatientEducation/<resource_id>/', methods=['GET', 'PATCH', 'DELETE'])
     def delete_or_update_local_resource(resource_id):
@@ -178,10 +178,18 @@ def create_app(script_info=None):
             resource = Resource.delete(resource_id)
             return f"{resource} has been removed." if resource else f"Transaction FAILED for {resource}"
 
+    @app.route('/PatientEducation/status/', methods=['GET', 'PATCH'])
+    def update_status_local_resource():
+        resource_id = request.json.get('resource_id')
+        status = request.json.get('status')
+        resource, resource_status = Resource.status_update(resource_id, status)
+        return f"Resource {resource} has been updated with status {status}"
+
     @app.route('/PatientEducation/remove-link/', methods=['DELETE', 'GET'])
     def delete_linked_external_resource():  # unlink
         ex_resource_id = request.json.get('external_resource_id')
-        Resource.delete_linked_ex_resource(ex_resource_id)
+        ExternalResource.delete_linked_ex_resource(ex_resource_id)
+        return f"External Resource: {ex_resource_id} has been removed."
 
     return app
 
