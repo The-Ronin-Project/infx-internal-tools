@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from typing import Optional
 from enum import Enum, unique
 from decouple import config
-from app.helpers.db_helper import db_cursor
+from app.helpers.db_helper import db_cursor, \
+    dynamic_select_stmt, dynamic_insert_stmt, dynamic_update_stmt, dynamic_delete_stmt
 
 
 @unique
@@ -57,11 +58,11 @@ class ExternalResource:
             return f"Cannot import external resource. Language code not found: {error}"
 
         table_query = {'name': 'external_resource_version', 'schema': 'patient_education'}
-        data = {
+        select_data = {
             'version': version,
             'external_id': ex_resource_id
         }
-        resource_exist = ExternalResource.dynamic_select(table_query, data)
+        resource_exist = dynamic_select_stmt(table_query, select_data)
 
         if not resource_exist:
             title = xhtml_soup.title.get_text()
@@ -73,7 +74,7 @@ class ExternalResource:
                 'external_resource', [
                     'url',
                     'language_code',
-                    'uuid',
+                    'external_uuid',
                     'type',
                     'version',
                     'title',
@@ -93,6 +94,7 @@ class ExternalResource:
     @db_cursor
     def load_resource(cursor, external_resource):
         """ insert external resource into db, return inserted data to user """
+        # query_table = {'name': 'external_resource_version', 'schema': 'patient_education'}
         cursor.execute(text(
             """
             INSERT INTO patient_education.external_resource_version
@@ -100,7 +102,7 @@ class ExternalResource:
             VALUES (:uuid, :version, :type, :url, :title, :body, :language_code, :external_resource_id);
             """
         ), {
-            'uuid': external_resource.uuid,
+            'external_uuid': external_resource.uuid,
             'version': external_resource.version,
             'type': external_resource.type,
             'url': external_resource.url,
@@ -111,48 +113,28 @@ class ExternalResource:
         })
 
         query_table = {'name': 'external_resource_version', 'schema': 'patient_education'}
-        data = {
-            'uuid': str(external_resource.uuid),
+        select_data = {
+            'external_uuid': str(external_resource.uuid),
         }
-        check_for_resource = ExternalResource.dynamic_select(query_table, data)
+        check_for_resource = dynamic_select_stmt(query_table, select_data)
         return check_for_resource if check_for_resource else False
 
     @staticmethod
-    @db_cursor
-    def link_external_and_internal_resources(cursor, ex_resource_id, resource_id, tenant_id):
+    def link_external_and_internal_resources(ex_resource_id, resource_id, tenant_id):
         uuid_resource_id = uuid.UUID(resource_id)
-        cursor.execute(text(
-            """
-            INSERT INTO patient_education.additional_resource_link
-            (resource_version_uuid, external_resource_version_uuid, tenant_id)
-            VALUES (:resource_version_uuid, :external_resource_version_uuid, :tenant_id)
-            """
-        ), {
+        query_table = {'name': 'additional_resource_link', 'schema': 'patient_education'}
+        insert_data = {
             'resource_version_uuid': uuid_resource_id,
             'external_resource_version_uuid': ex_resource_id,
-            'tenant_id': tenant_id if tenant_id else None
-        })
-        query_table = {'name': 'additional_resource_link', 'schema': 'patient_education'}
-        data = {
+            'tenant_id': tenant_id if tenant_id else None}
+        dynamic_insert_stmt(query_table, insert_data)
+
+        select_data = {
             'resource_version_uuid': str(uuid_resource_id),
             'external_resource_version_uuid': str(ex_resource_id)
         }
-        check_link = ExternalResource.dynamic_select(query_table, data)
+        check_link = dynamic_select_stmt(query_table, select_data)
         return True if check_link else False
-
-    @staticmethod
-    @db_cursor
-    def dynamic_select(cursor, query_table, data):
-        """ dynamic select query, can handle multiple 'WHERE' - turns into 'AND' """
-        table_name = query_table.get('name')
-        schema = query_table.get('schema')
-        metadata = MetaData()
-        table = Table(table_name, metadata, schema=schema, autoload=True, autoload_with=cursor)
-        query = table.select()
-        for k, v in data.items():
-            query = query.where(getattr(table.columns, k) == v)
-
-        return [dict(row) for row in cursor.execute(query).all()]
 
     @staticmethod
     @db_cursor
@@ -172,17 +154,11 @@ class ExternalResource:
         return True if result else False
 
     @staticmethod
-    @db_cursor
-    def delete_linked_ex_resource(cursor, ex_resource_id):
+    def delete_linked_ex_resource(ex_resource_id):
         """ delete link between internal and external resource """
-        cursor.execute(text(
-            """
-            DELETE FROM patient_education.additional_resource_link 
-            WHERE external_resource_version_uuid=:external_resource_version_uuid
-            """
-        ), {
-            'external_resource_version_uuid': ex_resource_id
-        })
+        table_query = {'name': 'additional_resource_link', 'schema': 'patient_education'}
+        delete_data = {'external_resource_version_uuid': str(ex_resource_id)}
+        dynamic_delete_stmt(table_query, delete_data)
         return ex_resource_id
 
 
@@ -193,51 +169,58 @@ class Resource:
     title: str
     body: str
     status: Optional[Status] = None
+    version_uuid: Optional = None
     resource_uuid: Optional = None
-    version: Optional[int] = None
+    version: Optional[int] = 1
 
     def __post_init__(self):
         self.conn = get_db()
-        if not self.resource_uuid:
+        if not self.version_uuid:
+            self.version_uuid = uuid.uuid1()
             self.resource_uuid = uuid.uuid1()
             self.status = Status.draft.value
             self.create_local_or_tenant_resource()
-        if self.resource_uuid:
+        if self.version_uuid:
             self.update_local_or_tenant_resource()
 
     def create_local_or_tenant_resource(self):
         """ create/insert new resource into db, return inserted data to user """
+        # TODO add versioning (1, 2, 3)... and resource_uuid
         self.conn.execute(text(
             """
+            INSERT INTO patient_education.resource (uuid) VALUES (:uuid);
+        
             INSERT INTO patient_education.resource_version
-            (version_uuid, title, body, language_code, status) 
-            VALUES (:version_uuid, :title, :body, :language_code, :status);
+            (version_uuid, title, body, language_code, status, version, resource_uuid) 
+            VALUES (:version_uuid, :title, :body, :language_code, :status, :version, :resource_uuid);
             """
         ), {
-            'version_uuid': self.resource_uuid,
+            'version_uuid': self.version_uuid,
             'title': self.title,
             'body': self.body,
             'language_code': self.language_code,
-            'status': self.status
+            'status': self.status,
+            'version': self.version,  # initial creation returns version 1
+            'resource_uuid': self.resource_uuid,
+            'uuid': self.resource_uuid
         })
         return Resource
 
     def update_local_or_tenant_resource(self):
         """ Update resource based on user changes """
-        # TODO should there be a does exist check? or a status check? if status is active
-        #  create new? -- call create new?
         self.conn.execute(text(
             """
             UPDATE patient_education.resource_version
-            SET title=:title, body=:body, language_code=:language_code, status=:status
+            SET title=:title, body=:body, language_code=:language_code, status=:status, version=:version
             WHERE version_uuid=:version_uuid
             """
         ), {
-            'version_uuid': self.resource_uuid,
+            'version_uuid': self.version_uuid,
             'title': self.title,
             'body': self.body,
             'language_code': self.language_code,
-            'status': self.status
+            'status': self.status,
+            'version': self.version
         })
         return Resource
 
@@ -248,58 +231,65 @@ class Resource:
         all_resources = cursor.execute(text(
             """
             SELECT rv.version_uuid as internal_uuid, rv.title, language_name, l.language_code, rv.status, 
-            erv.uuid as external_uuid, erv.title as external_title, erv.version as external_version, 
+            erv.external_uuid, erv.title as external_title, erv.version as external_version, 
             erv.language_code as external_language, external_id, erv.url
             FROM patient_education.external_resource_version erv 
             JOIN patient_education.additional_resource_link arl 
-            ON erv.uuid = arl.external_resource_version_uuid 
+            ON erv.external_uuid = arl.external_resource_version_uuid 
             FULL OUTER JOIN patient_education.resource_version rv 
             ON arl.resource_version_uuid = rv.version_uuid
             JOIN public.languages l
             ON rv.language_code = l.language_code
+            ORDER BY rv.version DESC
             """
         )).fetchall()
         return [dict(row) for row in all_resources]
 
     @staticmethod
-    @db_cursor
-    def status_update(cursor, resource_id, status):
+    def status_update(version_uuid, status):
         """ strictly for updated status, generated by retool button click """
-        cursor.execute(text(
-            """
-            UPDATE patient_education.resource_version
-            SET status=:status
-            WHERE version_uuid=:version_uuid;
-            """
-        ), {
-            'status': status,
-            'uuid': resource_id
-        })
-        return resource_id, status
+        table_query = {'name': 'resource_version', 'schema': 'patient_education'}
+        version_to_update = {'version_uuid': str(version_uuid)}
+        data = {'status': status}
+        update = dynamic_update_stmt(table_query, version_to_update, data)
+
+        return update
 
     @staticmethod
-    @db_cursor
-    def new_version(cursor, resource_id):
-        cursor.execute(text(
-            """
-            SELECT * FROM patient_education.resource_version WHERE version_uuid=:version_uuid
-            ORDER BY version DESC
-            """
-        ), {
-            'version_uuid': resource_id
-        }).first()  # get latest
-        pass
+    def new_version(resource_uuid):
+        """
+        create new version of existing resource (get most recent version and bump it +1),
+        if status is active retool will only let you create new, status is checked here too
+        """
+        version_uuid = uuid.uuid1()
+        table_query = {'name': 'resource_version', 'schema': 'patient_education'}
+        copy_data = {'resource_uuid': resource_uuid}
+        current_version = dynamic_select_stmt(table_query, copy_data, 'version')
+
+        if current_version.status == Status.active.value:
+            insert_data = {
+                'version_uuid': str(version_uuid),
+                'title': current_version.title,
+                'body': current_version.body,
+                'language_code': current_version.language_code,
+                'status': Status.draft.value,  # draft value for new version
+                'version': current_version.version + 1,
+                'resource_uuid': resource_uuid
+            }
+            dynamic_insert_stmt(table_query, insert_data)
+
+            select_data = {'version_uuid': str(version_uuid)}
+            new_version = dynamic_select_stmt(table_query, select_data)
+            return new_version
+        return {'message': 'Cannot create new version. Version must be active for a new version to be created.'}
 
     @staticmethod
-    @db_cursor
-    def delete(cursor, resource_id):
-        """ delete resource, cannot be in PUBLISHED status """
-        # TODO: retool handle status on this - only give option to delete if not active status?
-        cursor.execute(text(
-            """
-            DELETE FROM patient_education.resource_version WHERE version_uuid=:version_uuid
-            """
-        ), {
-            'version_uuid': resource_id
-        })
-        return resource_id
+    def delete(version_uuid):
+        """
+        delete resource, cannot be in PUBLISHED status
+        retool handle status on this - only give option to delete if not active status?
+        """
+        table_query = {'name': 'resource_version', 'schema': 'patient_education'}
+        delete_data = {'version_uuid': str(version_uuid)}
+        dynamic_delete_stmt(table_query, delete_data)
+        return {"message": f"{version_uuid} has been removed"}

@@ -153,7 +153,7 @@ def create_app(script_info=None):
         )
         return jsonify(ex_resource) if ex_resource and link_resources else "Resource already exists."
 
-    @app.route('/PatientEducation/', methods=['GET', 'POST'])
+    @app.route('/PatientEducation/', methods=['GET', 'POST', 'PATCH'])
     def create_or_find_local_resource():
         if request.method == 'POST':
             language = request.json.get('language')
@@ -164,34 +164,30 @@ def create_app(script_info=None):
         if request.method == 'GET':
             all_resources = Resource.get_all_resources_with_linked()
             return jsonify(all_resources)
-
-    @app.route('/PatientEducation/<resource_id>/', methods=['GET', 'PATCH', 'DELETE'])
-    def delete_or_update_local_resource(resource_id):
         if request.method == 'PATCH':
+            version_uuid = request.json.get('version_uuid')
+            status = request.json.get('status')
+            resource = Resource.status_update(version_uuid, status)
+            return resource
+
+    @app.route('/PatientEducation/<version_uuid>/', methods=['GET', 'PATCH', 'DELETE'])
+    def delete_or_update_local_resource(version_uuid):
+        if request.method == 'PATCH':  # add resource_uuid on return?
             language = request.json.get('language')
             title = request.json.get('title')
             body = request.json.get('body')
             status = request.json.get('status')
-            resource = Resource(language, title, body, status, resource_id)
+            version = request.json.get('version')
+            resource = Resource(language, title, body, status, version_uuid, version)
             return 'Resource could not be updated, no resource found with that ID.' if not resource else jsonify(resource)
         if request.method == 'DELETE':
-            resource = Resource.delete(resource_id)
-            return f"{resource} has been removed." if resource else f"Transaction FAILED for {resource}"
+            resource = Resource.delete(version_uuid)
+            return resource if resource else f"Transaction FAILED for {resource}"
 
-    @app.route('/PatientEducation/status/', methods=['PATCH'])
-    def update_status_local_resource():
-        resource_id = request.json.get('resource_id')
-        status = request.json.get('status')
-        resource, resource_status = Resource.status_update(resource_id, status)
-        return f"Resource {resource} has been updated with status {status}"
-
-    @app.route('/PatientEducation/<resource_id>/version/new', methods=['POST'])
-    def create_new_local_version(resource_id):
-        # TODO: select where resource_uuid = uuid, return order by version desc, get first, create new uuid
-        #  insert into resource_version uuid=new_uuid and version_uuid=original_uuid (passed in)
-        #  set status to Draft and bump original_version + 1
-        Resource.new_version(resource_id)
-        pass
+    @app.route('/PatientEducation/<resource_uuid>/version/new', methods=['POST'])
+    def create_new_version_local(resource_uuid):
+        new_version = Resource.new_version(resource_uuid)
+        return jsonify(new_version)
 
     @app.route('/PatientEducation/remove-link/', methods=['DELETE', 'GET'])
     def delete_linked_external_resource():  # unlink
