@@ -87,13 +87,13 @@ class ExternalResource:
                 resource_url, language_code.get('language_code'), _uuid, resource_type,
                 version, title, body, ex_resource_id
             )
-            return ExternalResource.load_resource(exr)
+            return ExternalResource.save_resource(exr)
 
         return resource_exist
 
     @staticmethod
     @db_cursor
-    def load_resource(cursor, external_resource):
+    def save_resource(cursor, external_resource):
         """ insert external resource into db, return inserted data to user """
         cursor.execute(text(
             """
