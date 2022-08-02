@@ -1,6 +1,6 @@
 from app.database import get_db
 from sqlalchemy import Table, MetaData, desc, update
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import DBAPIError
 from types import SimpleNamespace
 
 
@@ -12,7 +12,7 @@ def db_cursor(func):
             cursor.execute('BEGIN')
             transaction = func(cursor, *args)
             cursor.execute('COMMIT')
-        except (TypeError, AttributeError, ValueError) as error:
+        except (TypeError, AttributeError, ValueError, DBAPIError) as error:
             cursor.execute('ROLLBACK')
             raise {"message": f"Error occurred: {error}"}
         return transaction
@@ -31,9 +31,10 @@ def dynamic_select_stmt(cursor, query_table, data, orderby=None):
     for k, v in data.items():
         query = query.where(getattr(table.columns, k) == v)
     if orderby:
-        result = [dict(row) for row in cursor.execute(query.order_by(desc(orderby)).limit(1))]
-        return SimpleNamespace(**result[0])
-    return [dict(row) for row in cursor.execute(query).all()]
+        orderby_result = [dict(row) for row in cursor.execute(query.order_by(desc(orderby)).limit(1))]
+        return SimpleNamespace(**orderby_result[0]) if orderby_result else False
+    result = [dict(row) for row in cursor.execute(query).all()]
+    return SimpleNamespace(**result[0])
 
 
 @db_cursor

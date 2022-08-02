@@ -2,6 +2,7 @@ import collections
 import os
 import requests
 import uuid
+import json
 
 from sqlalchemy import text, Table, MetaData
 from markdownify import markdownify as md
@@ -94,7 +95,6 @@ class ExternalResource:
     @db_cursor
     def load_resource(cursor, external_resource):
         """ insert external resource into db, return inserted data to user """
-        # query_table = {'name': 'external_resource_version', 'schema': 'patient_education'}
         cursor.execute(text(
             """
             INSERT INTO patient_education.external_resource_version
@@ -120,21 +120,20 @@ class ExternalResource:
         return check_for_resource if check_for_resource else False
 
     @staticmethod
-    def link_external_and_internal_resources(ex_resource_id, resource_id, tenant_id):
-        uuid_resource_id = uuid.UUID(resource_id)
+    def link_external_and_internal_resources(ex_resource_id, resource_version_id, tenant_id):
         query_table = {'name': 'additional_resource_link', 'schema': 'patient_education'}
         insert_data = {
-            'resource_version_uuid': uuid_resource_id,
+            'resource_version_uuid': resource_version_id,
             'external_resource_version_uuid': ex_resource_id,
             'tenant_id': tenant_id if tenant_id else None}
         dynamic_insert_stmt(query_table, insert_data)
 
         select_data = {
-            'resource_version_uuid': str(uuid_resource_id),
-            'external_resource_version_uuid': str(ex_resource_id)
+            'resource_version_uuid': resource_version_id,
+            'external_resource_version_uuid': ex_resource_id
         }
         check_link = dynamic_select_stmt(query_table, select_data)
-        return True if check_link else False
+        return check_link if check_link else False
 
     @staticmethod
     @db_cursor
@@ -230,9 +229,11 @@ class Resource:
         """ return all resources with or without linked external resource """
         all_resources = cursor.execute(text(
             """
-            SELECT rv.version_uuid as internal_uuid, rv.title, language_name, l.language_code, rv.status, 
-            erv.external_uuid, erv.title as external_title, erv.version as external_version, 
-            erv.language_code as external_language, external_id, erv.url
+            SELECT rv.version_uuid as internal_uuid, rv.title, rv.body as internal_body, 
+            language_name, l.language_code, rv.status, rv.version,
+            erv.external_uuid, erv.title as external_title, erv.body as external_body, 
+            erv.version as external_version, erv.ronin_reviewed_date, 
+            erv.language_code as external_language, external_id, erv.url as external_url
             FROM patient_education.external_resource_version erv 
             JOIN patient_education.additional_resource_link arl 
             ON erv.external_uuid = arl.external_resource_version_uuid 
@@ -244,6 +245,14 @@ class Resource:
             """
         )).fetchall()
         return [dict(row) for row in all_resources]
+
+    @staticmethod
+    def get_specific_resource(version_uuid):
+        table_query = {'name': 'resource_version', 'schema': 'patient_education'}
+        data = {'version_uuid': str(version_uuid)}
+        resource = dynamic_select_stmt(table_query, data)
+        found_resource = json.loads(json.dumps(resource, default=lambda s: vars(s)))
+        return found_resource
 
     @staticmethod
     def status_update(version_uuid, status):
@@ -259,12 +268,14 @@ class Resource:
     def new_version(resource_uuid):
         """
         create new version of existing resource (get most recent version and bump it +1),
-        if status is active retool will only let you create new, status is checked here too
+        if status is active ReTool will only let you create new, status is checked here too
         """
         version_uuid = uuid.uuid1()
         table_query = {'name': 'resource_version', 'schema': 'patient_education'}
         copy_data = {'resource_uuid': resource_uuid}
         current_version = dynamic_select_stmt(table_query, copy_data, 'version')
+        if not current_version:
+            return {'message': 'Cannot create new version. Resource does not exist'}
 
         if current_version.status == Status.active.value:
             insert_data = {
@@ -279,17 +290,26 @@ class Resource:
             dynamic_insert_stmt(table_query, insert_data)
 
             select_data = {'version_uuid': str(version_uuid)}
-            new_version = dynamic_select_stmt(table_query, select_data)
+            get_new_version = dynamic_select_stmt(table_query, select_data)
+            new_version = json.loads(json.dumps(get_new_version, default=lambda s: vars(s)))
             return new_version
+
         return {'message': 'Cannot create new version. Version must be active for a new version to be created.'}
 
     @staticmethod
     def delete(version_uuid):
         """
         delete resource, cannot be in PUBLISHED status
-        retool handle status on this - only give option to delete if not active status?
+        ReTool handle status on this - only give option to delete if not active status
+        checking status here as well
         """
-        table_query = {'name': 'resource_version', 'schema': 'patient_education'}
-        delete_data = {'version_uuid': str(version_uuid)}
-        dynamic_delete_stmt(table_query, delete_data)
-        return {"message": f"{version_uuid} has been removed"}
+        table_query_link = {'name': 'additional_resource_link', 'schema': 'patient_education'}
+        data_link = {'resource_version_uuid': version_uuid}
+        table_query_rv = {'name': 'resource_version', 'schema': 'patient_education'}
+        data_rv = {'version_uuid': version_uuid}
+        get_status = dynamic_select_stmt(table_query_rv, data_rv)
+        if get_status.status != 'Active':
+            dynamic_delete_stmt(table_query_link, data_link)
+            dynamic_delete_stmt(table_query_rv, data_rv)
+            return {"message": f"{version_uuid} has been removed"}
+        return {"message": f"{version_uuid} cannot be removed, status is {get_status.status}"}
