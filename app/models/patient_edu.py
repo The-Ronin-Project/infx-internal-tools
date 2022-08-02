@@ -184,7 +184,6 @@ class Resource:
 
     def create_local_or_tenant_resource(self):
         """ create/insert new resource into db, return inserted data to user """
-        # TODO add versioning (1, 2, 3)... and resource_uuid
         self.conn.execute(text(
             """
             INSERT INTO patient_education.resource (uuid) VALUES (:uuid);
