@@ -31,6 +31,7 @@ structlog = "*"
 waitress = "*"
 python-json-logger = "*"
 hupper = "*"
+markdownify = "*"
 
 [dev-packages]
 pytest = "*"
