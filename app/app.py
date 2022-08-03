@@ -11,6 +11,7 @@ from decouple import config
 from app.models.value_sets import *
 from app.models.concept_maps import *
 from app.models.surveys import *
+from app.models.patient_edu import *
 from werkzeug.exceptions import HTTPException
 
 # Configure the logger when the application is imported. This ensures that
@@ -210,6 +211,68 @@ def create_app(script_info=None):
     def get_concept_map_version(version_uuid):
         concept_map_version = ConceptMapVersion(version_uuid)
         return jsonify(concept_map_version.serialize())
+
+    # Patient Education Endpoints
+    @app.route('/PatientEducation/external/elsevier', methods=['GET', 'POST'])
+    def external_resource_download():
+        ex_resource_id = request.json.get('ex_resource_id')
+        resource_version_id = request.json.get('internal_version_id')
+        language = request.json.get('language')
+        tenant_id = request.json.get('tenant_id')
+        ex_resource = ExternalResource.locate_external_resource(language, ex_resource_id)
+        link_res = ExternalResource.link_external_and_internal_resources(
+            ex_resource.external_uuid, resource_version_id, tenant_id
+        )
+        if link_res:
+            linked_resources = json.loads(json.dumps(link_res, default=lambda s: vars(s)))
+            return linked_resources
+        else:
+            return "Resource already exists."
+
+    @app.route('/PatientEducation/', methods=['GET', 'POST', 'PATCH'])
+    def create_or_find_local_resources():
+        if request.method == 'GET':
+            all_resources = Resource.get_all_resources_with_linked()
+            return jsonify(all_resources)
+        if request.method == 'POST':
+            language = request.json.get('language')
+            title = request.json.get('title')
+            body = request.json.get('body')
+            resource = Resource(language, title, body)
+            return 'Resource could not be created.' if not resource else jsonify(resource)
+        if request.method == 'PATCH':
+            version_uuid = request.json.get('version_uuid')
+            status = request.json.get('status')
+            resource = Resource.status_update(version_uuid, status)
+            return resource
+
+    @app.route('/PatientEducation/<version_uuid>/', methods=['GET', 'PATCH', 'DELETE'])
+    def delete_update_get_local_resource(version_uuid):
+        if request.method == 'GET':
+            resource_to_get = Resource.get_specific_resource(version_uuid)
+            return jsonify(resource_to_get)
+        if request.method == 'PATCH':
+            language = request.json.get('language')
+            title = request.json.get('title')
+            body = request.json.get('body')
+            status = request.json.get('status')
+            version = request.json.get('version')
+            resource = Resource(language, title, body, status, version_uuid, version)
+            return 'Resource could not be updated, no resource found with that ID.' if not resource else jsonify(resource)
+        if request.method == 'DELETE':
+            resource = Resource.delete(version_uuid)
+            return resource if resource else f"Transaction FAILED for {resource}"
+
+    @app.route('/PatientEducation/<resource_uuid>/version/new', methods=['POST'])
+    def create_new_version_local(resource_uuid):
+        new_version = Resource.new_version(resource_uuid)
+        return jsonify(new_version)
+
+    @app.route('/PatientEducation/remove-link/', methods=['DELETE', 'GET'])
+    def delete_linked_external_resource():  # unlink
+        ex_resource_id = request.json.get('external_resource_id')
+        ExternalResource.delete_linked_ex_resource(ex_resource_id)
+        return f"External Resource: {ex_resource_id} has been removed."
 
     return app
 
