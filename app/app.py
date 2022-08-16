@@ -279,7 +279,8 @@ def create_app(script_info=None):
         elsevier_id = request.json.get('elsevier_id')
         elsevier_url = request.json.get('elsevier_url')
         patient_term = request.json.get('patient_term')
-        # TODO create function for elsevier download and save - similar class structure
+        language = request.json.get('language')
+        get_resource = ElsevierOnly.extract_and_modify_resource()
         pass
 
     return app

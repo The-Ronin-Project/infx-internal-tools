@@ -312,3 +312,26 @@ class Resource:
             dynamic_delete_stmt(table_query_rv, data_rv)
             return {"message": f"{version_uuid} has been removed"}
         return {"message": f"{version_uuid} cannot be removed, status is {get_status.status}"}
+
+
+@dataclass
+class ElsevierOnly:
+    """ in the event that only elsevier resources are used/linked """
+    patient_term: str
+    title: str
+    body: str
+    version: str
+    language: str  # TODO check order and what is actually being passed
+    url: str
+    uuid: Optional[uuid]
+    resource_type: ResourceType
+
+    def __post_init__(self):
+        self.uuid = uuid.uuid1()
+
+    def extract_and_modify_resource(self):
+        pass
+
+    def save_resource(self):
+        pass
+
