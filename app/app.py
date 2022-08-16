@@ -274,6 +274,14 @@ def create_app(script_info=None):
         ExternalResource.delete_linked_ex_resource(ex_resource_id)
         return f"External Resource: {ex_resource_id} has been removed."
 
+    @app.route('/PatientEducation/elsevier', methods=['GET', 'POST'])
+    def get_elsevier_only():
+        elsevier_id = request.json.get('elsevier_id')
+        elsevier_url = request.json.get('elsevier_url')
+        patient_term = request.json.get('patient_term')
+        # TODO create function for elsevier download and save - similar class structure
+        pass
+
     return app
 
 
