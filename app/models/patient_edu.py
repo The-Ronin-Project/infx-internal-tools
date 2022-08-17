@@ -328,10 +328,13 @@ class ElsevierOnly:
     uuid: Optional[uuid] = None
     resource_type: Optional[ResourceType] = None
     language_code: Optional[str] = None
-    # status: Optional[Status] = None
+    status: Optional[Status] = None
 
     def __post_init__(self):
         self.uuid = uuid.uuid1()
+        if not self.status:
+            self.status = Status.draft.value
+
         self.extract_and_modify_resource()
 
     def extract_and_modify_resource(self):
@@ -376,11 +379,12 @@ class ElsevierOnly:
                     'external_url',
                     'tenant_id',
                     'type',
+                    'status'
                 ]
             )
             exr = external_resource(
                 self.uuid, title, self.body, self.external_version, self.external_id, self.language_code, url,
-                self.tenant_id, self.resource_type
+                self.tenant_id, self.resource_type, self.status
             )
             resource = ElsevierOnly.save_external_resource(exr)
             return resource
@@ -393,8 +397,8 @@ class ElsevierOnly:
         cursor.execute(text(
             """
             INSERT INTO patient_education.elsevier_only_test_table
-            (uuid, title, body, external_version, external_id, language_code, external_url, tenant_id, type, resource_uuid) 
-            VALUES (:uuid, :title, :body, :external_version, :external_id, :language_code, :external_url, :tenant_id, :type, :resource_uuid);
+            (uuid, title, body, external_version, external_id, language_code, external_url, tenant_id, type, resource_uuid, status) 
+            VALUES (:uuid, :title, :body, :external_version, :external_id, :language_code, :external_url, :tenant_id, :type, :resource_uuid, :status);
             """
         ), {
             'uuid': external_resource.uuid,
@@ -406,7 +410,8 @@ class ElsevierOnly:
             'external_url': external_resource.external_url,
             'tenant_id': external_resource.tenant_id,
             'type': external_resource.type,
-            'resource_uuid': uuid.uuid1()
+            'resource_uuid': uuid.uuid1(),
+            'status': external_resource.status
         })
 
         query_table = {'name': 'elsevier_only_test_table', 'schema': 'patient_education'}
@@ -426,3 +431,11 @@ class ElsevierOnly:
         )).fetchall()
 
         return [dict(row) for row in all_external_resources]
+
+    @staticmethod
+    def update_status(status, _uuid):
+        table_query = {'name': 'elsevier_only_test_table', 'schema': 'patient_education'}
+        version_to_update = {'uuid': str(_uuid)}
+        data = {'status': status}
+        update = dynamic_update_stmt(table_query, version_to_update, data)
+        return update if update else False
