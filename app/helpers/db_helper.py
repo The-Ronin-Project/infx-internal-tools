@@ -34,7 +34,7 @@ def dynamic_select_stmt(cursor, query_table, data, orderby=None):
         orderby_result = [dict(row) for row in cursor.execute(query.order_by(desc(orderby)).limit(1))]
         return SimpleNamespace(**orderby_result[0]) if orderby_result else False
     result = [dict(row) for row in cursor.execute(query).all()]
-    return SimpleNamespace(**result[0])
+    return SimpleNamespace(**result[0]) if result else False
 
 
 @db_cursor

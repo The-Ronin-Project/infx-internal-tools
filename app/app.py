@@ -274,14 +274,20 @@ def create_app(script_info=None):
         ExternalResource.delete_linked_ex_resource(ex_resource_id)
         return f"External Resource: {ex_resource_id} has been removed."
 
-    @app.route('/PatientEducation/elsevier', methods=['GET', 'POST'])
+    @app.route('/PatientEducation/elsevier/', methods=['GET', 'POST'])
     def get_elsevier_only():
-        elsevier_id = request.json.get('elsevier_id')
-        elsevier_url = request.json.get('elsevier_url')
-        patient_term = request.json.get('patient_term')
-        language = request.json.get('language')
-        get_resource = ElsevierOnly.extract_and_modify_resource()
-        pass
+        if request.method == 'POST':
+            external_id = request.json.get('external_id')
+            patient_term = request.json.get('patient_term')
+            language = request.json.get('language')
+            tenant_id = request.json.get('tenant_id')
+            get_resource = ElsevierOnly(
+                external_id, patient_term, language, tenant_id
+            )
+            return jsonify(get_resource)
+        if request.method == 'GET':
+            all_resources = ElsevierOnly.get_all_elsevier_only_resources()
+            return jsonify(all_resources)
 
     return app
 

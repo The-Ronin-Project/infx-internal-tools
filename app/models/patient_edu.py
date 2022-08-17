@@ -27,6 +27,7 @@ class Status(str, Enum):
     draft: str = 'Draft'
     under_review: str = 'Under Review'
     active: str = 'Active'
+    retired: str = 'Retired'
 
 
 @dataclass
@@ -317,21 +318,111 @@ class Resource:
 @dataclass
 class ElsevierOnly:
     """ in the event that only elsevier resources are used/linked """
+    external_id: str
     patient_term: str
-    title: str
-    body: str
-    version: str
-    language: str  # TODO check order and what is actually being passed
-    url: str
-    uuid: Optional[uuid]
-    resource_type: ResourceType
+    language: str
+    body: Optional[str] = None
+    external_url: Optional[str] = None
+    tenant_id: Optional[str] = None
+    external_version: Optional[int] = None
+    uuid: Optional[uuid] = None
+    resource_type: Optional[ResourceType] = None
+    language_code: Optional[str] = None
+    # status: Optional[Status] = None
 
     def __post_init__(self):
         self.uuid = uuid.uuid1()
+        self.extract_and_modify_resource()
 
     def extract_and_modify_resource(self):
-        pass
+        url = config('EXTERNAL_RESOURCE_URL')
+        self.external_url = f"{url}{self.language}/{self.external_id}"
+        response = requests.get(self.external_url)
+        xhtml_data = response.text
+        xhtml_soup = Soup(xhtml_data, 'html.parser')
+        self.external_version = xhtml_soup.find('meta', {'name': 'revisedDate'})['content']
+        language_code = {'language_code': xhtml_soup.html['lang']}
+        try:
+            ExternalResource.retrieve_language_code(language_code)
+        except Exception as error:
+            return f"Cannot import external resource. Language code not found: {error}"
 
-    def save_resource(self):
-        pass
+        if not self.patient_term:
+            title = xhtml_soup.title.get_text()
+        else:
+            title = self.patient_term
 
+        table_query = {'name': 'elsevier_only_test_table', 'schema': 'patient_education'}
+        select_data = {
+            'external_version': self.external_version,
+            'external_id': self.external_id,
+            'title': title
+        }
+        resource_exist = dynamic_select_stmt(table_query, select_data)
+
+        if not resource_exist:
+            md_text_body = md(xhtml_data, heading_style='ATX')
+            self.resource_type = ResourceType.markdown if 'elsevier' in url else ResourceType.external_link
+            self.body = os.linesep.join([empty_lines for empty_lines in md_text_body.splitlines() if empty_lines])
+            self.language_code = xhtml_soup.html['lang']
+            external_resource = collections.namedtuple(
+                'external_resource', [
+                    'uuid',
+                    'title',
+                    'body',
+                    'external_version',
+                    'external_id',
+                    'language_code',
+                    'external_url',
+                    'tenant_id',
+                    'type',
+                ]
+            )
+            exr = external_resource(
+                self.uuid, title, self.body, self.external_version, self.external_id, self.language_code, url,
+                self.tenant_id, self.resource_type
+            )
+            resource = ElsevierOnly.save_external_resource(exr)
+            return resource
+        return resource_exist
+
+    @staticmethod
+    @db_cursor
+    def save_external_resource(cursor, external_resource):
+        """ insert external resource into db, return inserted data to user """
+        cursor.execute(text(
+            """
+            INSERT INTO patient_education.elsevier_only_test_table
+            (uuid, title, body, external_version, external_id, language_code, external_url, tenant_id, type, resource_uuid) 
+            VALUES (:uuid, :title, :body, :external_version, :external_id, :language_code, :external_url, :tenant_id, :type, :resource_uuid);
+            """
+        ), {
+            'uuid': external_resource.uuid,
+            'title': external_resource.title,
+            'body': external_resource.body,
+            'external_version': external_resource.external_version,
+            'external_id': external_resource.external_id,
+            'language_code': external_resource.language_code,
+            'external_url': external_resource.external_url,
+            'tenant_id': external_resource.tenant_id,
+            'type': external_resource.type,
+            'resource_uuid': uuid.uuid1()
+        })
+
+        query_table = {'name': 'elsevier_only_test_table', 'schema': 'patient_education'}
+        select_data = {
+            'uuid': str(external_resource.uuid),
+        }
+        check_for_resource = dynamic_select_stmt(query_table, select_data)
+        return check_for_resource if check_for_resource else False
+
+    @staticmethod
+    @db_cursor
+    def get_all_elsevier_only_resources(cursor):
+        all_external_resources = cursor.execute(text(
+            """
+            SELECT * FROM patient_education.elsevier_only_test_table
+            """
+        )).fetchall()
+
+        return [dict(row) for row in all_external_resources]
