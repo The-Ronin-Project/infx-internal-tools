@@ -345,21 +345,17 @@ class ElsevierOnly:
         xhtml_soup = Soup(xhtml_data, 'html.parser')
         self.external_version = xhtml_soup.find('meta', {'name': 'revisedDate'})['content']
         language_code = {'language_code': xhtml_soup.html['lang']}
+        title = xhtml_soup.title.get_text()
         try:
             ExternalResource.retrieve_language_code(language_code)
         except Exception as error:
             return f"Cannot import external resource. Language code not found: {error}"
 
-        if not self.patient_term:
-            title = xhtml_soup.title.get_text()
-        else:
-            title = self.patient_term
-
         table_query = {'name': 'elsevier_only_test_table', 'schema': 'patient_education'}
         select_data = {
             'external_version': self.external_version,
             'external_id': self.external_id,
-            'title': title
+            'external_title': title
         }
         resource_exist = dynamic_select_stmt(table_query, select_data)
 
@@ -373,6 +369,7 @@ class ElsevierOnly:
                     'uuid',
                     'title',
                     'body',
+                    'external_title',
                     'external_version',
                     'external_id',
                     'language_code',
@@ -383,7 +380,7 @@ class ElsevierOnly:
                 ]
             )
             exr = external_resource(
-                self.uuid, title, self.body, self.external_version, self.external_id, self.language_code, url,
+                self.uuid, self.patient_term, self.body, title, self.external_version, self.external_id, self.language_code, url,
                 self.tenant_id, self.resource_type, self.status
             )
             resource = ElsevierOnly.save_external_resource(exr)
@@ -397,13 +394,14 @@ class ElsevierOnly:
         cursor.execute(text(
             """
             INSERT INTO patient_education.elsevier_only_test_table
-            (uuid, title, body, external_version, external_id, language_code, external_url, tenant_id, type, resource_uuid, status) 
-            VALUES (:uuid, :title, :body, :external_version, :external_id, :language_code, :external_url, :tenant_id, :type, :resource_uuid, :status);
+            (uuid, title, body, external_title, external_version, external_id, language_code, external_url, tenant_id, type, resource_uuid, status) 
+            VALUES (:uuid, :title, :body, :external_title, :external_version, :external_id, :language_code, :external_url, :tenant_id, :type, :resource_uuid, :status);
             """
         ), {
             'uuid': external_resource.uuid,
             'title': external_resource.title,
             'body': external_resource.body,
+            'external_title': external_resource.external_title,
             'external_version': external_resource.external_version,
             'external_id': external_resource.external_id,
             'language_code': external_resource.language_code,
@@ -439,3 +437,18 @@ class ElsevierOnly:
         data = {'status': status}
         update = dynamic_update_stmt(table_query, version_to_update, data)
         return update if update else False
+
+    @staticmethod
+    def unlink_resource(_uuid):
+        """
+        delete resource, cannot be in PUBLISHED status
+        ReTool handle status on this - only give option to delete if not active status
+        checking status here as well
+        """
+        table_query = {'name': 'elsevier_only_test_table', 'schema': 'patient_education'}
+        data = {'uuid': _uuid}
+        get_status = dynamic_select_stmt(table_query, data)
+        if get_status.status != 'Active':
+            dynamic_delete_stmt(table_query, data)
+            return {"message": f"{_uuid} has been removed"}
+        return {"message": f"{_uuid} cannot be removed, status is {get_status.status}"}
