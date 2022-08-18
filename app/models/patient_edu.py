@@ -437,3 +437,18 @@ class ElsevierOnly:
         data = {'status': status}
         update = dynamic_update_stmt(table_query, version_to_update, data)
         return update if update else False
+
+    @staticmethod
+    def unlink_resource(_uuid):
+        """
+        delete resource, cannot be in PUBLISHED status
+        ReTool handle status on this - only give option to delete if not active status
+        checking status here as well
+        """
+        table_query = {'name': 'elsevier_only_test_table', 'schema': 'patient_education'}
+        data = {'uuid': _uuid}
+        get_status = dynamic_select_stmt(table_query, data)
+        if get_status.status != 'Active':
+            dynamic_delete_stmt(table_query, data)
+            return {"message": f"{_uuid} has been removed"}
+        return {"message": f"{_uuid} cannot be removed, status is {get_status.status}"}
