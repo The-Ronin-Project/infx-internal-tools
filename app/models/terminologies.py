@@ -2,13 +2,14 @@ from sqlalchemy import text
 from app.database import get_db
 
 class Terminology:
-    def __init__(self, uuid, name, version, effective_start, effective_end, fhir_uri):
+    def __init__(self, uuid, name, version, effective_start, effective_end, fhir_uri, fhir_terminology):
         self.uuid = uuid
         self.name = name
         self.version = version
         self.effective_start = effective_start
         self.effective_end = effective_end
         self.fhir_uri = fhir_uri
+        self.fhir_terminology = fhir_terminology
 
     def __hash__(self):
         return hash(self.uuid)
@@ -41,7 +42,8 @@ class Terminology:
             x.version,
             x.effective_start,
             x.effective_end,
-            x.fhir_uri
+            x.fhir_uri,
+            x.fhir_terminology
         ) for x in term_data}
 
         return terminologies
