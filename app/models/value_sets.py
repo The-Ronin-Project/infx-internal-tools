@@ -125,12 +125,10 @@ class VSRule:
       self.scale_rule()
     elif self.property == 'method':
       self.method_rule()
-      
-  def direct_child(self):
-    pass
-  
-  def descendent_of(self):
-    pass
+
+    #FHIR
+    if self.property == 'has_fhir_terminology':
+      self.has_fhir_terminology_rule()  
 
   def serialize(self):
     return {
@@ -835,8 +833,27 @@ class CPTRule(VSRule):
     search_results = [x.get('_source') for x in results.get('hits').get('hits')]
     final_results = [Code(self.fhir_system, self.terminology_version.version, x.get('code'), x.get('display')) for x in search_results]
     self.results = set(final_results)
-    
 
+class FHIRRule(VSRule):
+  def has_fhir_terminology_rule(self):
+    conn = get_db()
+    query = """
+    select value_set_version, csn.* from value_sets.value_set_rule vsr
+    join fhir_defined_terminologies.code_systems_new csn
+    on vsr.terminology_version = csn.terminology_version_uuid
+    where vsr.value_set_version = :version_uuid
+    """
+    results_data = conn.execute(
+      text(
+        query
+      ), {
+        'version_uuid' : self.terminology_version.uuid
+      }
+    )
+    results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
+    self.results = set(results) 
+
+  
 #
 # End of Value Set Rules
 #
@@ -1286,7 +1303,9 @@ class RuleGroup:
       elif terminology.name == "CPT":
         rule = CPTRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
       elif terminology.name == "ICD-10 PCS":
-        rule = ICD10PCSRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))  
+        rule = ICD10PCSRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))
+      elif terminology.fhir_terminology == True:
+        rule = FHIRRule(x.uuid, x.position, x.description, x.property, x.operator, x.value, x.include, self, x.fhir_uri, terminologies.get(x.terminology_version))  
       if terminology in self.rules:
         self.rules[terminology].append(rule)
       else:
@@ -1692,6 +1711,7 @@ class ValueSetVersion:
     )
     result = last_modified_query.first()
     return result.timestamp
+
 
   # def delete(self):
   #  """
