@@ -126,18 +126,18 @@ def create_app(script_info=None):
         return str(new_version_uuid), 201
 
     @app.route('/ValueSets/<string:value_set_uuid>', methods=['DELETE'])
-    def delet_value_set(value_set_uuid):
+    def delete_value_set(value_set_uuid):
         value_set = ValueSet.load(value_set_uuid)
         value_set.delete()
         return "Deleted", 200
 
-    @app.route('/ValueSets/<string:value_set_uuid>/versions/<string:vs_version_uuid>', methods=['DELETE'])
-    def delete_vs_version(value_set_uuid, vs_version_uuid):
-        vs_version = ValueSetVersion.load(vs_version_uuid)
-        if str(vs_version.value_set.uuid) != str(value_set_uuid):
-            raise BadRequest(f"{vs_version_uuid} is not a version of value set with uuid {value_set_uuid}")
-        vs_version.delete()
-        return "Deleted", 200
+    # @app.route('/ValueSets/<string:value_set_uuid>/versions/<string:vs_version_uuid>', methods=['DELETE'])
+    # def delete_vs_version(value_set_uuid, vs_version_uuid):
+    #     vs_version = ValueSetVersion.load(vs_version_uuid)
+    #     if str(vs_version.value_set.uuid) != str(value_set_uuid):
+    #         raise BadRequest(f"{vs_version_uuid} is not a version of value set with uuid {value_set_uuid}")
+    #     vs_version.delete()
+    #     return "Deleted", 200
 
     @app.route('/ValueSets/<string:value_set_uuid>/versions/<string:vs_version_uuid>/explicitly_included_codes/', methods=['POST', 'GET'])
     def explicitly_included_code_to_vs_version(value_set_uuid, vs_version_uuid):
