@@ -962,14 +962,14 @@ class ValueSet:
           "type": self.type,
         }
 
-  """ def delete(self):
+  def delete(self):
     
     conn = get_db()
     #check for a version
     vs_version_data = conn.execute(text(
-      
+      """
       select * from value_sets.value_set_version where value_set_uuid=:uuid
-     
+      """
     ), {
       'uuid': self.uuid
     }).first()
@@ -979,14 +979,14 @@ class ValueSet:
     else:  
       conn.execute(
         text(
-          
+          """
           delete from value_sets.value_set
           where uuid=:uuid
-         
+          """
         ), {
          'uuid': self.uuid
         }
-      )    """
+      )   
 
   @classmethod
   def load_all_value_set_metadata(cls, active_only=True):
@@ -1493,7 +1493,6 @@ class ValueSetVersion:
 
       for item in extensional_data:
         code = Code(item.fhir_uri, item.version, item.code, item.display)
-
         if (item.fhir_uri, item.version) not in value_set_version.extensional_codes:
           value_set_version.extensional_codes[(item.fhir_uri, item.version)] = [code]
         else:
@@ -1694,64 +1693,64 @@ class ValueSetVersion:
     result = last_modified_query.first()
     return result.timestamp
 
-  """ def delete(self):
+  # def delete(self):
     
-    #Deleting a value set version is only allowed if it was only in draft status and never published--typically if it was created in error.
-    #Once a value set version has been published, it must be kept indefinitely.
+  #   #Deleting a value set version is only allowed if it was only in draft status and never published--typically if it was created in error.
+  #   #Once a value set version has been published, it must be kept indefinitely.
     
-    # Make sure value set is eligible for deletion
-    if self.status != 'pending':
-      raise BadRequest('ValueSet version is not eligible for deletion because its status is not `pending`')
+  #   # Make sure value set is eligible for deletion
+  #   if self.status != 'pending':
+  #     raise BadRequest('ValueSet version is not eligible for deletion because its status is not `pending`')
 
-    # Identify any expansions, delete their contents, then delete the expansions themselves
-    conn = get_db()
-    conn.execute(
-      text(
+  #   # Identify any expansions, delete their contents, then delete the expansions themselves
+  #   conn = get_db()
+  #   conn.execute(
+  #     text(
         
-        delete from value_sets.expansion_member
-        where expansion_uuid in
-        (select uuid from value_sets.expansion
-        where vs_version_uuid=:vs_version_uuid)
+  #       delete from value_sets.expansion_member
+  #       where expansion_uuid in
+  #       (select uuid from value_sets.expansion
+  #       where vs_version_uuid=:vs_version_uuid)
        
-      ), {
-        'vs_version_uuid': self.uuid
-      }
-    )
+  #     ), {
+  #       'vs_version_uuid': self.uuid
+  #     }
+  #   )
 
-    conn.execute(
-      text(
-        """
-        """ delete from value_sets.expansion
-        where vs_version_uuid=:vs_version_uuid """
-        """
-      ), {
-        'vs_version_uuid': self.uuid
-      }
-    )
+  #   conn.execute(
+  #     text(
+  #       """
+  #       """ delete from value_sets.expansion
+  #       where vs_version_uuid=:vs_version_uuid """
+  #       """
+  #     ), {
+  #       'vs_version_uuid': self.uuid
+  #     }
+  #   )
 
-    # Delete associated rules for value set version
-    conn.execute(
-      text(
-        """
-        """ delete from value_sets.value_set_rule
-        where value_set_version=:vs_version_uuid """
-        """
-      ), {
-        'vs_version_uuid': self.uuid
-      }
-    )
+  #   # Delete associated rules for value set version
+  #   conn.execute(
+  #     text(
+  #       """
+  #       """ delete from value_sets.value_set_rule
+  #       where value_set_version=:vs_version_uuid """
+  #       """
+  #     ), {
+  #       'vs_version_uuid': self.uuid
+  #     }
+  #   )
 
-    # Delete value set version
-    conn.execute(
-      text(
-        """
-        """ delete from value_sets.value_set_version
-        where uuid=:vs_version_uuid """
-        """
-      ), {
-        'vs_version_uuid': self.uuid
-      }
-    ) """
+  #   # Delete value set version
+  #   conn.execute(
+  #     text(
+  #       """
+  #       """ delete from value_sets.value_set_version
+  #       where uuid=:vs_version_uuid """
+  #       """
+  #     ), {
+  #       'vs_version_uuid': self.uuid
+  #     }
+  #   )
 
   def serialize_include(self):
     if self.value_set.type == 'extensional':
