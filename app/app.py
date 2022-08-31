@@ -213,89 +213,26 @@ def create_app(script_info=None):
         return jsonify(concept_map_version.serialize())
 
     # Patient Education Endpoints
-    @app.route('/PatientEducation/external/elsevier', methods=['GET', 'POST'])
-    def external_resource_download():
-        ex_resource_id = request.json.get('ex_resource_id')
-        resource_version_id = request.json.get('internal_version_id')
-        language = request.json.get('language')
-        tenant_id = request.json.get('tenant_id')
-        ex_resource = ExternalResource.locate_external_resource(language, ex_resource_id)
-        link_res = ExternalResource.link_external_and_internal_resources(
-            ex_resource.external_uuid, resource_version_id, tenant_id
-        )
-        if link_res:
-            linked_resources = json.loads(json.dumps(link_res, default=lambda s: vars(s)))
-            return linked_resources
-        else:
-            return "Resource already exists."
-
-    @app.route('/PatientEducation/', methods=['GET', 'POST', 'PATCH'])
-    def create_or_find_local_resources():
-        if request.method == 'GET':
-            all_resources = Resource.get_all_resources_with_linked()
-            return jsonify(all_resources)
-        if request.method == 'POST':
-            language = request.json.get('language')
-            title = request.json.get('title')
-            body = request.json.get('body')
-            resource = Resource(language, title, body)
-            return 'Resource could not be created.' if not resource else jsonify(resource)
-        if request.method == 'PATCH':
-            version_uuid = request.json.get('version_uuid')
-            status = request.json.get('status')
-            resource = Resource.status_update(version_uuid, status)
-            return resource
-
-    @app.route('/PatientEducation/<version_uuid>/', methods=['GET', 'PATCH', 'DELETE'])
-    def delete_update_get_local_resource(version_uuid):
-        if request.method == 'GET':
-            resource_to_get = Resource.get_specific_resource(version_uuid)
-            return jsonify(resource_to_get)
-        if request.method == 'PATCH':
-            language = request.json.get('language')
-            title = request.json.get('title')
-            body = request.json.get('body')
-            status = request.json.get('status')
-            version = request.json.get('version')
-            resource = Resource(language, title, body, status, version_uuid, version)
-            return 'Resource could not be updated, no resource found with that ID.' if not resource else jsonify(resource)
-        if request.method == 'DELETE':
-            resource = Resource.delete(version_uuid)
-            return resource if resource else f"Transaction FAILED for {resource}"
-
-    @app.route('/PatientEducation/<resource_uuid>/version/new', methods=['POST'])
-    def create_new_version_local(resource_uuid):
-        new_version = Resource.new_version(resource_uuid)
-        return jsonify(new_version)
-
-    @app.route('/PatientEducation/remove-link/', methods=['DELETE', 'GET'])
-    def delete_linked_external_resource():  # unlink
-        ex_resource_id = request.json.get('external_resource_id')
-        ExternalResource.delete_linked_ex_resource(ex_resource_id)
-        return f"External Resource: {ex_resource_id} has been removed."
-
-    @app.route('/PatientEducation/elsevier/', methods=['GET', 'POST', 'PATCH', 'DELETE'])
-    def get_elsevier_only():
+    @app.route('/PatientEducation/', methods=['GET', 'POST', 'PATCH', 'DELETE'])
+    def get_external_resources():
         if request.method == 'PATCH':
             status = request.json.get('status')
             _uuid = request.json.get('uuid')
-            updated_status = ElsevierOnly.update_status(status, _uuid)
+            updated_status = ExternalResource.update_status(status, _uuid)
             return jsonify(updated_status) if updated_status else {'message': f'Could not update resource {_uuid}'}
         if request.method == 'POST':
             external_id = request.json.get('external_id')
             patient_term = request.json.get('patient_term')
             language = request.json.get('language')
             tenant_id = request.json.get('tenant_id')
-            get_resource = ElsevierOnly(
-                external_id, patient_term, language, tenant_id
-            )
+            get_resource = ExternalResource(external_id, patient_term, language, tenant_id)
             return jsonify(get_resource)
         if request.method == 'GET':
-            all_resources = ElsevierOnly.get_all_elsevier_only_resources()
+            all_resources = ExternalResource.get_all_external_resources()
             return jsonify(all_resources)
         if request.method == 'DELETE':
             _uuid = request.json.get('uuid')
-            remove_link = ElsevierOnly.unlink_resource(_uuid)
+            remove_link = ExternalResource.unlink_resource(_uuid)
             return remove_link
 
     return app

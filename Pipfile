@@ -32,6 +32,7 @@ waitress = "*"
 python-json-logger = "*"
 hupper = "*"
 markdownify = "*"
+readtime = "*"
 
 [dev-packages]
 pytest = "*"
