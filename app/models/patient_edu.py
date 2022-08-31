@@ -39,7 +39,7 @@ class ExternalResource:
     external_url: Optional[str] = None
     tenant_id: Optional[str] = None
     external_version: Optional[int] = None
-    version_uuid: Optional[uuid] = None
+    version_uuid: Optional[uuid.UUID] = None
     resource_type: Optional[ResourceType] = None
     language_code: Optional[str] = None
     status: Optional[Status] = None
@@ -84,17 +84,17 @@ class ExternalResource:
         except Exception as error:
             return f"Cannot import external resource. Language code not found: {error}"
 
-        table_query = {'name': 'elsevier_only_test_table', 'schema': 'patient_education'}
+        table_query = {'name': 'resource_version', 'schema': 'patient_education'}
         select_data = {
-            'external_version': self.external_version,
+            'version': self.external_version,
             'external_id': self.external_id,
-            'external_title': title
+            # 'title': title
         }
         resource_exist = dynamic_select_stmt(table_query, select_data)
 
         if not resource_exist:
             md_text_body = md(xhtml_data, heading_style='ATX')
-            self.resource_type = ResourceType.markdown if 'elsevier' in url else ResourceType.external_link
+            self.resource_type = ResourceType.markdown.value if 'elsevier' in url else ResourceType.external_link.value
             self.body = os.linesep.join([empty_lines for empty_lines in md_text_body.splitlines() if empty_lines])
             self.language_code = xhtml_soup.html['lang']
             resource_uuid = uuid.uuid1()
@@ -103,7 +103,7 @@ class ExternalResource:
             else:
                 self.data_source = 'Elsevier'
             # disclaimer_and_copywrite = x
-            readtime = rt.of_markdown(self.body)
+            readtime = str(rt.of_markdown(self.body))
             external_resource = collections.namedtuple(
                 'external_resource', [
                     'version_uuid',
@@ -111,18 +111,20 @@ class ExternalResource:
                     'content_type',
                     'url',
                     'title',
+                    'patient_title',
                     'body',
                     'read_time',
                     'language_code',
                     'status',
                     'external_id',
                     'data_source',
-                    'tenant_id'
+                    'tenant_id',
                     'resource_uuid'
                 ]
             )
             exr = external_resource(
-                self.version_uuid, self.external_version, self.resource_type, url, title, self.body,
+                self.version_uuid, self.external_version, self.resource_type, self.external_url, title, self.patient_term,
+                self.body,
                 readtime, self.language_code, self.status, self.external_id,  self.data_source,
                 self.tenant_id, resource_uuid
             )
@@ -136,7 +138,7 @@ class ExternalResource:
         """ insert external resource into db, return inserted data to user """
         cursor.execute(text(
             """
-            INSERT INTO patient_education_external.resource
+            INSERT INTO patient_education.resource
             (uuid) VALUES (:uuid)
             """
             ), {
@@ -145,16 +147,17 @@ class ExternalResource:
 
         cursor.execute(text(
             """
-            INSERT INTO patient_education_external.resource_version
-            (version_uuid, version, content_type, url, title, body, read_time, language_code, status, external_id, data_source, tenant_id, resource_uuid) 
-            VALUES (:version_uuid, :version, :content_type, :url, :title, :body, :read_time, :language_code, :status, :external_id, :data_source, :tenant_id, :resource_uuid);
+            INSERT INTO patient_education.resource_version
+            (version_uuid, version, content_type, url, title, patient_title, body, read_time, language_code, status, external_id, data_source, tenant_id, resource_uuid) 
+            VALUES (:version_uuid, :version, :content_type, :url, :title, :patient_title, :body, :read_time, :language_code, :status, :external_id, :data_source, :tenant_id, :resource_uuid);
             """
         ), {
             'version_uuid': external_resource.version_uuid,
-            'version': external_resource.external_version,
+            'version': external_resource.version,
             'content_type': external_resource.content_type,
             'url': external_resource.url,
             'title': external_resource.title,
+            'patient_title': external_resource.patient_title,
             'body': external_resource.body,
             'read_time': external_resource.read_time,
             'language_code': external_resource.language_code,
@@ -165,7 +168,7 @@ class ExternalResource:
             'resource_uuid': external_resource.resource_uuid
         })
 
-        query_table = {'name': 'resource_version', 'schema': 'patient_education_external'}
+        query_table = {'name': 'resource_version', 'schema': 'patient_education'}
         select_data = {
             'version_uuid': str(external_resource.version_uuid),
         }
@@ -177,7 +180,7 @@ class ExternalResource:
     def get_all_external_resources(cursor):
         all_external_resources = cursor.execute(text(
             """
-            SELECT * FROM patient_education_external.resource_version
+            SELECT * FROM patient_education.resource_version
             """
         )).fetchall()
 
@@ -185,7 +188,7 @@ class ExternalResource:
 
     @staticmethod
     def update_status(status, _uuid):
-        table_query = {'name': 'resource_version', 'schema': 'patient_education_external'}
+        table_query = {'name': 'resource_version', 'schema': 'patient_education'}
         version_to_update = {'version_uuid': str(_uuid)}
         data = {'status': status}
         update = dynamic_update_stmt(table_query, version_to_update, data)
@@ -198,7 +201,7 @@ class ExternalResource:
         ReTool handle status on this - only give option to delete if not active status
         checking status here as well
         """
-        table_query = {'name': 'resource_version', 'schema': 'patient_education_external'}
+        table_query = {'name': 'resource_version', 'schema': 'patient_education'}
         data = {'version_uuid': _uuid}
         get_status = dynamic_select_stmt(table_query, data)
         if get_status.status != 'active':

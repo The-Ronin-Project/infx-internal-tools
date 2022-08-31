@@ -235,6 +235,8 @@ def create_app(script_info=None):
             remove_link = ExternalResource.unlink_resource(_uuid)
             return remove_link
 
+        # create json function for on active
+
     return app
 
 
