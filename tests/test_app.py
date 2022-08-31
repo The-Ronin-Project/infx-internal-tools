@@ -7,6 +7,7 @@ app = create_app()
 def test_extensional_vs():
     app.config['MOCK_DB'] = True
     response = app.test_client().get('/ValueSet/987ffe8a-27a8-11ec-9621-0242ac130002/$expand')
+    print(response.json)
     # assert response.json.get('version') == "1.0"
     # assert 'url' in response.json
     assert response.json.get('title') == "Extensional Value Set Test"
@@ -346,7 +347,7 @@ def test_icd_10_pcs_multi_rule():
     assert len(response.json) == 4
 
 def test_create_new_version_value_set():
-    """ This test will create a new version of a value set and then delete it """
+    """ This test will create a new version of a value set """
     app.config['MOCK_DB'] = True
 
     metadata = app.test_client().get(
@@ -372,17 +373,18 @@ def test_create_new_version_value_set():
 
     assert num_versions + 1 == new_num_versions
 
-    # Now delete the new version
-    app.test_client().delete(
-        f'/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/{new_version_uuid}'
-    )
+    # We no longer allow deletes
+    # # Now delete the new version
+    # app.test_client().delete(
+    #     f'/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/{new_version_uuid}'
+    # )
 
-    metadata = app.test_client().get(
-        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
-    )
-    new_num_versions = len(metadata.json)
+    # metadata = app.test_client().get(
+    #     '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
+    # )
+    # new_num_versions = len(metadata.json)
 
-    assert num_versions == new_num_versions
+    # assert num_versions == new_num_versions
 
 def test_concept_map_load():
     app.config['MOCK_DB'] = True
