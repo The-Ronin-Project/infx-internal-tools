@@ -847,7 +847,7 @@ class FHIRRule(VSRule):
       text(
         query
       ), {
-        'version_uuid' : self.terminology_version.uuid
+        'version_uuid' : self.value_set_version.uuid
       }
     )
     results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
