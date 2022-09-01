@@ -838,16 +838,14 @@ class FHIRRule(VSRule):
   def has_fhir_terminology_rule(self):
     conn = get_db()
     query = """
-    select value_set_version, csn.* from value_sets.value_set_rule vsr
-    join fhir_defined_terminologies.code_systems_new csn
-    on vsr.terminology_version = csn.terminology_version_uuid
-    where vsr.value_set_version = :version_uuid
+    select * from fhir_defined_terminologies.code_systems_new
+    where terminology_version_uuid=:terminology_version_uuid
     """
     results_data = conn.execute(
       text(
         query
       ), {
-        'version_uuid' : self.terminology_version.uuid
+        'terminology_version_uuid' : self.terminology_version.uuid
       }
     )
     results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
