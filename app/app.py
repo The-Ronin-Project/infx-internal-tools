@@ -239,6 +239,7 @@ def create_app(script_info=None):
     def export_data():
         _uuid = request.json.get('uuid')
         export = ExternalResource.format_data_to_export(_uuid)
+        return jsonify(export)
 
     return app
 

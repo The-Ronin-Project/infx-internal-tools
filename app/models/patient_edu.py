@@ -1,5 +1,6 @@
 import collections
 import os
+import re
 import requests
 import uuid
 import readtime as rt
@@ -217,10 +218,29 @@ class ExternalResource:
         table_query = {'name': 'resource_version', 'schema': 'patient_education'}
         data = {'version_uuid': _uuid}
         get_resource = dynamic_select_stmt(table_query, data)
-        print('test')
-        # text between header and first set of ## -- will need to add # to front of string
-        # #\K[^##]++(##)
+        section_list = []
+        title = '#' + re.findall(r'#(.*?)\n', get_resource.body)[0]
+        patient_title = get_resource.patient_title
+        sections = re.findall(r'##[^#]+', get_resource.body)
+        review_date = '*' + re.findall(r'Document[^#]+', get_resource.body)[0] + '*'
+        for md_text in sections:
+            section_title = re.search(r'##(.*?)\n', md_text)[0]
+            section = md_text.replace(section_title, '').replace(review_date, '')
+            section_to_add = {
+                'title': section_title,
+                'body': section
+            }
+            section_list.append(section_to_add)
 
-        # text between lower headers ##   ##\K[^##]++()
+        full_resource = {
+            'title': title,
+            'patient_title': patient_title,
+            'read_time': get_resource.read_time,
+            'resource_body': section_list,
+            'review_date': review_date,
+            'language_code': get_resource.language_code,
+            'url': get_resource.url
+        }
+        return full_resource
 
 
