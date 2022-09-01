@@ -235,7 +235,10 @@ def create_app(script_info=None):
             remove_link = ExternalResource.unlink_resource(_uuid)
             return remove_link
 
-        # create json function for on active
+    @app.route('/PatientEducation/export', methods=['GET'])
+    def export_data():
+        _uuid = request.json.get('uuid')
+        export = ExternalResource.format_data_to_export(_uuid)
 
     return app
 

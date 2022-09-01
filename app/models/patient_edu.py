@@ -201,10 +201,26 @@ class ExternalResource:
         ReTool handle status on this - only give option to delete if not active status
         checking status here as well
         """
+        table_query_link = {'name': 'resource', 'schema': 'patient_education'}
+        data_link = {'uuid': _uuid}
         table_query = {'name': 'resource_version', 'schema': 'patient_education'}
         data = {'version_uuid': _uuid}
         get_status = dynamic_select_stmt(table_query, data)
         if get_status.status != 'active':
+            dynamic_delete_stmt(table_query_link, data_link)
             dynamic_delete_stmt(table_query, data)
             return {"message": f"{_uuid} has been removed"}
         return {"message": f"{_uuid} cannot be removed, status is {get_status.status}"}
+
+    @staticmethod
+    def format_data_to_export(_uuid):
+        table_query = {'name': 'resource_version', 'schema': 'patient_education'}
+        data = {'version_uuid': _uuid}
+        get_resource = dynamic_select_stmt(table_query, data)
+        print('test')
+        # text between header and first set of ## -- will need to add # to front of string
+        # #\K[^##]++(##)
+
+        # text between lower headers ##   ##\K[^##]++()
+
+
