@@ -1,6 +1,5 @@
 from app.database import get_db
 from sqlalchemy import Table, MetaData, desc, update
-from sqlalchemy.exc import DBAPIError
 from types import SimpleNamespace
 
 
