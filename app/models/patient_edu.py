@@ -96,14 +96,16 @@ class ExternalResource:
         if not resource_exist:
             md_text_body = md(xhtml_data, heading_style='ATX')
             self.resource_type = ResourceType.markdown.value if 'elsevier' in url else ResourceType.external_link.value
-            self.body = os.linesep.join([empty_lines for empty_lines in md_text_body.splitlines() if empty_lines])
             self.language_code = xhtml_soup.html['lang']
             resource_uuid = uuid.uuid1()
             if self.tenant_id:
                 self.data_source = self.tenant_id
             else:
                 self.data_source = 'Elsevier'
-            # disclaimer_and_copywrite = x
+            body = os.linesep.join([empty_lines for empty_lines in md_text_body.splitlines() if empty_lines])
+            review_date = re.findall(r'Document[^#]+', body)[0]
+            self.body = body.replace(review_date, '')
+            formatted_review_date = '*'+review_date+'*'
             readtime = str(rt.of_markdown(self.body))
             external_resource = collections.namedtuple(
                 'external_resource', [
@@ -120,14 +122,14 @@ class ExternalResource:
                     'external_id',
                     'data_source',
                     'tenant_id',
-                    'resource_uuid'
+                    'resource_uuid',
+                    'external_review'
                 ]
             )
             exr = external_resource(
                 self.version_uuid, self.external_version, self.resource_type, self.external_url, title, self.patient_term,
-                self.body,
-                readtime, self.language_code, self.status, self.external_id,  self.data_source,
-                self.tenant_id, resource_uuid
+                self.body, readtime, self.language_code, self.status, self.external_id, self.data_source,
+                self.tenant_id, resource_uuid, formatted_review_date
             )
             resource = ExternalResource.save_external_resource(exr)
             return resource
@@ -149,8 +151,10 @@ class ExternalResource:
         cursor.execute(text(
             """
             INSERT INTO patient_education.resource_version
-            (version_uuid, version, content_type, url, title, patient_title, body, read_time, language_code, status, external_id, data_source, tenant_id, resource_uuid) 
-            VALUES (:version_uuid, :version, :content_type, :url, :title, :patient_title, :body, :read_time, :language_code, :status, :external_id, :data_source, :tenant_id, :resource_uuid);
+            (version_uuid, version, content_type, url, title, patient_title, body, read_time, language_code, status, 
+            external_id, data_source, tenant_id, resource_uuid, external_review) 
+            VALUES (:version_uuid, :version, :content_type, :url, :title, :patient_title, :body, :read_time, 
+            :language_code, :status, :external_id, :data_source, :tenant_id, :resource_uuid, :external_review);
             """
         ), {
             'version_uuid': external_resource.version_uuid,
@@ -166,7 +170,8 @@ class ExternalResource:
             'external_id': external_resource.external_id,
             'data_source': external_resource.data_source,
             'tenant_id': external_resource.tenant_id,
-            'resource_uuid': external_resource.resource_uuid
+            'resource_uuid': external_resource.resource_uuid,
+            'external_review': external_resource.external_review
         })
 
         query_table = {'name': 'resource_version', 'schema': 'patient_education'}
@@ -222,10 +227,9 @@ class ExternalResource:
         title = '#' + re.findall(r'#(.*?)\n', get_resource.body)[0]
         patient_title = get_resource.patient_title
         sections = re.findall(r'##[^#]+', get_resource.body)
-        review_date = '*' + re.findall(r'Document[^#]+', get_resource.body)[0] + '*'
         for md_text in sections:
             section_title = re.search(r'##(.*?)\n', md_text)[0]
-            section = md_text.replace(section_title, '').replace(review_date, '')
+            section = md_text.replace(section_title, '')
             section_to_add = {
                 'title': section_title,
                 'body': section
@@ -237,10 +241,8 @@ class ExternalResource:
             'patient_title': patient_title,
             'read_time': get_resource.read_time,
             'resource_body': section_list,
-            'review_date': review_date,
+            'review_date': get_resource.external_review,
             'language_code': get_resource.language_code,
             'url': get_resource.url
         }
         return full_resource
-
-

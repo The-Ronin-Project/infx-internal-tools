@@ -1,7 +1,6 @@
 from bdb import effective
 from io import StringIO
 from uuid import UUID
-import re
 import logging
 from app.helpers.structlog import config_structlog, common_handler
 import structlog
@@ -219,13 +218,19 @@ def create_app(script_info=None):
             status = request.json.get('status')
             _uuid = request.json.get('uuid')
             updated_status = ExternalResource.update_status(status, _uuid)
-            return jsonify(updated_status) if updated_status else {'message': f'Could not update resource {_uuid}'}
+            return (
+                jsonify(updated_status)
+                if updated_status
+                else {'message': f'Could not update resource {_uuid}'}
+            )
         if request.method == 'POST':
             external_id = request.json.get('external_id')
             patient_term = request.json.get('patient_term')
             language = request.json.get('language')
             tenant_id = request.json.get('tenant_id')
-            get_resource = ExternalResource(external_id, patient_term, language, tenant_id)
+            get_resource = ExternalResource(
+                external_id, patient_term, language, tenant_id
+            )
             return jsonify(get_resource)
         if request.method == 'GET':
             all_resources = ExternalResource.get_all_external_resources()
