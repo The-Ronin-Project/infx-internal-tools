@@ -21,6 +21,7 @@ Please delete options that are not relevant.
 #### Checklist: 
 - [ ] My code follows the style guidelines of this project 
 - [ ] I have performed a self-review of my code 
+- [ ] If I created a new ENV Variable I have informed the correct personnel
 - [ ] I have made corresponding changes to the documentation ( .env changes? / README.md update? )
 - [ ] If applicable - I have added tests that prove my fix is effective or that my feature works 
 - [ ] New and existing unit tests pass locally with my changes

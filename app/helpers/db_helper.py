@@ -1,6 +1,5 @@
 from app.database import get_db
 from sqlalchemy import Table, MetaData, desc, update
-from sqlalchemy.exc import DBAPIError
 from types import SimpleNamespace
 
 
@@ -12,7 +11,7 @@ def db_cursor(func):
             cursor.execute('BEGIN')
             transaction = func(cursor, *args)
             cursor.execute('COMMIT')
-        except (TypeError, AttributeError, ValueError, DBAPIError) as error:
+        except Exception as error:
             cursor.execute('ROLLBACK')
             raise {"message": f"Error occurred: {error}"}
         return transaction
