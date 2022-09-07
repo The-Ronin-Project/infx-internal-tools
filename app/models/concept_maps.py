@@ -275,8 +275,8 @@ class MappingSuggestion:
     code: Code
     suggestion_source: str
     confidence: float
-    timestamp: datetime.datetime
-    accepted: bool
+    timestamp: datetime.datetime = None
+    accepted: bool = None
 
     def save(self):
         conn = get_db()
