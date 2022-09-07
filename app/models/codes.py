@@ -2,13 +2,14 @@ from app.database import get_db
 from sqlalchemy import text
 
 class Code:
-    def __init__(self, system, version, code, display, uuid=None, system_name=None):
+    def __init__(self, system, version, code, display, uuid=None, system_name=None, terminology_version=None):
         self.system = system
         self.version = version
         self.code = code
         self.display = display
         self.uuid = uuid
         self.system_name = system_name
+        self.terminology_version = terminology_version
 
     def __repr__(self):
         return f"Code({self.code}, {self.display}, {self.system}, {self.version})"

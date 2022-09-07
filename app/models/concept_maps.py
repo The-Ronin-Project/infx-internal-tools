@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+import datetime
+from uuid import UUID
 from elasticsearch import TransportError
 from numpy import source
 from sqlalchemy import text
@@ -264,3 +267,45 @@ class Mapping:
 
     def __repr__(self):
         return f"Mapping({self.source_code.code}, {self.equivalence}, {self.target_code.code})"
+
+@dataclass
+class MappingSuggestion:
+    uuid: UUID
+    source_concept_uuid: UUID
+    code: Code
+    suggestion_source: str
+    confidence: float
+    timestamp: datetime.datetime
+    accepted: bool
+
+    def save(self):
+        conn = get_db()
+        conn.execute(
+            text(
+                """
+                insert into concept_maps.suggestion
+                (uuid, source_concept_uuid, code, display, terminology_version, suggestion_source, confidence, timestamp)
+                values
+                (:new_uuid, :source_concept_uuid, :code, :display, :terminology_version, :suggestion_source, :confidence, now())
+                """
+            ), {
+                'new_uuid': self.uuid,
+                'source_concept_uuid': self.source_concept_uuid,
+                'code': self.code.code,
+                'display': self.code.display,
+                'terminology_version': self.code.terminology_version.uuid,
+                'suggestion_source': self.suggestion_source,
+                'confidence': self.confidence,
+            }
+        )
+
+    def serialize(self):
+        return {
+            'uuid': self.uuid,
+            'source_concept_uuid': self.source_concept_uuid,
+            'code': self.code.serialize(),
+            'suggestion_source': self.suggestion_source,
+            'confidence': self.confidence,
+            'timestamp': self.timestamp,
+            'accepted': self.accepted
+        }

@@ -1,6 +1,6 @@
 from bdb import effective
 from io import StringIO
-from uuid import UUID
+from uuid import UUID, uuid4
 import logging
 from app.helpers.structlog import config_structlog, common_handler
 import structlog
@@ -210,6 +210,38 @@ def create_app(script_info=None):
     def get_concept_map_version(version_uuid):
         concept_map_version = ConceptMapVersion(version_uuid)
         return jsonify(concept_map_version.serialize())
+
+    @app.route('/ConceptMapSuggestions/', methods=['POST'])
+    def mapping_suggestion(version_uuid):
+        if request.method == 'POST':
+            source_concept_uuid = request.json.get('source_concept_uuid')
+            code = request.json.get('code')
+            display = request.json.get('display')
+            terminology_version_uuid = request.json.get('terminology_version_uuid')
+            suggestion_source = request.json.get('suggestion_source')
+            confidence = request.json.get('confidence')
+            new_uuid = uuid4()
+
+            terminology_version = Terminology.load(terminology_version_uuid)
+            code = Code(
+                system = terminology_version.fhir_uri,
+                version = terminology_version.version,
+                code = code,
+                display = display,
+                terminology_version=terminology_version
+            )
+
+            new_suggestion = MappingSuggestion(
+                uuid=new_uuid,
+                source_concept_uuid=source_concept_uuid,
+                code=code,
+                suggestion_source=suggestion_source,
+                confidence=confidence
+            )
+
+            new_suggestion.save()
+
+            return jsonify(new_suggestion.serialize())
 
     # Patient Education Endpoints
     @app.route('/PatientEducation/', methods=['GET', 'POST', 'PATCH', 'DELETE'])

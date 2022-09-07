@@ -1,3 +1,4 @@
+from webbrowser import get
 from sqlalchemy import text
 from app.database import get_db
 
@@ -19,6 +20,30 @@ class Terminology:
             if other.uuid == self.uuid:
                 return True
         return False
+
+    @classmethod
+    def load(cls, terminology_version_uuid):
+        conn = get_db()
+        term_data = conn.execute(
+            text(
+                """
+                select * from terminology_versions
+                where uuid=:terminology_version_uuid
+                """
+            ), {
+                'terminology_version_uuid': terminology_version_uuid
+            }
+        ).first()
+
+        return cls(
+            uuid=term_data.uuid, 
+            name=term_data.terminology, 
+            version=term_data.version, 
+            effective_start=term_data.effective_start, 
+            effective_end=term_data.effective_end, 
+            fhir_uri=term_data.fhir_uri, 
+            fhir_terminology=term_data.fhir_terminology
+        )
 
     @classmethod
     def load_terminologies_for_value_set_version(cls, vs_version_uuid):
