@@ -243,6 +243,30 @@ def create_app(script_info=None):
 
             return jsonify(new_suggestion.serialize())
 
+    @app.route("/ConceptMap/", methods=["POST"])
+    def create_concept_map():
+        if request.method == "POST":
+            source_concept_uuid = request.json.get("source_concept_uuid")
+            relationship = request.json.get("relationship")
+            target_concept_code = request.json.get("target_concept_code")
+            target_concept_display = request.json.get("target_concept_display")
+            target_concept_system_version_uuid = request.json.get(
+                "target_concept_system_version_uuid"
+            )
+            mapping_comments = request.json.get("mapping_comments")
+            author = request.json.get("author")
+            data_to_map = Mapping(
+                source_concept_uuid,
+                relationship,
+                target_concept_code,
+                target_concept_display,
+                target_concept_system_version_uuid,
+                mapping_comments,
+                author,
+            )
+            get_new_concept_map = Mapping.get_recent_conceptmap(data_to_map.uuid)
+            return jsonify(get_new_concept_map)
+
     # Patient Education Endpoints
     @app.route('/PatientEducation/', methods=['GET', 'POST', 'PATCH', 'DELETE'])
     def get_external_resources():

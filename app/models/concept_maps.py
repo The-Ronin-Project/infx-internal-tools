@@ -1,13 +1,18 @@
-from dataclasses import dataclass
 import datetime
-from uuid import UUID
-from elasticsearch import TransportError
-from numpy import source
-from sqlalchemy import text
+import uuid
+
 import app.models.terminologies
 import app.models.codes
+
+from sqlalchemy import text
+from dataclasses import dataclass
+from uuid import UUID
+from typing import Optional
 from app.database import get_db
 from app.models.codes import Code
+from app.helpers.db_helper import db_cursor
+from elasticsearch import TransportError
+from numpy import source
 
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
 class DeprecatedConceptMap:
@@ -259,14 +264,82 @@ class ConceptMapVersion:
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and not required for our use cases at this time
         }
 
-class Mapping:
-    def __init__(self, source_code, equivalence, target_code):
-        self.source_code = source_code
-        self.equivalence = equivalence #relationship code
-        self.target_code = target_code
 
-    def __repr__(self):
-        return f"Mapping({self.source_code.code}, {self.equivalence}, {self.target_code.code})"
+@dataclass
+class Mapping:
+    source_concept_uuid: UUID
+    relationship: str
+    target_concept_code: str
+    target_concept_display: str
+    target_concept_system_version_uuid: UUID
+    mapping_comments: Optional[str]
+    author: str  # UUID
+    uuid: Optional[UUID] = None
+    cursor: Optional[None] = None
+    relationship_code_uuid: Optional[UUID] = None
+
+    def __post_init__(self):
+        self.cursor = get_db()
+        self.uuid = uuid.uuid4()
+        Mapping.get_relationship_code(self)
+        Mapping.save_concept_map(self)
+
+    def get_relationship_code(self):
+        get_code = self.cursor.execute(
+            text(
+                """
+                SELECT uuid FROM
+                concept_maps.relationship_codes WHERE code=:code
+                """
+            ),
+            {"code": self.relationship},
+        )
+        relationship_code = dict(zip(["uuid"], get_code))
+        self.relationship_code_uuid = relationship_code["uuid"]._data[0]
+        return self.relationship_code_uuid
+
+    def save_concept_map(self):
+        self.cursor.execute(
+            text(
+                """
+                INSERT INTO concept_maps.concept_relationship(
+                uuid, review_status, source_concept_uuid, relationship_code_uuid, target_concept_code, 
+                target_concept_display, target_concept_system_version_uuid, mapping_comments, author, created_date
+                ) VALUES (
+                :uuid, :review_status, :source_concept_uuid, :relationship_code_uuid, :target_concept_code, 
+                :target_concept_display, :target_concept_system_version_uuid, :mapping_comments, :author, :created_date
+                );
+                """
+            ),
+            {
+                "uuid": self.uuid,
+                "review_status": "ready for review",
+                "source_concept_uuid": self.source_concept_uuid,
+                "relationship_code_uuid": self.relationship_code_uuid,
+                "target_concept_code": self.target_concept_code,
+                "target_concept_display": self.target_concept_display,
+                "target_concept_system_version_uuid": self.target_concept_system_version_uuid,
+                "mapping_comments": self.mapping_comments,
+                "author": self.author,
+                "created_date": datetime.datetime.now(),
+            },
+        )
+        return {"uuid": self.uuid}
+
+    @staticmethod
+    @db_cursor
+    def get_recent_conceptmap(cursor, uuid):
+        get_new_map = cursor.execute(
+            text(
+                """
+            SELECT * FROM concept_maps.concept_relationship WHERE uuid=:uuid
+            """
+            ),
+            {"uuid": uuid},
+        )
+
+        return [dict(row) for row in get_new_map]
+
 
 @dataclass
 class MappingSuggestion:
