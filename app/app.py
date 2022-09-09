@@ -9,6 +9,7 @@ import os
 from flask import Flask, jsonify, request, Response
 from decouple import config
 from app.models.value_sets import *
+import app.models.new_value_sets as new_value_sets
 from app.models.concept_maps import *
 from app.models.surveys import *
 from werkzeug.exceptions import HTTPException
@@ -125,7 +126,7 @@ def create_app(script_info=None):
         return str(new_version_uuid), 201
 
     @app.route('/ValueSets/<string:value_set_uuid>', methods=['DELETE'])
-    def delet_value_set(value_set_uuid):
+    def delete_value_set(value_set_uuid):
         value_set = ValueSet.load(value_set_uuid)
         value_set.delete()
         return "Deleted", 200
@@ -185,6 +186,13 @@ def create_app(script_info=None):
         """ Allows for the real-time execution of rules, used on the front-end to preview output of a rule set"""
         rules_input = request.get_json()
         result = execute_rules(rules_input)
+        return jsonify(result)
+
+    @app.route('/v2/ValueSets/rule_set/execute', methods=['POST'])
+    def v2_process_rule_set():
+        """ Allows for the real-time execution of rules, used on the front-end to preview output of a rule set"""
+        rules_input = request.get_json()
+        result = new_value_sets.execute_rules(rules_input)
         return jsonify(result)
 
     # Survey Endpoints
