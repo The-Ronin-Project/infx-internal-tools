@@ -386,9 +386,9 @@ def test_create_new_version_value_set():
 
     # assert num_versions == new_num_versions
 
-def test_concept_map_load():
-    app.config['MOCK_DB'] = True
-    concept_map = app.test_client().get(
-        '/ConceptMaps/cbe12636-102f-4ab0-9616-a8684c9f2a21'
-    )
-    assert len(concept_map.json.get('group')[0].get('element')) == 313
+# def test_concept_map_load():
+#     app.config['MOCK_DB'] = True
+#     concept_map = app.test_client().get(
+#         '/ConceptMaps/cbe12636-102f-4ab0-9616-a8684c9f2a21'
+#     )
+#     assert len(concept_map.json.get('group')[0].get('element')) == 313
