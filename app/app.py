@@ -243,29 +243,43 @@ def create_app(script_info=None):
 
             return jsonify(new_suggestion.serialize())
 
-    @app.route("/ConceptMap/", methods=["POST"])
+    @app.route("/mappings/", methods=["POST"])
     def create_concept_map():
         if request.method == "POST":
             source_concept_uuid = request.json.get("source_concept_uuid")
-            relationship = request.json.get("relationship")
+            relationship_code_uuid = request.json.get("relationship_code_uuid")
             target_concept_code = request.json.get("target_concept_code")
             target_concept_display = request.json.get("target_concept_display")
-            target_concept_system_version_uuid = request.json.get(
-                "target_concept_system_version_uuid"
+            target_concept_terminology_version_uuid = request.json.get(
+                "target_concept_terminology_version_uuid"
             )
             mapping_comments = request.json.get("mapping_comments")
             author = request.json.get("author")
-            data_to_map = Mapping(
-                source_concept_uuid,
-                relationship,
-                target_concept_code,
-                target_concept_display,
-                target_concept_system_version_uuid,
-                mapping_comments,
-                author,
+            review_status = request.json.get("review_status")
+
+            source_code = Code.load_concept_map_source_concept(source_concept_uuid)
+
+            relationship = MappingRelationship.load(relationship_code_uuid)
+
+            target_code = Code(
+                code=target_concept_code,
+                display=target_concept_display,
+                system=None,
+                version=None,
+                terminology_version=target_concept_terminology_version_uuid
             )
-            get_new_concept_map = Mapping.get_recent_conceptmap(data_to_map.uuid)
-            return jsonify(get_new_concept_map)
+
+            new_mapping = Mapping(
+                source = source_code,
+                relationship=relationship,
+                target=target_code,
+                mapping_comments=mapping_comments,
+                author=author,
+                review_status=review_status
+            )
+            new_mapping.save()
+
+            return jsonify(new_mapping.serialize())
 
     # Patient Education Endpoints
     @app.route('/PatientEducation/', methods=['GET', 'POST', 'PATCH', 'DELETE'])

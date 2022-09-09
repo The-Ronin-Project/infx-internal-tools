@@ -33,6 +33,7 @@ python-json-logger = "*"
 hupper = "*"
 markdownify = "*"
 readtime = "*"
+black = "*"
 
 [dev-packages]
 pytest = "*"
