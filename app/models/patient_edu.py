@@ -47,7 +47,7 @@ class ExternalResource:
     data_source: Optional[str] = None
 
     def __post_init__(self):
-        self.version_uuid = uuid.uuid1()
+        self.version_uuid = uuid.uuid4()
         if not self.status:
             self.status = Status.draft.value
 
