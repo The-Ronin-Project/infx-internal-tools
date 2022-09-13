@@ -849,7 +849,40 @@ class FHIRRule(VSRule):
       }
     )
     results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
-    self.results = set(results) 
+    self.results = set(results)
+
+  def code_rule(self):
+    conn = get_db()
+    query = ""
+
+    if self.property == 'code':
+      # Lookup UUIDs for provided codes
+      codes = self.value.replace(' ', '').split(',')
+
+      # Get provided codes through a recursive query
+      query = """
+          select code, display from fhir_defined_terminologies.code_systems_new 
+          where code in :codes 
+          and terminology_version_uuid=:terminology_version_uuid
+          order by code
+          """
+      # See link for tutorial in recursive queries: https://www.cybertec-postgresql.com/en/recursive-queries-postgresql/
+
+    converted_query = text(
+      query
+    ).bindparams(
+      bindparam('codes', expanding=True),
+      bindparam('terminology_version_uuid')
+    )
+
+    results_data = conn.execute(
+      converted_query, {
+        'codes': codes,
+        'terminology_version_uuid': self.terminology_version.uuid
+      }
+    )
+    results = [Code(self.fhir_system, self.terminology_version.version, x.code, x.display) for x in results_data]
+    self.results = set(results)
 
   
 #
