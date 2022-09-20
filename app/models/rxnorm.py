@@ -1,5 +1,4 @@
 import requests
-import pysnooper
 
 RX_NAV_BASE_URL = 'https://rxnav.prod.projectronin.io/REST'
 
@@ -34,7 +33,6 @@ def exact_search(query_string):
     return concept_group_by_tty, rxcui
 
 
-@pysnooper.snoop()
 def approx_search(query_string):
     approx_search_json = requests.get(f'{RX_NAV_BASE_URL}/approximateTerm.json', params={
         'term': query_string,
