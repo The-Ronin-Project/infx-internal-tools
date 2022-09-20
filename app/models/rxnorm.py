@@ -41,8 +41,14 @@ def approx_search(query_string):
 
     rxcuis = [x.get('rxcui') for x in approx_search_json.get('approximateGroup').get('candidate')]
     top_rxcui = rxcuis[0]
+    rxcuis = list(set(rxcuis))
 
-    final_results = {}
+    final_results = {
+        'SCD': [],  # Make sure the term types we care about always return
+        'SBD': [],
+        'GPCK': [],
+        'BPCK': []
+    }
     for rxcui in rxcuis:
         info_request = requests.get(f'{RX_NAV_BASE_URL}/RxTerms/rxcui/{rxcui}/allinfo.json').json()
         if info_request:
