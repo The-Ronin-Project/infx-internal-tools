@@ -41,6 +41,7 @@ def approx_search(query_string):
 
     rxcuis = [x.get('rxcui') for x in approx_search_json.get('approximateGroup').get('candidate')]
     top_rxcui = rxcuis[0]
+    rxcuis = list(set(rxcuis))
 
     final_results = {}
     for rxcui in rxcuis:
