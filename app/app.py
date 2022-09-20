@@ -11,6 +11,7 @@ from app.models.value_sets import *
 from app.models.concept_maps import *
 from app.models.surveys import *
 from app.models.patient_edu import *
+import app.models.rxnorm as rxnorm
 from werkzeug.exceptions import HTTPException
 
 # Configure the logger when the application is imported. This ensures that
@@ -315,6 +316,12 @@ def create_app(script_info=None):
         _uuid = request.json.get('uuid')
         export = ExternalResource.format_data_to_export(_uuid)
         return jsonify(export)
+
+    # RxNorm custom search
+    @app.route('/rxnorm_search', methods=['GET'])
+    def rxnorm_search():
+        query_string = request.values.get('query_string')
+        return jsonify(rxnorm.exact_with_approx_fallback_search(query_string))
 
     return app
 
