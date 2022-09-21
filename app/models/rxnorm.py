@@ -53,6 +53,7 @@ def approx_search(query_string):
         info_request = requests.get(f'{RX_NAV_BASE_URL}/RxTerms/rxcui/{rxcui}/allinfo.json').json()
         if info_request:
             info_json = info_request.get('rxtermsProperties')
+            info_json['name'] = info_json.get('fullName')
             term_type = info_json.get('termType')
 
             if term_type in final_results:
