@@ -211,6 +211,8 @@ def create_app(script_info=None):
         concept_map_version = ConceptMapVersion(version_uuid)
         return jsonify(concept_map_version.serialize())
 
+
+
     @app.route('/ConceptMapSuggestions/', methods=['POST'])
     def mapping_suggestion():
         if request.method == 'POST':

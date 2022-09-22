@@ -75,11 +75,12 @@ class DeprecatedConceptMap:
                 result[code].append(mapped_code_object)
         return result
 
+
 # This is the new maps system
 class ConceptMap:
     def __init__(self, uuid):
         self.uuid = uuid
-        # self.name = None
+        self.name = None
         self.title = None
         self.description = None
         self.purpose = None
@@ -104,6 +105,7 @@ class ConceptMap:
         ).first()
 
         self.title = data.title
+        self.name = data.name
         self.description = data.description
         self.purpose = data.purpose
         self.publisher = data.publisher
@@ -122,9 +124,10 @@ class ConceptMapVersion:
         self.created_date = None
         self.effective_start = None
         self.effective_end = None
+        self.published_date = None
         self.version = None
         self.mappings = {}
-        
+        self.url = None
         self.load_data()
 
     def load_data(self):
@@ -148,6 +151,7 @@ class ConceptMapVersion:
         self.effective_start = data.effective_start
         self.effective_end = data.effective_end
         self.version = data.version
+        self.published_date = data.published_date
 
         self.load_mappings()
 
@@ -156,7 +160,7 @@ class ConceptMapVersion:
         query = """
             select source_concept.code as source_code, source_concept.display as source_display, source_concept.system as source_system, 
             tv_source.version as source_version, tv_source.fhir_uri as source_fhir_uri,
-            relationship_codes.code as relationship_code, 
+            relationship_codes.code as relationship_code, source_concept.map_status,
             concept_relationship.target_concept_code, concept_relationship.target_concept_display,
             concept_relationship.target_concept_system_version_uuid as target_system,
             tv_target.version as target_version, tv_target.fhir_uri as target_fhir_uri
@@ -169,8 +173,9 @@ class ConceptMapVersion:
             on cast(tv_source.uuid as uuid) = cast(source_concept.system as uuid)
             join terminology_versions as tv_target
             on tv_target.uuid = concept_relationship.target_concept_system_version_uuid
-            where source_concept.concept_map_version_uuid = :concept_map_version_uuid
-        """
+            where source_concept.concept_map_version_uuid=:concept_map_version_uuid
+			and map_status = 'reviewed'
+			"""
 
         results = conn.execute(
             text(
@@ -223,7 +228,7 @@ class ConceptMapVersion:
                                     "code": mapping.target_code.code,
                                     "display": mapping.target_code.display,
                                     "equivalence": mapping.equivalence,
-                                    "comment": None
+                                    # "comment": None
                                 } 
                                 for mapping in filtered_mappings]
                         }
@@ -245,15 +250,18 @@ class ConceptMapVersion:
         combined_description = str(self.concept_map.description) + ' Version-specific notes:' + str(self.description)
 
         return {
+            'resourceType': 'ConceptMap',
             'title': self.concept_map.title,
-            'description': combined_description,
+            'id': self.uuid,
+            'name': self.concept_map.name,
+            'contact': [{'name': self.concept_map.author}],
+            'url': f'http://projectronin.com/fhir/us/ronin/ConceptMap/{self.concept_map.uuid}',
+            'description': self.concept_map.description,
             'purpose': self.concept_map.purpose,
-            'publisher': self.concept_map.purpose,
+            'publisher': self.concept_map.publisher,
             'experimental': self.concept_map.experimental,
-            'comments': self.comments,
             'status': self.status,
-            'effective_start': self.effective_start,
-            'effective_end': self.effective_end,
+            'date': self.published_date.strftime('%Y-%m-%d'),
             'version': self.version,
             'group': self.serialize_mappings()
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and not required for our use cases at this time
