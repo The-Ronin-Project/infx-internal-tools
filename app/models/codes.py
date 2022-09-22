@@ -1,5 +1,7 @@
 from app.database import get_db
 from sqlalchemy import text
+from app.models.terminologies import Terminology
+
 
 class Code:
     def __init__(self, system, version, code, display, uuid=None, system_name=None, terminology_version=None):
@@ -10,6 +12,11 @@ class Code:
         self.uuid = uuid
         self.system_name = system_name
         self.terminology_version = terminology_version
+
+        if self.terminology_version is not None and self.system is None and self.version is None:
+            terminology = Terminology.load(self.terminology_version)
+            self.system = terminology.fhir_uri
+            self.version = terminology.version
 
     def __repr__(self):
         return f"Code({self.code}, {self.display}, {self.system}, {self.version})"
@@ -49,6 +56,29 @@ class Code:
             uuid=code_uuid
         )
 
+    @classmethod
+    def load_concept_map_source_concept(cls, source_code_uuid):
+        conn = get_db()
+
+        source_data = conn.execute(
+            text(
+                """
+                select system as terminology_version_uuid, * from concept_maps.source_concept
+                where uuid=:source_concept_uuid
+                """
+            ), {
+                'source_concept_uuid': source_code_uuid
+            }
+        ).first()
+
+        return cls(
+            uuid=source_data.uuid,
+            system=None,
+            version=None,
+            code=source_data.code,
+            display=source_data.display,
+            terminology_version=source_data.terminology_version_uuid
+        )
     def serialize(self, with_system_and_version=True, with_system_name=False):
         serialized = {
             "system": self.system,
