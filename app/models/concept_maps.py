@@ -87,6 +87,7 @@ class ConceptMap:
         self.experimental = None
         self.author = None
         self.created_date = None
+        self.include_self_map = None
 
         self.load_data()
 
@@ -110,6 +111,7 @@ class ConceptMap:
         self.experimental = data.experimental
         self.author = data.author
         self.created_date = data.created_date
+        # self.include_self_map = data.include_self_map
 
 
 class ConceptMapVersion:
@@ -123,8 +125,8 @@ class ConceptMapVersion:
         self.effective_start = None
         self.effective_end = None
         self.version = None
+        self.allowed_target_terminologies = []
         self.mappings = {}
-        
         self.load_data()
 
     def load_data(self):
@@ -132,8 +134,10 @@ class ConceptMapVersion:
         data = conn.execute(
             text(
                 """
-                select * from concept_maps.concept_map_version
-                where uuid=:version_uuid
+                select cmv.*, cm.include_self_map from concept_maps.concept_map_version cmv
+                join concept_maps.concept_map cm
+                on cmv.concept_map_uuid = cm.uuid
+                where cmv.concept_map_uuid=:version_uuid
                 """
             ), {
                 'version_uuid': self.uuid
@@ -150,6 +154,16 @@ class ConceptMapVersion:
         self.version = data.version
 
         self.load_mappings()
+
+    def generate_self_mappings(self):
+        if self.include_self_map is True:
+            for target_terminology in self.allowed_target_terminologies:
+                target_terminology.load_content()
+                for code in target_terminology.codes:
+                    self.mappings[code] = [Mapping(
+                            code, 'f2a20235-bd9d-4f6a-8e78-b3f41f97d07f', code  # self is equivalent to self
+                        )]
+
 
     def load_mappings(self):
         conn = get_db()
@@ -241,6 +255,7 @@ class ConceptMapVersion:
         
         return groups
 
+
     def serialize(self):
         combined_description = str(self.concept_map.description) + ' Version-specific notes:' + str(self.description)
 
@@ -262,7 +277,7 @@ class ConceptMapVersion:
 class Mapping:
     def __init__(self, source_code, equivalence, target_code):
         self.source_code = source_code
-        self.equivalence = equivalence #relationship code
+        self.equivalence = equivalence  # relationship code
         self.target_code = target_code
 
     def __repr__(self):
