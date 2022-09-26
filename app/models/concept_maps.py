@@ -12,6 +12,7 @@ from uuid import UUID
 from typing import Optional
 from app.database import get_db
 from app.models.codes import Code
+from app.helpers.oci_auth import oci_authentication
 from app.helpers.db_helper import db_cursor
 from elasticsearch import TransportError
 from numpy import source
