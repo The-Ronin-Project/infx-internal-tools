@@ -1,6 +1,6 @@
 import datetime
 import uuid
-import pysnooper
+import functools
 
 import app.models.terminologies
 import app.models.codes
@@ -212,6 +212,7 @@ class ConceptMapVersion:
                         author=None
                     )]
 
+
     def load_mappings(self):
         conn = get_db()
         query = """
@@ -231,7 +232,7 @@ class ConceptMapVersion:
             join terminology_versions as tv_target
             on tv_target.uuid = concept_relationship.target_concept_system_version_uuid
             where source_concept.concept_map_version_uuid=:concept_map_version_uuid
-            and map_status = 'reviewed'
+            and concept_relationship.review_status = 'reviewed'
             """
 
         results = conn.execute(
@@ -254,9 +255,12 @@ class ConceptMapVersion:
                 item.target_concept_code,
                 item.target_concept_display,
             )
-            equivalence = item.relationship_code
+            relationship = MappingRelationship.load_by_code(item.relationship_code) # this needs optimization
 
-            mapping = Mapping(source_code, equivalence, target_code)
+            mapping = Mapping(
+                source_code,
+                relationship,
+                target_code)
             if source_code in self.mappings:
                 self.mappings[source_code].append(mapping)
             else:
@@ -372,6 +376,21 @@ class MappingRelationship:
             {"uuid": uuid},
         ).first()
 
+        return cls(uuid=data.uuid, code=data.code, display=data.display)
+
+    @classmethod
+    @functools.lru_cache(maxsize=32)
+    def load_by_code(cls, code):
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """
+                select * from concept_maps.relationship_codes
+                where code=:code
+                """
+            ),
+            {'code': code}
+        ).first()
         return cls(uuid=data.uuid, code=data.code, display=data.display)
 
     def serialize(self):
