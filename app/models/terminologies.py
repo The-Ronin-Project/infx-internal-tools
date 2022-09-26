@@ -12,6 +12,7 @@ class Terminology:
         self.effective_end = effective_end
         self.fhir_uri = fhir_uri
         self.fhir_terminology = fhir_terminology
+        self.codes = []
 
     def __hash__(self):
         return hash(self.uuid)

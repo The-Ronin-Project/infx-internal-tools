@@ -152,8 +152,29 @@ class ConceptMapVersion:
         self.effective_start = data.effective_start
         self.effective_end = data.effective_end
         self.version = data.version
-
+        self.include_self_map = data.include_self_map
+        self.load_allowed_target_terminologies()
         self.load_mappings()
+        self.generate_self_mappings()
+
+    def load_allowed_target_terminologies(self):
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """
+                select * from concept_maps.concept_map_version_terminologies
+                where concept_map_version_uuid=:concept_map_version_uuid
+                and context='target_terminology'
+                """
+            ), {
+                'concept_map_version_uuid': self.uuid
+            }
+        )
+        for item in data:
+            terminology_version_uuid = item.terminology_version_uuid
+            self.allowed_target_terminologies.append(
+                app.models.terminologies.Terminology.load(terminology_version_uuid)
+            )
 
     def generate_self_mappings(self):
         if self.include_self_map is True:
