@@ -1,5 +1,6 @@
 import datetime
 import uuid
+import pysnooper
 
 import app.models.terminologies
 import app.models.codes
@@ -130,7 +131,7 @@ class ConceptMap:
         self.experimental = data.experimental
         self.author = data.author
         self.created_date = data.created_date
-        # self.include_self_map = data.include_self_map
+        self.include_self_map = data.include_self_map
 
 
 class ConceptMapVersion:
@@ -145,7 +146,6 @@ class ConceptMapVersion:
         self.effective_end = None
         self.published_date = None
         self.version = None
-        self.include_self_map = None
         self.allowed_target_terminologies = []
         self.mappings = {}
         self.url = None
@@ -157,10 +157,10 @@ class ConceptMapVersion:
         data = conn.execute(
             text(
                 """
-                select cmv.*, cm.include_self_map from concept_maps.concept_map_version cmv
+                select cmv.* from concept_maps.concept_map_version cmv
                 join concept_maps.concept_map cm
                 on cmv.concept_map_uuid = cm.uuid
-                where cmv.concept_map_uuid=:version_uuid
+                where cmv.uuid=:version_uuid
                 """
             ),
             {"version_uuid": self.uuid},
@@ -174,7 +174,6 @@ class ConceptMapVersion:
         self.effective_start = data.effective_start
         self.effective_end = data.effective_end
         self.version = data.version
-        self.include_self_map = data.include_self_map
         self.published_date = data.published_date
 
         self.load_allowed_target_terminologies()
@@ -201,12 +200,16 @@ class ConceptMapVersion:
             )
 
     def generate_self_mappings(self):
-        if self.include_self_map is True:
+        if self.concept_map.include_self_map is True:
             for target_terminology in self.allowed_target_terminologies:
                 target_terminology.load_content()
                 for code in target_terminology.codes:
                     self.mappings[code] = [Mapping(
-                        code, 'f2a20235-bd9d-4f6a-8e78-b3f41f97d07f', code  # self is equivalent to self
+                        source=code,
+                        relationship=MappingRelationship('f2a20235-bd9d-4f6a-8e78-b3f41f97d07f', 'equivalent', 'equivalent'),
+                        target=code,  # self is equivalent to self
+                        mapping_comments="Self map",
+                        author=None
                     )]
 
     def load_mappings(self):
@@ -267,8 +270,8 @@ class ConceptMapVersion:
             source_uri = source_code.system
             source_version = source_code.version
             for mapping in mappings:
-                target_uri = mapping.target_code.system
-                target_version = mapping.target_code.version
+                target_uri = mapping.target.system
+                target_version = mapping.target.version
 
                 source_target_pairs_set.add(
                     (source_uri, source_version, target_uri, target_version)
@@ -292,8 +295,8 @@ class ConceptMapVersion:
                     filtered_mappings = [
                         x
                         for x in mappings
-                        if x.target_code.system == target_uri
-                           and x.target_code.version == target_version
+                        if x.target.system == target_uri
+                           and x.target.version == target_version
                     ]
                     elements.append(
                         {
@@ -301,9 +304,9 @@ class ConceptMapVersion:
                             "display": source_code.display,
                             "target": [
                                 {
-                                    "code": mapping.target_code.code,
-                                    "display": mapping.target_code.display,
-                                    "equivalence": mapping.equivalence,
+                                    "code": mapping.target.code,
+                                    "display": mapping.target.display,
+                                    "equivalence": mapping.relationship.code,
 
                                 }
                                 for mapping in filtered_mappings]
@@ -380,8 +383,8 @@ class Mapping:
     source: Code
     relationship: MappingRelationship
     target: Code
-    mapping_comments: Optional[str]
-    author: str
+    mapping_comments: Optional[str] = None
+    author: Optional[str] = None
     uuid: Optional[UUID] = None
     cursor: Optional[None] = None
     review_status: str = "ready for review"
