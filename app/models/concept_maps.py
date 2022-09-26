@@ -1,5 +1,6 @@
 import datetime
 import uuid
+import functools
 
 import app.models.terminologies
 import app.models.codes
@@ -13,6 +14,7 @@ from app.models.codes import Code
 from app.helpers.db_helper import db_cursor
 from elasticsearch import TransportError
 from numpy import source
+
 
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
 class DeprecatedConceptMap:
@@ -105,6 +107,7 @@ class ConceptMap:
         self.experimental = None
         self.author = None
         self.created_date = None
+        self.include_self_map = None
 
         self.load_data()
 
@@ -128,6 +131,7 @@ class ConceptMap:
         self.experimental = data.experimental
         self.author = data.author
         self.created_date = data.created_date
+        self.include_self_map = data.include_self_map
 
 
 class ConceptMapVersion:
@@ -142,8 +146,10 @@ class ConceptMapVersion:
         self.effective_end = None
         self.published_date = None
         self.version = None
+        self.allowed_target_terminologies = []
         self.mappings = {}
         self.url = None
+
         self.load_data()
 
     def load_data(self):
@@ -168,7 +174,41 @@ class ConceptMapVersion:
         self.version = data.version
         self.published_date = data.published_date
 
+        self.load_allowed_target_terminologies()
         self.load_mappings()
+        self.generate_self_mappings()
+
+    def load_allowed_target_terminologies(self):
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """
+                select * from concept_maps.concept_map_version_terminologies
+                where concept_map_version_uuid=:concept_map_version_uuid
+                and context='target_terminology'
+                """
+            ), {
+                'concept_map_version_uuid': self.uuid
+            }
+        )
+        for item in data:
+            terminology_version_uuid = item.terminology_version_uuid
+            self.allowed_target_terminologies.append(
+                app.models.terminologies.Terminology.load(terminology_version_uuid)
+            )
+
+    def generate_self_mappings(self):
+        if self.concept_map.include_self_map is True:
+            for target_terminology in self.allowed_target_terminologies:
+                target_terminology.load_content()
+                for code in target_terminology.codes:
+                    self.mappings[code] = [Mapping(
+                        source=code,
+                        relationship=MappingRelationship.load_by_code('equivalent'),
+                        target=code,  # self is equivalent to self
+                        mapping_comments="Auto-generated self map",
+                    )]
+
 
     def load_mappings(self):
         conn = get_db()
@@ -189,8 +229,8 @@ class ConceptMapVersion:
             join terminology_versions as tv_target
             on tv_target.uuid = concept_relationship.target_concept_system_version_uuid
             where source_concept.concept_map_version_uuid=:concept_map_version_uuid
-			and map_status = 'reviewed'
-			"""
+            and concept_relationship.review_status = 'reviewed'
+            """
 
         results = conn.execute(
             text(query),
@@ -212,9 +252,12 @@ class ConceptMapVersion:
                 item.target_concept_code,
                 item.target_concept_display,
             )
-            equivalence = item.relationship_code
+            relationship = MappingRelationship.load_by_code(item.relationship_code) # this needs optimization
 
-            mapping = Mapping(source_code, equivalence, target_code)
+            mapping = Mapping(
+                source_code,
+                relationship,
+                target_code)
             if source_code in self.mappings:
                 self.mappings[source_code].append(mapping)
             else:
@@ -228,8 +271,8 @@ class ConceptMapVersion:
             source_uri = source_code.system
             source_version = source_code.version
             for mapping in mappings:
-                target_uri = mapping.target_code.system
-                target_version = mapping.target_code.version
+                target_uri = mapping.target.system
+                target_version = mapping.target.version
 
                 source_target_pairs_set.add(
                     (source_uri, source_version, target_uri, target_version)
@@ -239,22 +282,22 @@ class ConceptMapVersion:
         groups = []
 
         for (
-            source_uri,
-            source_version,
-            target_uri,
-            target_version,
+                source_uri,
+                source_version,
+                target_uri,
+                target_version,
         ) in source_target_pairs_set:
             elements = []
             for source_code, mappings in self.mappings.items():
                 if (
-                    source_code.system == source_uri
-                    and source_code.version == source_version
+                        source_code.system == source_uri
+                        and source_code.version == source_version
                 ):
                     filtered_mappings = [
                         x
                         for x in mappings
-                        if x.target_code.system == target_uri
-                        and x.target_code.version == target_version
+                        if x.target.system == target_uri
+                           and x.target.version == target_version
                     ]
                     elements.append(
                         {
@@ -262,11 +305,11 @@ class ConceptMapVersion:
                             "display": source_code.display,
                             "target": [
                                 {
-                                    "code": mapping.target_code.code,
-                                    "display": mapping.target_code.display,
-                                    "equivalence": mapping.equivalence,
+                                    "code": mapping.target.code,
+                                    "display": mapping.target.display,
+                                    "equivalence": mapping.relationship.code,
 
-                                } 
+                                }
                                 for mapping in filtered_mappings]
 
                         }
@@ -286,9 +329,9 @@ class ConceptMapVersion:
 
     def serialize(self):
         combined_description = (
-            str(self.concept_map.description)
-            + " Version-specific notes:"
-            + str(self.description)
+                str(self.concept_map.description)
+                + " Version-specific notes:"
+                + str(self.description)
         )
 
         return {
@@ -332,6 +375,21 @@ class MappingRelationship:
 
         return cls(uuid=data.uuid, code=data.code, display=data.display)
 
+    @classmethod
+    @functools.lru_cache(maxsize=32)
+    def load_by_code(cls, code):
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """
+                select * from concept_maps.relationship_codes
+                where code=:code
+                """
+            ),
+            {'code': code}
+        ).first()
+        return cls(uuid=data.uuid, code=data.code, display=data.display)
+
     def serialize(self):
         return {"uuid": self.uuid, "code": self.code, "display": self.display}
 
@@ -341,8 +399,8 @@ class Mapping:
     source: Code
     relationship: MappingRelationship
     target: Code
-    mapping_comments: Optional[str]
-    author: str
+    mapping_comments: Optional[str] = None
+    author: Optional[str] = None
     uuid: Optional[UUID] = None
     cursor: Optional[None] = None
     review_status: str = "ready for review"

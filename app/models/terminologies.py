@@ -1,6 +1,7 @@
 from webbrowser import get
 from sqlalchemy import text
 from app.database import get_db
+import app.models.codes
 
 class Terminology:
     def __init__(self, uuid, name, version, effective_start, effective_end, fhir_uri, fhir_terminology):
@@ -11,6 +12,7 @@ class Terminology:
         self.effective_end = effective_end
         self.fhir_uri = fhir_uri
         self.fhir_terminology = fhir_terminology
+        self.codes = []
 
     def __hash__(self):
         return hash(self.uuid)
@@ -44,6 +46,35 @@ class Terminology:
             fhir_uri=term_data.fhir_uri, 
             fhir_terminology=term_data.fhir_terminology
         )
+
+    def load_content(self):
+        if self.fhir_terminology is True:
+            conn = get_db()
+            content_data = conn.execute(
+                text(
+                    """
+                    select * from fhir_defined_terminologies.code_systems_new
+                    where terminology_version_uuid =:terminology_version_uuid
+                    """
+                ), {
+                    'terminology_version_uuid': self.uuid
+                }
+            )
+        else:
+            raise NotImplementedError('Loading content for non-FHIR terminologies is not supported.')
+
+        for item in content_data:
+            self.codes.append(
+                app.models.codes.Code(
+                    system=self.fhir_uri,
+                    version=self.version,
+                    code=item.code,
+                    display=item.display,
+                    uuid=item.uuid,
+                    system_name=self.name,
+                    terminology_version=self
+                )
+            )
 
     @classmethod
     def load_terminologies_for_value_set_version(cls, vs_version_uuid):
