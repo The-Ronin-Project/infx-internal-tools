@@ -14,6 +14,7 @@ from app.helpers.db_helper import db_cursor
 from elasticsearch import TransportError
 from numpy import source
 
+
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
 class DeprecatedConceptMap:
     def __init__(self, uuid, relationship_types, concept_map_name):
@@ -144,10 +145,11 @@ class ConceptMapVersion:
         self.effective_end = None
         self.published_date = None
         self.version = None
+        self.include_self_map = None
         self.allowed_target_terminologies = []
         self.mappings = {}
         self.url = None
-        
+
         self.load_data()
 
     def load_data(self):
@@ -174,7 +176,7 @@ class ConceptMapVersion:
         self.version = data.version
         self.include_self_map = data.include_self_map
         self.published_date = data.published_date
-        
+
         self.load_allowed_target_terminologies()
         self.load_mappings()
         self.generate_self_mappings()
@@ -204,9 +206,8 @@ class ConceptMapVersion:
                 target_terminology.load_content()
                 for code in target_terminology.codes:
                     self.mappings[code] = [Mapping(
-                            code, 'f2a20235-bd9d-4f6a-8e78-b3f41f97d07f', code  # self is equivalent to self
-                        )]
-
+                        code, 'f2a20235-bd9d-4f6a-8e78-b3f41f97d07f', code  # self is equivalent to self
+                    )]
 
     def load_mappings(self):
         conn = get_db()
@@ -227,8 +228,8 @@ class ConceptMapVersion:
             join terminology_versions as tv_target
             on tv_target.uuid = concept_relationship.target_concept_system_version_uuid
             where source_concept.concept_map_version_uuid=:concept_map_version_uuid
-			and map_status = 'reviewed'
-			"""
+            and map_status = 'reviewed'
+            """
 
         results = conn.execute(
             text(query),
@@ -277,22 +278,22 @@ class ConceptMapVersion:
         groups = []
 
         for (
-            source_uri,
-            source_version,
-            target_uri,
-            target_version,
+                source_uri,
+                source_version,
+                target_uri,
+                target_version,
         ) in source_target_pairs_set:
             elements = []
             for source_code, mappings in self.mappings.items():
                 if (
-                    source_code.system == source_uri
-                    and source_code.version == source_version
+                        source_code.system == source_uri
+                        and source_code.version == source_version
                 ):
                     filtered_mappings = [
                         x
                         for x in mappings
                         if x.target_code.system == target_uri
-                        and x.target_code.version == target_version
+                           and x.target_code.version == target_version
                     ]
                     elements.append(
                         {
@@ -304,7 +305,7 @@ class ConceptMapVersion:
                                     "display": mapping.target_code.display,
                                     "equivalence": mapping.equivalence,
 
-                                } 
+                                }
                                 for mapping in filtered_mappings]
 
                         }
@@ -322,12 +323,11 @@ class ConceptMapVersion:
 
         return groups
 
-
     def serialize(self):
         combined_description = (
-            str(self.concept_map.description)
-            + " Version-specific notes:"
-            + str(self.description)
+                str(self.concept_map.description)
+                + " Version-specific notes:"
+                + str(self.description)
         )
 
         return {
