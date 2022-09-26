@@ -1,7 +1,8 @@
 import datetime
 import uuid
 import functools
-
+import os
+import io
 import app.models.terminologies
 import app.models.codes
 
@@ -352,6 +353,47 @@ class ConceptMapVersion:
             'group': self.serialize_mappings()
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and not required for our use cases at this time
         }
+
+
+
+    def pre_export_validate(self):
+        pass
+        if self.pre_export_validate is False:
+            raise BadRequest('Concept map cannot be published because it failed validation')
+        pass
+
+    def save_in_object_store(self):
+        object_storage_client = oci_authentication
+        # authenticate
+        # check status to direct to appropriate folder: list_objects(namespace_name, bucket_name)
+        path = 'Concept Maps/v1'
+        for status in self.mappings.items():
+            if status is 'active':
+                path += f'/published/{self.concept_map.uuid}'
+            elif status is 'in progress':
+                path += f'/prerelease/{self.concept_map.uuid}'
+            else:
+                raise BadRequest(
+                    'Concept map cannot be saved in object store, status must be either active or in progress.'
+                )
+
+
+        # check if concept_map_uuid folder exists
+        # if no uuid folder, create uuid folder
+        # if yes, check for version file
+        # if no version file, follow steps below
+        # schema property with a value of 1.0.0
+        # strip status before save
+        # save object in said uuid folder
+
+        files_to_process = 'concept_map that we want to upload'
+        bucket_name = 'infx-shared'
+        namespace = object_storage_client.get_namespace().data   # object_storage_client = ObjectStorageClient(config) <-- oci_auth file
+        for upload_file in files_to_process:
+            print(f'Uploading file {upload_file}')
+            object_storage_client.put_object(namespace, bucket_name, upload_file,
+                                             io.open(os.path.join(directory, upload_file), 'r'))
+        return 'done'
 
 
 @dataclass
