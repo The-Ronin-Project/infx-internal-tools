@@ -157,10 +157,8 @@ class ConceptMapVersion:
         data = conn.execute(
             text(
                 """
-                select cmv.* from concept_maps.concept_map_version cmv
-                join concept_maps.concept_map cm
-                on cmv.concept_map_uuid = cm.uuid
-                where cmv.uuid=:version_uuid
+                select * from concept_maps.concept_map_version
+                where uuid=:version_uuid
                 """
             ),
             {"version_uuid": self.uuid},
@@ -206,10 +204,9 @@ class ConceptMapVersion:
                 for code in target_terminology.codes:
                     self.mappings[code] = [Mapping(
                         source=code,
-                        relationship=MappingRelationship('f2a20235-bd9d-4f6a-8e78-b3f41f97d07f', 'equivalent', 'equivalent'),
+                        relationship=MappingRelationship.load_by_code('equivalent'),
                         target=code,  # self is equivalent to self
-                        mapping_comments="Self map",
-                        author=None
+                        mapping_comments="Auto-generated self map",
                     )]
 
 
