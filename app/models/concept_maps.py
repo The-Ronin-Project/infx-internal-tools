@@ -382,6 +382,7 @@ class ConceptMapVersion:
             if version_exist:
                 return {"message": "concept map already in bucket"}
             else:
+                del concept_map["status"]
                 ConceptMapVersion.save_to_object_store(
                     path, object_storage_client, bucket_name, namespace, concept_map
                 )
