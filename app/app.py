@@ -210,8 +210,11 @@ def create_app(script_info=None):
     @app.route('/ConceptMaps/<string:version_uuid>')
     def get_concept_map_version(version_uuid):
         concept_map_version = ConceptMapVersion(version_uuid)
-        return jsonify(concept_map_version.serialize())
-
+        concept_map_to_json = concept_map_version.serialize()
+        concept_map_to_datastore = ConceptMapVersion.set_up_object_store(
+            concept_map_to_json
+        )
+        return "done"
 
 
     @app.route('/ConceptMapSuggestions/', methods=['POST'])

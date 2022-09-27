@@ -1,11 +1,11 @@
 import datetime
 import uuid
 import functools
-import os
-import io
+import json
 import app.models.terminologies
 import app.models.codes
 
+from werkzeug.exceptions import BadRequest
 from sqlalchemy import text
 from dataclasses import dataclass
 from uuid import UUID
@@ -13,9 +13,6 @@ from typing import Optional
 from app.database import get_db
 from app.models.codes import Code
 from app.helpers.oci_auth import oci_authentication
-from app.helpers.db_helper import db_cursor
-from elasticsearch import TransportError
-from numpy import source
 
 
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
@@ -189,9 +186,8 @@ class ConceptMapVersion:
                 where concept_map_version_uuid=:concept_map_version_uuid
                 and context='target_terminology'
                 """
-            ), {
-                'concept_map_version_uuid': self.uuid
-            }
+            ),
+            {"concept_map_version_uuid": self.uuid},
         )
         for item in data:
             terminology_version_uuid = item.terminology_version_uuid
@@ -204,13 +200,14 @@ class ConceptMapVersion:
             for target_terminology in self.allowed_target_terminologies:
                 target_terminology.load_content()
                 for code in target_terminology.codes:
-                    self.mappings[code] = [Mapping(
-                        source=code,
-                        relationship=MappingRelationship.load_by_code('equivalent'),
-                        target=code,  # self is equivalent to self
-                        mapping_comments="Auto-generated self map",
-                    )]
-
+                    self.mappings[code] = [
+                        Mapping(
+                            source=code,
+                            relationship=MappingRelationship.load_by_code("equivalent"),
+                            target=code,  # self is equivalent to self
+                            mapping_comments="Auto-generated self map",
+                        )
+                    ]
 
     def load_mappings(self):
         conn = get_db()
@@ -254,12 +251,11 @@ class ConceptMapVersion:
                 item.target_concept_code,
                 item.target_concept_display,
             )
-            relationship = MappingRelationship.load_by_code(item.relationship_code) # this needs optimization
+            relationship = MappingRelationship.load_by_code(
+                item.relationship_code
+            )  # this needs optimization
 
-            mapping = Mapping(
-                source_code,
-                relationship,
-                target_code)
+            mapping = Mapping(source_code, relationship, target_code)
             if source_code in self.mappings:
                 self.mappings[source_code].append(mapping)
             else:
@@ -284,22 +280,22 @@ class ConceptMapVersion:
         groups = []
 
         for (
-                source_uri,
-                source_version,
-                target_uri,
-                target_version,
+            source_uri,
+            source_version,
+            target_uri,
+            target_version,
         ) in source_target_pairs_set:
             elements = []
             for source_code, mappings in self.mappings.items():
                 if (
-                        source_code.system == source_uri
-                        and source_code.version == source_version
+                    source_code.system == source_uri
+                    and source_code.version == source_version
                 ):
                     filtered_mappings = [
                         x
                         for x in mappings
                         if x.target.system == target_uri
-                           and x.target.version == target_version
+                        and x.target.version == target_version
                     ]
                     elements.append(
                         {
@@ -310,10 +306,9 @@ class ConceptMapVersion:
                                     "code": mapping.target.code,
                                     "display": mapping.target.display,
                                     "equivalence": mapping.relationship.code,
-
                                 }
-                                for mapping in filtered_mappings]
-
+                                for mapping in filtered_mappings
+                            ],
                         }
                     )
 
@@ -330,71 +325,84 @@ class ConceptMapVersion:
         return groups
 
     def serialize(self):
-        combined_description = (
-                str(self.concept_map.description)
-                + " Version-specific notes:"
-                + str(self.description)
-        )
-
         return {
-
-            'resourceType': 'ConceptMap',
-            'title': self.concept_map.title,
-            'id': self.uuid,
-            'name': self.concept_map.name,
-            'contact': [{'name': self.concept_map.author}],
-            'url': f'http://projectronin.com/fhir/us/ronin/ConceptMap/{self.concept_map.uuid}',
-            'description': self.concept_map.description,
-            'purpose': self.concept_map.purpose,
-            'publisher': self.concept_map.publisher,
-            'experimental': self.concept_map.experimental,
-            'status': self.status,
-            'date': self.published_date.strftime('%Y-%m-%d'),
-            'version': self.version,
-            'group': self.serialize_mappings()
-            # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and not required for our use cases at this time
+            "resourceType": "ConceptMap",
+            "title": self.concept_map.title,
+            "id": self.uuid,
+            "name": self.concept_map.name,
+            "contact": [{"name": self.concept_map.author}],
+            "url": f"http://projectronin.com/fhir/us/ronin/ConceptMap/{self.concept_map.uuid}",
+            "description": self.concept_map.description,
+            "purpose": self.concept_map.purpose,
+            "publisher": self.concept_map.publisher,
+            "experimental": self.concept_map.experimental,
+            "status": self.status,
+            "date": self.published_date.strftime("%Y-%m-%d"),
+            "version": self.version,
+            "group": self.serialize_mappings()
+            # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and
+            # are not required for our use cases at this time
         }
 
-
-
     def pre_export_validate(self):
-        pass
         if self.pre_export_validate is False:
-            raise BadRequest('Concept map cannot be published because it failed validation')
-        pass
+            raise BadRequest(
+                "Concept map cannot be published because it failed validation"
+            )
 
-    def save_in_object_store(self):
-        object_storage_client = oci_authentication
-        # authenticate
-        # check status to direct to appropriate folder: list_objects(namespace_name, bucket_name)
-        path = 'Concept Maps/v1'
-        for status in self.mappings.items():
-            if status is 'active':
-                path += f'/published/{self.concept_map.uuid}'
-            elif status is 'in progress':
-                path += f'/prerelease/{self.concept_map.uuid}'
+    @staticmethod
+    def set_up_object_store(concept_map):
+        object_storage_client = oci_authentication()
+        path = "ConceptMaps/v1"
+        if concept_map["status"] == "active":
+            path += f"/published/{concept_map['id']}"
+        elif concept_map["status"] == "in progress":
+            path += f"/prerelease/{concept_map['id']}"
+        else:
+            raise BadRequest(
+                "Concept map cannot be saved in object store, status must be either active or in progress."
+            )
+        bucket_name = "infx-shared"
+        namespace = object_storage_client.get_namespace().data
+
+        folder_exists = ConceptMapVersion.folder_in_bucket(
+            path, object_storage_client, bucket_name, namespace
+        )
+
+        if not folder_exists:
+            del concept_map["status"]
+            ConceptMapVersion.save_to_object_store(
+                path, object_storage_client, bucket_name, namespace, concept_map
+            )
+        elif folder_exists:
+            path = path + f"/{concept_map['version']}"
+            version_exist = ConceptMapVersion.folder_in_bucket(
+                path, object_storage_client, bucket_name, namespace
+            )
+            if version_exist:
+                return {"message": "concept map already in bucket"}
             else:
-                raise BadRequest(
-                    'Concept map cannot be saved in object store, status must be either active or in progress.'
+                ConceptMapVersion.save_to_object_store(
+                    path, object_storage_client, bucket_name, namespace, concept_map
                 )
 
+    @staticmethod
+    def folder_in_bucket(path, object_storage_client, bucket_name, namespace):
+        object_list = object_storage_client.list_objects(namespace, bucket_name)
+        exists = [x for x in object_list.data.objects if path in x.name]
+        return True if exists else False
 
-        # check if concept_map_uuid folder exists
-        # if no uuid folder, create uuid folder
-        # if yes, check for version file
-        # if no version file, follow steps below
-        # schema property with a value of 1.0.0
-        # strip status before save
-        # save object in said uuid folder
-
-        files_to_process = 'concept_map that we want to upload'
-        bucket_name = 'infx-shared'
-        namespace = object_storage_client.get_namespace().data   # object_storage_client = ObjectStorageClient(config) <-- oci_auth file
-        for upload_file in files_to_process:
-            print(f'Uploading file {upload_file}')
-            object_storage_client.put_object(namespace, bucket_name, upload_file,
-                                             io.open(os.path.join(directory, upload_file), 'r'))
-        return 'done'
+    @staticmethod
+    def save_to_object_store(
+        path, object_storage_client, bucket_name, namespace, concept_map
+    ):
+        object_storage_client.put_object(
+            namespace,
+            bucket_name,
+            path + f"/{concept_map['version']}.json",
+            json.dumps(concept_map, indent=2).encode("utf-8"),
+        )
+        return {"message": "concept map pushed to bucket", "object": concept_map}
 
 
 @dataclass
@@ -429,7 +437,7 @@ class MappingRelationship:
                 where code=:code
                 """
             ),
-            {'code': code}
+            {"code": code},
         ).first()
         return cls(uuid=data.uuid, code=data.code, display=data.display)
 
