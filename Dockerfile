@@ -2,6 +2,8 @@ FROM docker-proxy.devops.projectronin.io/ronin/python-builder:latest as builder
 
 COPY --chown=ronin:ronin Pipfile ./
 COPY --chown=ronin:ronin Pipfile.lock ./
+COPY --chown=ronin:ronin oci_config ./
+RUN mkdir -p ~/.oci
 
 RUN pipenv install --system --deploy
 
