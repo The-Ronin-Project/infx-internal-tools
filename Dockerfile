@@ -6,7 +6,6 @@ COPY --chown=ronin:ronin Pipfile.lock ./
 RUN pipenv install --system --deploy
 
 FROM docker-proxy.devops.projectronin.io/ronin/base/python-base:latest as runtime
-COPY --chown=ronin:ronin configs/* ./configs
 RUN mkdir ./.oci
 COPY --from=builder --chown=ronin:ronin /app/.local/ /app/.local
 COPY --chown=ronin:ronin app ./app
