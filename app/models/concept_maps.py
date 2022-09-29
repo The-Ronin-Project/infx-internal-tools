@@ -325,6 +325,15 @@ class ConceptMapVersion:
         return groups
 
     def serialize(self):
+        for map in self.serialize_mappings():
+            for nested in map['element']:
+                for item in nested['target']:
+                    if item["equivalence"] == "source-is-narrorwer-than-target":
+                        item["equivalence"] = "wider"
+                    elif item["equivalence"] == "source-is-broader-than-target":
+                        item["equivalence"] = "narrower"
+                    else:
+                        pass
         return {
             "resourceType": "ConceptMap",
             "title": self.concept_map.title,
@@ -344,6 +353,7 @@ class ConceptMapVersion:
             # are not required for our use cases at this time
         }
 
+
     def pre_export_validate(self):
         if self.pre_export_validate is False:
             raise BadRequest(
@@ -354,10 +364,11 @@ class ConceptMapVersion:
     def set_up_object_store(concept_map):
         object_storage_client = oci_authentication()
         path = "ConceptMaps/v1"
+        concept_map_uuid = concept_map['url'].rsplit('/', 1)[1]
         if concept_map["status"] == "active":
-            path += f"/published/{concept_map['id']}"
+            path += f"/published/{concept_map_uuid}"
         elif concept_map["status"] == "in progress":
-            path += f"/prerelease/{concept_map['id']}"
+            path += f"/prerelease/{concept_map_uuid}"
         else:
             raise BadRequest(
                 "Concept map cannot be saved in object store, status must be either active or in progress."
@@ -368,7 +379,6 @@ class ConceptMapVersion:
         folder_exists = ConceptMapVersion.folder_in_bucket(
             path, object_storage_client, bucket_name, namespace
         )
-
         if not folder_exists:
             del concept_map["status"]
             ConceptMapVersion.save_to_object_store(
