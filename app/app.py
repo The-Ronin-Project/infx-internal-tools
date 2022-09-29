@@ -214,8 +214,7 @@ def create_app(script_info=None):
         concept_map_to_datastore = ConceptMapVersion.set_up_object_store(
             concept_map_to_json
         )
-        return "done"
-
+        return jsonify(concept_map_to_datastore)
 
     @app.route('/ConceptMapSuggestions/', methods=['POST'])
     def mapping_suggestion():

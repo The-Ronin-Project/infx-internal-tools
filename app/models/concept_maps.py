@@ -381,6 +381,7 @@ class ConceptMapVersion:
             ConceptMapVersion.save_to_object_store(
                 path, object_storage_client, bucket_name, namespace, concept_map
             )
+            return concept_map
         elif folder_exists:
             path = path + f"/{concept_map['version']}"
             version_exist = ConceptMapVersion.folder_in_bucket(
@@ -393,6 +394,7 @@ class ConceptMapVersion:
                 ConceptMapVersion.save_to_object_store(
                     path, object_storage_client, bucket_name, namespace, concept_map
                 )
+                return concept_map
 
     @staticmethod
     def folder_in_bucket(path, object_storage_client, bucket_name, namespace):
