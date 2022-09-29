@@ -325,15 +325,13 @@ class ConceptMapVersion:
         return groups
 
     def serialize(self):
-        for map in self.serialize_mappings():
-            for nested in map['element']:
-                for item in nested['target']:
+        for mapped_object in self.serialize_mappings():
+            for nested in mapped_object["element"]:
+                for item in nested["target"]:
                     if item["equivalence"] == "source-is-narrorwer-than-target":
                         item["equivalence"] = "wider"
                     elif item["equivalence"] == "source-is-broader-than-target":
                         item["equivalence"] = "narrower"
-                    else:
-                        pass
         return {
             "resourceType": "ConceptMap",
             "title": self.concept_map.title,
@@ -353,7 +351,6 @@ class ConceptMapVersion:
             # are not required for our use cases at this time
         }
 
-
     def pre_export_validate(self):
         if self.pre_export_validate is False:
             raise BadRequest(
@@ -364,7 +361,7 @@ class ConceptMapVersion:
     def set_up_object_store(concept_map):
         object_storage_client = oci_authentication()
         path = "ConceptMaps/v1"
-        concept_map_uuid = concept_map['url'].rsplit('/', 1)[1]
+        concept_map_uuid = concept_map["url"].rsplit("/", 1)[1]
         if concept_map["status"] == "active":
             path += f"/published/{concept_map_uuid}"
         elif concept_map["status"] == "in progress":
