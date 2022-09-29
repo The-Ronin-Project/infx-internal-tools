@@ -113,7 +113,7 @@ def test_survey_export():
     app.config['MOCK_DB'] = True
     response = app.test_client().get('/surveys/34775510-1267-11ec-b9a3-77c9d91ff3f2?organization_uuid=866632f0-ff85-11eb-9f47-ffa6d132f8a4')
     print(hashlib.md5(response.data).hexdigest())
-    assert hashlib.md5(response.data).hexdigest() == "d8d184f61545f542f2a42c7064a90148"
+    assert hashlib.md5(response.data).hexdigest() == "d9b0f04d124702c00e160db2507b2852"
 
 def test_execute_rules_directly():
     app.config['MOCK_DB'] = True
