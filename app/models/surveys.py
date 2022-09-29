@@ -129,6 +129,18 @@ class SurveyExporter:
         #   next_question_slugs = [x if x != 'next_symptom' else "||nextsymptom" for x in next_question_slugs]
         return "; ".join(next_question_slugs)
 
+    def load_next_question_text(self, answer_uuid_array, next_question_uuid, present_most_severe_first=False):
+        """ Return the text of the next question """
+        question_uuid_to_text = {x.question_uuid: x.question_text for x in self.survey_data}
+        question_uuid_to_text['||nextsymptom'] = '||nextsymptom'
+
+        sorted_array = self.load_answers_for_questions(answer_uuid_array, present_most_severe_first)
+        next_question_slugs = [x.get("next_question") for x in sorted_array]
+        next_question_slugs = [x if x is not None else next_question_uuid for x in next_question_slugs]
+        next_question_slugs = [question_uuid_to_text[x] for x in next_question_slugs]
+        next_question_slugs = [str(x) for x in next_question_slugs]
+        return "; ".join(next_question_slugs)
+
     def load_symptom_result(self, answer_uuid_array, present_most_severe_first=False):
         """ Return the alert tier of the answers as words """
         sorted_array = self.load_answers_for_questions(answer_uuid_array, present_most_severe_first)
@@ -244,6 +256,7 @@ class SurveyExporter:
                 "values": '; '.join(
                     ['1' for x in range(len(self.get_first_question_for_each_symptom_after_symptom_select()))] + ['0']),
                 "next_question_slug": '; '.join(self.get_slugs_for_symptom_start()),
+                "next_question_text": "N/A",
                 "kind": "Multiple Choice",
                 "symptom_result_clinicians_tier": '; '.join(
                     ["Low" for x in self.get_first_question_for_each_symptom_after_symptom_select()] + ["No Symptom"]),
@@ -274,6 +287,9 @@ class SurveyExporter:
             "values": self.generate_values(parse_array_in_sqlite(x.specific_answer_uuids),
                                            x.present_most_severe_first) if x.specific_answer_uuids else None,
             "next_question_slug": self.load_next_question_slugs(parse_array_in_sqlite(x.specific_answer_uuids),
+                                                                self.next_question_uuid.get(x.question_uuid),
+                                                                x.present_most_severe_first) if x.specific_answer_uuids else None,
+            "next_question_text": self.load_next_question_text(parse_array_in_sqlite(x.specific_answer_uuids),
                                                                 self.next_question_uuid.get(x.question_uuid),
                                                                 x.present_most_severe_first) if x.specific_answer_uuids else None,
             "kind": "Multiple Choice" if x.question_uuid == '7fc52db1-9ae8-4535-9463-c75ebc7398ca' else "Single Choice",
