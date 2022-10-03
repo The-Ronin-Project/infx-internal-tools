@@ -402,7 +402,7 @@ class ConceptMapVersion:
 
     @staticmethod
     def save_to_object_store(
-            path, object_storage_client, bucket_name, namespace, concept_map
+        path, object_storage_client, bucket_name, namespace, concept_map
     ):
         object_storage_client.put_object(
             namespace,
