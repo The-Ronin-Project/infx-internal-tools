@@ -13,6 +13,7 @@ from typing import Optional
 from app.database import get_db
 from app.models.codes import Code
 from app.helpers.oci_auth import oci_authentication
+from app.helpers.db_helper import db_cursor
 
 
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
@@ -280,22 +281,22 @@ class ConceptMapVersion:
         groups = []
 
         for (
-            source_uri,
-            source_version,
-            target_uri,
-            target_version,
+                source_uri,
+                source_version,
+                target_uri,
+                target_version,
         ) in source_target_pairs_set:
             elements = []
             for source_code, mappings in self.mappings.items():
                 if (
-                    source_code.system == source_uri
-                    and source_code.version == source_version
+                        source_code.system == source_uri
+                        and source_code.version == source_version
                 ):
                     filtered_mappings = [
                         x
                         for x in mappings
                         if x.target.system == target_uri
-                        and x.target.version == target_version
+                           and x.target.version == target_version
                     ]
                     elements.append(
                         {
@@ -358,14 +359,11 @@ class ConceptMapVersion:
             )
 
     @staticmethod
-    def set_up_object_store(concept_map):
+    def set_up_object_store(concept_map, status):
         object_storage_client = oci_authentication()
-        path = "ConceptMaps/v1"
         concept_map_uuid = concept_map["url"].rsplit("/", 1)[1]
-        if concept_map["status"] == "active":
-            path += f"/published/{concept_map_uuid}"
-        elif concept_map["status"] == "in progress":
-            path += f"/prerelease/{concept_map_uuid}"
+        if concept_map["status"] == "active" or concept_map["status"] == "in progress":
+            path = f"ConceptMaps/v1/{status}/{concept_map_uuid}"
         else:
             raise BadRequest(
                 "Concept map cannot be saved in object store, status must be either active or in progress."
@@ -404,7 +402,7 @@ class ConceptMapVersion:
 
     @staticmethod
     def save_to_object_store(
-        path, object_storage_client, bucket_name, namespace, concept_map
+            path, object_storage_client, bucket_name, namespace, concept_map
     ):
         object_storage_client.put_object(
             namespace,
@@ -413,6 +411,41 @@ class ConceptMapVersion:
             json.dumps(concept_map, indent=2).encode("utf-8"),
         )
         return {"message": "concept map pushed to bucket", "object": concept_map}
+
+    @staticmethod
+    @db_cursor
+    def get_concept_map_from_db(cursor, version_uuid):
+        data = cursor.execute(
+            text(
+                """
+                select * from concept_maps.concept_map_version
+                where uuid=:version_uuid order by version desc 
+                """
+            ),
+            {
+                "version_uuid": version_uuid
+            },
+        ).first()
+        if data is None:
+            return False
+
+        result = dict(data)
+        return {'folder_name': result['concept_map_uuid'], 'version': result['version']}
+
+    @staticmethod
+    def get_concept_map_from_object_store(concept_map, status):
+        object_storage_client = oci_authentication()
+        bucket_name = "infx-shared"
+        namespace = object_storage_client.get_namespace().data
+        path = f"ConceptMaps/v1/{status}/{str(concept_map['folder_name'])}/{concept_map['version']}.json"
+        concept_map_found = object_storage_client.get_object(
+            namespace,
+            bucket_name,
+            path
+        )
+        if not concept_map_found:
+            return {'message': f"{path} not found."}
+        return concept_map_found.data.json()
 
 
 @dataclass

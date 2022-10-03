@@ -73,19 +73,19 @@ def create_app(script_info=None):
             version_description = request.json.get('version_description')
 
             new_vs = ValueSet.create(
-                name = name,
-                title = title,
-                publisher = publisher,
-                contact = contact,
+                name=name,
+                title=title,
+                publisher=publisher,
+                contact=contact,
                 value_set_description=value_set_description,
                 immutable=immutable,
                 experimental=experimental,
                 purpose=purpose,
                 vs_type=vs_type,
                 use_case_uuid=use_case_uuid,
-                effective_start = effective_start,
-                effective_end = effective_end,
-                version_description = version_description
+                effective_start=effective_start,
+                effective_end=effective_end,
+                version_description=version_description,
             )
             return jsonify(new_vs.serialize())
 
@@ -207,33 +207,60 @@ def create_app(script_info=None):
         return response
 
     # Concept Map Endpoints
-    @app.route('/ConceptMaps/<string:version_uuid>')
-    def get_concept_map_version(version_uuid):
-        concept_map_version = ConceptMapVersion(version_uuid)
-        concept_map_to_json = concept_map_version.serialize()
-        concept_map_to_datastore = ConceptMapVersion.set_up_object_store(
-            concept_map_to_json
-        )
-        return jsonify(concept_map_to_datastore)
+    @app.route("/ConceptMaps/<string:version_uuid>/prerelease", methods=["GET", "POST"])
+    def get_concept_map_version_prerelease(version_uuid):
+        if request.method == "POST":
+            concept_map_version = ConceptMapVersion(version_uuid)
+            concept_map_to_json = concept_map_version.serialize()
+            concept_map_to_datastore = ConceptMapVersion.set_up_object_store(
+                concept_map_to_json, status='prerelease'
+            )
+            return jsonify(concept_map_to_datastore)
+        if request.method == "GET":
+            concept_map = ConceptMapVersion.get_concept_map_from_db(version_uuid)
+            if not concept_map:
+                return {'message': 'concept map uuid not found.'}
+            concept_map_from_object_store = ConceptMapVersion.get_concept_map_from_object_store(
+                concept_map, status='prerelease'
+            )
+            return jsonify(concept_map_from_object_store)
 
-    @app.route('/ConceptMapSuggestions/', methods=['POST'])
+    @app.route("/ConceptMaps/<string:version_uuid>/published", methods=["GET", "POST"])
+    def get_concept_map_version_published(version_uuid):
+        if request.method == "POST":
+            concept_map_version = ConceptMapVersion(version_uuid)
+            concept_map_to_json = concept_map_version.serialize()
+            concept_map_to_datastore = ConceptMapVersion.set_up_object_store(
+                concept_map_to_json, status='published'
+            )
+            return jsonify(concept_map_to_datastore)
+        if request.method == "GET":
+            concept_map = ConceptMapVersion.get_concept_map_from_db(version_uuid)
+            if not concept_map:
+                return {'message': 'concept map uuid not found.'}
+            concept_map_from_object_store = ConceptMapVersion.get_concept_map_from_object_store(
+                concept_map, status='published'
+            )
+            return jsonify(concept_map_from_object_store)
+
+    @app.route("/ConceptMapSuggestions/", methods=["POST"])
     def mapping_suggestion():
-        if request.method == 'POST':
-            source_concept_uuid = request.json.get('source_concept_uuid')
-            code = request.json.get('code')
-            display = request.json.get('display')
-            terminology_version_uuid = request.json.get('terminology_version_uuid')
-            suggestion_source = request.json.get('suggestion_source')
-            confidence = request.json.get('confidence')
+        if request.method == "POST":
+            source_concept_uuid = request.json.get("source_concept_uuid")
+            code = request.json.get("code")
+            display = request.json.get("display")
+            terminology_version_uuid = request.json.get("terminology_version_uuid")
+            suggestion_source = request.json.get("suggestion_source")
+            confidence = request.json.get("confidence")
             new_uuid = uuid4()
 
             terminology_version = Terminology.load(terminology_version_uuid)
             code = Code(
-                system = terminology_version.fhir_uri,
-                version = terminology_version.version,
-                code = code,
-                display = display,
-                terminology_version=terminology_version
+                system=terminology_version.fhir_uri,
+                version=terminology_version.version,
+                code=code,
+                display=display,
+                terminology_version=terminology_version,
             )
 
             new_suggestion = MappingSuggestion(
@@ -241,7 +268,7 @@ def create_app(script_info=None):
                 source_concept_uuid=source_concept_uuid,
                 code=code,
                 suggestion_source=suggestion_source,
-                confidence=confidence
+                confidence=confidence,
             )
 
             new_suggestion.save()
@@ -271,16 +298,16 @@ def create_app(script_info=None):
                 display=target_concept_display,
                 system=None,
                 version=None,
-                terminology_version=target_concept_terminology_version_uuid
+                terminology_version=target_concept_terminology_version_uuid,
             )
 
             new_mapping = Mapping(
-                source = source_code,
+                source=source_code,
                 relationship=relationship,
                 target=target_code,
                 mapping_comments=mapping_comments,
                 author=author,
-                review_status=review_status
+                review_status=review_status,
             )
             new_mapping.save()
 
