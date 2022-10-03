@@ -296,7 +296,7 @@ class ConceptMapVersion:
                         x
                         for x in mappings
                         if x.target.system == target_uri
-                           and x.target.version == target_version
+                        and x.target.version == target_version
                     ]
                     elements.append(
                         {
