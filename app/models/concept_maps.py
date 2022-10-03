@@ -307,6 +307,7 @@ class ConceptMapVersion:
                                     "code": mapping.target.code,
                                     "display": mapping.target.display,
                                     "equivalence": mapping.relationship.code,
+                                    "comment": None
                                 }
                                 for mapping in filtered_mappings
                             ],
@@ -347,7 +348,9 @@ class ConceptMapVersion:
             "status": self.status,
             "date": self.published_date.strftime("%Y-%m-%d"),
             "version": self.version,
-            "group": self.serialize_mappings()
+            "group": self.serialize_mappings(),
+            "extension": [{"url": "http://projectronin.io/fhir/ronin.common-fhir-model.uscore-r4/StructureDefinition/Extension/ronin-ConceptMapSchema",
+                                  "valueString": "1.0.0"}]
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and
             # are not required for our use cases at this time
         }
@@ -376,22 +379,33 @@ class ConceptMapVersion:
         )
         if not folder_exists:
             del concept_map["status"]
+            if status == "prerelease":
+                path = path + f"/{concept_map['version']}_{datetime.datetime.now().strftime('%Y%M%D%H%M')}"
+
             ConceptMapVersion.save_to_object_store(
                 path, object_storage_client, bucket_name, namespace, concept_map
             )
             return concept_map
         elif folder_exists:
-            path = path + f"/{concept_map['version']}"
-            version_exist = ConceptMapVersion.folder_in_bucket(
-                path, object_storage_client, bucket_name, namespace
-            )
-            if version_exist:
-                return {"message": "concept map already in bucket"}
-            else:
-                del concept_map["status"]
+            del concept_map["status"]
+            if status == "prerelease":
+                path = path + f"/{concept_map['version']}_{datetime.datetime.now().strftime('%Y%M%D%H%M')}"
+
                 ConceptMapVersion.save_to_object_store(
                     path, object_storage_client, bucket_name, namespace, concept_map
                 )
+                return concept_map
+            if status == "published":
+                path = path + f"/{concept_map['version']}"
+                version_exist = ConceptMapVersion.folder_in_bucket(
+                    path, object_storage_client, bucket_name, namespace
+                )
+                if version_exist:
+                    return {"message": "concept map already in bucket"}
+                else:
+                    ConceptMapVersion.save_to_object_store(
+                        path, object_storage_client, bucket_name, namespace, concept_map
+                    )
                 return concept_map
 
     @staticmethod
