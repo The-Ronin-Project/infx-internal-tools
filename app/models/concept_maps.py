@@ -281,16 +281,16 @@ class ConceptMapVersion:
         groups = []
 
         for (
-                source_uri,
-                source_version,
-                target_uri,
-                target_version,
+            source_uri,
+            source_version,
+            target_uri,
+            target_version,
         ) in source_target_pairs_set:
             elements = []
             for source_code, mappings in self.mappings.items():
                 if (
-                        source_code.system == source_uri
-                        and source_code.version == source_version
+                    source_code.system == source_uri
+                    and source_code.version == source_version
                 ):
                     filtered_mappings = [
                         x
