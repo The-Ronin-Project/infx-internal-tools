@@ -4,7 +4,16 @@ from app.models.terminologies import Terminology
 
 
 class Code:
-    def __init__(self, system, version, code, display, uuid=None, system_name=None, terminology_version=None):
+    def __init__(
+        self,
+        system,
+        version,
+        code,
+        display,
+        uuid=None,
+        system_name=None,
+        terminology_version=None,
+    ):
         self.system = system
         self.version = version
         self.code = code
@@ -13,7 +22,11 @@ class Code:
         self.system_name = system_name
         self.terminology_version = terminology_version
 
-        if self.terminology_version is not None and self.system is None and self.version is None:
+        if (
+            self.terminology_version is not None
+            and self.system is None
+            and self.version is None
+        ):
             terminology = Terminology.load(self.terminology_version)
             self.system = terminology.fhir_uri
             self.version = terminology.version
@@ -26,7 +39,12 @@ class Code:
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Code):
-            return (self.code == other.code) and (self.display == other.display) and (self.system == other.system) and (self.version == other.version)
+            return (
+                (self.code == other.code)
+                and (self.display == other.display)
+                and (self.system == other.system)
+                and (self.version == other.version)
+            )
         return False
 
     @classmethod
@@ -42,18 +60,16 @@ class Code:
                 where code.uuid=:code_uuid
                 """
             ),
-            {
-                'code_uuid': code_uuid
-            }
+            {"code_uuid": code_uuid},
         ).first()
 
         return cls(
-            system = code_data.system_url,
-            version = code_data.version,
-            code = code_data.code,
-            display = code_data.display,
-            system_name = code_data.system_name,
-            uuid=code_uuid
+            system=code_data.system_url,
+            version=code_data.version,
+            code=code_data.code,
+            display=code_data.display,
+            system_name=code_data.system_name,
+            uuid=code_uuid,
         )
 
     @classmethod
@@ -66,9 +82,8 @@ class Code:
                 select system as terminology_version_uuid, * from concept_maps.source_concept
                 where uuid=:source_concept_uuid
                 """
-            ), {
-                'source_concept_uuid': source_code_uuid
-            }
+            ),
+            {"source_concept_uuid": source_code_uuid},
         ).first()
 
         return cls(
@@ -77,21 +92,22 @@ class Code:
             version=None,
             code=source_data.code,
             display=source_data.display,
-            terminology_version=source_data.terminology_version_uuid
+            terminology_version=source_data.terminology_version_uuid,
         )
+
     def serialize(self, with_system_and_version=True, with_system_name=False):
         serialized = {
             "system": self.system,
             "version": self.version,
             "code": self.code,
-            "display": self.display
+            "display": self.display,
         }
 
         if with_system_and_version is False:
-            serialized.pop('system')
-            serialized.pop('version')
+            serialized.pop("system")
+            serialized.pop("version")
 
         if self.system_name is not None and with_system_name is True:
-            serialized['system_name'] = self.system_name
+            serialized["system_name"] = self.system_name
 
         return serialized

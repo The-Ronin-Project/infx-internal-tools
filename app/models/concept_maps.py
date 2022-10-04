@@ -187,9 +187,8 @@ class ConceptMapVersion:
                 where concept_map_version_uuid=:concept_map_version_uuid
                 and context='target_terminology'
                 """
-            ), {
-                'concept_map_version_uuid': self.uuid
-            }
+            ),
+            {"concept_map_version_uuid": self.uuid},
         )
         for item in data:
             terminology_version_uuid = item.terminology_version_uuid
@@ -202,13 +201,14 @@ class ConceptMapVersion:
             for target_terminology in self.allowed_target_terminologies:
                 target_terminology.load_content()
                 for code in target_terminology.codes:
-                    self.mappings[code] = [Mapping(
-                        source=code,
-                        relationship=MappingRelationship.load_by_code('equivalent'),
-                        target=code,  # self is equivalent to self
-                        mapping_comments="Auto-generated self map",
-                    )]
-
+                    self.mappings[code] = [
+                        Mapping(
+                            source=code,
+                            relationship=MappingRelationship.load_by_code("equivalent"),
+                            target=code,  # self is equivalent to self
+                            mapping_comments="Auto-generated self map",
+                        )
+                    ]
 
     def load_mappings(self):
         conn = get_db()
@@ -252,12 +252,11 @@ class ConceptMapVersion:
                 item.target_concept_code,
                 item.target_concept_display,
             )
-            relationship = MappingRelationship.load_by_code(item.relationship_code) # this needs optimization
+            relationship = MappingRelationship.load_by_code(
+                item.relationship_code
+            )  # this needs optimization
 
-            mapping = Mapping(
-                source_code,
-                relationship,
-                target_code)
+            mapping = Mapping(source_code, relationship, target_code)
             if source_code in self.mappings:
                 self.mappings[source_code].append(mapping)
             else:
@@ -282,22 +281,22 @@ class ConceptMapVersion:
         groups = []
 
         for (
-                source_uri,
-                source_version,
-                target_uri,
-                target_version,
+            source_uri,
+            source_version,
+            target_uri,
+            target_version,
         ) in source_target_pairs_set:
             elements = []
             for source_code, mappings in self.mappings.items():
                 if (
-                        source_code.system == source_uri
-                        and source_code.version == source_version
+                    source_code.system == source_uri
+                    and source_code.version == source_version
                 ):
                     filtered_mappings = [
                         x
                         for x in mappings
                         if x.target.system == target_uri
-                           and x.target.version == target_version
+                        and x.target.version == target_version
                     ]
                     elements.append(
                         {
@@ -308,10 +307,9 @@ class ConceptMapVersion:
                                     "code": mapping.target.code,
                                     "display": mapping.target.display,
                                     "equivalence": mapping.relationship.code,
-
                                 }
-                                for mapping in filtered_mappings]
-
+                                for mapping in filtered_mappings
+                            ],
                         }
                     )
 
@@ -329,27 +327,26 @@ class ConceptMapVersion:
 
     def serialize(self):
         combined_description = (
-                str(self.concept_map.description)
-                + " Version-specific notes:"
-                + str(self.description)
+            str(self.concept_map.description)
+            + " Version-specific notes:"
+            + str(self.description)
         )
 
         return {
-
-            'resourceType': 'ConceptMap',
-            'title': self.concept_map.title,
-            'id': self.uuid,
-            'name': self.concept_map.name,
-            'contact': [{'name': self.concept_map.author}],
-            'url': f'http://projectronin.com/fhir/us/ronin/ConceptMap/{self.concept_map.uuid}',
-            'description': self.concept_map.description,
-            'purpose': self.concept_map.purpose,
-            'publisher': self.concept_map.publisher,
-            'experimental': self.concept_map.experimental,
-            'status': self.status,
-            'date': self.published_date.strftime('%Y-%m-%d'),
-            'version': self.version,
-            'group': self.serialize_mappings()
+            "resourceType": "ConceptMap",
+            "title": self.concept_map.title,
+            "id": self.uuid,
+            "name": self.concept_map.name,
+            "contact": [{"name": self.concept_map.author}],
+            "url": f"http://projectronin.com/fhir/us/ronin/ConceptMap/{self.concept_map.uuid}",
+            "description": self.concept_map.description,
+            "purpose": self.concept_map.purpose,
+            "publisher": self.concept_map.publisher,
+            "experimental": self.concept_map.experimental,
+            "status": self.status,
+            "date": self.published_date.strftime("%Y-%m-%d"),
+            "version": self.version,
+            "group": self.serialize_mappings()
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and not required for our use cases at this time
         }
 
@@ -386,7 +383,7 @@ class MappingRelationship:
                 where code=:code
                 """
             ),
-            {'code': code}
+            {"code": code},
         ).first()
         return cls(uuid=data.uuid, code=data.code, display=data.display)
 
