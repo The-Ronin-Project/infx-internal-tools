@@ -379,9 +379,10 @@ class ConceptMapVersion:
 
     @staticmethod
     def check_for_prerelease_in_published(
-        path, object_storage_client, bucket_name, namespace
+        path, object_storage_client, bucket_name, namespace, concept_map
     ):
-        path_to_check = path.replace("prerelease", "published")
+        published_path = path.replace("prerelease", "published")
+        path_to_check = published_path + f"/{concept_map['version']}.json"
         exists_in_published = ConceptMapVersion.folder_in_bucket(
             path_to_check, object_storage_client, bucket_name, namespace
         )
@@ -403,11 +404,11 @@ class ConceptMapVersion:
         # if folder is prerelease check if file exists in PUBLISHED folder
         if folder == "prerelease":
             pre_in_pub = ConceptMapVersion.check_for_prerelease_in_published(
-                path, object_storage_client, bucket_name, namespace
+                path, object_storage_client, bucket_name, namespace, concept_map
             )
             if pre_in_pub:
                 return {
-                    "message": "this concept map already in the published bucket"
+                    "message": "concept map is already in the published bucket"
                 }
         folder_exists = ConceptMapVersion.folder_in_bucket(
             path, object_storage_client, bucket_name, namespace
