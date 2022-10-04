@@ -349,8 +349,12 @@ class ConceptMapVersion:
             "date": self.published_date.strftime("%Y-%m-%d"),
             "version": self.version,
             "group": self.serialize_mappings(),
-            "extension": [{"url": "http://projectronin.io/fhir/ronin.common-fhir-model.uscore-r4/StructureDefinition/Extension/ronin-ConceptMapSchema",
-                                  "valueString": "1.0.0"}]
+            "extension": [
+                {
+                    "url": "http://projectronin.io/fhir/ronin.common-fhir-model.uscore-r4/StructureDefinition/Extension/ronin-ConceptMapSchema",
+                    "valueString": "1.0.0",
+                }
+            ]
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and
             # are not required for our use cases at this time
         }
@@ -362,11 +366,33 @@ class ConceptMapVersion:
             )
 
     @staticmethod
-    def set_up_object_store(concept_map, status):
+    def folder_path_for_oci(folder, concept_map, path):
+        if folder == "prerelease":
+            path = (
+                path
+                + f"/{concept_map['version']}_{datetime.datetime.now().strftime('%Y%m%d-%H%M')}.json"
+            )
+            return path
+        if folder == "published":
+            path = path + f"/{concept_map['version']}.json"
+            return path
+
+    @staticmethod
+    def check_for_prerelease_in_published(
+        path, object_storage_client, bucket_name, namespace
+    ):
+        path_to_check = path.replace("prerelease", "published")
+        exists_in_published = ConceptMapVersion.folder_in_bucket(
+            path_to_check, object_storage_client, bucket_name, namespace
+        )
+        return exists_in_published
+
+    @staticmethod
+    def set_up_object_store(concept_map, folder):
         object_storage_client = oci_authentication()
         concept_map_uuid = concept_map["url"].rsplit("/", 1)[1]
         if concept_map["status"] == "active" or concept_map["status"] == "in progress":
-            path = f"ConceptMaps/v1/{status}/{concept_map_uuid}"
+            path = f"ConceptMaps/v1/{folder}/{concept_map_uuid}"
         else:
             raise BadRequest(
                 "Concept map cannot be saved in object store, status must be either active or in progress."
@@ -374,29 +400,34 @@ class ConceptMapVersion:
         bucket_name = "infx-shared"
         namespace = object_storage_client.get_namespace().data
 
+        # if folder is prerelease check if file exists in PUBLISHED folder
+        if folder == "prerelease":
+            pre_in_pub = ConceptMapVersion.check_for_prerelease_in_published(
+                path, object_storage_client, bucket_name, namespace
+            )
+            if pre_in_pub:
+                return {
+                    "message": "this concept map already in the published bucket"
+                }
         folder_exists = ConceptMapVersion.folder_in_bucket(
             path, object_storage_client, bucket_name, namespace
         )
         if not folder_exists:
             del concept_map["status"]
-            if status == "prerelease":
-                path = path + f"/{concept_map['version']}_{datetime.datetime.now().strftime('%Y%M%D%H%M')}"
-
+            path = ConceptMapVersion.folder_path_for_oci(folder, concept_map, path)
             ConceptMapVersion.save_to_object_store(
                 path, object_storage_client, bucket_name, namespace, concept_map
             )
             return concept_map
         elif folder_exists:
             del concept_map["status"]
-            if status == "prerelease":
-                path = path + f"/{concept_map['version']}_{datetime.datetime.now().strftime('%Y%M%D%H%M')}"
-
+            path = ConceptMapVersion.folder_path_for_oci(folder, concept_map, path)
+            if folder == "prerelease":
                 ConceptMapVersion.save_to_object_store(
                     path, object_storage_client, bucket_name, namespace, concept_map
                 )
                 return concept_map
-            if status == "published":
-                path = path + f"/{concept_map['version']}"
+            if folder == "published":
                 version_exist = ConceptMapVersion.folder_in_bucket(
                     path, object_storage_client, bucket_name, namespace
                 )
@@ -421,7 +452,7 @@ class ConceptMapVersion:
         object_storage_client.put_object(
             namespace,
             bucket_name,
-            path + f"/{concept_map['version']}.json",
+            path,
             json.dumps(concept_map, indent=2).encode("utf-8"),
         )
         return {"message": "concept map pushed to bucket", "object": concept_map}
@@ -444,21 +475,20 @@ class ConceptMapVersion:
             return False
 
         result = dict(data)
-        return {'folder_name': result['concept_map_uuid'], 'version': result['version']}
+        return {"folder_name": result["concept_map_uuid"], "version": result["version"]}
 
     @staticmethod
-    def get_concept_map_from_object_store(concept_map, status):
+    def get_concept_map_from_object_store(concept_map, folder):
         object_storage_client = oci_authentication()
         bucket_name = "infx-shared"
         namespace = object_storage_client.get_namespace().data
-        path = f"ConceptMaps/v1/{status}/{str(concept_map['folder_name'])}/{concept_map['version']}.json"
-        concept_map_found = object_storage_client.get_object(
-            namespace,
-            bucket_name,
-            path
-        )
-        if not concept_map_found:
-            return {'message': f"{path} not found."}
+        path = f"ConceptMaps/v1/{folder}/{str(concept_map['folder_name'])}/{concept_map['version']}.json"
+        try:
+            concept_map_found = object_storage_client.get_object(
+                namespace, bucket_name, path
+            )
+        except:
+            return {"message": f"{path} not found."}
         return concept_map_found.data.json()
 
 

@@ -213,15 +213,17 @@ def create_app(script_info=None):
             concept_map_version = ConceptMapVersion(version_uuid)
             concept_map_to_json = concept_map_version.serialize()
             concept_map_to_datastore = ConceptMapVersion.set_up_object_store(
-                concept_map_to_json, status='prerelease'
+                concept_map_to_json, folder="prerelease"
             )
             return jsonify(concept_map_to_datastore)
         if request.method == "GET":
             concept_map = ConceptMapVersion.get_concept_map_from_db(version_uuid)
             if not concept_map:
-                return {'message': 'concept map uuid not found.'}
-            concept_map_from_object_store = ConceptMapVersion.get_concept_map_from_object_store(
-                concept_map, status='prerelease'
+                return {"message": "concept map uuid not found."}
+            concept_map_from_object_store = (
+                ConceptMapVersion.get_concept_map_from_object_store(
+                    concept_map, folder="prerelease"
+                )
             )
             return jsonify(concept_map_from_object_store)
 
@@ -231,15 +233,17 @@ def create_app(script_info=None):
             concept_map_version = ConceptMapVersion(version_uuid)
             concept_map_to_json = concept_map_version.serialize()
             concept_map_to_datastore = ConceptMapVersion.set_up_object_store(
-                concept_map_to_json, status='published'
+                concept_map_to_json, folder="published"
             )
             return jsonify(concept_map_to_datastore)
         if request.method == "GET":
             concept_map = ConceptMapVersion.get_concept_map_from_db(version_uuid)
             if not concept_map:
-                return {'message': 'concept map uuid not found.'}
-            concept_map_from_object_store = ConceptMapVersion.get_concept_map_from_object_store(
-                concept_map, status='published'
+                return {"message": "concept map uuid not found."}
+            concept_map_from_object_store = (
+                ConceptMapVersion.get_concept_map_from_object_store(
+                    concept_map, folder="published"
+                )
             )
             return jsonify(concept_map_from_object_store)
 
