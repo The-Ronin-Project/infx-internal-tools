@@ -370,7 +370,7 @@ class ConceptMapVersion:
         if folder == "prerelease":
             path = (
                 path
-                + f"/{concept_map['version']}_{datetime.datetime.now().strftime('%Y%m%d-%H%M')}.json"
+                + f"/{concept_map['version']}_{datetime.datetime.utcnow().strftime('%Y%m%d-%H%M')}.json"
             )
             return path
         if folder == "published":
