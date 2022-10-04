@@ -330,7 +330,7 @@ class ConceptMapVersion:
         for mapped_object in self.serialize_mappings():
             for nested in mapped_object["element"]:
                 for item in nested["target"]:
-                    if item["equivalence"] == "source-is-narrorwer-than-target":
+                    if item["equivalence"] == "source-is-narrower-than-target":
                         item["equivalence"] = "wider"
                     elif item["equivalence"] == "source-is-broader-than-target":
                         item["equivalence"] = "narrower"
@@ -340,7 +340,7 @@ class ConceptMapVersion:
             "id": self.uuid,
             "name": self.concept_map.name,
             "contact": [{"name": self.concept_map.author}],
-            "url": f"http://projectronin.io/fhir/us/ronin/ConceptMap/{self.concept_map.uuid}",
+            "url": f"http://projectronin.io/fhir/ronin.common-fhir-model.uscore-r4/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
             "purpose": self.concept_map.purpose,
             "publisher": self.concept_map.publisher,
@@ -390,7 +390,7 @@ class ConceptMapVersion:
         path, object_storage_client, bucket_name, namespace, concept_map
     ):
         """
-        This function changes the folder path to reflect published if the folder passed was release.  We do this
+        This function changes the folder path to reflect published if the folder passed was prerelease.  We do this
         specifically to check if a PRERELEASE concept map is already in the PUBLISHED FOLDER
         @param path: complete string folder path for the concept map
         @param object_storage_client: oci client to check for file existence
