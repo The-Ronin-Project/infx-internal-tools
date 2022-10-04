@@ -340,7 +340,7 @@ class ConceptMapVersion:
             "id": self.uuid,
             "name": self.concept_map.name,
             "contact": [{"name": self.concept_map.author}],
-            "url": f"http://projectronin.com/fhir/us/ronin/ConceptMap/{self.concept_map.uuid}",
+            "url": f"http://projectronin.io/fhir/us/ronin/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
             "purpose": self.concept_map.purpose,
             "publisher": self.concept_map.publisher,
@@ -432,9 +432,7 @@ class ConceptMapVersion:
                 path, object_storage_client, bucket_name, namespace, concept_map
             )
             if pre_in_pub:
-                return {
-                    "message": "concept map is already in the published bucket"
-                }
+                return {"message": "concept map is already in the published bucket"}
         folder_exists = ConceptMapVersion.folder_in_bucket(
             path, object_storage_client, bucket_name, namespace
         )
@@ -517,9 +515,7 @@ class ConceptMapVersion:
                 where uuid=:version_uuid order by version desc 
                 """
             ),
-            {
-                "version_uuid": version_uuid
-            },
+            {"version_uuid": version_uuid},
         ).first()
         if data is None:
             return False
