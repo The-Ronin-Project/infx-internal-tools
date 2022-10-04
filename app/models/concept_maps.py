@@ -307,7 +307,7 @@ class ConceptMapVersion:
                                     "code": mapping.target.code,
                                     "display": mapping.target.display,
                                     "equivalence": mapping.relationship.code,
-                                    "comment": None
+                                    "comment": None,
                                 }
                                 for mapping in filtered_mappings
                             ],
@@ -367,6 +367,14 @@ class ConceptMapVersion:
 
     @staticmethod
     def folder_path_for_oci(folder, concept_map, path):
+        """
+        This function creates the oci folder path based on folder given (prerelease or published) - prerelease includes
+        an utc timestamp appended at the end as there can be multiple versions in prerelease
+        @param folder: destination folder (prerelease or published)
+        @param concept_map: concept map object
+        @param path: string path - complete folder path location
+        @return: string of folder path
+        """
         if folder == "prerelease":
             path = (
                 path
@@ -381,6 +389,16 @@ class ConceptMapVersion:
     def check_for_prerelease_in_published(
         path, object_storage_client, bucket_name, namespace, concept_map
     ):
+        """
+        This function changes the folder path to reflect published if the folder passed was release.  We do this
+        specifically to check if a PRERELEASE concept map is already in the PUBLISHED FOLDER
+        @param path: complete string folder path for the concept map
+        @param object_storage_client: oci client to check for file existence
+        @param bucket_name: bucket for oci - most cases 'infx-shared'
+        @param namespace: oci namespaced for infx bucket
+        @param concept_map: concept map object - used here to get the version appended to the folder path
+        @return: True or False depending on if the file exists in the published folder
+        """
         published_path = path.replace("prerelease", "published")
         path_to_check = published_path + f"/{concept_map['version']}.json"
         exists_in_published = ConceptMapVersion.folder_in_bucket(
@@ -390,6 +408,13 @@ class ConceptMapVersion:
 
     @staticmethod
     def set_up_object_store(concept_map, folder):
+        """
+        This function is the conditional matrix for saving a concept map to oci.  The function LOOKS
+        to see if the concept map already exists and LOOKS to see where it should be saved.
+        @param concept_map: concept map object - used to retrieve version and correct folder name from url
+        @param folder: string folder destination (prerelease or published)
+        @return: concept map if saved to oci, otherwise messages returned based on findings
+        """
         object_storage_client = oci_authentication()
         concept_map_uuid = concept_map["url"].rsplit("/", 1)[1]
         if concept_map["status"] == "active" or concept_map["status"] == "in progress":
@@ -442,6 +467,14 @@ class ConceptMapVersion:
 
     @staticmethod
     def folder_in_bucket(path, object_storage_client, bucket_name, namespace):
+        """
+        This function will check if a specified folder/file already exists in oci
+        @param path: string path of folder
+        @param object_storage_client: oci client
+        @param bucket_name: bucket for oci - most cases 'infx-shared'
+        @param namespace: oci namespaced for infx bucket
+        @return: True or False depending on if the file exists in the published folder
+        """
         object_list = object_storage_client.list_objects(namespace, bucket_name)
         exists = [x for x in object_list.data.objects if path in x.name]
         return True if exists else False
@@ -450,6 +483,15 @@ class ConceptMapVersion:
     def save_to_object_store(
         path, object_storage_client, bucket_name, namespace, concept_map
     ):
+        """
+        This function saves the given concept map to the oci infx-shared bucket based on the folder path given
+        @param path: string path for folder
+        @param object_storage_client: oci client
+        @param bucket_name: bucket for oci - most cases 'infx-shared'
+        @param namespace: oci namespaced for infx bucket
+        @param concept_map: concept map object - used here to get the version appended to the folder path
+        @return: completion message and concept map
+        """
         object_storage_client.put_object(
             namespace,
             bucket_name,
@@ -461,6 +503,13 @@ class ConceptMapVersion:
     @staticmethod
     @db_cursor
     def get_concept_map_from_db(cursor, version_uuid):
+        """
+        This function runs the below sql query to get the overall concept map uuid and version for use in searching
+        oci storage, sql query returns most recent version
+        @param cursor: db_cursor wrapper function to create connection to sql db
+        @param version_uuid: UUID; concept map version used to retrieve overall concept uuid
+        @return: dictionary containing overall concept map uuid and version
+        """
         data = cursor.execute(
             text(
                 """
@@ -480,6 +529,12 @@ class ConceptMapVersion:
 
     @staticmethod
     def get_concept_map_from_object_store(concept_map, folder):
+        """
+        This function gets the requested concept from oci storage
+        @param concept_map: concept map object used to get the most recent version
+        @param folder: string path to look for in oci
+        @return: json of concept map found in oci storage
+        """
         object_storage_client = oci_authentication()
         bucket_name = "infx-shared"
         namespace = object_storage_client.get_namespace().data
