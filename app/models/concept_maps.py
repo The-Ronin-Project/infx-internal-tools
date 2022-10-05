@@ -14,6 +14,8 @@ from app.models.codes import Code
 from app.models.terminologies import Terminology
 from app.helpers.oci_auth import oci_authentication
 from app.helpers.db_helper import db_cursor
+from elasticsearch import TransportError
+from numpy import source
 
 
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
