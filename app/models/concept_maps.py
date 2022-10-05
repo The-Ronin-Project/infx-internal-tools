@@ -500,15 +500,15 @@ class ConceptMapVersion:
 
     @staticmethod
     @db_cursor
-    def get_concept_map_from_db(cursor, version_uuid):
+    def get_concept_map_from_db(conn, version_uuid):
         """
         This function runs the below sql query to get the overall concept map uuid and version for use in searching
         oci storage, sql query returns most recent version
-        @param cursor: db_cursor wrapper function to create connection to sql db
+        @param conn: db_cursor wrapper function to create connection to sql db
         @param version_uuid: UUID; concept map version used to retrieve overall concept uuid
         @return: dictionary containing overall concept map uuid and version
         """
-        data = cursor.execute(
+        data = conn.execute(
             text(
                 """
                 select * from concept_maps.concept_map_version
