@@ -1,5 +1,6 @@
 # infx-internal-tools
-
+![Generic badge](https://img.shields.io/badge/python-3.9-blue)
+![Generic badge](https://img.shields.io/badge/code%20style-black-000000.svg)
 A .gitignore is here as well. any subdirs or files not to be checked should have their relative paths set there.
 
 ## Team Conventions
