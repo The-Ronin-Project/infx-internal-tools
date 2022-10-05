@@ -345,7 +345,8 @@ class ConceptMapVersion:
         return groups
 
     def serialize(self):
-        for mapped_object in self.serialize_mappings():
+        serial_mappings = self.serialize_mappings()
+        for mapped_object in serial_mappings:
             for nested in mapped_object["element"]:
                 for item in nested["target"]:
                     if item["equivalence"] == "source-is-narrower-than-target":
@@ -366,7 +367,7 @@ class ConceptMapVersion:
             "status": self.status,
             "date": self.published_date.strftime("%Y-%m-%d"),
             "version": self.version,
-            "group": self.serialize_mappings(),
+            "group": serial_mappings,
             "extension": [
                 {
                     "url": "http://projectronin.io/fhir/ronin.common-fhir-model.uscore-r4/StructureDefinition/Extension/ronin-ConceptMapSchema",
