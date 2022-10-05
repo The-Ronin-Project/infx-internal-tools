@@ -2,7 +2,6 @@ import datetime
 import uuid
 import functools
 import json
-import app.models.terminologies
 import app.models.codes
 
 from werkzeug.exceptions import BadRequest
@@ -12,6 +11,7 @@ from uuid import UUID
 from typing import Optional
 from app.database import get_db
 from app.models.codes import Code
+from app.models.terminologies import Terminology
 from app.helpers.oci_auth import oci_authentication
 from app.helpers.db_helper import db_cursor
 
@@ -193,7 +193,7 @@ class ConceptMapVersion:
         for item in data:
             terminology_version_uuid = item.terminology_version_uuid
             self.allowed_target_terminologies.append(
-                app.models.terminologies.Terminology.load(terminology_version_uuid)
+                Terminology.load(terminology_version_uuid)
             )
 
     def generate_self_mappings(self):
