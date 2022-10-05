@@ -34,6 +34,8 @@ hupper = "*"
 markdownify = "*"
 readtime = "*"
 black = "*"
+oci = "*"
+mock = "*"
 
 [dev-packages]
 pytest = "*"
