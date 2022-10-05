@@ -114,6 +114,9 @@ class ConceptMap:
         self.load_data()
 
     def load_data(self):
+        """
+        runs sql query to get all information related to the concept map
+        """
         conn = get_db()
         data = conn.execute(
             text(
@@ -155,6 +158,11 @@ class ConceptMapVersion:
         self.load_data()
 
     def load_data(self):
+        """
+        runs sql query to return all information related to specified concept map version, data returned is used to
+        set class attributes
+        @rtype: object
+        """
         conn = get_db()
         data = conn.execute(
             text(
@@ -181,6 +189,10 @@ class ConceptMapVersion:
         self.generate_self_mappings()
 
     def load_allowed_target_terminologies(self):
+        """
+        runs query to get target terminology related to concept map version, called from the load method above.
+        Data returned is looped through and appended to the allowed_target_terminologies attribute list
+        """
         conn = get_db()
         data = conn.execute(
             text(
@@ -199,6 +211,10 @@ class ConceptMapVersion:
             )
 
     def generate_self_mappings(self):
+        """
+        if self_map flag in db is true, generate the self_mappings here
+        @rtype: mappings dictionary
+        """
         if self.concept_map.include_self_map is True:
             for target_terminology in self.allowed_target_terminologies:
                 target_terminology.load_content()
