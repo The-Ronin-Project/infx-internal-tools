@@ -167,6 +167,7 @@ def test_folder_path_for_oci():
     )
 
 
+# not implementing yet looking for a way to mock OCI connection
 # @patch("app.helpers.oci_auth.oci_authentication")
 # def test_oci_authentication(mock_oci_auth):
 #     """
