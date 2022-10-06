@@ -352,8 +352,11 @@ class ConceptMapVersion:
                 for item in nested["target"]:
                     if item["equivalence"] == "source-is-narrower-than-target":
                         item["equivalence"] = "wider"
+                        # [on_true] if [expression] else [on_false]
+                        item["comment"] = f"{item['comment']} source-is-narrower-than-target" if item["comment"] else "source-is-narrower-than-target"
                     elif item["equivalence"] == "source-is-broader-than-target":
                         item["equivalence"] = "narrower"
+                        item["comment"] = f"{item['comment']} source-is-broader-than-target" if item["comment"] else "source-is-broader-than-target"
         return {
             "resourceType": "ConceptMap",
             "title": self.concept_map.title,
