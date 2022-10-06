@@ -4,6 +4,7 @@ import functools
 import json
 import app.models.codes
 
+from decouple import config
 from werkzeug.exceptions import BadRequest
 from sqlalchemy import text
 from dataclasses import dataclass
@@ -441,7 +442,7 @@ class ConceptMapVersion:
             raise BadRequest(
                 "Concept map cannot be saved in object store, status must be either active or in progress."
             )
-        bucket_name = "infx-shared"
+        bucket_name = config("OCI_CLI_BUCKET")
         namespace = object_storage_client.get_namespace().data
 
         # if folder is prerelease check if file exists in PUBLISHED folder
@@ -550,7 +551,7 @@ class ConceptMapVersion:
         @return: json of concept map found in oci storage
         """
         object_storage_client = oci_authentication()
-        bucket_name = "infx-shared"
+        bucket_name = config("OCI_CLI_BUCKET")
         namespace = object_storage_client.get_namespace().data
         path = f"ConceptMaps/v1/{folder}/{str(concept_map['folder_name'])}/{concept_map['version']}.json"
         try:
