@@ -5,6 +5,11 @@ from oci.object_storage import ObjectStorageClient
 
 
 def oci_authentication():
+    """
+    config and connection for oci storage. get env variables and create oci storage client to be used for accessing
+    the infx shared bucket in oci
+    @return: oci storage client - ObjectStorageClient (oci)
+    """
     oci_config = {
         "user": config("OCI_CLI_USER"),
         "fingerprint": config("OCI_CLI_FINGERPRINT"),
