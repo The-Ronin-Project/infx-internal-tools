@@ -11,6 +11,7 @@ from app.models.value_sets import *
 from app.models.concept_maps import *
 from app.models.surveys import *
 from app.models.patient_edu import *
+from app.models.data_ingestion_registry import DataNormalizationRegistry
 import app.models.rxnorm as rxnorm
 from werkzeug.exceptions import HTTPException
 
@@ -357,6 +358,12 @@ def create_app(script_info=None):
     def rxnorm_search():
         query_string = request.values.get('query_string')
         return jsonify(rxnorm.exact_with_approx_fallback_search(query_string))
+
+    @app.route('/data_normalization/registry', methods=['GET'])
+    def data_ingestion_registry():
+        registry = DataNormalizationRegistry()
+        registry.load_entries()
+        return jsonify(registry.serialize())
 
     return app
 
