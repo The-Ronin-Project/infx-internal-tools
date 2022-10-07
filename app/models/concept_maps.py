@@ -1,16 +1,19 @@
 import datetime
 import uuid
 import functools
-
-import app.models.terminologies
+import json
 import app.models.codes
 
+from decouple import config
+from werkzeug.exceptions import BadRequest
 from sqlalchemy import text
 from dataclasses import dataclass
 from uuid import UUID
 from typing import Optional
 from app.database import get_db
 from app.models.codes import Code
+from app.models.terminologies import Terminology
+from app.helpers.oci_auth import oci_authentication
 from app.helpers.db_helper import db_cursor
 from elasticsearch import TransportError
 from numpy import source
@@ -112,6 +115,9 @@ class ConceptMap:
         self.load_data()
 
     def load_data(self):
+        """
+        runs sql query to get all information related to the concept map
+        """
         conn = get_db()
         data = conn.execute(
             text(
@@ -153,6 +159,11 @@ class ConceptMapVersion:
         self.load_data()
 
     def load_data(self):
+        """
+        runs sql query to return all information related to specified concept map version, data returned is used to
+        set class attributes
+        @rtype: object
+        """
         conn = get_db()
         data = conn.execute(
             text(
@@ -179,6 +190,10 @@ class ConceptMapVersion:
         self.generate_self_mappings()
 
     def load_allowed_target_terminologies(self):
+        """
+        runs query to get target terminology related to concept map version, called from the load method above.
+        Data returned is looped through and appended to the allowed_target_terminologies attribute list
+        """
         conn = get_db()
         data = conn.execute(
             text(
@@ -193,10 +208,14 @@ class ConceptMapVersion:
         for item in data:
             terminology_version_uuid = item.terminology_version_uuid
             self.allowed_target_terminologies.append(
-                app.models.terminologies.Terminology.load(terminology_version_uuid)
+                Terminology.load(terminology_version_uuid)
             )
 
     def generate_self_mappings(self):
+        """
+        if self_map flag in db is true, generate the self_mappings here
+        @rtype: mappings dictionary
+        """
         if self.concept_map.include_self_map is True:
             for target_terminology in self.allowed_target_terminologies:
                 target_terminology.load_content()
@@ -307,6 +326,7 @@ class ConceptMapVersion:
                                     "code": mapping.target.code,
                                     "display": mapping.target.display,
                                     "equivalence": mapping.relationship.code,
+                                    "comment": None,
                                 }
                                 for mapping in filtered_mappings
                             ],
@@ -326,19 +346,24 @@ class ConceptMapVersion:
         return groups
 
     def serialize(self):
-        combined_description = (
-            str(self.concept_map.description)
-            + " Version-specific notes:"
-            + str(self.description)
-        )
-
+        serial_mappings = self.serialize_mappings()
+        for mapped_object in serial_mappings:
+            for nested in mapped_object["element"]:
+                for item in nested["target"]:
+                    if item["equivalence"] == "source-is-narrower-than-target":
+                        item["equivalence"] = "wider"
+                        # [on_true] if [expression] else [on_false]
+                        item["comment"] = f"{item['comment']} source-is-narrower-than-target" if item["comment"] else "source-is-narrower-than-target"
+                    elif item["equivalence"] == "source-is-broader-than-target":
+                        item["equivalence"] = "narrower"
+                        item["comment"] = f"{item['comment']} source-is-broader-than-target" if item["comment"] else "source-is-broader-than-target"
         return {
             "resourceType": "ConceptMap",
             "title": self.concept_map.title,
             "id": self.uuid,
             "name": self.concept_map.name,
             "contact": [{"name": self.concept_map.author}],
-            "url": f"http://projectronin.com/fhir/us/ronin/ConceptMap/{self.concept_map.uuid}",
+            "url": f"http://projectronin.io/fhir/ronin.common-fhir-model.uscore-r4/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
             "purpose": self.concept_map.purpose,
             "publisher": self.concept_map.publisher,
@@ -346,9 +371,200 @@ class ConceptMapVersion:
             "status": self.status,
             "date": self.published_date.strftime("%Y-%m-%d"),
             "version": self.version,
-            "group": self.serialize_mappings()
-            # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and not required for our use cases at this time
+            "group": serial_mappings,
+            "extension": [
+                {
+                    "url": "http://projectronin.io/fhir/ronin.common-fhir-model.uscore-r4/StructureDefinition/Extension/ronin-ConceptMapSchema",
+                    "valueString": "1.0.0",
+                }
+            ]
+            # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and
+            # are not required for our use cases at this time
         }
+
+    def pre_export_validate(self):
+        if self.pre_export_validate is False:
+            raise BadRequest(
+                "Concept map cannot be published because it failed validation"
+            )
+
+    @staticmethod
+    def folder_path_for_oci(folder, concept_map, path):
+        """
+        This function creates the oci folder path based on folder given (prerelease or published) - prerelease includes
+        an utc timestamp appended at the end as there can be multiple versions in prerelease
+        @param folder: destination folder (prerelease or published)
+        @param concept_map: concept map object
+        @param path: string path - complete folder path location
+        @return: string of folder path
+        """
+        if folder == "prerelease":
+            path = (
+                path
+                + f"/{concept_map['version']}_{datetime.datetime.utcnow().strftime('%Y%m%d-%H%M')}.json"
+            )
+            return path
+        if folder == "published":
+            path = path + f"/{concept_map['version']}.json"
+            return path
+
+    @staticmethod
+    def check_for_prerelease_in_published(
+        path, object_storage_client, bucket_name, namespace, concept_map
+    ):
+        """
+        This function changes the folder path to reflect published if the folder passed was prerelease.  We do this
+        specifically to check if a PRERELEASE concept map is already in the PUBLISHED FOLDER
+        @param path: complete string folder path for the concept map
+        @param object_storage_client: oci client to check for file existence
+        @param bucket_name: bucket for oci - most cases 'infx-shared'
+        @param namespace: oci namespaced for infx bucket
+        @param concept_map: concept map object - used here to get the version appended to the folder path
+        @return: True or False depending on if the file exists in the published folder
+        """
+        published_path = path.replace("prerelease", "published")
+        path_to_check = published_path + f"/{concept_map['version']}.json"
+        exists_in_published = ConceptMapVersion.folder_in_bucket(
+            path_to_check, object_storage_client, bucket_name, namespace
+        )
+        return exists_in_published
+
+    @staticmethod
+    def set_up_object_store(concept_map, folder):
+        """
+        This function is the conditional matrix for saving a concept map to oci.  The function LOOKS
+        to see if the concept map already exists and LOOKS to see where it should be saved.
+        @param concept_map: concept map object - used to retrieve version and correct folder name from url
+        @param folder: string folder destination (prerelease or published)
+        @return: concept map if saved to oci, otherwise messages returned based on findings
+        """
+        object_storage_client = oci_authentication()
+        concept_map_uuid = concept_map["url"].rsplit("/", 1)[1]
+        if concept_map["status"] == "active" or concept_map["status"] == "in progress":
+            path = f"ConceptMaps/v1/{folder}/{concept_map_uuid}"
+        else:
+            raise BadRequest(
+                "Concept map cannot be saved in object store, status must be either active or in progress."
+            )
+        bucket_name = config("OCI_CLI_BUCKET")
+        namespace = object_storage_client.get_namespace().data
+
+        # if folder is prerelease check if file exists in PUBLISHED folder
+        if folder == "prerelease":
+            pre_in_pub = ConceptMapVersion.check_for_prerelease_in_published(
+                path, object_storage_client, bucket_name, namespace, concept_map
+            )
+            if pre_in_pub:
+                return {"message": "concept map is already in the published bucket"}
+        folder_exists = ConceptMapVersion.folder_in_bucket(
+            path, object_storage_client, bucket_name, namespace
+        )
+        if not folder_exists:
+            del concept_map["status"]
+            path = ConceptMapVersion.folder_path_for_oci(folder, concept_map, path)
+            ConceptMapVersion.save_to_object_store(
+                path, object_storage_client, bucket_name, namespace, concept_map
+            )
+            return concept_map
+        elif folder_exists:
+            del concept_map["status"]
+            path = ConceptMapVersion.folder_path_for_oci(folder, concept_map, path)
+            if folder == "prerelease":
+                ConceptMapVersion.save_to_object_store(
+                    path, object_storage_client, bucket_name, namespace, concept_map
+                )
+                return concept_map
+            if folder == "published":
+                version_exist = ConceptMapVersion.folder_in_bucket(
+                    path, object_storage_client, bucket_name, namespace
+                )
+                if version_exist:
+                    return {"message": "concept map already in bucket"}
+                else:
+                    ConceptMapVersion.save_to_object_store(
+                        path, object_storage_client, bucket_name, namespace, concept_map
+                    )
+                return concept_map
+
+    @staticmethod
+    def folder_in_bucket(path, object_storage_client, bucket_name, namespace):
+        """
+        This function will check if a specified folder/file already exists in oci
+        @param path: string path of folder
+        @param object_storage_client: oci client
+        @param bucket_name: bucket for oci - most cases 'infx-shared'
+        @param namespace: oci namespaced for infx bucket
+        @return: True or False depending on if the file exists in the published folder
+        """
+        object_list = object_storage_client.list_objects(namespace, bucket_name)
+        exists = [x for x in object_list.data.objects if path in x.name]
+        return True if exists else False
+
+    @staticmethod
+    def save_to_object_store(
+        path, object_storage_client, bucket_name, namespace, concept_map
+    ):
+        """
+        This function saves the given concept map to the oci infx-shared bucket based on the folder path given
+        @param path: string path for folder
+        @param object_storage_client: oci client
+        @param bucket_name: bucket for oci - most cases 'infx-shared'
+        @param namespace: oci namespaced for infx bucket
+        @param concept_map: concept map object - used here to get the version appended to the folder path
+        @return: completion message and concept map
+        """
+        object_storage_client.put_object(
+            namespace,
+            bucket_name,
+            path,
+            json.dumps(concept_map, indent=2).encode("utf-8"),
+        )
+        return {"message": "concept map pushed to bucket", "object": concept_map}
+
+    @staticmethod
+    @db_cursor
+    def get_concept_map_from_db(conn, version_uuid):
+        """
+        This function runs the below sql query to get the overall concept map uuid and version for use in searching
+        oci storage, sql query returns most recent version
+        @param conn: db_cursor wrapper function to create connection to sql db
+        @param version_uuid: UUID; concept map version used to retrieve overall concept uuid
+        @return: dictionary containing overall concept map uuid and version
+        """
+        data = conn.execute(
+            text(
+                """
+                select * from concept_maps.concept_map_version
+                where uuid=:version_uuid order by version desc 
+                """
+            ),
+            {"version_uuid": version_uuid},
+        ).first()
+        if data is None:
+            return False
+
+        result = dict(data)
+        return {"folder_name": result["concept_map_uuid"], "version": result["version"]}
+
+    @staticmethod
+    def get_concept_map_from_object_store(concept_map, folder):
+        """
+        This function gets the requested concept from oci storage
+        @param concept_map: concept map object used to get the most recent version
+        @param folder: string path to look for in oci
+        @return: json of concept map found in oci storage
+        """
+        object_storage_client = oci_authentication()
+        bucket_name = config("OCI_CLI_BUCKET")
+        namespace = object_storage_client.get_namespace().data
+        path = f"ConceptMaps/v1/{folder}/{str(concept_map['folder_name'])}/{concept_map['version']}.json"
+        try:
+            concept_map_found = object_storage_client.get_object(
+                namespace, bucket_name, path
+            )
+        except:
+            return {"message": f"{path} not found."}
+        return concept_map_found.data.json()
 
 
 @dataclass

@@ -60,7 +60,7 @@ class ExternalResource:
 
     @staticmethod
     @db_cursor
-    def retrieve_language_code(cursor, code):
+    def retrieve_language_code(conn, code):
         """
         check if code is in table, if it is return true, else return the base language_code
         example: if code were en-XX only return en **** this will always search the public.languages
@@ -68,13 +68,13 @@ class ExternalResource:
         """
         metadata = MetaData()
         table = Table(
-            "languages", metadata, schema="public", autoload=True, autoload_with=cursor
+            "languages", metadata, schema="public", autoload=True, autoload_with=conn
         )
         query = table.select()
         for k, v in code.items():
             query = query.where(getattr(table.columns, k) == v)
 
-        result = [dict(row) for row in cursor.execute(query).all()]
+        result = [dict(row) for row in conn.execute(query).all()]
         return True if result else False
 
     def extract_and_modify_resource(self):
@@ -169,9 +169,9 @@ class ExternalResource:
 
     @staticmethod
     @db_cursor
-    def save_external_resource(cursor, external_resource):
+    def save_external_resource(conn, external_resource):
         """insert external resource into db, return inserted data to user"""
-        cursor.execute(
+        conn.execute(
             text(
                 """
             INSERT INTO patient_education.resource
@@ -181,7 +181,7 @@ class ExternalResource:
             {"uuid": external_resource.resource_uuid},
         )
 
-        cursor.execute(
+        conn.execute(
             text(
                 """
             INSERT INTO patient_education.resource_version
@@ -219,8 +219,8 @@ class ExternalResource:
 
     @staticmethod
     @db_cursor
-    def get_all_external_resources(cursor):
-        all_external_resources = cursor.execute(
+    def get_all_external_resources(conn):
+        all_external_resources = conn.execute(
             text(
                 """
             SELECT * FROM patient_education.resource_version
