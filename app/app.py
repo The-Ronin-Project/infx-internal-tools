@@ -361,9 +361,19 @@ def create_app(script_info=None):
 
     @app.route('/data_normalization/registry', methods=['GET'])
     def data_ingestion_registry():
-        registry = DataNormalizationRegistry()
-        registry.load_entries()
-        return jsonify(registry.serialize())
+        if request.method == 'GET':
+            registry = DataNormalizationRegistry()
+            registry.load_entries()
+            return jsonify(registry.serialize())
+
+    @app.route('/data_normalization/registry/actions/publish', methods=['POST'])
+    def publish_data_normalization_registry():
+        if request.method == 'POST':
+            post_registry = DataNormalizationRegistry()
+            post_registry.load_entries()
+            t = post_registry.serialize()
+            all_registries = DataNormalizationRegistry.publish_to_object_store(t)
+            return all_registries
 
     return app
 
