@@ -359,26 +359,29 @@ def create_app(script_info=None):
         query_string = request.values.get('query_string')
         return jsonify(rxnorm.exact_with_approx_fallback_search(query_string))
 
-    @app.route('/data_normalization/registry', methods=['GET'])
+    # Registry
+    @app.route("/data_normalization/registry", methods=["GET"])
     def data_ingestion_registry():
-        if request.method == 'GET':
+        if request.method == "GET":
             registry = DataNormalizationRegistry()
             registry.load_entries()
             return jsonify(registry.serialize())
 
-    @app.route('/data_normalization/registry/actions/publish', methods=['POST'])
+    @app.route("/data_normalization/registry/actions/publish", methods=["POST"])
     def publish_data_normalization_registry():
-        if request.method == 'POST':
+        if request.method == "POST":
             post_registry = DataNormalizationRegistry()
             post_registry.load_entries()
-            t = post_registry.serialize()
-            all_registries = DataNormalizationRegistry.publish_to_object_store(t)
-            return all_registries
+            all_registries = post_registry.serialize()
+            registries_to_post = DataNormalizationRegistry.publish_to_object_store(
+                all_registries
+            )
+            return jsonify(registries_to_post)
 
     return app
 
 
 application = create_app()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     application.run(debug=True, host="0.0.0.0", port=5500)
