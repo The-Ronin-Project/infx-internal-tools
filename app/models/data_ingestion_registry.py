@@ -12,23 +12,21 @@ from app.helpers.oci_auth import oci_authentication
 
 @dataclass
 class DNRegistryEntry:
-    uuid: uuid.UUID
     resource_type: str
     data_element: str
     tenant_id: str
-    original_data_element: str
+    source_extension_url: str
     concept_map: app.models.concept_maps.ConceptMap
 
     def serialize(self):
         return {
-            'uuid': str(self.uuid),
-            'resource_type': self.resource_type,
-            'data_element': self.data_element,
-            'tenant_id': self.tenant_id,
-            'original_data_element': self.original_data_element,
-            'concept_map_uuid': str(self.concept_map.uuid),
-            'version': self.concept_map.most_recent_active_version.version,
-            'filename': f'/ConceptMaps/v1/{self.concept_map.uuid}/{self.concept_map.most_recent_active_version.version}.json'
+            "resource_type": self.resource_type,
+            "data_element": self.data_element,
+            "tenant_id": self.tenant_id,
+            "concept_map_uuid": str(self.concept_map.uuid),
+            "version": self.concept_map.most_recent_active_version.version,
+            "filename": f"ConceptMaps/v1/{self.concept_map.uuid}/{self.concept_map.most_recent_active_version.version}.json",
+            "source_extension_url": self.source_extension_url,
         }
 
 
@@ -53,12 +51,13 @@ class DataNormalizationRegistry:
         for item in query:
             self.entries.append(
                 DNRegistryEntry(
-                    uuid=item.uuid,
                     resource_type=item.resource_type,
                     data_element=item.data_element,
                     tenant_id=item.tenant_id,
-                    original_data_element=item.original_data_element,
-                    concept_map=app.models.concept_maps.ConceptMap(item.concept_map_uuid)
+                    source_extension_url=item.source_extension_url,
+                    concept_map=app.models.concept_maps.ConceptMap(
+                        item.concept_map_uuid
+                    ),
                 )
             )
 
@@ -73,9 +72,7 @@ class DataNormalizationRegistry:
         object_storage_client.put_object(
             namespace,
             bucket_name,
-            'DataNormalizationRegistry/v1/registry-draft.json',
+            "DataNormalizationRegistry/v1/registry-draft.json",
             json.dumps(registry, indent=2).encode("utf-8"),
         )
         return registry
-
-
