@@ -177,8 +177,8 @@ def create_app(script_info=None):
             file_buffer,
             mimetype="text/plain",
             headers={
-            "Content-Disposition": f"attachment; filename={expansion_uuid}-report.csv"
-            }
+                "Content-Disposition": f"attachment; filename={expansion_uuid}-report.csv"
+            },
         )
         return response
 
@@ -377,6 +377,12 @@ def create_app(script_info=None):
                 all_registries
             )
             return jsonify(registries_to_post)
+
+    @app.route("/data_normalization/registry/actions/get_time", methods=["GET"])
+    def get_last_published_time():
+        last_update = DataNormalizationRegistry.get_oci_last_published_time()
+        convert_last_update = DataNormalizationRegistry.convert_gmt_time(last_update)
+        return convert_last_update
 
     return app
 

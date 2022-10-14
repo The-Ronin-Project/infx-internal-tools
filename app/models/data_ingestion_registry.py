@@ -1,13 +1,16 @@
 import json
-from dataclasses import dataclass
+import datetime
+import uuid
+import app.models.concept_maps
 
+from dataclasses import dataclass
 from decouple import config
 from sqlalchemy import text
-import uuid
 from typing import List, cast
-import app.models.concept_maps
 from app.database import get_db
 from app.helpers.oci_auth import oci_authentication
+from datetime import datetime
+from dateutil import tz
 
 
 @dataclass
@@ -76,3 +79,38 @@ class DataNormalizationRegistry:
             json.dumps(registry, indent=2).encode("utf-8"),
         )
         return registry
+
+    @staticmethod
+    def get_oci_last_published_time():
+        """
+        function to get the last modified time from registry file
+        @return: timestamp string
+        @rtype: string
+        """
+        object_storage_client = oci_authentication()
+        namespace = object_storage_client.get_namespace().data
+        bucket_name = config("OCI_CLI_BUCKET")
+        bucket_item = object_storage_client.get_object(
+            namespace, bucket_name, "DataNormalizationRegistry/v1/registry-draft.json"
+        )
+        return bucket_item.headers["last-modified"]
+
+    @staticmethod
+    def convert_gmt_time(object_time):
+        """
+        function to convert last modified string timestamp from GMT to PST time
+        @param object_time: string timestamp
+        @type object_time: string
+        @return: dictionary containing converted time
+        @rtype: dictionary
+        """
+        # set timezones that are being worked with
+        from_zone = tz.gettz("GMT")
+        to_zone = tz.gettz("US/Pacific")
+        # set format of gmt timestamp
+        gmt = datetime.strptime(object_time, "%a, %d %b %Y %H:%M:%S GMT")
+        # tell datetime object its GMT
+        gmt = gmt.replace(tzinfo=from_zone)
+        # convert time zone to PST
+        pacific_time = str(gmt.astimezone(to_zone))
+        return {"last_modified": pacific_time + " PST"}
