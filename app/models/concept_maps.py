@@ -523,6 +523,27 @@ class ConceptMapVersion:
 
     @staticmethod
     @db_cursor
+    def version_set_status_active(conn, version_uuid):
+        """
+        This function updates the status of the concept map version to "active" and inserts the publication date as now
+        @param conn: db_cursor wrapper function to create connection to sql db
+        @param version_uuid: UUID; concept map version used to set status in pgAdmin
+        @return: result from query
+        """
+        data = conn.execute(
+            text(
+                """
+                UPDATE concept_maps.concept_map_version
+                SET status='active', published_date=:published_date
+                WHERE uuid=:version_uuid
+                """
+            ),
+            {"version_uuid": version_uuid, "published_date": datetime.datetime.now()}
+        )
+        return data
+
+    @staticmethod
+    @db_cursor
     def get_concept_map_from_db(conn, version_uuid):
         """
         This function runs the below sql query to get the overall concept map uuid and version for use in searching

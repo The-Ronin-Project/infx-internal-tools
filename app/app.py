@@ -235,6 +235,7 @@ def create_app(script_info=None):
             concept_map_to_datastore = ConceptMapVersion.set_up_object_store(
                 concept_map_to_json, folder="published"
             )
+            ConceptMapVersion.version_set_status_active(version_uuid)
             return jsonify(concept_map_to_datastore)
         if request.method == "GET":
             concept_map = ConceptMapVersion.get_concept_map_from_db(version_uuid)
