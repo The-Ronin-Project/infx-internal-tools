@@ -19,6 +19,7 @@ class DNRegistryEntry:
     data_element: str
     tenant_id: str
     source_extension_url: str
+    registry_uuid: str
     concept_map: app.models.concept_maps.ConceptMap
 
     def serialize(self):
@@ -30,6 +31,7 @@ class DNRegistryEntry:
             "version": self.concept_map.most_recent_active_version.version,
             "filename": f"ConceptMaps/v1/{self.concept_map.uuid}/{self.concept_map.most_recent_active_version.version}.json",
             "source_extension_url": self.source_extension_url,
+            "registry_uuid": str(self.registry_uuid)
         }
 
 
@@ -58,6 +60,7 @@ class DataNormalizationRegistry:
                     data_element=item.data_element,
                     tenant_id=item.tenant_id,
                     source_extension_url=item.source_extension_url,
+                    registry_uuid=item.registry_uuid,
                     concept_map=app.models.concept_maps.ConceptMap(
                         item.concept_map_uuid
                     ),
