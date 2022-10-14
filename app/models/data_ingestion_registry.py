@@ -78,7 +78,7 @@ class DataNormalizationRegistry:
         object_storage_client.put_object(
             namespace,
             bucket_name,
-            "DataNormalizationRegistry/v1/registry-draft.json",
+            "DataNormalizationRegistry/v1/registry.json",
             json.dumps(registry, indent=2).encode("utf-8"),
         )
         return registry
@@ -94,7 +94,7 @@ class DataNormalizationRegistry:
         namespace = object_storage_client.get_namespace().data
         bucket_name = config("OCI_CLI_BUCKET")
         bucket_item = object_storage_client.get_object(
-            namespace, bucket_name, "DataNormalizationRegistry/v1/registry-draft.json"
+            namespace, bucket_name, "DataNormalizationRegistry/v1/registry.json"
         )
         return bucket_item.headers["last-modified"]
 
