@@ -31,7 +31,8 @@ class DNRegistryEntry:
             "version": self.concept_map.most_recent_active_version.version,
             "filename": f"ConceptMaps/v1/{self.concept_map.uuid}/{self.concept_map.most_recent_active_version.version}.json",
             "source_extension_url": self.source_extension_url,
-            "registry_uuid": str(self.registry_uuid)
+            "registry_uuid": str(self.registry_uuid),
+            "concept_map_name": self.concept_map.name,
         }
 
 
