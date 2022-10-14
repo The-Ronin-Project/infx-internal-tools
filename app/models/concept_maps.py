@@ -112,6 +112,8 @@ class ConceptMap:
         self.created_date = None
         self.include_self_map = None
 
+        self.most_recent_active_version = None
+
         self.load_data()
 
     def load_data(self):
@@ -139,9 +141,26 @@ class ConceptMap:
         self.created_date = data.created_date
         self.include_self_map = data.include_self_map
 
+        version = conn.execute(
+            text(
+                """
+                select * from concept_maps.concept_map_version
+                where concept_map_uuid=:concept_map_uuid
+                and status='active'
+                order by version desc
+                limit 1
+                """
+            ), {
+                'concept_map_uuid': self.uuid
+            }
+        ).first()
+        self.most_recent_active_version = ConceptMapVersion(version.uuid, concept_map=self)
+
+
+
 
 class ConceptMapVersion:
-    def __init__(self, uuid):
+    def __init__(self, uuid, concept_map=None):
         self.uuid = uuid
         self.concept_map = None
         self.description = None
@@ -156,9 +175,9 @@ class ConceptMapVersion:
         self.mappings = {}
         self.url = None
 
-        self.load_data()
+        self.load_data(concept_map=concept_map)
 
-    def load_data(self):
+    def load_data(self, concept_map=None):
         """
         runs sql query to return all information related to specified concept map version, data returned is used to
         set class attributes
@@ -175,7 +194,11 @@ class ConceptMapVersion:
             {"version_uuid": self.uuid},
         ).first()
 
-        self.concept_map = ConceptMap(data.concept_map_uuid)
+        if concept_map is None:
+            self.concept_map = ConceptMap(data.concept_map_uuid)
+        else:
+            self.concept_map = concept_map
+
         self.description = data.description
         self.comments = data.comments
         self.status = data.status

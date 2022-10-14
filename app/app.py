@@ -11,6 +11,7 @@ from app.models.value_sets import *
 from app.models.concept_maps import *
 from app.models.surveys import *
 from app.models.patient_edu import *
+from app.models.data_ingestion_registry import DataNormalizationRegistry
 import app.models.rxnorm as rxnorm
 from werkzeug.exceptions import HTTPException
 
@@ -176,8 +177,8 @@ def create_app(script_info=None):
             file_buffer,
             mimetype="text/plain",
             headers={
-            "Content-Disposition": f"attachment; filename={expansion_uuid}-report.csv"
-            }
+                "Content-Disposition": f"attachment; filename={expansion_uuid}-report.csv"
+            },
         )
         return response
 
@@ -359,10 +360,35 @@ def create_app(script_info=None):
         query_string = request.values.get('query_string')
         return jsonify(rxnorm.exact_with_approx_fallback_search(query_string))
 
+    # Registry
+    @app.route("/data_normalization/registry", methods=["GET"])
+    def data_ingestion_registry():
+        if request.method == "GET":
+            registry = DataNormalizationRegistry()
+            registry.load_entries()
+            return jsonify(registry.serialize())
+
+    @app.route("/data_normalization/registry/actions/publish", methods=["POST"])
+    def publish_data_normalization_registry():
+        if request.method == "POST":
+            post_registry = DataNormalizationRegistry()
+            post_registry.load_entries()
+            all_registries = post_registry.serialize()
+            registries_to_post = DataNormalizationRegistry.publish_to_object_store(
+                all_registries
+            )
+            return jsonify(registries_to_post)
+
+    @app.route("/data_normalization/registry/actions/get_time", methods=["GET"])
+    def get_last_published_time():
+        last_update = DataNormalizationRegistry.get_oci_last_published_time()
+        convert_last_update = DataNormalizationRegistry.convert_gmt_time(last_update)
+        return convert_last_update
+
     return app
 
 
 application = create_app()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     application.run(debug=True, host="0.0.0.0", port=5500)
