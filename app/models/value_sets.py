@@ -442,23 +442,27 @@ class SNOMEDRule(VSRule):
         offset = 0
         self.results = set()
         results_complete = False
+        search_after_token = None
 
         while results_complete is False:
             branch = "MAIN"
+
+            params = {"ecl": self.value, "limit": SNOSTORM_LIMIT, "offset": offset}
+            if search_after_token is not None:
+                params['searchAfter'] = search_after_token
+
             r = requests.get(
                 f"{ECL_SERVER_PATH}/{branch}/{self.terminology_version.version}/concepts",
-                params={"ecl": self.value, "limit": SNOSTORM_LIMIT, "offset": offset},
+                params=params,
             )
 
             if "error" in r.json():
                 raise BadRequest(r.json().get("message"))
 
             # Handle pagination
-            total_results = r.json().get("total")
-            pages = int(math.ceil(total_results / SNOSTORM_LIMIT))
-            offset += SNOSTORM_LIMIT
-            if offset >= pages * SNOSTORM_LIMIT:
+            if len(r.json().get('items')) == 0:
                 results_complete = True
+            search_after_token = r.json().get('searchAfter')
 
             # Add data to results
             data = r.json().get("items")
