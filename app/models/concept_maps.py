@@ -342,8 +342,8 @@ class ConceptMapVersion:
                     ]
                     elements.append(
                         {
-                            "code": source_code.code,
-                            "display": source_code.display,
+                            "code": source_code.code.rstrip(),
+                            "display": source_code.display.rstrip(),
                             "target": [
                                 {
                                     "code": mapping.target.code,
