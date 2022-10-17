@@ -23,7 +23,7 @@ import numpy as np
 from pandas import json_normalize
 
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io"
-SNOSTORM_LIMIT = 500
+SNOSTORM_LIMIT = 1000
 
 # RXNORM_BASE_URL = "https://rxnav.nlm.nih.gov/REST/"
 RXNORM_BASE_URL = "https://rxnav.prod.projectronin.io/REST/"
