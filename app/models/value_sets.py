@@ -23,7 +23,7 @@ import numpy as np
 from pandas import json_normalize
 
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io"
-SNOSTORM_LIMIT = 500
+SNOSTORM_LIMIT = 1000
 
 # RXNORM_BASE_URL = "https://rxnav.nlm.nih.gov/REST/"
 RXNORM_BASE_URL = "https://rxnav.prod.projectronin.io/REST/"
@@ -439,7 +439,11 @@ class SNOMEDRule(VSRule):
         self.results = set(results)
 
     def ecl_query(self):
-        offset = 0
+        """
+        Executes an ECL query against our internal Snowstorm instance.
+        Uses pagination to ensure all results are captured.
+        Puts final results into self.results, per value set specs
+        """
         self.results = set()
         results_complete = False
         search_after_token = None
@@ -447,7 +451,7 @@ class SNOMEDRule(VSRule):
         while results_complete is False:
             branch = "MAIN"
 
-            params = {"ecl": self.value, "limit": SNOSTORM_LIMIT, "offset": offset}
+            params = {"ecl": self.value, "limit": SNOSTORM_LIMIT}
             if search_after_token is not None:
                 params['searchAfter'] = search_after_token
 
