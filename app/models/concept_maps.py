@@ -561,7 +561,7 @@ class ConceptMapVersion:
                 WHERE uuid=:version_uuid
                 """
             ),
-            {"version_uuid": version_uuid, "published_date": datetime.datetime.now()}
+            {"version_uuid": version_uuid, "published_date": datetime.datetime.now()},
         )
         return data
 
@@ -750,4 +750,58 @@ class MappingSuggestion:
             "confidence": self.confidence,
             "timestamp": self.timestamp,
             "accepted": self.accepted,
+        }
+
+
+@dataclass
+class ValueSetMap:
+    concept_map_version_uuid: UUID
+    mapping_comments: str
+    target_concept_code: UUID
+    target_concept_display: str
+    author: str
+    relationship_code_uuid: UUID
+    review_status: str = "ready for review"
+    uuid: Optional[UUID] = None
+    conn: Optional[None] = None
+
+    def __post_init__(self):
+        self.conn = get_db()
+        self.uuid = uuid.uuid4()
+
+    def save(self):
+        valueset_map = self.conn.execute(
+            text(
+                """
+                INSERT INTO concept_maps.concept_relationship(
+                uuid, review_status, relationship_code_uuid, target_concept_code, 
+                target_concept_display, target_concept_system_version_uuid, mapping_comments, author, created_date
+                ) VALUES (
+                :uuid, :review_status, :relationship_code_uuid, :target_concept_code, 
+                :target_concept_display, :mapping_comments, :author, :created_date
+                );
+                """
+            ),
+            {
+                "uuid": self.uuid,
+                "review_status": self.review_status,
+                "relationship_code_uuid": self.relationship_code_uuid,
+                "target_concept_code": self.target_concept_code,
+                "target_concept_display": self.target_concept_display,
+                "mapping_comments": self.mapping_comments,
+                "author": self.author,
+                "created_date": datetime.datetime.now(),
+            },
+        )
+        return valueset_map
+
+    def serialize(self):
+        return {
+            "uuid": self.uuid,
+            "review_status": self.review_status,
+            "relationship_code_uuid": self.relationship_code_uuid,
+            "target_concept_code": self.target_concept_code,
+            "target_concept_display": self.target_concept_display,
+            "mapping_comments": self.mapping_comments,
+            "author": self.author,
         }
