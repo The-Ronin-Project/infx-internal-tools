@@ -322,18 +322,20 @@ def create_app(script_info=None):
     @app.route("/valueset/mappings/", methods=["POST"])
     def create_valueset_concept_map():
         if request.method == "POST":
-            concept_map_version_uuid = request.json.get("concept_map_version_uuid")
+            source_concept_uuid = request.json.get("source_concept_uuid")
             mapping_comments = request.json.get("mapping_comments")
             target_concept_code = request.json.get("target_concept_code")
             target_concept_display = request.json.get("target_concept_display")
+            target_concept_system_version_uuid = request.json.get("target_concept_terminology_version_uuid")
             author = request.json.get("author")
             relationship_code_uuid = request.json.get("relationship_code_uuid")
 
             valueset_map = ValueSetMap(
-                concept_map_version_uuid=concept_map_version_uuid,
+                source_concept_uuid=source_concept_uuid,
                 mapping_comments=mapping_comments,
                 target_concept_code=target_concept_code,
                 target_concept_display=target_concept_display,
+                target_concept_system_version_uuid=target_concept_system_version_uuid,
                 author=author,
                 relationship_code_uuid=relationship_code_uuid,
             )

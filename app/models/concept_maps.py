@@ -755,10 +755,11 @@ class MappingSuggestion:
 
 @dataclass
 class ValueSetMap:
-    concept_map_version_uuid: UUID
+    source_concept_uuid: UUID
     mapping_comments: str
     target_concept_code: UUID
     target_concept_display: str
+    target_concept_system_version_uuid: UUID
     author: str
     relationship_code_uuid: UUID
     uuid: Optional[UUID] = None
@@ -773,19 +774,21 @@ class ValueSetMap:
             text(
                 """
                 INSERT INTO concept_maps.concept_relationship(
-                uuid, relationship_code_uuid, target_concept_code, 
+                uuid, source_concept_uuid, relationship_code_uuid, target_concept_code, 
                 target_concept_display, target_concept_system_version_uuid, mapping_comments, author, created_date
                 ) VALUES (
-                :uuid, :relationship_code_uuid, :target_concept_code, 
-                :target_concept_display, :mapping_comments, :author, :created_date
+                :uuid, :source_concept_uuid, :relationship_code_uuid, :target_concept_code, 
+                :target_concept_display, :target_concept_system_version_uuid, :mapping_comments, :author, :created_date
                 );
                 """
             ),
             {
                 "uuid": self.uuid,
+                "source_concept_uuid": self.source_concept_uuid,
                 "relationship_code_uuid": self.relationship_code_uuid,
                 "target_concept_code": self.target_concept_code,
                 "target_concept_display": self.target_concept_display,
+                "target_concept_system_version_uuid": self.target_concept_system_version_uuid,
                 "mapping_comments": self.mapping_comments,
                 "author": self.author,
                 "created_date": datetime.datetime.now(),
@@ -809,7 +812,7 @@ class ValueSetMap:
     def serialize(self):
         return {
             "uuid": self.uuid,
-            "review_status": self.review_status,
+            "source_concept_uuid": self.source_concept_uuid,
             "relationship_code_uuid": self.relationship_code_uuid,
             "target_concept_code": self.target_concept_code,
             "target_concept_display": self.target_concept_display,
