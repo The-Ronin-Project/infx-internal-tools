@@ -761,7 +761,6 @@ class ValueSetMap:
     target_concept_display: str
     author: str
     relationship_code_uuid: UUID
-    review_status: str = "ready for review"
     uuid: Optional[UUID] = None
     conn: Optional[None] = None
 
@@ -774,17 +773,16 @@ class ValueSetMap:
             text(
                 """
                 INSERT INTO concept_maps.concept_relationship(
-                uuid, review_status, relationship_code_uuid, target_concept_code, 
+                uuid, relationship_code_uuid, target_concept_code, 
                 target_concept_display, target_concept_system_version_uuid, mapping_comments, author, created_date
                 ) VALUES (
-                :uuid, :review_status, :relationship_code_uuid, :target_concept_code, 
+                :uuid, :relationship_code_uuid, :target_concept_code, 
                 :target_concept_display, :mapping_comments, :author, :created_date
                 );
                 """
             ),
             {
                 "uuid": self.uuid,
-                "review_status": self.review_status,
                 "relationship_code_uuid": self.relationship_code_uuid,
                 "target_concept_code": self.target_concept_code,
                 "target_concept_display": self.target_concept_display,
