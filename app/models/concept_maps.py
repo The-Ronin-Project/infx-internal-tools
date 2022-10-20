@@ -386,7 +386,7 @@ class ConceptMapVersion:
             "id": self.uuid,
             "name": self.concept_map.name,
             "contact": [{"name": self.concept_map.author}],
-            "url": f"http://projectronin.io/fhir/ronin.common-fhir-model.uscore-r4/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
+            "url": f"http://projectronin.io/fhir/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
             "purpose": self.concept_map.purpose,
             "publisher": self.concept_map.publisher,
