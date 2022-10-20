@@ -770,7 +770,7 @@ class ValueSetMap:
         self.uuid = uuid.uuid4()
 
     def save(self):
-        valueset_map = self.conn.execute(
+        self.conn.execute(
             text(
                 """
                 INSERT INTO concept_maps.concept_relationship(
@@ -793,7 +793,20 @@ class ValueSetMap:
                 "created_date": datetime.datetime.now(),
             },
         )
+        valueset_map = ValueSetMap.get_new_valueset_map(self)
         return valueset_map
+
+    def get_new_valueset_map(self):
+        new_map = self.conn.execute(
+            text(
+                """
+                SELECT * FROM concept_maps.concept_relationship
+                WHERE uuid=:uuid
+                """
+            ),
+            {"uuid": self.uuid},
+        )
+        return new_map
 
     def serialize(self):
         return {
