@@ -321,6 +321,10 @@ def create_app(script_info=None):
 
     @app.route("/valueset/mappings/", methods=["POST"])
     def create_valueset_concept_map():
+        """
+        This endpoint triggers value set mapping to be saved in the concept_relationship table
+        @return: Serialized version of the saved value set mapping.
+        """
         if request.method == "POST":
             source_concept_uuid = request.json.get("source_concept_uuid")
             mapping_comments = request.json.get("mapping_comments")

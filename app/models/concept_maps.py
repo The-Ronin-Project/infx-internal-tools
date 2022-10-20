@@ -770,6 +770,10 @@ class ValueSetMap:
         self.uuid = uuid.uuid4()
 
     def save(self):
+        """
+        This function saves the value set mapping in the postgres database.
+        @return: Tuple from postgres database.
+        """
         self.conn.execute(
             text(
                 """
@@ -798,6 +802,10 @@ class ValueSetMap:
         return valueset_map
 
     def get_new_valueset_map(self):
+        """
+        This function gets the value set map that was just inserted.
+        @return: Tuple from postgres database.
+        """
         new_map = self.conn.execute(
             text(
                 """
@@ -810,6 +818,10 @@ class ValueSetMap:
         return new_map
 
     def serialize(self):
+        """
+        Serializes the object.
+        @return: Serialized object.
+        """
         return {
             "uuid": self.uuid,
             "source_concept_uuid": self.source_concept_uuid,
