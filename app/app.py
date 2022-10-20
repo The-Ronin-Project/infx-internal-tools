@@ -337,6 +337,8 @@ def create_app(script_info=None):
                 author=author,
                 relationship_code_uuid=relationship_code_uuid,
             )
+            valueset_map.save()
+
             return jsonify(valueset_map.serialize())
 
     # Patient Education Endpoints
