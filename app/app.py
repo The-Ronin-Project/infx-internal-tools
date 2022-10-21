@@ -319,34 +319,6 @@ def create_app(script_info=None):
 
             return jsonify(new_mapping.serialize())
 
-    @app.route("/valueset/mappings/", methods=["POST"])
-    def create_valueset_concept_map():
-        """
-        This endpoint triggers value set mapping to be saved in the concept_relationship table
-        @return: Serialized version of the saved value set mapping.
-        """
-        if request.method == "POST":
-            source_concept_uuid = request.json.get("source_concept_uuid")
-            mapping_comments = request.json.get("mapping_comments")
-            target_concept_code = request.json.get("target_concept_code")
-            target_concept_display = request.json.get("target_concept_display")
-            target_concept_system_version_uuid = request.json.get("target_concept_terminology_version_uuid")
-            author = request.json.get("author")
-            relationship_code_uuid = request.json.get("relationship_code_uuid")
-
-            valueset_map = ValueSetMap(
-                source_concept_uuid=source_concept_uuid,
-                mapping_comments=mapping_comments,
-                target_concept_code=target_concept_code,
-                target_concept_display=target_concept_display,
-                target_concept_system_version_uuid=target_concept_system_version_uuid,
-                author=author,
-                relationship_code_uuid=relationship_code_uuid,
-            )
-            valueset_map.save()
-
-            return jsonify(valueset_map.serialize())
-
     # Patient Education Endpoints
     @app.route('/PatientEducation/', methods=['GET', 'POST', 'PATCH', 'DELETE'])
     def get_external_resources():
