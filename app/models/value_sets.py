@@ -179,7 +179,7 @@ class VSRule:
             self.rxnorm_relationship_type()
         if self.property == "term_type_within_class":
             self.term_type_within_class()
-        if self.property == "all_active_rxnorm"
+        if self.property == "all_active_rxnorm":
             self.all_active_rxnorm()
 
         # SNOMED
@@ -393,6 +393,10 @@ class ICD10CMRule(VSRule):
         ]
         self.results = set(results)
     def include_entire_code_system(self):
+        """
+        This function gathers all ICD-10-CM codes.
+        @return: A set of all ICD-10-CM codes by code and display.
+        """
         conn = get_db()
         query = """
         select * from icd_10_cm.code 
@@ -665,26 +669,27 @@ class RxNormRule(VSRule):
         self.results = set(results)
 
     def all_active_rxnorm(self):
+        """
+        This function gathers all active RxNorm concepts.
+        @return: A json of all active RxNorm concepts by rxcui and display.
+        """
         self.results = set()
-        notation = ".json"
-        status = "Active"
+
         r = requests.get(
-            f"{RXNORM_BASE_URL}/allstatus",
-            params={"format": notation, "status": status},
+            f"{RXNORM_BASE_URL}allstatus.json?status=Active",
         )
         # Add data to results
-        data = r.json().get("items")
+        data = r.json().get("minConceptGroup").get("minConcept")
         results = [
             Code(
                 self.fhir_system,
                 self.terminology_version.version,
-                x.get("conceptId"),
-                x.get("fsn").get("term"),
+                x.get('rxcui'),
+                x.get("name"),
             )
             for x in data
         ]
         self.results.update(set(results))
-
 
 
 class LOINCRule(VSRule):
@@ -829,6 +834,10 @@ class LOINCRule(VSRule):
     """
         self.loinc_rule(query)
     def include_entire_code_system(self):
+        """
+        This function returns all LOINC codes.
+        @return: A set of all LOINC codes by number and long common name.
+        """
         conn = get_db()
         query = """
         select * from loinc.code 
@@ -1043,6 +1052,10 @@ class CPTRule(VSRule):
         self.results = set(final_results)
 
     def include_entire_code_system(self):
+        """
+        This function gathers all CPT codes.
+        @return: A set of all CPT codes by code and long description.
+        """
         conn = get_db()
         query = """
         select * from cpt.code 
