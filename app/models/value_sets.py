@@ -179,6 +179,8 @@ class VSRule:
             self.rxnorm_relationship_type()
         if self.property == "term_type_within_class":
             self.term_type_within_class()
+        if self.property == "all_active_rxnorm":
+            self.all_active_rxnorm()
 
         # SNOMED
         if self.property == "ecl":
@@ -201,6 +203,9 @@ class VSRule:
         # FHIR
         if self.property == "has_fhir_terminology":
             self.has_fhir_terminology_rule()
+        # Include entire code system rules
+        if self.property == "include_entire_code_system":
+            self.include_entire_code_system()
 
     def serialize(self):
         return {"property": self.property, "op": self.operator, "value": self.value}
@@ -387,8 +392,25 @@ class ICD10CMRule(VSRule):
             for x in results_data
         ]
         self.results = set(results)
-
-
+    def include_entire_code_system(self):
+        """
+        This function gathers all ICD-10-CM codes.
+        @return: A set of all ICD-10-CM codes by code and display.
+        """
+        conn = get_db()
+        query = """
+        select * from icd_10_cm.code 
+        where version_uuid=:terminology_version_uuid
+        """
+        results_data = conn.execute(
+            text(query),
+            {"terminology_version_uuid": self.terminology_version.uuid}
+        )
+        results = [
+            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            for x in results_data
+        ]
+        self.results = set(results)
 class SNOMEDRule(VSRule):
     # # Deprecating because we prefer ECL
     # def direct_child(self):
@@ -654,6 +676,29 @@ class RxNormRule(VSRule):
         ]
         self.results = set(results)
 
+    def all_active_rxnorm(self):
+        """
+        This function gathers all active RxNorm concepts.
+        @return: A json of all active RxNorm concepts by rxcui and display.
+        """
+        self.results = set()
+
+        r = requests.get(
+            f"{RXNORM_BASE_URL}allstatus.json?status=Active",
+        )
+        # Add data to results
+        data = r.json().get("minConceptGroup").get("minConcept")
+        results = [
+            Code(
+                self.fhir_system,
+                self.terminology_version.version,
+                x.get('rxcui'),
+                x.get("name"),
+            )
+            for x in data
+        ]
+        self.results.update(set(results))
+
 
 class LOINCRule(VSRule):
     def loinc_rule(self, query):
@@ -796,6 +841,30 @@ class LOINCRule(VSRule):
     order by long_common_name
     """
         self.loinc_rule(query)
+    def include_entire_code_system(self):
+        """
+        This function returns all LOINC codes.
+        @return: A set of all LOINC codes by number and long common name.
+        """
+        conn = get_db()
+        query = """
+        select * from loinc.code 
+        where terminology_version_uuid=:terminology_version_uuid
+        """
+        results_data = conn.execute(
+            text(query),
+            {"terminology_version_uuid": self.terminology_version.uuid}
+        )
+        results = [
+            Code(
+                self.fhir_system,
+                self.terminology_version.version,
+                x.loinc_num,
+                x.long_common_name,
+            )
+            for x in results_data
+        ]
+        self.results = set(results)
 
 
 class ICD10PCSRule(VSRule):
@@ -990,6 +1059,25 @@ class CPTRule(VSRule):
         ]
         self.results = set(final_results)
 
+    def include_entire_code_system(self):
+        """
+        This function gathers all CPT codes.
+        @return: A set of all CPT codes by code and long description.
+        """
+        conn = get_db()
+        query = """
+        select * from cpt.code 
+        where version_uuid=:terminology_version_uuid
+        """
+        results_data = conn.execute(
+            text(query),
+            {"terminology_version_uuid": self.terminology_version.uuid}
+        )
+        results = [
+            Code(self.fhir_system, self.terminology_version.version, x.code, x.long_description)
+            for x in results_data
+        ]
+        self.results = set(results)
 
 class FHIRRule(VSRule):
     def has_fhir_terminology_rule(self):
@@ -1038,6 +1126,40 @@ class FHIRRule(VSRule):
         ]
         self.results = set(results)
 
+class CustomTerminologyRule(VSRule):
+    def include_entire_code_system(self):
+        conn = get_db()
+        query = """
+        select * from custom_terminologies.code 
+        where terminology_version=:terminology_version_uuid
+        """
+        results_data = conn.execute(
+            text(query),
+            {"terminology_version_uuid": self.terminology_version.uuid}
+        )
+        results = [
+            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            for x in results_data
+        ]
+        self.results = set(results)
+
+    def display_regex(self):
+        conn = get_db()
+        query = """
+        select * from custom_terminologies.code 
+        where terminology_version=:terminology_version_uuid
+        and display like :value
+        """
+        results_data = conn.execute(
+            text(query),
+            {"terminology_version_uuid": self.terminology_version.uuid,
+             "value": self.value}
+        )
+        results = [
+            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            for x in results_data
+        ]
+        self.results = set(results)
 
 #
 # End of Value Set Rules
@@ -1635,6 +1757,19 @@ class RuleGroup:
                 )
             elif terminology.fhir_terminology == True:
                 rule = FHIRRule(
+                    x.uuid,
+                    x.position,
+                    x.description,
+                    x.property,
+                    x.operator,
+                    x.value,
+                    x.include,
+                    self,
+                    x.fhir_uri,
+                    terminologies.get(x.terminology_version),
+                )
+            elif terminology.fhir_terminology == False:
+                rule = CustomTerminologyRule(
                     x.uuid,
                     x.position,
                     x.description,
