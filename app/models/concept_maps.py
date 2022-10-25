@@ -111,6 +111,8 @@ class ConceptMap:
         self.author = None
         self.created_date = None
         self.include_self_map = None
+        self.source_value_set_uuid = None
+        self.target_value_set_uuid = None
 
         self.most_recent_active_version = None
 
@@ -150,13 +152,132 @@ class ConceptMap:
                 order by version desc
                 limit 1
                 """
-            ), {
-                'concept_map_uuid': self.uuid
-            }
+            ),
+            {"concept_map_uuid": self.uuid},
         ).first()
-        self.most_recent_active_version = ConceptMapVersion(version.uuid, concept_map=self)
+        self.most_recent_active_version = ConceptMapVersion(
+            version.uuid, concept_map=self
+        )
 
+    @classmethod
+    def concept_map_metadata(cls, cm_uuid):
+        """
+        This function executes a sql query to get the concept map based on the uuid passed in.
+        @param cm_uuid: concept map uuid
+        @return: tuple of metadata related to the given concept map uuid
+        """
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """
+                select * from concept_maps.concept_map
+                where uuid=:uuid
+                """
+            ),
+            {"uuid": cm_uuid},
+        ).first()
+        return data
 
+    @classmethod
+    def initial_concept_map_creation(
+        cls,
+        name,
+        title,
+        publisher,
+        author,
+        purpose,
+        cm_description,
+        experimental,
+        source_value_set_uuid,
+        target_value_set_uuid,
+        cm_version_description,
+        source_value_set_version_uuid,
+        target_value_set_version_uuid,
+    ):
+        """
+        This function creates a brand new concept map and concept map version 1.
+        @param name: string concept map name
+        @param title: string concept map title
+        @param publisher: string hard coded Project Ronin
+        @param author: string auto fill as retool current user
+        @param purpose: string use case
+        @param cm_description: string concept map description
+        @param experimental: boolean
+        @param source_value_set_uuid: uuid value set
+        @param target_value_set_uuid: uuid value set
+        @param cm_version_description: string concept map version description
+        @param source_value_set_version_uuid: uuid value set version
+        @param target_value_set_version_uuid: uuid value set version
+        @return: tuple of metadata related to the given concept map uuid
+        """
+        conn = get_db()
+        cm_uuid = uuid.uuid4()
+
+        conn.execute(
+            text(
+                """
+                insert into concept_maps.concept_map
+                (uuid, name, title, publisher, author, description, experimental, purpose, created_date, source_value_set_uuid, target_value_set_uuid)
+                values
+                (:uuid, :name, :title, :publisher, :author, :description, :experimental, :purpose, :created_date, :source_value_set_uuid, :target_value_set_uuid)
+                """
+            ),
+            {
+                "uuid": cm_uuid,
+                "name": name,
+                "title": title,
+                "publisher": publisher,
+                "author": author,
+                "description": cm_description,
+                "created_date": datetime.datetime.now(),
+                "experimental": experimental,
+                "purpose": purpose,
+                "source_value_set_uuid": source_value_set_uuid,
+                "target_value_set_uuid": target_value_set_uuid,
+            },
+        )
+
+        cm_version_uuid = uuid.uuid4()
+        conn.execute(
+            text(
+                """
+                insert into concept_maps.concept_map_version
+                (uuid, concept_map_uuid, description, status, created_date, version, source_value_set_version_uuid, target_value_set_version_uuid)
+                values
+                (:uuid, :concept_map_uuid, :description, :status, :created_date, :version, :source_value_set_version_uuid, :target_value_set_version_uuid)
+                """
+            ),
+            {
+                "concept_map_uuid": cm_uuid,
+                "uuid": cm_version_uuid,
+                "description": cm_version_description,
+                "status": "pending",
+                "created_date": datetime.datetime.now(),
+                "version": 1,
+                "source_value_set_version_uuid": source_value_set_version_uuid,
+                "target_value_set_version_uuid": target_value_set_version_uuid,
+            },
+        )
+        return cls.concept_map_metadata(cm_uuid)
+
+    def serialize(self):
+        """
+        This function serializes a concept map object
+        @return: Serialized concept map metadata
+        """
+        return {
+            "uuid": str(self.uuid),
+            "name": self.name,
+            "title": self.title,
+            "publisher": self.publisher,
+            "author": self.author,
+            "description": self.description,
+            "created_date": self.created_date,
+            "experimental": self.experimental,
+            "purpose": self.purpose,
+            "source_value_set_uuid": str(self.source_value_set_uuid),
+            "target_value_set_uuid": str(self.target_value_set_uuid),
+        }
 
 
 class ConceptMapVersion:
@@ -376,10 +497,18 @@ class ConceptMapVersion:
                     if item["equivalence"] == "source-is-narrower-than-target":
                         item["equivalence"] = "wider"
                         # [on_true] if [expression] else [on_false]
-                        item["comment"] = f"{item['comment']} source-is-narrower-than-target" if item["comment"] else "source-is-narrower-than-target"
+                        item["comment"] = (
+                            f"{item['comment']} source-is-narrower-than-target"
+                            if item["comment"]
+                            else "source-is-narrower-than-target"
+                        )
                     elif item["equivalence"] == "source-is-broader-than-target":
                         item["equivalence"] = "narrower"
-                        item["comment"] = f"{item['comment']} source-is-broader-than-target" if item["comment"] else "source-is-broader-than-target"
+                        item["comment"] = (
+                            f"{item['comment']} source-is-broader-than-target"
+                            if item["comment"]
+                            else "source-is-broader-than-target"
+                        )
         return {
             "resourceType": "ConceptMap",
             "title": self.concept_map.title,
