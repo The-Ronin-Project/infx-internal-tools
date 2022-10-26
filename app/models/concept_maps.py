@@ -105,7 +105,7 @@ class ConceptMap:
         self.name = None
         self.title = None
         self.description = None
-        self.purpose = None
+        self.use_case_uuid = None
         self.publisher = None
         self.experimental = None
         self.author = None
@@ -136,7 +136,7 @@ class ConceptMap:
         self.title = data.title
         self.name = data.name
         self.description = data.description
-        self.purpose = data.purpose
+        self.use_case_uuid = data.use_case_uuid
         self.publisher = data.publisher
         self.experimental = data.experimental
         self.author = data.author
@@ -185,7 +185,7 @@ class ConceptMap:
         title,
         publisher,
         author,
-        purpose,
+        use_case_uuid,
         cm_description,
         experimental,
         source_value_set_uuid,
@@ -200,7 +200,7 @@ class ConceptMap:
         @param title: string concept map title
         @param publisher: string hard coded Project Ronin
         @param author: string auto fill as retool current user
-        @param purpose: string use case
+        @param use_case_uuid: uuid use case
         @param cm_description: string concept map description
         @param experimental: boolean
         @param source_value_set_uuid: uuid value set
@@ -217,9 +217,9 @@ class ConceptMap:
             text(
                 """
                 insert into concept_maps.concept_map
-                (uuid, name, title, publisher, author, description, experimental, purpose, created_date, source_value_set_uuid, target_value_set_uuid)
+                (uuid, name, title, publisher, author, description, experimental, use_case_uuid, created_date, source_value_set_uuid, target_value_set_uuid)
                 values
-                (:uuid, :name, :title, :publisher, :author, :description, :experimental, :purpose, :created_date, :source_value_set_uuid, :target_value_set_uuid)
+                (:uuid, :name, :title, :publisher, :author, :description, :experimental, :use_case_uuid, :created_date, :source_value_set_uuid, :target_value_set_uuid)
                 """
             ),
             {
@@ -231,7 +231,7 @@ class ConceptMap:
                 "description": cm_description,
                 "created_date": datetime.datetime.now(),
                 "experimental": experimental,
-                "purpose": purpose,
+                "use_case_uuid": use_case_uuid,
                 "source_value_set_uuid": source_value_set_uuid,
                 "target_value_set_uuid": target_value_set_uuid,
             },
@@ -274,7 +274,7 @@ class ConceptMap:
             "description": self.description,
             "created_date": self.created_date,
             "experimental": self.experimental,
-            "purpose": self.purpose,
+            "use_case_uuid": self.use_case_uuid,
             "source_value_set_uuid": str(self.source_value_set_uuid),
             "target_value_set_uuid": str(self.target_value_set_uuid),
         }
