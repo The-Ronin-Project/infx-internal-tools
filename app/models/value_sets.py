@@ -23,7 +23,7 @@ import numpy as np
 from pandas import json_normalize
 
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io"
-SNOSTORM_LIMIT = 500
+SNOSTORM_LIMIT = 1000
 
 # RXNORM_BASE_URL = "https://rxnav.nlm.nih.gov/REST/"
 RXNORM_BASE_URL = "https://rxnav.prod.projectronin.io/REST/"
@@ -118,6 +118,8 @@ class VSRule:
             self.term_type_within_class()
         if self.property == "term_type":
             self.rxnorm_term_type()
+        if self.property == "all_active_rxnorm":
+            self.all_active_rxnorm()
 
         # SNOMED
         if self.property == "ecl":
@@ -140,6 +142,9 @@ class VSRule:
         # FHIR
         if self.property == "has_fhir_terminology":
             self.has_fhir_terminology_rule()
+        # Include entire code system rules
+        if self.property == "include_entire_code_system":
+            self.include_entire_code_system()
 
     def serialize(self):
         return {"property": self.property, "op": self.operator, "value": self.value}
@@ -326,8 +331,25 @@ class ICD10CMRule(VSRule):
             for x in results_data
         ]
         self.results = set(results)
-
-
+    def include_entire_code_system(self):
+        """
+        This function gathers all ICD-10-CM codes.
+        @return: A set of all ICD-10-CM codes by code and display.
+        """
+        conn = get_db()
+        query = """
+        select * from icd_10_cm.code 
+        where version_uuid=:terminology_version_uuid
+        """
+        results_data = conn.execute(
+            text(query),
+            {"terminology_version_uuid": self.terminology_version.uuid}
+        )
+        results = [
+            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            for x in results_data
+        ]
+        self.results = set(results)
 class SNOMEDRule(VSRule):
     # # Deprecating because we prefer ECL
     # def direct_child(self):
@@ -378,26 +400,34 @@ class SNOMEDRule(VSRule):
         self.results = set(results)
 
     def ecl_query(self):
-        offset = 0
+        """
+        Executes an ECL query against our internal Snowstorm instance.
+        Uses pagination to ensure all results are captured.
+        Puts final results into self.results, per value set specs
+        """
         self.results = set()
         results_complete = False
+        search_after_token = None
 
         while results_complete is False:
             branch = "MAIN"
+
+            params = {"ecl": self.value, "limit": SNOSTORM_LIMIT}
+            if search_after_token is not None:
+                params['searchAfter'] = search_after_token
+
             r = requests.get(
                 f"{ECL_SERVER_PATH}/{branch}/{self.terminology_version.version}/concepts",
-                params={"ecl": self.value, "limit": SNOSTORM_LIMIT, "offset": offset},
+                params=params,
             )
 
             if "error" in r.json():
                 raise BadRequest(r.json().get("message"))
 
             # Handle pagination
-            total_results = r.json().get("total")
-            pages = int(math.ceil(total_results / SNOSTORM_LIMIT))
-            offset += SNOSTORM_LIMIT
-            if offset >= pages * SNOSTORM_LIMIT:
+            if len(r.json().get('items')) == 0:
                 results_complete = True
+            search_after_token = r.json().get('searchAfter')
 
             # Add data to results
             data = r.json().get("items")
@@ -543,6 +573,29 @@ class RxNormRule(VSRule):
         ]
         self.results = set(results)
 
+    def all_active_rxnorm(self):
+        """
+        This function gathers all active RxNorm concepts.
+        @return: A json of all active RxNorm concepts by rxcui and display.
+        """
+        self.results = set()
+
+        r = requests.get(
+            f"{RXNORM_BASE_URL}allstatus.json?status=Active",
+        )
+        # Add data to results
+        data = r.json().get("minConceptGroup").get("minConcept")
+        results = [
+            Code(
+                self.fhir_system,
+                self.terminology_version.version,
+                x.get('rxcui'),
+                x.get("name"),
+            )
+            for x in data
+        ]
+        self.results.update(set(results))
+
 
 class LOINCRule(VSRule):
     def loinc_rule(self, query):
@@ -685,6 +738,30 @@ class LOINCRule(VSRule):
     order by long_common_name
     """
         self.loinc_rule(query)
+    def include_entire_code_system(self):
+        """
+        This function returns all LOINC codes.
+        @return: A set of all LOINC codes by number and long common name.
+        """
+        conn = get_db()
+        query = """
+        select * from loinc.code 
+        where terminology_version_uuid=:terminology_version_uuid
+        """
+        results_data = conn.execute(
+            text(query),
+            {"terminology_version_uuid": self.terminology_version.uuid}
+        )
+        results = [
+            Code(
+                self.fhir_system,
+                self.terminology_version.version,
+                x.loinc_num,
+                x.long_common_name,
+            )
+            for x in results_data
+        ]
+        self.results = set(results)
 
 
 class ICD10PCSRule(VSRule):
@@ -879,6 +956,25 @@ class CPTRule(VSRule):
         ]
         self.results = set(final_results)
 
+    def include_entire_code_system(self):
+        """
+        This function gathers all CPT codes.
+        @return: A set of all CPT codes by code and long description.
+        """
+        conn = get_db()
+        query = """
+        select * from cpt.code 
+        where version_uuid=:terminology_version_uuid
+        """
+        results_data = conn.execute(
+            text(query),
+            {"terminology_version_uuid": self.terminology_version.uuid}
+        )
+        results = [
+            Code(self.fhir_system, self.terminology_version.version, x.code, x.long_description)
+            for x in results_data
+        ]
+        self.results = set(results)
 
 class FHIRRule(VSRule):
     def has_fhir_terminology_rule(self):
@@ -927,6 +1023,40 @@ class FHIRRule(VSRule):
         ]
         self.results = set(results)
 
+class CustomTerminologyRule(VSRule):
+    def include_entire_code_system(self):
+        conn = get_db()
+        query = """
+        select * from custom_terminologies.code 
+        where terminology_version=:terminology_version_uuid
+        """
+        results_data = conn.execute(
+            text(query),
+            {"terminology_version_uuid": self.terminology_version.uuid}
+        )
+        results = [
+            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            for x in results_data
+        ]
+        self.results = set(results)
+
+    def display_regex(self):
+        conn = get_db()
+        query = """
+        select * from custom_terminologies.code 
+        where terminology_version=:terminology_version_uuid
+        and display like :value
+        """
+        results_data = conn.execute(
+            text(query),
+            {"terminology_version_uuid": self.terminology_version.uuid,
+             "value": self.value}
+        )
+        results = [
+            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            for x in results_data
+        ]
+        self.results = set(results)
 
 #
 # End of Value Set Rules
@@ -1524,6 +1654,19 @@ class RuleGroup:
                 )
             elif terminology.fhir_terminology == True:
                 rule = FHIRRule(
+                    x.uuid,
+                    x.position,
+                    x.description,
+                    x.property,
+                    x.operator,
+                    x.value,
+                    x.include,
+                    self,
+                    x.fhir_uri,
+                    terminologies.get(x.terminology_version),
+                )
+            elif terminology.fhir_terminology == False:
+                rule = CustomTerminologyRule(
                     x.uuid,
                     x.position,
                     x.description,
