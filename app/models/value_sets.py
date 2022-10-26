@@ -496,43 +496,53 @@ class RxNormRule(VSRule):
                 )
 
         self.results = set(final_rxnorm_codes)
+
     def rxnorm_term_type(self):
-        json_value = json.loads(self.value)
-        term_type = json_value.get("term_type")
+        # json_value = json.loads(self.value)
+        term_type = self.value.replace(",", " ")
 
         # Calls the getAllConceptsByTTY API
         payload = {"tty": term_type}
         tty_member_request = requests.get(
-            f"{RXNORM_BASE_URL}/allconcepts.json?", params=payload
+            f"{RXNORM_BASE_URL}allconcepts.json", params=payload
         )
 
         # Extracts a list of RxCUIs from the JSON response
-        rxcuis = self.json_extract(tty_member_request.json(), "rxcui")
+        # rxcuis = self.json_extract(tty_member_request.json(), "rxcui")
 
         # Calls the concept property RxNorm API
-        concept_properties = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=25) as pool:
-            results = pool.map(self.load_rxnorm_properties, rxcuis)
-            for result in results:
-                concept_properties.append(result)
+        # concept_properties = []
+        # with concurrent.futures.ThreadPoolExecutor(max_workers=25) as pool:
+        #     results = pool.map(self.load_rxnorm_properties, rxcuis)
+        #     for result in results:
+        #         concept_properties.append(result)
+        #
+        # # Making a final list of RxNorm codes
+        # final_rxnorm_codes = []
+        # for item in concept_properties:
+        #     properties = item.get("properties")
+        #     result_term_type = properties.get("tty")
+        #     display = properties.get("name")
+        #     code = properties.get("rxcui")
+        #     final_rxnorm_codes.append(
+        #         Code(
+        #             self.fhir_system,
+        #             self.terminology_version.version,
+        #             code,
+        #             display,
+        #         )
+        #     )
+        results = [
+            Code(
+                self.fhir_system,
+                self.terminology_version.version,
+                x.get("rxcui"),
+                x.get("name"),
+            )
+            for x in tty_member_request.json().get("minConceptGroup").get("minConcept")
+        ]
+        self.results = set(results)
 
-        # Making a final list of RxNorm codes
-        final_rxnorm_codes = []
-        for item in concept_properties:
-            properties = item.get("properties")
-            result_term_type = properties.get("tty")
-            display = properties.get("name")
-            code = properties.get("rxcui")
-            final_rxnorm_codes.append(
-                    Code(
-                        self.fhir_system,
-                        self.terminology_version.version,
-                        code,
-                        display,
-                            )
-                        )
-
-        self.results = set(final_rxnorm_codes)
 
 class LOINCRule(VSRule):
     def loinc_rule(self, query):
