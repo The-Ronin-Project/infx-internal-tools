@@ -141,7 +141,6 @@ class ConceptMap:
         self.experimental = data.experimental
         self.author = data.author
         self.created_date = data.created_date
-        self.include_self_map = data.include_self_map
 
         version = conn.execute(
             text(
@@ -258,7 +257,58 @@ class ConceptMap:
                 "target_value_set_version_uuid": target_value_set_version_uuid,
             },
         )
+        ex_members = cls.get_source_concepts_for_mapping(source_value_set_version_uuid)
+        cls.insert_source_concepts_for_mapping(ex_members, cm_version_uuid)
         return cls.concept_map_metadata(cm_uuid)
+
+    @classmethod
+    def get_source_concepts_for_mapping(cls, source_value_set_version_uuid):
+        conn = get_db()
+        result = conn.execute(
+            text(
+                """
+            select uuid from value_sets.expansion
+            where vs_version_uuid=:vs_version_uuid
+            order by timestamp desc
+            limit 1
+            """
+            ),
+            {"vs_version_uuid": source_value_set_version_uuid},
+        ).first()
+        ex_members = conn.execute(
+            text(
+                """
+                select code, display, system from value_sets.expansion_member
+                where expansion_uuid=:expansion_uuid
+
+                """
+            ),
+            {"expansion_uuid": str(result.uuid)},
+        )
+        return ex_members
+
+    @classmethod
+    def insert_source_concepts_for_mapping(cls, ex_members, cmv_uuid):
+        conn = get_db()
+        for x in ex_members:
+            sc_uuid = uuid.uuid4()
+            conn.execute(
+                text(
+                    """
+                    insert into concept_maps.source_concept
+                    (uuid,code, display, system, concept_map_version_uuid)
+                    values
+                    (:uuid, :code, :display, :system, :concept_map_version_uuid)
+                    """
+                ),
+                {
+                    "uuid": sc_uuid,
+                    "code": x.code,
+                    "display": x.display,
+                    "system": x.system,
+                    "concept_map_version_uuid": cmv_uuid,
+                },
+            )
 
     def serialize(self):
         """
@@ -288,8 +338,6 @@ class ConceptMapVersion:
         self.comments = None
         self.status = None
         self.created_date = None
-        self.effective_start = None
-        self.effective_end = None
         self.published_date = None
         self.version = None
         self.allowed_target_terminologies = []
@@ -324,11 +372,8 @@ class ConceptMapVersion:
         self.comments = data.comments
         self.status = data.status
         self.created_date = data.created_date
-        self.effective_start = data.effective_start
-        self.effective_end = data.effective_end
         self.version = data.version
         self.published_date = data.published_date
-
         self.load_allowed_target_terminologies()
         self.load_mappings()
         self.generate_self_mappings()
@@ -489,6 +534,19 @@ class ConceptMapVersion:
 
         return groups
 
+    def get_use_case_description(self):
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """select description from project_management.use_case
+                where uuid=:uuid"""
+            ),
+            {
+                "uuid": self.concept_map.use_case_uuid,
+            },
+        ).first()
+        return results.description
+
     def serialize(self):
         serial_mappings = self.serialize_mappings()
         for mapped_object in serial_mappings:
@@ -517,7 +575,7 @@ class ConceptMapVersion:
             "contact": [{"name": self.concept_map.author}],
             "url": f"http://projectronin.io/fhir/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
-            "purpose": self.concept_map.purpose,
+            "purpose": self.get_use_case_description(),
             "publisher": self.concept_map.publisher,
             "experimental": self.concept_map.experimental,
             "status": self.status,
