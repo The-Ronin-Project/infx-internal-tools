@@ -194,7 +194,7 @@ class ConceptMap:
         target_value_set_version_uuid,
     ):
         """
-        This function creates a brand new concept map and concept map version 1.
+        This function creates a brand new concept map and concept map version 1 and inserts the source concept value set version codes, displays and systems into the source concept table.
         @param name: string concept map name
         @param title: string concept map title
         @param publisher: string hard coded Project Ronin
@@ -263,6 +263,11 @@ class ConceptMap:
 
     @classmethod
     def get_source_concepts_for_mapping(cls, source_value_set_version_uuid):
+        """
+        This function gathers source code value set version: codes, displays and systems for later use.
+        @param source_value_set_version_uuid: uuid of the assigned source value set version
+        @return: tuple codes, displays and systems from the source value set version
+        """
         conn = get_db()
         result = conn.execute(
             text(
@@ -289,6 +294,12 @@ class ConceptMap:
 
     @classmethod
     def insert_source_concepts_for_mapping(cls, ex_members, cmv_uuid):
+        """
+        This function inserts the codes, displays and systems from the source value set version AND a concept map version uuid, into the source_concept table for mapping.
+        @param ex_members: return from the get_source_concepts_for_mapping function
+        @param cmv_uuid: uuid concept map version
+        @return:none, the items are simply inserted into the concept_maps.source_concepts table
+        """
         conn = get_db()
         for x in ex_members:
             sc_uuid = uuid.uuid4()
