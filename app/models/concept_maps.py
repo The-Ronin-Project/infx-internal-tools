@@ -3,7 +3,6 @@ import uuid
 import functools
 import json
 import app.models.codes
-import pysnooper
 
 from decouple import config
 from werkzeug.exceptions import BadRequest
