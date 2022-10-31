@@ -2,6 +2,7 @@ import math
 import json
 from dataclasses import dataclass, field
 import re
+import pysnooper
 import requests
 import concurrent.futures
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String
@@ -78,6 +79,7 @@ class VSRule:
 
         self.results = set()
 
+    @pysnooper.snoop()
     def execute(self):
         if self.operator == "descendent-of":
             self.descendent_of()
