@@ -116,71 +116,10 @@ class VSRule:
             self.display_rule()
 
         # RxNorm Specific
-        if self.property == "SAB":
-            self.rxnorm_source()
-        if self.property == "TTY":
-            self.rxnorm_term_type()
-        if self.property in ["SY", "SIB", "RN", "PAR", "CHD", "RB", "RO"]:
-            self.rxnorm_relationship()
-        if self.property in [
-            "permuted_term_of",
-            "has_quantified_form",
-            "constitutes",
-            "has_active_moiety",
-            "doseformgroup_of",
-            "ingredients_of",
-            "precise_active_ingredient_of",
-            "has_product_monograph_title",
-            "sort_version_of",
-            "precise_ingredient_of",
-            "has_part",
-            "reformulation_of",
-            "has_precise_ingredient",
-            "has_precise_active_ingredient",
-            "mapped_from",
-            "included_in",
-            "has_inactive_ingredient",
-            "has_ingredients",
-            "active_moiety_of",
-            "is_modification_of",
-            "isa",
-            "has_form",
-            "has_member",
-            "consists_of",
-            "form_of",
-            "has_entry_version",
-            "part_of",
-            "dose_form_of",
-            "has_print_name",
-            "contained_in",
-            "mapped_to",
-            "has_ingredient",
-            "has_basis_of_strength_substance",
-            "has_doseformgroup",
-            "has_tradename",
-            "basis_of_strength_substance_of",
-            "has_dose_form",
-            "inverse_isa",
-            "has_sort_version",
-            "has_active_ingredient",
-            "product_monograph_title_of",
-            "member_of",
-            "quantified_form_of",
-            "contains",
-            "includes",
-            "active_ingredient_of",
-            "entry_version_of",
-            "inactive_ingredient_of",
-            "reformulated_to",
-            "has_modification",
-            "ingredient_of",
-            "has_permuted_term",
-            "tradename_of",
-            "print_name_of",
-        ]:
-            self.rxnorm_relationship_type()
         if self.property == "term_type_within_class":
             self.term_type_within_class()
+        if self.property == "term_type":
+            self.rxnorm_term_type()
         if self.property == "all_active_rxnorm":
             self.all_active_rxnorm()
 
@@ -590,91 +529,49 @@ class RxNormRule(VSRule):
 
         self.results = set(final_rxnorm_codes)
 
-    def rxnorm_source(self):
-        conn = get_db()
-        query = text(
-            """
-      Select RXCUI, str from "rxnormDirty".rxnconso where SAB = 'RXNORM' and TTY <> 'SY' 
-      and RXCUI in (select RXCUI from "rxnormDirty".rxnconso where SAB in :value)
-    """
-        ).bindparams(bindparam("value", expanding=True))
-
-        value = self.value.split(",")
-
-        results_data = conn.execute(query, {"value": value})
-
-        results = [
-            Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str)
-            for x in results_data
-        ]
-        self.results = set(results)
-
     def rxnorm_term_type(self):
-        conn = get_db()
-        query = text(
-            """
-      Select RXCUI, str from "rxnormDirty".rxnconso where SAB = 'RXNORM' and TTY <> 'SY' 
-      and TTY in :value
-    """
-        ).bindparams(bindparam("value", expanding=True))
+        # json_value = json.loads(self.value)
+        term_type = self.value.replace(",", " ")
 
-        value = self.value.split(",")
+        # Calls the getAllConceptsByTTY API
+        payload = {"tty": term_type}
+        tty_member_request = requests.get(
+            f"{RXNORM_BASE_URL}allconcepts.json", params=payload
+        )
 
-        results_data = conn.execute(query, {"value": value})
+        # Extracts a list of RxCUIs from the JSON response
+        # rxcuis = self.json_extract(tty_member_request.json(), "rxcui")
 
+        # Calls the concept property RxNorm API
+        # concept_properties = []
+        # with concurrent.futures.ThreadPoolExecutor(max_workers=25) as pool:
+        #     results = pool.map(self.load_rxnorm_properties, rxcuis)
+        #     for result in results:
+        #         concept_properties.append(result)
+        #
+        # # Making a final list of RxNorm codes
+        # final_rxnorm_codes = []
+        # for item in concept_properties:
+        #     properties = item.get("properties")
+        #     result_term_type = properties.get("tty")
+        #     display = properties.get("name")
+        #     code = properties.get("rxcui")
+        #     final_rxnorm_codes.append(
+        #         Code(
+        #             self.fhir_system,
+        #             self.terminology_version.version,
+        #             code,
+        #             display,
+        #         )
+        #     )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str)
-            for x in results_data
-        ]
-        self.results = set(results)
-
-    def rxnorm_relationship(self):
-        conn = get_db()
-        if self.value[:4] == "CUI:":
-            query = text(
-                """ Select RXCUI, STR from "rxnormDirty".rxnconso where SAB = 'RXNORM' and TTY <> 'SY'  
-      and (RXCUI in (select RXCUI from "rxnormDirty".rxnconso where RXCUI in (select RXCUI1 from "rxnormDirty".rxnrel where REL = :rel and RXCUI2 in :value)))"""
+            Code(
+                self.fhir_system,
+                self.terminology_version.version,
+                x.get("rxcui"),
+                x.get("name"),
             )
-        else:
-            query = text(
-                """ Select RXCUI, STR from "rxnormDirty".rxnconso where SAB = 'RXNORM' and TTY <> 'SY'  
-      and (RXCUI in (select RXCUI from "rxnormDirty".rxnconso where RXAUI in (select RXAUI1 from "rxnormDirty".rxnrel where REL = :rel and RXAUI2 in :value)))"""
-            )
-
-        query = query.bindparams(bindparam("value", expanding=True))
-
-        value = self.value[4:].split(",")
-
-        results_data = conn.execute(query, {"value": value, "rel": self.property})
-
-        results = [
-            Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str)
-            for x in results_data
-        ]
-        self.results = set(results)
-
-    def rxnorm_relationship_type(self):
-        conn = get_db()
-        if self.value[:4] == "CUI:":
-            query = text(
-                """ Select RXCUI, STR from "rxnormDirty".rxnconso where SAB = 'RXNORM' and TTY <> 'SY'  
-      and (RXCUI in (select RXCUI from "rxnormDirty".rxnconso where RXCUI in (select RXCUI1 from "rxnormDirty".rxnrel where RELA = :rel and RXCUI2 in :value)))"""
-            )
-        else:
-            query = text(
-                """ Select RXCUI, STR from "rxnormDirty".rxnconso where SAB = 'RXNORM' and TTY <> 'SY'  
-      and (RXCUI in (select RXCUI from "rxnormDirty".rxnconso where RXAUI in (select RXAUI1 from "rxnormDirty".rxnrel where RELA = :rel and RXAUI2 in :value)))"""
-            )
-
-        query = query.bindparams(bindparam("value", expanding=True))
-
-        value = self.value[4:].split(",")
-
-        results_data = conn.execute(query, {"value": value, "rel": self.property})
-
-        results = [
-            Code(self.fhir_system, self.terminology_version.version, x.rxcui, x.str)
-            for x in results_data
+            for x in tty_member_request.json().get("minConceptGroup").get("minConcept")
         ]
         self.results = set(results)
 

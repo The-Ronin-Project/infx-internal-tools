@@ -106,12 +106,14 @@ class ConceptMap:
         self.name = None
         self.title = None
         self.description = None
-        self.purpose = None
+        self.use_case_uuid = None
         self.publisher = None
         self.experimental = None
         self.author = None
         self.created_date = None
         self.include_self_map = None
+        self.source_value_set_uuid = None
+        self.target_value_set_uuid = None
 
         self.most_recent_active_version = None
 
@@ -135,12 +137,11 @@ class ConceptMap:
         self.title = data.title
         self.name = data.name
         self.description = data.description
-        self.purpose = data.purpose
+        self.use_case_uuid = data.use_case_uuid
         self.publisher = data.publisher
         self.experimental = data.experimental
         self.author = data.author
         self.created_date = data.created_date
-        # self.include_self_map = data.include_self_map
 
         version = conn.execute(
             text(
@@ -151,11 +152,12 @@ class ConceptMap:
                 order by version desc
                 limit 1
                 """
-            ), {
-                'concept_map_uuid': self.uuid
-            }
+            ),
+            {"concept_map_uuid": self.uuid},
         ).first()
-        self.most_recent_active_version = ConceptMapVersion(version.uuid, concept_map=self)
+        self.most_recent_active_version = ConceptMapVersion(
+            version.uuid, concept_map=self
+        )
 
     @staticmethod
     def new_version_from_previous(previous_version_uuid, new_version_description, new_version_num, new_source_value_set_version_uuid, new_target_value_set_version_uuid):
@@ -286,6 +288,188 @@ class ConceptMap:
                         )
                         new_mapping.save()
 
+    @classmethod
+    def concept_map_metadata(cls, cm_uuid):
+        """
+        This function executes a sql query to get the concept map based on the uuid passed in.
+        @param cm_uuid: concept map uuid
+        @return: tuple of metadata related to the given concept map uuid
+        """
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """
+                select * from concept_maps.concept_map
+                where uuid=:uuid
+                """
+            ),
+            {"uuid": cm_uuid},
+        ).first()
+        return data
+
+    @classmethod
+    def initial_concept_map_creation(
+        cls,
+        name,
+        title,
+        publisher,
+        author,
+        use_case_uuid,
+        cm_description,
+        experimental,
+        source_value_set_uuid,
+        target_value_set_uuid,
+        cm_version_description,
+        source_value_set_version_uuid,
+        target_value_set_version_uuid,
+    ):
+        """
+        This function creates a brand new concept map and concept map version 1 and inserts the source concept value set version codes, displays and systems into the source concept table.
+        @param name: string concept map name
+        @param title: string concept map title
+        @param publisher: string hard coded Project Ronin
+        @param author: string auto fill as retool current user
+        @param use_case_uuid: uuid use case
+        @param cm_description: string concept map description
+        @param experimental: boolean
+        @param source_value_set_uuid: uuid value set
+        @param target_value_set_uuid: uuid value set
+        @param cm_version_description: string concept map version description
+        @param source_value_set_version_uuid: uuid value set version
+        @param target_value_set_version_uuid: uuid value set version
+        @return: tuple of metadata related to the given concept map uuid
+        """
+        conn = get_db()
+        cm_uuid = uuid.uuid4()
+
+        conn.execute(
+            text(
+                """
+                insert into concept_maps.concept_map
+                (uuid, name, title, publisher, author, description, experimental, use_case_uuid, created_date, source_value_set_uuid, target_value_set_uuid)
+                values
+                (:uuid, :name, :title, :publisher, :author, :description, :experimental, :use_case_uuid, :created_date, :source_value_set_uuid, :target_value_set_uuid)
+                """
+            ),
+            {
+                "uuid": cm_uuid,
+                "name": name,
+                "title": title,
+                "publisher": publisher,
+                "author": author,
+                "description": cm_description,
+                "created_date": datetime.datetime.now(),
+                "experimental": experimental,
+                "use_case_uuid": use_case_uuid,
+                "source_value_set_uuid": source_value_set_uuid,
+                "target_value_set_uuid": target_value_set_uuid,
+            },
+        )
+
+        cm_version_uuid = uuid.uuid4()
+        conn.execute(
+            text(
+                """
+                insert into concept_maps.concept_map_version
+                (uuid, concept_map_uuid, description, status, created_date, version, source_value_set_version_uuid, target_value_set_version_uuid)
+                values
+                (:uuid, :concept_map_uuid, :description, :status, :created_date, :version, :source_value_set_version_uuid, :target_value_set_version_uuid)
+                """
+            ),
+            {
+                "concept_map_uuid": cm_uuid,
+                "uuid": cm_version_uuid,
+                "description": cm_version_description,
+                "status": "pending",
+                "created_date": datetime.datetime.now(),
+                "version": 1,
+                "source_value_set_version_uuid": source_value_set_version_uuid,
+                "target_value_set_version_uuid": target_value_set_version_uuid,
+            },
+        )
+        ex_members = cls.get_source_concepts_for_mapping(source_value_set_version_uuid)
+        cls.insert_source_concepts_for_mapping(ex_members, cm_version_uuid)
+        return cls.concept_map_metadata(cm_uuid)
+
+    @classmethod
+    def get_source_concepts_for_mapping(cls, source_value_set_version_uuid):
+        """
+        This function gathers source code value set version: codes, displays and systems for later use.
+        @param source_value_set_version_uuid: uuid of the assigned source value set version
+        @return: tuple codes, displays and systems from the source value set version
+        """
+        conn = get_db()
+        result = conn.execute(
+            text(
+                """
+            select uuid from value_sets.expansion
+            where vs_version_uuid=:vs_version_uuid
+            order by timestamp desc
+            limit 1
+            """
+            ),
+            {"vs_version_uuid": source_value_set_version_uuid},
+        ).first()
+        ex_members = conn.execute(
+            text(
+                """
+                select code, display, system from value_sets.expansion_member
+                where expansion_uuid=:expansion_uuid
+
+                """
+            ),
+            {"expansion_uuid": str(result.uuid)},
+        )
+        return ex_members
+
+    @classmethod
+    def insert_source_concepts_for_mapping(cls, ex_members, cmv_uuid):
+        """
+        This function inserts the codes, displays and systems from the source value set version AND a concept map version uuid, into the source_concept table for mapping.
+        @param ex_members: return from the get_source_concepts_for_mapping function
+        @param cmv_uuid: uuid concept map version
+        @return:none, the items are simply inserted into the concept_maps.source_concepts table
+        """
+        conn = get_db()
+        for x in ex_members:
+            sc_uuid = uuid.uuid4()
+            conn.execute(
+                text(
+                    """
+                    insert into concept_maps.source_concept
+                    (uuid,code, display, system, concept_map_version_uuid)
+                    values
+                    (:uuid, :code, :display, :system, :concept_map_version_uuid)
+                    """
+                ),
+                {
+                    "uuid": sc_uuid,
+                    "code": x.code,
+                    "display": x.display,
+                    "system": x.system,
+                    "concept_map_version_uuid": cmv_uuid,
+                },
+            )
+
+    def serialize(self):
+        """
+        This function serializes a concept map object
+        @return: Serialized concept map metadata
+        """
+        return {
+            "uuid": str(self.uuid),
+            "name": self.name,
+            "title": self.title,
+            "publisher": self.publisher,
+            "author": self.author,
+            "description": self.description,
+            "created_date": self.created_date,
+            "experimental": self.experimental,
+            "use_case_uuid": self.use_case_uuid,
+            "source_value_set_uuid": str(self.source_value_set_uuid),
+            "target_value_set_uuid": str(self.target_value_set_uuid),
+        }
+
 
 class ConceptMapVersion:
     def __init__(self, uuid, concept_map=None):
@@ -295,8 +479,6 @@ class ConceptMapVersion:
         self.comments = None
         self.status = None
         self.created_date = None
-        self.effective_start = None
-        self.effective_end = None
         self.published_date = None
         self.version = None
         self.allowed_target_terminologies = []
@@ -331,11 +513,8 @@ class ConceptMapVersion:
         self.comments = data.comments
         self.status = data.status
         self.created_date = data.created_date
-        self.effective_start = data.effective_start
-        self.effective_end = data.effective_end
         self.version = data.version
         self.published_date = data.published_date
-
         self.load_allowed_target_terminologies()
         self.load_mappings()
         self.generate_self_mappings()
@@ -502,6 +681,19 @@ class ConceptMapVersion:
 
         return groups
 
+    def get_use_case_description(self):
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """select description from project_management.use_case
+                where uuid=:uuid"""
+            ),
+            {
+                "uuid": self.concept_map.use_case_uuid,
+            },
+        ).first()
+        return results.description
+
     def serialize(self):
         serial_mappings = self.serialize_mappings()
         for mapped_object in serial_mappings:
@@ -510,10 +702,18 @@ class ConceptMapVersion:
                     if item["equivalence"] == "source-is-narrower-than-target":
                         item["equivalence"] = "wider"
                         # [on_true] if [expression] else [on_false]
-                        item["comment"] = f"{item['comment']} source-is-narrower-than-target" if item["comment"] else "source-is-narrower-than-target"
+                        item["comment"] = (
+                            f"{item['comment']} source-is-narrower-than-target"
+                            if item["comment"]
+                            else "source-is-narrower-than-target"
+                        )
                     elif item["equivalence"] == "source-is-broader-than-target":
                         item["equivalence"] = "narrower"
-                        item["comment"] = f"{item['comment']} source-is-broader-than-target" if item["comment"] else "source-is-broader-than-target"
+                        item["comment"] = (
+                            f"{item['comment']} source-is-broader-than-target"
+                            if item["comment"]
+                            else "source-is-broader-than-target"
+                        )
         return {
             "resourceType": "ConceptMap",
             "title": self.concept_map.title,
@@ -522,7 +722,7 @@ class ConceptMapVersion:
             "contact": [{"name": self.concept_map.author}],
             "url": f"http://projectronin.io/fhir/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
-            "purpose": self.concept_map.purpose,
+            "purpose": self.get_use_case_description(),
             "publisher": self.concept_map.publisher,
             "experimental": self.concept_map.experimental,
             "status": self.status,
