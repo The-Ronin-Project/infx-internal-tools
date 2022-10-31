@@ -406,8 +406,9 @@ class ConceptMap:
                 "target_value_set_version_uuid": target_value_set_version_uuid,
             },
         )
-        ex_members = cls.get_source_concepts_for_mapping(source_value_set_version_uuid)
-        cls.insert_source_concepts_for_mapping(ex_members, cm_version_uuid)
+        cls.insert_source_concepts_for_mapping(
+            cm_version_uuid, source_value_set_version_uuid
+        )
         return cls.concept_map_metadata(cm_uuid)
 
     @classmethod
