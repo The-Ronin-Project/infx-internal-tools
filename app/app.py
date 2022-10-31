@@ -228,6 +228,28 @@ def create_app(script_info=None):
         return response
 
     # Concept Map Endpoints
+    @app.route("/ConceptMaps/actions/new_version_from_previous", methods=["POST"])
+    def new_cm_version_from_previous():
+        previous_version_uuid = request.json.get("previous_version_uuid")
+        new_version_description = request.json.get("new_version_description")
+        new_version_num = request.json.get("new_version_num")
+        new_source_value_set_version_uuid = request.json.get("new_source_value_set_version_uuid")
+        new_target_value_set_version_uuid = request.json.get("new_target_value_set_version_uuid")
+
+        new_version = ConceptMap.new_version_from_previous(
+            previous_version_uuid=previous_version_uuid,
+            new_version_description=new_version_description,
+            new_version_num=new_version_num,
+            new_source_value_set_version_uuid=new_source_value_set_version_uuid,
+            new_target_value_set_version_uuid=new_target_value_set_version_uuid
+        )
+        return jsonify(new_version.serialize())
+
+    @app.route("/ConceptMaps/<string:version_uuid>", methods=["GET"])
+    def get_concept_map_version(version_uuid):
+        concept_map_version = ConceptMapVersion(version_uuid)
+        concept_map_to_json = concept_map_version.serialize()
+        return jsonify(concept_map_to_json)
 
     @app.route("/ConceptMaps/", methods=["POST"])
     def create_initial_concept_map_and_version_one():
