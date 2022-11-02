@@ -251,6 +251,12 @@ def create_app(script_info=None):
         concept_map_to_json = concept_map_version.serialize()
         return jsonify(concept_map_to_json)
 
+    @app.route("/ConceptMaps/<string:version_uuid>/actions/index", methods=["POST"])
+    def index_targets(version_uuid):
+        target_value_set_version_uuid = request.json.get("target_value_set_version_uuid")
+        ConceptMap.index_targets(version_uuid, target_value_set_version_uuid=target_value_set_version_uuid)
+        return "OK"
+
     @app.route("/ConceptMaps/", methods=["POST"])
     def create_initial_concept_map_and_version_one():
         if request.method == "POST":

@@ -3,16 +3,18 @@ import uuid
 import functools
 import json
 import app.models.codes
+import app.models.value_sets
 
+from elasticsearch.helpers import bulk
 from decouple import config
 from werkzeug.exceptions import BadRequest
 from sqlalchemy import text
 from dataclasses import dataclass
 from uuid import UUID
 from typing import Optional
-from app.database import get_db
+from app.database import get_db, get_elasticsearch
 from app.models.codes import Code
-from app.models.terminologies import Terminology
+from app.models.terminologies import Terminology, terminology_version_uuid_lookup
 from app.helpers.oci_auth import oci_authentication
 from app.helpers.db_helper import db_cursor
 from elasticsearch import TransportError
@@ -409,6 +411,9 @@ class ConceptMap:
         cls.insert_source_concepts_for_mapping(
             cm_version_uuid, source_value_set_version_uuid
         )
+        cls.index_targets(
+            cm_version_uuid, target_value_set_version_uuid
+        )
         return cls.concept_map_metadata(cm_uuid)
 
     @classmethod
@@ -442,6 +447,29 @@ class ConceptMap:
                 "concept_map_version_uuid": cmv_uuid,
             },
         )
+
+    @staticmethod
+    def index_targets(concept_map_version_uuid, target_value_set_version_uuid):
+        es = get_elasticsearch()
+
+        def gendata():
+            vs_version = app.models.value_sets.ValueSetVersion.load(target_value_set_version_uuid)
+            vs_version.expand()
+            for concept in vs_version.expansion:
+                terminology_version_uuid = terminology_version_uuid_lookup(concept.system, concept.version)
+                print(str(concept_map_version_uuid) + str(concept.code), concept.code, concept.display,
+                      terminology_version_uuid)
+                document={
+                    "_id": (str(concept_map_version_uuid) + str(concept.code)),
+                    "_index": "target_concepts_for_mapping",
+                    'code': concept.code,
+                    'display': concept.display,
+                    'concept_map_version_uuid': str(concept_map_version_uuid),
+                    'terminology_version_uuid': terminology_version_uuid
+                }
+                yield document
+
+        bulk(es, gendata())
 
     def serialize(self):
         """
