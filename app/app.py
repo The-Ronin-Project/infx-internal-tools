@@ -243,7 +243,7 @@ def create_app(script_info=None):
             new_source_value_set_version_uuid=new_source_value_set_version_uuid,
             new_target_value_set_version_uuid=new_target_value_set_version_uuid
         )
-        return jsonify(new_version.serialize())
+        return "OK"
 
     @app.route("/ConceptMaps/<string:version_uuid>", methods=["GET"])
     def get_concept_map_version(version_uuid):
