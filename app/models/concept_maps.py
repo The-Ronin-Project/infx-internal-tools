@@ -309,6 +309,9 @@ class ConceptMap:
                         )
                         new_mapping.save()
 
+        # Index the targets
+        ConceptMap.index_targets(new_version_uuid, new_target_value_set_version_uuid)
+
     @classmethod
     def concept_map_metadata(cls, cm_uuid):
         """
