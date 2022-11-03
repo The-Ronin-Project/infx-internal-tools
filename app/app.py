@@ -433,11 +433,12 @@ def create_app(script_info=None):
             remove_link = ExternalResource.unlink_resource(_uuid)
             return remove_link
 
-    @app.route("/PatientEducation/export", methods=["GET"])
+    @app.route("/PatientEducation/export", methods=["POST"])
     def export_data():
-        _uuid = request.json.get("uuid")
-        export = ExternalResource.format_data_to_export(_uuid)
-        return jsonify(export)
+        if request.method == "POST":
+            _uuid = request.json.get("uuid")
+            export = ExternalResource.format_data_to_export(_uuid)
+            return jsonify(export)
 
     # RxNorm custom search
     @app.route("/rxnorm_search", methods=["GET"])
