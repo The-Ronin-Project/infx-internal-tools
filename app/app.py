@@ -233,15 +233,19 @@ def create_app(script_info=None):
         previous_version_uuid = request.json.get("previous_version_uuid")
         new_version_description = request.json.get("new_version_description")
         new_version_num = request.json.get("new_version_num")
-        new_source_value_set_version_uuid = request.json.get("new_source_value_set_version_uuid")
-        new_target_value_set_version_uuid = request.json.get("new_target_value_set_version_uuid")
+        new_source_value_set_version_uuid = request.json.get(
+            "new_source_value_set_version_uuid"
+        )
+        new_target_value_set_version_uuid = request.json.get(
+            "new_target_value_set_version_uuid"
+        )
 
         new_version = ConceptMap.new_version_from_previous(
             previous_version_uuid=previous_version_uuid,
             new_version_description=new_version_description,
             new_version_num=new_version_num,
             new_source_value_set_version_uuid=new_source_value_set_version_uuid,
-            new_target_value_set_version_uuid=new_target_value_set_version_uuid
+            new_target_value_set_version_uuid=new_target_value_set_version_uuid,
         )
         return "OK"
 
@@ -253,8 +257,12 @@ def create_app(script_info=None):
 
     @app.route("/ConceptMaps/<string:version_uuid>/actions/index", methods=["POST"])
     def index_targets(version_uuid):
-        target_value_set_version_uuid = request.json.get("target_value_set_version_uuid")
-        ConceptMap.index_targets(version_uuid, target_value_set_version_uuid=target_value_set_version_uuid)
+        target_value_set_version_uuid = request.json.get(
+            "target_value_set_version_uuid"
+        )
+        ConceptMap.index_targets(
+            version_uuid, target_value_set_version_uuid=target_value_set_version_uuid
+        )
         return "OK"
 
     @app.route("/ConceptMaps/", methods=["POST"])
