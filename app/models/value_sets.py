@@ -2385,7 +2385,7 @@ class ExplicitlyIncludedCode:
                 join custom_terminologies.code
                 on eic.code_uuid = code.uuid
                 join terminology_versions tv
-                on code.terminology_version = tv.uuid
+                on code.terminology_version_uuid = tv.uuid
                 where vs_version_uuid=:vs_version_uuid
                 """
             ),
