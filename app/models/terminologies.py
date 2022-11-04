@@ -229,39 +229,5 @@ class Terminology:
         ).first()
         return new_term_version
 
-    def duplicate_term(
-        self,
-        name,
-        title,
-        contact,
-        value_set_description,
-        purpose,
-        effective_start,
-        effective_end,
-        version_description,
-        use_case_uuid=None,
-    ):
-        conn = get_db()
-        # create new value set uuid
-        new_vs_uuid = uuid.uuid4()
-        conn.execute(
-            text(
-                """
-                insert into value_sets.value_set
-                (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type, use_case_uuid)
-                select :new_vs_uuid, :name, :title, publisher, :contact, :value_set_description, immutable, experimental, :purpose, type, :use_case_uuid
-                from value_sets.value_set
-                where uuid = :old_uuid
-                """
-            ),
-            {
-                "new_vs_uuid": str(new_vs_uuid),
-                "name": name,
-                "title": title,
-                "contact": contact,
-                "value_set_description": value_set_description,
-                "purpose": purpose,
-                "use_case_uuid": use_case_uuid,
-                "old_uuid": self.uuid,
-            },
-        )
+
+
