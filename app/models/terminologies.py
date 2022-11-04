@@ -1,3 +1,4 @@
+import uuid
 from webbrowser import get
 from sqlalchemy import text
 from functools import lru_cache
@@ -42,6 +43,7 @@ class Terminology:
         self.fhir_uri = fhir_uri
         self.fhir_terminology = fhir_terminology
         self.codes = []
+        self.is_standard = None
 
     def __hash__(self):
         return hash(self.uuid)
@@ -135,3 +137,116 @@ class Terminology:
         }
 
         return terminologies
+
+    @classmethod
+    def create_new_terminology(
+        cls,
+        terminology,
+        version,
+        effective_start,
+        effective_end,
+        fhir_uri,
+        is_standard,
+        fhir_terminology,
+    ):
+        conn = get_db()
+        new_terminology_uuid = uuid.uuid4()
+        conn.execute(
+            text(
+                """
+                Insert into public.terminology_versions(uuid, terminology, version, effective_start, effective_end, fhir_uri, is_standard, fhir_terminology)
+                Values (:uuid, :terminology, :version, :effective_start, :effective_end, :fhir_uri, :is_standard, :fhir_terminology)
+                """
+            ),
+            {
+                "uuid": new_terminology_uuid,
+                "terminology": terminology,
+                "version": version,
+                "effective_start": effective_start,
+                "effective_end": effective_end,
+                "fhir_uri": fhir_uri,
+                "is_standard": is_standard,
+                "fhir_terminology": fhir_terminology,
+            },
+        )
+        new_terminology = conn.execute(
+            text(
+                """
+                select * from public.terminology_versions
+                where uuid=:uuid
+                """
+            ),
+            {"uuid": new_terminology_uuid},
+        ).first()
+        return new_terminology
+
+    def serialize(self):
+        return {
+            "uuid": self.uuid,
+            "name": self.terminology,
+            "version": self.version,
+            "effective_start": self.effective_start,
+            "effective_end": self.effective_end,
+            "fhir_uri": self.fhir_uri,
+            "is_standard": self.is_standard,
+            "fhir_terminology": self.fhir_terminology,
+        }
+
+    @classmethod
+    def insert_new_terminology_version(
+        cls,
+        previous_version_uuid,
+        terminology,
+        version,
+        is_standard,
+        fhir_terminology,
+        effective_start,
+        effective_end,
+    ):
+        conn = get_db()
+        version_uuid = uuid.uuid4()
+        conn.execute(
+            text(
+                """
+                Insert into public.terminology_versions(uuid, terminology, version, is_standard, fhir_terminology, effective_start, effective_end )
+                Values (:uuid, :terminology, :version, :is_standard, :fhir_terminology, :effective_start, :effective_end)
+                """
+            ),
+            {
+                "uuid": version_uuid,
+                "terminology": terminology,
+                "version": version,
+                "is_standard": is_standard,
+                "fhir_terminology": fhir_terminology,
+                "effective_start": effective_start,
+                "effective_end": effective_end,
+            },
+        )
+
+        conn.execute(
+            text(
+                """
+                Insert into custom_terminologies.code(code, display, terminology_version_uuid, additional_data)
+                select code, display, :version_uuid, additional_data
+                from custom_terminologies.code
+                where terminology_version_uuid = :previous_version_uuid
+                """
+            ),
+            {
+                "previous_version_uuid": previous_version_uuid,
+                "version_uuid": version_uuid,
+            },
+        )
+        new_term_version = conn.execute(
+            text(
+                """
+                select * from public.terminology_versions
+                where uuid = :version_uuid
+                """
+            ),
+            {"version_uuid": version_uuid},
+        ).first()
+        return new_term_version
+
+
+
