@@ -233,15 +233,19 @@ def create_app(script_info=None):
         previous_version_uuid = request.json.get("previous_version_uuid")
         new_version_description = request.json.get("new_version_description")
         new_version_num = request.json.get("new_version_num")
-        new_source_value_set_version_uuid = request.json.get("new_source_value_set_version_uuid")
-        new_target_value_set_version_uuid = request.json.get("new_target_value_set_version_uuid")
+        new_source_value_set_version_uuid = request.json.get(
+            "new_source_value_set_version_uuid"
+        )
+        new_target_value_set_version_uuid = request.json.get(
+            "new_target_value_set_version_uuid"
+        )
 
         new_version = ConceptMap.new_version_from_previous(
             previous_version_uuid=previous_version_uuid,
             new_version_description=new_version_description,
             new_version_num=new_version_num,
             new_source_value_set_version_uuid=new_source_value_set_version_uuid,
-            new_target_value_set_version_uuid=new_target_value_set_version_uuid
+            new_target_value_set_version_uuid=new_target_value_set_version_uuid,
         )
         return jsonify(new_version.serialize())
 
@@ -463,6 +467,61 @@ def create_app(script_info=None):
         last_update = DataNormalizationRegistry.get_oci_last_published_time()
         convert_last_update = DataNormalizationRegistry.convert_gmt_time(last_update)
         return convert_last_update
+
+    @app.route("/terminology/", methods=["POST"])
+    def create_terminology():
+        if request.method == "POST":
+            terminology = request.json.get("terminology")
+            version = request.json.get("version")
+            effective_start = request.json.get("effective_start")
+            effective_end = request.json.get("effective_end")
+            fhir_uri = request.json.get("fhir_uri")
+            is_standard = request.json.get("is_standard")
+            fhir_terminology = request.json.get("fhir_terminology")
+            new_terminology = Terminology.create_new_terminology(
+                terminology,
+                version,
+                effective_start,
+                effective_end,
+                fhir_uri,
+                is_standard,
+                fhir_terminology,
+            )
+            term = Terminology.serialize(new_terminology)
+            return term
+
+    @app.route("/terminology/new_code", methods=["POST"])
+    def create_code():
+        if request.method == "POST":
+            payload = request.json
+            new_code = Code.add_new_code_to_terminology(payload)
+            codes = []
+            for x in new_code:
+                code = Code.serialize(x)
+                codes.append(code)
+            return codes
+
+    @app.route("/terminology/new_version/", methods=["POST"])
+    def create_new_term_version():
+        if request.method == "POST":
+            terminology = request.json.get("terminology")
+            version = request.json.get("version")
+            effective_start = request.json.get("effective_start")
+            effective_end = request.json.get("effective_end")
+            previous_version_uuid = request.json.get("previous_version_uuid")
+            is_standard = request.json.get("is_standard")
+            fhir_terminology = request.json.get("fhir_terminology")
+            new_terminology_version = Terminology.insert_new_terminology_version(
+                previous_version_uuid,
+                terminology,
+                version,
+                is_standard,
+                fhir_terminology,
+                effective_start,
+                effective_end,
+            )
+            new_term_version = Terminology.serialize(new_terminology_version)
+            return new_term_version
 
     return app
 

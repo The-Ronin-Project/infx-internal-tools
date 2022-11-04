@@ -1,3 +1,4 @@
+import uuid
 from webbrowser import get
 from sqlalchemy import text
 from app.database import get_db
@@ -23,6 +24,7 @@ class Terminology:
         self.fhir_uri = fhir_uri
         self.fhir_terminology = fhir_terminology
         self.codes = []
+        self.is_standard = None
 
     def __hash__(self):
         return hash(self.uuid)
@@ -116,3 +118,150 @@ class Terminology:
         }
 
         return terminologies
+
+    @classmethod
+    def create_new_terminology(
+        cls,
+        terminology,
+        version,
+        effective_start,
+        effective_end,
+        fhir_uri,
+        is_standard,
+        fhir_terminology,
+    ):
+        conn = get_db()
+        new_terminology_uuid = uuid.uuid4()
+        conn.execute(
+            text(
+                """
+                Insert into public.terminology_versions(uuid, terminology, version, effective_start, effective_end, fhir_uri, is_standard, fhir_terminology)
+                Values (:uuid, :terminology, :version, :effective_start, :effective_end, :fhir_uri, :is_standard, :fhir_terminology)
+                """
+            ),
+            {
+                "uuid": new_terminology_uuid,
+                "terminology": terminology,
+                "version": version,
+                "effective_start": effective_start,
+                "effective_end": effective_end,
+                "fhir_uri": fhir_uri,
+                "is_standard": is_standard,
+                "fhir_terminology": fhir_terminology,
+            },
+        )
+        new_terminology = conn.execute(
+            text(
+                """
+                select * from public.terminology_versions
+                where uuid=:uuid
+                """
+            ),
+            {"uuid": new_terminology_uuid},
+        ).first()
+        return new_terminology
+
+    def serialize(self):
+        return {
+            "uuid": self.uuid,
+            "name": self.terminology,
+            "version": self.version,
+            "effective_start": self.effective_start,
+            "effective_end": self.effective_end,
+            "fhir_uri": self.fhir_uri,
+            "is_standard": self.is_standard,
+            "fhir_terminology": self.fhir_terminology,
+        }
+
+    @classmethod
+    def insert_new_terminology_version(
+        cls,
+        previous_version_uuid,
+        terminology,
+        version,
+        is_standard,
+        fhir_terminology,
+        effective_start,
+        effective_end,
+    ):
+        conn = get_db()
+        version_uuid = uuid.uuid4()
+        conn.execute(
+            text(
+                """
+                Insert into public.terminology_versions(uuid, terminology, version, is_standard, fhir_terminology, effective_start, effective_end )
+                Values (:uuid, :terminology, :version, :is_standard, :fhir_terminology, :effective_start, :effective_end)
+                """
+            ),
+            {
+                "uuid": version_uuid,
+                "terminology": terminology,
+                "version": version,
+                "is_standard": is_standard,
+                "fhir_terminology": fhir_terminology,
+                "effective_start": effective_start,
+                "effective_end": effective_end,
+            },
+        )
+
+        conn.execute(
+            text(
+                """
+                Insert into custom_terminologies.code(code, display, terminology_version_uuid, additional_data)
+                select code, display, :version_uuid, additional_data
+                from custom_terminologies.code
+                where terminology_version_uuid = :previous_version_uuid
+                """
+            ),
+            {
+                "previous_version_uuid": previous_version_uuid,
+                "version_uuid": version_uuid,
+            },
+        )
+        new_term_version = conn.execute(
+            text(
+                """
+                select * from public.terminology_versions
+                where uuid = :version_uuid
+                """
+            ),
+            {"version_uuid": version_uuid},
+        ).first()
+        return new_term_version
+
+    def duplicate_term(
+        self,
+        name,
+        title,
+        contact,
+        value_set_description,
+        purpose,
+        effective_start,
+        effective_end,
+        version_description,
+        use_case_uuid=None,
+    ):
+        conn = get_db()
+        # create new value set uuid
+        new_vs_uuid = uuid.uuid4()
+        conn.execute(
+            text(
+                """
+                insert into value_sets.value_set
+                (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type, use_case_uuid)
+                select :new_vs_uuid, :name, :title, publisher, :contact, :value_set_description, immutable, experimental, :purpose, type, :use_case_uuid
+                from value_sets.value_set
+                where uuid = :old_uuid
+                """
+            ),
+            {
+                "new_vs_uuid": str(new_vs_uuid),
+                "name": name,
+                "title": title,
+                "contact": contact,
+                "value_set_description": value_set_description,
+                "purpose": purpose,
+                "use_case_uuid": use_case_uuid,
+                "old_uuid": self.uuid,
+            },
+        )

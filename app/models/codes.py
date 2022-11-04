@@ -1,3 +1,5 @@
+import uuid
+import json
 from app.database import get_db
 from sqlalchemy import text
 from app.models.terminologies import Terminology
@@ -10,17 +12,21 @@ class Code:
         version,
         code,
         display,
+        additional_data=None,
         uuid=None,
         system_name=None,
         terminology_version=None,
+        terminology_version_uuid=None,
     ):
         self.system = system
         self.version = version
         self.code = code
         self.display = display
+        self.additional_data = additional_data
         self.uuid = uuid
         self.system_name = system_name
         self.terminology_version = terminology_version
+        self.terminology_version_uuid = terminology_version_uuid
 
         if (
             self.terminology_version is not None
@@ -53,10 +59,10 @@ class Code:
         code_data = conn.execute(
             text(
                 """
-                select code.uuid, code.code, display, tv.fhir_uri as system_url, tv.version, tv.terminology as system_name 
+                select code.uuid, code.code, display, tv.fhir_uri as system_url, tv.version, tv.terminology as system_name, tv.uuid as terminology_version_uuid
                 from custom_terminologies.code
                 join terminology_versions tv
-                on code.terminology_version = tv.uuid
+                on code.terminology_version_uuid = tv.uuid
                 where code.uuid=:code_uuid
                 """
             ),
@@ -69,6 +75,7 @@ class Code:
             code=code_data.code,
             display=code_data.display,
             system_name=code_data.system_name,
+            terminology_version_uuid=code_data.terminology_version_uuid,
             uuid=code_uuid,
         )
 
@@ -96,6 +103,7 @@ class Code:
         )
 
     def serialize(self, with_system_and_version=True, with_system_name=False):
+
         serialized = {
             "system": self.system,
             "version": self.version,
@@ -111,3 +119,32 @@ class Code:
             serialized["system_name"] = self.system_name
 
         return serialized
+
+    @classmethod
+    def add_new_code_to_terminology(cls, data):
+        conn = get_db()
+        new_uuids = []
+        for x in data:
+            new_code_uuid = uuid.uuid4()
+            new_uuids.append(new_code_uuid)
+            new_additional_data = json.dumps(x["additional_data"])
+            conn.execute(
+                text(
+                    """
+                    Insert into custom_terminologies.code(uuid, code, display, terminology_version_uuid, additional_data)
+                    Values (:uuid, :code, :display, :terminology_version_uuid, :additional_data)
+                    """
+                ),
+                {
+                    "uuid": new_code_uuid,
+                    "code": x["code"],
+                    "display": x["display"],
+                    "terminology_version_uuid": x["terminology_version_uuid"],
+                    "additional_data": new_additional_data,
+                },
+            )
+        new_codes = []
+        for new_uuid in new_uuids:
+            new_code = cls.load_from_custom_terminology(new_uuid)
+            new_codes.append(new_code)
+        return new_codes
