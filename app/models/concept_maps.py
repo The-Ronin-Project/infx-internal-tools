@@ -170,7 +170,6 @@ class ConceptMap:
     ):
         conn = get_db()
         new_version_uuid = uuid.uuid4()
-        print("New Version UUID", new_version_uuid)
 
         # Lookup concept_map_uuid
         concept_map_uuid = (
@@ -461,12 +460,6 @@ class ConceptMap:
             for concept in vs_version.expansion:
                 terminology_version_uuid = terminology_version_uuid_lookup(
                     concept.system, concept.version
-                )
-                print(
-                    str(concept_map_version_uuid) + str(concept.code),
-                    concept.code,
-                    concept.display,
-                    terminology_version_uuid,
                 )
                 document = {
                     "_id": (str(concept_map_version_uuid) + str(concept.code)),

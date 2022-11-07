@@ -2124,7 +2124,6 @@ class ValueSetVersion:
         mapping_inclusions = [x for x in mapping_inclusions_query]
 
         for inclusion in mapping_inclusions:
-            print("Inclusion", inclusion)
             # Load appropriate concept maps
             allowed_relationship_types = self.parse_mapping_inclusion_retool_array(
                 inclusion.relationship_types
@@ -2142,7 +2141,6 @@ class ValueSetVersion:
             codes_to_add_to_expansion = []
             for item in self.expansion:
                 if item.code in mappings:
-                    print("Adding codes", mappings[item.code])
                     codes_to_add_to_expansion.extend(mappings[item.code])
 
             set_to_add_to_expansion = set(codes_to_add_to_expansion)
