@@ -434,12 +434,14 @@ class ConceptMap:
                 insert into concept_maps.source_concept
                 (uuid, code, display, system, map_status, concept_map_version_uuid)
                 select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid from value_sets.expansion_member
-                join value_sets.expansion
-                on expansion.uuid=expansion_member.expansion_uuid
                 join public.terminology_versions tv
                 on tv.fhir_uri=expansion_member.system
                 and tv.version=expansion_member.version
-                where vs_version_uuid=:source_value_set_version_uuid
+                where expansion_uuid in 
+                (select uuid from value_sets.expansion
+                where vs_version_uuid='e027eb59-2c4f-47be-9a12-f47fb14a2698'
+                order by timestamp desc
+                limit 1)
                 """
             ),
             {
