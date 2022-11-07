@@ -333,6 +333,7 @@ class ICD10CMRule(VSRule):
             for x in results_data
         ]
         self.results = set(results)
+
     def include_entire_code_system(self):
         """
         This function gathers all ICD-10-CM codes.
@@ -344,14 +345,15 @@ class ICD10CMRule(VSRule):
         where version_uuid=:terminology_version_uuid
         """
         results_data = conn.execute(
-            text(query),
-            {"terminology_version_uuid": self.terminology_version.uuid}
+            text(query), {"terminology_version_uuid": self.terminology_version.uuid}
         )
         results = [
             Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
             for x in results_data
         ]
         self.results = set(results)
+
+
 class SNOMEDRule(VSRule):
     # # Deprecating because we prefer ECL
     # def direct_child(self):
@@ -416,7 +418,7 @@ class SNOMEDRule(VSRule):
 
             params = {"ecl": self.value, "limit": SNOSTORM_LIMIT}
             if search_after_token is not None:
-                params['searchAfter'] = search_after_token
+                params["searchAfter"] = search_after_token
 
             r = requests.get(
                 f"{ECL_SERVER_PATH}/{branch}/{self.terminology_version.version}/concepts",
@@ -427,9 +429,9 @@ class SNOMEDRule(VSRule):
                 raise BadRequest(r.json().get("message"))
 
             # Handle pagination
-            if len(r.json().get('items')) == 0:
+            if len(r.json().get("items")) == 0:
                 results_complete = True
-            search_after_token = r.json().get('searchAfter')
+            search_after_token = r.json().get("searchAfter")
 
             # Add data to results
             data = r.json().get("items")
@@ -591,7 +593,7 @@ class RxNormRule(VSRule):
             Code(
                 self.fhir_system,
                 self.terminology_version.version,
-                x.get('rxcui'),
+                x.get("rxcui"),
                 x.get("name"),
             )
             for x in data
@@ -740,6 +742,7 @@ class LOINCRule(VSRule):
     order by long_common_name
     """
         self.loinc_rule(query)
+
     def include_entire_code_system(self):
         """
         This function returns all LOINC codes.
@@ -751,8 +754,7 @@ class LOINCRule(VSRule):
         where terminology_version_uuid=:terminology_version_uuid
         """
         results_data = conn.execute(
-            text(query),
-            {"terminology_version_uuid": self.terminology_version.uuid}
+            text(query), {"terminology_version_uuid": self.terminology_version.uuid}
         )
         results = [
             Code(
@@ -969,14 +971,19 @@ class CPTRule(VSRule):
         where version_uuid=:terminology_version_uuid
         """
         results_data = conn.execute(
-            text(query),
-            {"terminology_version_uuid": self.terminology_version.uuid}
+            text(query), {"terminology_version_uuid": self.terminology_version.uuid}
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.long_description)
+            Code(
+                self.fhir_system,
+                self.terminology_version.version,
+                x.code,
+                x.long_description,
+            )
             for x in results_data
         ]
         self.results = set(results)
+
 
 class FHIRRule(VSRule):
     def has_fhir_terminology_rule(self):
@@ -1025,16 +1032,16 @@ class FHIRRule(VSRule):
         ]
         self.results = set(results)
 
+
 class CustomTerminologyRule(VSRule):
     def include_entire_code_system(self):
         conn = get_db()
         query = """
         select * from custom_terminologies.code 
-        where terminology_version=:terminology_version_uuid
+        where terminology_version_uuid=:terminology_version_uuid
         """
         results_data = conn.execute(
-            text(query),
-            {"terminology_version_uuid": self.terminology_version.uuid}
+            text(query), {"terminology_version_uuid": self.terminology_version.uuid}
         )
         results = [
             Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
@@ -1046,19 +1053,22 @@ class CustomTerminologyRule(VSRule):
         conn = get_db()
         query = """
         select * from custom_terminologies.code 
-        where terminology_version=:terminology_version_uuid
+        where terminology_version_uuid=:terminology_version_uuid
         and display like :value
         """
         results_data = conn.execute(
             text(query),
-            {"terminology_version_uuid": self.terminology_version.uuid,
-             "value": self.value}
+            {
+                "terminology_version_uuid": self.terminology_version.uuid,
+                "value": self.value,
+            },
         )
         results = [
             Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
             for x in results_data
         ]
         self.results = set(results)
+
 
 #
 # End of Value Set Rules
@@ -1237,7 +1247,7 @@ class ValueSet:
             select * from value_sets.value_set_version where value_set_uuid=:uuid
             """
             ),
-            {"uuid": self.uuid},
+            {"uuid": str(self.uuid)},
         ).first()
         # reject if has version
         if vs_version_data is not None:
@@ -1898,7 +1908,7 @@ class ValueSetVersion:
             select * from value_sets.value_set_version where uuid=:uuid
             """
             ),
-            {"uuid": uuid},
+            {"uuid": str(uuid)},
         ).first()
 
         if vs_version_data is None:
