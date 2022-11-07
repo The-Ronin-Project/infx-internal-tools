@@ -414,9 +414,7 @@ class ConceptMap:
         cls.insert_source_concepts_for_mapping(
             cm_version_uuid, source_value_set_version_uuid
         )
-        cls.index_targets(
-            cm_version_uuid, target_value_set_version_uuid
-        )
+        cls.index_targets(cm_version_uuid, target_value_set_version_uuid)
         return cls.concept_map_metadata(cm_uuid)
 
     @classmethod
@@ -456,19 +454,27 @@ class ConceptMap:
         es = get_elasticsearch()
 
         def gendata():
-            vs_version = app.models.value_sets.ValueSetVersion.load(target_value_set_version_uuid)
+            vs_version = app.models.value_sets.ValueSetVersion.load(
+                target_value_set_version_uuid
+            )
             vs_version.expand()
             for concept in vs_version.expansion:
-                terminology_version_uuid = terminology_version_uuid_lookup(concept.system, concept.version)
-                print(str(concept_map_version_uuid) + str(concept.code), concept.code, concept.display,
-                      terminology_version_uuid)
-                document={
+                terminology_version_uuid = terminology_version_uuid_lookup(
+                    concept.system, concept.version
+                )
+                print(
+                    str(concept_map_version_uuid) + str(concept.code),
+                    concept.code,
+                    concept.display,
+                    terminology_version_uuid,
+                )
+                document = {
                     "_id": (str(concept_map_version_uuid) + str(concept.code)),
                     "_index": "target_concepts_for_mapping",
-                    'code': concept.code,
-                    'display': concept.display,
-                    'concept_map_version_uuid': str(concept_map_version_uuid),
-                    'terminology_version_uuid': terminology_version_uuid
+                    "code": concept.code,
+                    "display": concept.display,
+                    "concept_map_version_uuid": str(concept_map_version_uuid),
+                    "terminology_version_uuid": terminology_version_uuid,
                 }
                 yield document
 
@@ -919,11 +925,15 @@ class ConceptMapVersion:
             text(
                 """
                 UPDATE concept_maps.concept_map_version
-                SET status='active', published_date=:published_date
+                SET status=:status, published_date=:published_date
                 WHERE uuid=:version_uuid
                 """
             ),
-            {"version_uuid": version_uuid, "published_date": datetime.datetime.now()},
+            {
+                "status": "active",
+                "published_date": datetime.datetime.now(),
+                "version_uuid": version_uuid,
+            },
         )
         return data
 
