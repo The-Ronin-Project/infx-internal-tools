@@ -156,9 +156,12 @@ class ConceptMap:
             ),
             {"concept_map_uuid": self.uuid},
         ).first()
-        self.most_recent_active_version = ConceptMapVersion(
-            version.uuid, concept_map=self
-        )
+        if version is not None:
+            self.most_recent_active_version = ConceptMapVersion(
+                version.uuid, concept_map=self
+            )
+        else:
+            self.most_recent_active_version = None
 
     @staticmethod
     def new_version_from_previous(
