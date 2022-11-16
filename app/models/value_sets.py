@@ -185,7 +185,7 @@ class UcumRule(VSRule):
             text(query), {"terminology_version_uuid": self.terminology_version.uuid}
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            Code(self.fhir_system, self.terminology_version.version, x.code, x.code)
             for x in results_data
         ]
         self.results = set(results)
