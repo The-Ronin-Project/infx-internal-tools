@@ -173,6 +173,23 @@ class UcumRule(VSRule):
         ]
         self.results = set(results)
 
+    def include_entire_code_system(self):
+        """
+        This function gathers all UCUM codes into a value set
+        """
+        conn = get_db()
+        query = """
+        select code from ucum.common_units
+        """
+        results_data = conn.execute(
+            text(query), {"terminology_version_uuid": self.terminology_version.uuid}
+        )
+        results = [
+            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            for x in results_data
+        ]
+        self.results = set(results)
+
 
 class ICD10CMRule(VSRule):
     def direct_child(self):
