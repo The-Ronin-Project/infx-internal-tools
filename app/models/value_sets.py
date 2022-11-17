@@ -2,7 +2,6 @@ import math
 import json
 from dataclasses import dataclass, field
 import re
-import pysnooper
 import requests
 import concurrent.futures
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String
@@ -79,7 +78,6 @@ class VSRule:
 
         self.results = set()
 
-    @pysnooper.snoop()
     def execute(self):
         if self.operator == "descendent-of":
             self.descendent_of()
@@ -140,6 +138,10 @@ class VSRule:
             self.scale_rule()
         elif self.property == "method":
             self.method_rule()
+        elif self.property == "class_type":
+            self.class_type_rule()
+        elif self.property == "order_or_observation":
+            self.order_observation_rule()
 
         # FHIR
         if self.property == "has_fhir_terminology":
@@ -758,6 +760,26 @@ class LOINCRule(VSRule):
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
+        self.loinc_rule(query)
+
+    def class_type_rule(self):
+        query = """
+            select * from loinc.code
+            where classtype in :value
+            and status = 'ACTIVE'
+            and terminology_version_uuid=:terminology_version_uuid
+            order by long_common_name
+            """
+        self.loinc_rule(query)
+
+    def order_observation_rule(self):
+        query = """
+            select * from loinc.code
+            where order_obs in :value
+            and status = 'ACTIVE'
+            and terminology_version_uuid=:terminology_version_uuid
+            order by long_common_name
+            """
         self.loinc_rule(query)
 
     def include_entire_code_system(self):
