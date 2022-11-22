@@ -517,6 +517,7 @@ def create_app(script_info=None):
         if request.method == "POST":
             terminology = request.json.get("terminology")
             version = request.json.get("version")
+            fhir_uri = request.json.get("fhir_uri")
             effective_start = request.json.get("effective_start")
             effective_end = request.json.get("effective_end")
             previous_version_uuid = request.json.get("previous_version_uuid")
@@ -526,6 +527,7 @@ def create_app(script_info=None):
                 previous_version_uuid,
                 terminology,
                 version,
+                fhir_uri,
                 is_standard,
                 fhir_terminology,
                 effective_start,
