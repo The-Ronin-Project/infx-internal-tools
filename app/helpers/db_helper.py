@@ -14,7 +14,7 @@ def db_cursor(func):
             conn.execute("COMMIT")
         except Exception as error:
             conn.execute("ROLLBACK")
-            raise {"message": f"Error occurred: {error}"}
+            raise error
         return transaction
 
     return new_func

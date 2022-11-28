@@ -14,6 +14,18 @@ from app.models.patient_edu import *
 from app.models.data_ingestion_registry import DataNormalizationRegistry
 import app.models.rxnorm as rxnorm
 from werkzeug.exceptions import HTTPException
+from app.helpers.oci_helper import (
+    oci_authentication,
+    folder_path_for_oci,
+    folder_in_bucket,
+    pre_export_validate,
+    save_to_object_store,
+    version_set_status_active,
+    get_object_type_from_db,
+    get_object_type_from_object_store,
+    check_for_prerelease_in_published,
+    set_up_object_store,
+)
 
 # Configure the logger when the application is imported. This ensures that
 # everything below uses the same configured logger.
@@ -208,6 +220,50 @@ def create_app(script_info=None):
         result = execute_rules(rules_input)
         return jsonify(result)
 
+    @app.route("/ValueSets/<string:version_uuid>/prerelease", methods=["GET", "POST"])
+    def get_value_set_version_prerelease(version_uuid):
+        object_type = "value_set"
+        if request.method == "POST":
+            value_set_version = ValueSetVersion.load(
+                version_uuid
+            )  # use ValueSetVersion class to get metadata
+            value_set_version.uuid = str(value_set_version.uuid)
+            value_set_to_json = value_set_version.serialize()
+            value_set_to_json["id"] = str(value_set_to_json["id"])
+            value_set_to_datastore = set_up_object_store(
+                value_set_to_json, folder="prerelease"
+            )
+            return jsonify(value_set_to_datastore)
+        if request.method == "GET":
+            value_set = get_object_type_from_db(version_uuid)
+            if not value_set:
+                return {"message": "value_set uuid not found."}
+            value_set_from_object_store = get_object_type_from_object_store(
+                object_type, value_set, folder="prerelease"
+            )
+            return jsonify(value_set_from_object_store)
+
+    @app.route("/ValueSets/<string:version_uuid>/published", methods=["GET", "POST"])
+    def get_value_set_version_published(version_uuid):
+        object_type = "value_set"
+        if request.method == "POST":
+            value_set_version = ValueSetVersion.load(version_uuid)
+            value_set_to_json = value_set_version.serialize()
+            value_set_to_json["id"] = str(value_set_to_json["id"])
+            value_set_to_datastore = set_up_object_store(
+                value_set_to_json, folder="published"
+            )
+            version_set_status_active(version_uuid, object_type)
+            return jsonify(value_set_to_datastore)
+        if request.method == "GET":
+            value_set = get_object_type_from_db(version_uuid)
+            if not value_set:
+                return {"message": "value_set uuid not found."}
+            value_set_from_object_store = get_object_type_from_object_store(
+                object_type, value_set, folder="published"
+            )
+            return jsonify(value_set_from_object_store)
+
     # Survey Endpoints
     @app.route("/surveys/<string:survey_uuid>")
     def export_survey(survey_uuid):
@@ -303,42 +359,52 @@ def create_app(script_info=None):
 
     @app.route("/ConceptMaps/<string:version_uuid>/prerelease", methods=["GET", "POST"])
     def get_concept_map_version_prerelease(version_uuid):
+        object_type = "concept_map"
         if request.method == "POST":
-            concept_map_version = ConceptMapVersion(version_uuid)
-            concept_map_to_json = concept_map_version.serialize()
-            concept_map_to_datastore = ConceptMapVersion.set_up_object_store(
+            concept_map_version = ConceptMapVersion(
+                version_uuid
+            )  # using the version uuid to get the version metadata from the ConceptMapVersion class
+            concept_map_to_json = (
+                concept_map_version.serialize()
+            )  # serialize the metadata
+            concept_map_to_datastore = set_up_object_store(  # use the serialized data with an oci_helper function
                 concept_map_to_json, folder="prerelease"
             )
-            return jsonify(concept_map_to_datastore)
+            return jsonify(
+                concept_map_to_datastore
+            )  # returns the serialized metadata posted to OCI
         if request.method == "GET":
-            concept_map = ConceptMapVersion.get_concept_map_from_db(version_uuid)
+            concept_map = get_object_type_from_db(  # concept_map will be a dictionary of overall concept_map uuid and version integer
+                version_uuid, object_type
+            )  # use the version uuid with an oci_helper function to check DB first
             if not concept_map:
-                return {"message": "concept map uuid not found."}
-            concept_map_from_object_store = (
-                ConceptMapVersion.get_concept_map_from_object_store(
-                    concept_map, folder="prerelease"
-                )
+                return {"message": "concept map uuid not found."}  # error if not in DB
+            concept_map_from_object_store = get_object_type_from_object_store(  # uses the return from the above oci_helper function to call another  oci_helper function
+                object_type, concept_map, folder="prerelease"
             )
-            return jsonify(concept_map_from_object_store)
+            return jsonify(concept_map_from_object_store)  # returns the file from OCI
 
     @app.route("/ConceptMaps/<string:version_uuid>/published", methods=["GET", "POST"])
     def get_concept_map_version_published(version_uuid):
+        object_type = "concept_map"
         if request.method == "POST":
-            concept_map_version = ConceptMapVersion(version_uuid)
-            concept_map_to_json = concept_map_version.serialize()
-            concept_map_to_datastore = ConceptMapVersion.set_up_object_store(
+            concept_map_version = ConceptMapVersion(
+                version_uuid
+            )  # using the version uuid to get the version metadata from the ConceptMapVersion class
+            concept_map_to_json = (
+                concept_map_version.serialize()
+            )  # serialize the metadata
+            concept_map_to_datastore = set_up_object_store(  # use the serialized data with an oci_helper function
                 concept_map_to_json, folder="published"
             )
-            ConceptMapVersion.version_set_status_active(version_uuid)
+            version_set_status_active(version_uuid, object_type)
             return jsonify(concept_map_to_datastore)
         if request.method == "GET":
-            concept_map = ConceptMapVersion.get_concept_map_from_db(version_uuid)
+            concept_map = get_object_type_from_db(version_uuid, object_type)
             if not concept_map:
                 return {"message": "concept map uuid not found."}
-            concept_map_from_object_store = (
-                ConceptMapVersion.get_concept_map_from_object_store(
-                    concept_map, folder="published"
-                )
+            concept_map_from_object_store = get_object_type_from_object_store(
+                object_type, concept_map, folder="published"
             )
             return jsonify(concept_map_from_object_store)
 
