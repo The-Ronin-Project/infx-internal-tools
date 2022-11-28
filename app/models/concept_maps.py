@@ -167,9 +167,12 @@ class ConceptMap:
             ),
             {"concept_map_uuid": self.uuid},
         ).first()
-        self.most_recent_active_version = ConceptMapVersion(
-            version.uuid, concept_map=self
-        )
+        if version is not None:
+            self.most_recent_active_version = ConceptMapVersion(
+                version.uuid, concept_map=self
+            )
+        else:
+            self.most_recent_active_version = None
 
     @staticmethod
     def new_version_from_previous(
@@ -721,7 +724,7 @@ class ConceptMapVersion:
 
     def get_use_case_description(self):
         conn = get_db()
-        results = conn.execute(
+        result = conn.execute(
             text(
                 """select description from project_management.use_case
                 where uuid=:uuid"""
@@ -730,7 +733,9 @@ class ConceptMapVersion:
                 "uuid": self.concept_map.use_case_uuid,
             },
         ).first()
-        return results.description
+        if result is not None:
+            return result.description
+        return None
 
     def serialize(self):
         serial_mappings = self.serialize_mappings()
