@@ -167,12 +167,13 @@ def save_to_object_store(
     @param object_type: either concept map or value set object - used here to get the version appended to the folder path
     @return: completion message and concept map
     """
-    object_type["additionalData"]["value_set_uuid"] = str(
-        object_type["additionalData"]["value_set_uuid"]
-    )
-    object_type["additionalData"]["version_uuid"] = str(
-        object_type["additionalData"]["version_uuid"]
-    )
+    if object_type["resourceType"] == "ValueSet":
+        object_type["additionalData"]["value_set_uuid"] = str(
+            object_type["additionalData"]["value_set_uuid"]
+        )
+        object_type["additionalData"]["version_uuid"] = str(
+            object_type["additionalData"]["version_uuid"]
+        )
     object_storage_client.put_object(
         namespace,
         bucket_name,
