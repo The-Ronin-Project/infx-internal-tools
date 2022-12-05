@@ -1740,7 +1740,7 @@ class RuleGroup:
         Calculates and returns the set of codes that belong to a particular group of rules.
 
         The method first initializes an empty set called expansion to store the codes that belong to the group.
-        It then extracts a list of terminologies (presumably objects representing different medical terminologies)
+        It then extracts a list of terminologies (objects representing different medical terminologies)
         from a dictionary called self.rules, where the keys of the dictionary are the terminologies and
         the values are lists of rules associated with those terminologies.
 
