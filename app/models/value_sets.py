@@ -1750,6 +1750,31 @@ class RuleGroup:
 
     # Move execute, so that the logic previously kept at a version level is now at a rule group level
     def generate_expansion(self):
+        """
+        Calculates and returns the set of codes that belong to a particular group of rules.
+
+        The method first initializes an empty set called expansion to store the codes that belong to the group.
+        It then extracts a list of terminologies (objects representing different medical terminologies)
+        from a dictionary called self.rules, where the keys of the dictionary are the terminologies and
+        the values are lists of rules associated with those terminologies.
+
+        Next, the method loops through each terminology and its associated rules, executing each rule
+        and dividing them into two lists: one for rules that are marked as "inclusion" rules
+        and another for rules that are marked as "exclusion" rules.
+        For each list, the method prints a description of the rules it contains.
+
+        The method then performs a series of set operations on the codes that are identified
+        by the inclusion and exclusion rules. It starts by intersecting the results
+        of the first inclusion rule with the results of each subsequent inclusion rule,
+        effectively creating a single set of codes that satisfy all of the inclusion rules.
+
+        It then subtracts the codes identified by the exclusion rules from this set, one rule at a time,
+        to produce the final set of codes for the terminology.
+
+        The method then updates the expansion set with the codes for the current terminology and
+        repeats the process for each additional terminology. When all terminologies have been processed,
+        the method returns the expansion set and a report of the expansion process.
+        """
         self.expansion = set()
         terminologies = self.rules.keys()
         expansion_report = f"EXPANDING RULE GROUP {self.rule_group_id}\n"
