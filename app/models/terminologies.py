@@ -16,10 +16,8 @@ def terminology_version_uuid_lookup(fhir_uri, version):
             where fhir_uri=:fhir_uri
             and version=:version
             """
-        ), {
-            'fhir_uri': fhir_uri,
-            'version': version
-        }
+        ),
+        {"fhir_uri": fhir_uri, "version": version},
     ).first()
     return result.uuid
 
@@ -198,6 +196,7 @@ class Terminology:
         previous_version_uuid,
         terminology,
         version,
+        fhir_uri,
         is_standard,
         fhir_terminology,
         effective_start,
@@ -208,14 +207,15 @@ class Terminology:
         conn.execute(
             text(
                 """
-                Insert into public.terminology_versions(uuid, terminology, version, is_standard, fhir_terminology, effective_start, effective_end )
-                Values (:uuid, :terminology, :version, :is_standard, :fhir_terminology, :effective_start, :effective_end)
+                Insert into public.terminology_versions(uuid, terminology, version, fhir_uri, is_standard, fhir_terminology, effective_start, effective_end )
+                Values (:uuid, :terminology, :version, :fhir_uri, :is_standard, :fhir_terminology, :effective_start, :effective_end)
                 """
             ),
             {
                 "uuid": version_uuid,
                 "terminology": terminology,
                 "version": version,
+                "fhir_uri": fhir_uri,
                 "is_standard": is_standard,
                 "fhir_terminology": fhir_terminology,
                 "effective_start": effective_start,
@@ -247,6 +247,3 @@ class Terminology:
             {"version_uuid": version_uuid},
         ).first()
         return new_term_version
-
-
-
