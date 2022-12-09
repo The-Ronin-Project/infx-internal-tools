@@ -174,6 +174,9 @@ def save_to_object_store(
         object_type["additionalData"]["version_uuid"] = str(
             object_type["additionalData"]["version_uuid"]
         )
+        object_type["additionalData"]["expansion_uuid"] = str(
+            object_type["additionalData"]["expansion_uuid"]
+        )
     object_storage_client.put_object(
         namespace,
         bucket_name,
