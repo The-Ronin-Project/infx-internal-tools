@@ -805,6 +805,7 @@ class LOINCRule(VSRule):
         query = """
         select * from loinc.code 
         where terminology_version_uuid=:terminology_version_uuid
+        and status != 'DEPRECATED'
         """
         results_data = conn.execute(
             text(query), {"terminology_version_uuid": self.terminology_version.uuid}
