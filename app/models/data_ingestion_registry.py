@@ -8,7 +8,7 @@ from decouple import config
 from sqlalchemy import text
 from typing import List, cast
 from app.database import get_db
-from app.helpers.oci_auth import oci_authentication
+from app.helpers.oci_helper import oci_authentication
 from datetime import datetime
 from dateutil import tz
 
@@ -30,7 +30,7 @@ class DNRegistryEntry:
             "concept_map_uuid": str(self.concept_map.uuid),
             "version": self.concept_map.most_recent_active_version.version,
             "filename": f"ConceptMaps/v1/published/{self.concept_map.uuid}"
-                        f"/{self.concept_map.most_recent_active_version.version}.json",
+            f"/{self.concept_map.most_recent_active_version.version}.json",
             "source_extension_url": self.source_extension_url,
             "registry_uuid": str(self.registry_uuid),
             "concept_map_name": self.concept_map.name,
