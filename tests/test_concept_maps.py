@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mock import patch
-from app.models.concept_maps import ConceptMapVersion
+from app.helpers.oci_helper import folder_path_for_oci
 
 concept_map = {
     "resourceType": "ConceptMap",
@@ -162,7 +162,7 @@ path = f"ConceptMaps/v1/{folder}/{concept_map_uuid}"
 
 def test_folder_path_for_oci():
     assert (
-        ConceptMapVersion.folder_path_for_oci(folder, concept_map, path)
+        folder_path_for_oci(folder, concept_map, path)
         == "ConceptMaps/v1/published/FAKEFAKE-FAKE-FAKE-FAKE-FAKEFAKEFAKE/1.json"
     )
 
