@@ -4,7 +4,7 @@ import functools
 import json
 import app.models.codes
 import app.models.value_sets
-
+import csv
 from elasticsearch.helpers import bulk
 from decouple import config
 from werkzeug.exceptions import BadRequest
@@ -657,6 +657,71 @@ class ConceptMapVersion:
                 self.mappings[source_code].append(mapping)
             else:
                 self.mappings[source_code] = [mapping]
+
+    def mapping_draft(self):
+        """
+        This function runs a query to retrieve concepts for an in-progress concept map. This should include everything,
+        the end user can filter the result as they choose.
+        @return:
+        """
+        conn = get_db()
+        query = """
+            select sc.*, cr.*, rc.display as relationship_display from concept_maps.source_concept sc
+            left join concept_maps.concept_relationship cr on sc.uuid=cr.source_concept_uuid
+            left join concept_maps.relationship_codes rc on rc.uuid=cr.relationship_code_uuid
+            WHERE sc.concept_map_version_uuid=:concept_map_version_uuid
+            """
+        results = conn.execute(
+            text(query),
+            {
+                "concept_map_version_uuid": self.uuid,
+            },
+        )
+        # Create an empty list to hold the data
+        data = []
+        # Iterate over the query results to populate the data list
+        for row in results:
+            data.append(
+                {
+                    "Source Code": row[1],
+                    "Source Display": row[2],
+                    "Relationship": row[27],
+                    "Target Code": row[16],
+                    "Target Display": row[17],
+                    "Review Status": row[14],
+                    "Map Status": row[6],
+                    "Mapping Comments": row[15],
+                    "Comments": row[4],
+                    "Additional Context": row[5],
+                    "No-Map": row[10],
+                    "No-Map Reason": row[11],
+                    "Mapping Group": row[12],
+                    "Mapper": row[21],
+                    "Reviewer": row[26],
+                    "Review Comment": row[25],
+                }
+            )
+
+        fieldnames = [
+            "Source Code",
+            "Source Display",
+            "Relationship",
+            "Target Code",
+            "Target Display",
+            "Review Status",
+            "Map Status",
+            "Mapping Comments",
+            "Comments",
+            "Additional Context",
+            "No-Map",
+            "No-Map Reason",
+            "Mapping Group",
+            "Mapper",
+            "Reviewer",
+            "Review Comment",
+        ]
+
+        return data, fieldnames
 
     def serialize_mappings(self):
         # Identify all the source terminology / target terminology pairings in the mappings

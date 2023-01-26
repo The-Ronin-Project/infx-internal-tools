@@ -1,11 +1,13 @@
+import io
 from bdb import effective
 from io import StringIO
+import string
 from uuid import UUID, uuid4
 import logging
 from app.helpers.structlog import config_structlog, common_handler
 import structlog
 import os
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request, Response, make_response
 from decouple import config
 from app.models.value_sets import *
 from app.models.concept_maps import *
@@ -568,6 +570,27 @@ def create_app(script_info=None):
                 target_value_set_version_uuid=target_value_set_version_uuid,
             )
             return jsonify(ConceptMap.serialize(new_cm))
+
+    @app.route("/ConceptMaps/<string:version_uuid>/draft", methods=["GET"])
+    def get_concept_map_draft(version_uuid):
+        concept_map_version = ConceptMapVersion(version_uuid)
+        csv_data, csv_field_names = concept_map_version.mapping_draft()
+        # Create a CSV file-like object in memory
+        si = io.StringIO()
+        cw = csv.DictWriter(si, fieldnames=csv_field_names)
+        cw.writeheader()
+        cw.writerows(csv_data)
+
+        # Return the CSV file as a response
+        output = make_response(si.getvalue())
+        filename = concept_map_version.concept_map.title.translate(
+            str.maketrans("", "", string.whitespace)
+        )
+        output.headers[
+            "Content-Disposition"
+        ] = f"attachment; filename={filename}-{concept_map_version.version}draft.csv"
+        output.headers["Content-type"] = "text/csv"
+        return output
 
     @app.route("/ConceptMaps/<string:version_uuid>/prerelease", methods=["GET", "POST"])
     def get_concept_map_version_prerelease(version_uuid):
