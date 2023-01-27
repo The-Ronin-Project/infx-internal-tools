@@ -685,20 +685,20 @@ class ConceptMapVersion:
                 {
                     "Source Code": row[1],
                     "Source Display": row[2],
-                    "Relationship": row[27],
-                    "Target Code": row[16],
-                    "Target Display": row[17],
-                    "Review Status": row[14],
+                    "Relationship": row[29],
+                    "Target Code": row[18],
+                    "Target Display": row[19],
+                    "Review Status": row[15],
                     "Map Status": row[6],
-                    "Mapping Comments": row[15],
+                    "Mapping Comments": row[16],
                     "Comments": row[4],
                     "Additional Context": row[5],
                     "No-Map": row[10],
                     "No-Map Reason": row[11],
                     "Mapping Group": row[12],
-                    "Mapper": row[21],
-                    "Reviewer": row[26],
-                    "Review Comment": row[25],
+                    "Mapper": row[23],
+                    "Reviewer": row[28],
+                    "Review Comment": row[27],
                 }
             )
 
