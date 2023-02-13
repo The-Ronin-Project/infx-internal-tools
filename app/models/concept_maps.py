@@ -257,16 +257,17 @@ class ConceptMap:
         )
         target_value_set_lookup = {
             (x.code, x.display, x.system): x for x in target_value_set_expansion
-        }
+        }  # Creates a lookup dict allowing lookup of targets based on code, display, system tuples
 
-        # Iterate through source_concepts in new version
+        # Load the mappings for previous concept map version
         previous_concept_map_version = ConceptMapVersion(previous_version_uuid)
         exact_previous_mappings = previous_concept_map_version.mappings
         code_display_system_previous_mappings = {
             (key.code, key.display, key.system): value
             for key, value in exact_previous_mappings.items()
-        }
+        }  # Creates a lookup dict allowing lookup of previous mappings
 
+        # Iterate through source_concepts in new version
         new_source_concepts = conn.execute(
             text(
                 """
@@ -281,11 +282,13 @@ class ConceptMap:
         for item in new_source_concepts:
             source_code = Code.load_concept_map_source_concept(item.source_concept_uuid)
 
+            # Check for a match between previous mappings for a source and the new source
             if (
                 item.code,
                 item.display,
                 item.fhir_uri,
             ) in code_display_system_previous_mappings:
+                # Lookup the exact previous mappings
                 mappings = code_display_system_previous_mappings[
                     (item.code, item.display, item.fhir_uri)
                 ]
@@ -319,6 +322,10 @@ class ConceptMap:
                             mapping_comments=mapping.mapping_comments,
                             author=mapping.author,
                             review_status=mapping.review_status,
+                            created_date=mapping.created_date,
+                            reviewed_date=mapping.reviewed_date,
+                            review_comment=mapping.review_comment,
+                            reviewed_by=mapping.reviewed_by,
                         )
                         new_mapping.save()
 
@@ -601,6 +608,7 @@ class ConceptMapVersion:
         conn = get_db()
         query = """
             select concept_relationship.uuid as mapping_uuid, concept_relationship.author, concept_relationship.review_status, concept_relationship.mapping_comments,
+            concept_relationship.created_date, concept_relationship.reviewed_date, concept_relationship.review_comment, concept_relationship.reviewed_by,
             source_concept.code as source_code, source_concept.display as source_display, source_concept.system as source_system, 
             tv_source.version as source_version, tv_source.fhir_uri as source_fhir_uri,
             relationship_codes.code as relationship_code, source_concept.map_status,
@@ -652,6 +660,10 @@ class ConceptMapVersion:
                 author=item.author,
                 uuid=item.mapping_uuid,
                 review_status=item.review_status,
+                created_date=item.created_date,
+                reviewed_date=item.reviewed_date,
+                review_comment=item.review_comment,
+                reviewed_by=item.reviewed_by,
             )
             if source_code in self.mappings:
                 self.mappings[source_code].append(mapping)
@@ -895,14 +907,18 @@ class Mapping:
     source: Code
     relationship: MappingRelationship
     target: Code
-    mapping_comments: Optional[str] = None
-    author: Optional[str] = None
-    uuid: Optional[UUID] = None
-    cursor: Optional[None] = None
     review_status: str = "ready for review"
+    mapping_comments: Optional[str] = None
+    created_date: Optional[datetime] = None
+    reviewed_date: Optional[datetime] = None
+    author: Optional[str] = None
+    review_comment: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    uuid: Optional[UUID] = None
+    conn: Optional[None] = None
 
     def __post_init__(self):
-        self.cursor = get_db()
+        self.conn = get_db()
         self.uuid = uuid.uuid4()
 
     @classmethod
@@ -910,7 +926,7 @@ class Mapping:
         pass
 
     def save(self):
-        self.cursor.execute(
+        self.conn.execute(
             text(
                 """
                 INSERT INTO concept_maps.concept_relationship(
