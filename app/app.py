@@ -787,6 +787,8 @@ def create_app(script_info=None):
             version = request.json.get("version")
             effective_start = request.json.get("effective_start")
             effective_end = request.json.get("effective_end")
+            if effective_end == "":
+                effective_end = None
             fhir_uri = request.json.get("fhir_uri")
             is_standard = request.json.get("is_standard")
             fhir_terminology = request.json.get("fhir_terminology")
