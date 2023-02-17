@@ -42,7 +42,7 @@ SNOSTORM_LIMIT = 1000
 # RXNORM_BASE_URL = "https://rxnav.nlm.nih.gov/REST/"
 RXNORM_BASE_URL = "https://rxnav.prod.projectronin.io/REST/"
 
-MAX_ES_SIZE = ƒ
+MAX_ES_SIZE = 1000
 
 metadata = MetaData()
 expansion_member = Table(
