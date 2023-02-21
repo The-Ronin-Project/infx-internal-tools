@@ -1123,6 +1123,27 @@ class CustomTerminologyRule(VSRule):
         ]
         self.results = set(results)
 
+    def code_rule(self):
+        conn = get_db()
+        query = """
+        select * from custom_terminologies.code
+        where code in :value
+        and terminology_version_uuid=:terminology_version_uuid
+        """
+        converted_query = text(query).bindparams(bindparam("value", expanding=True))
+        results_data = conn.execute(
+            converted_query,
+            {
+                "terminology_version_uuid": self.terminology_version.uuid,
+                "value": [x.strip() for x in self.value.split(",")],
+            },
+        )
+        results = [
+            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            for x in results_data
+        ]
+        self.results = set(results)
+
 
 #
 # End of Value Set Rules
