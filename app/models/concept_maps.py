@@ -453,7 +453,7 @@ class ConceptMap:
                 and tv.version=expansion_member.version
                 where expansion_uuid in 
                 (select uuid from value_sets.expansion
-                where vs_version_uuid='e027eb59-2c4f-47be-9a12-f47fb14a2698'
+                where vs_version_uuid=:source_value_set_version_uuid
                 order by timestamp desc
                 limit 1)
                 """
