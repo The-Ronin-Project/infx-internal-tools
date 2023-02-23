@@ -9,6 +9,7 @@ import structlog
 import os
 from flask import Flask, jsonify, request, Response, make_response
 from decouple import config
+from app.database import close_db
 from app.models.value_sets import *
 from app.models.concept_maps import *
 from app.models.surveys import *
@@ -49,6 +50,8 @@ def create_app(script_info=None):
         from ddtrace import patch_all
 
         patch_all()
+
+    app.teardown_appcontext(close_db)
 
     @app.route("/ping")
     def ping():
