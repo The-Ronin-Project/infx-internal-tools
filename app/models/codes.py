@@ -127,7 +127,9 @@ class Code:
         for x in data:
             new_code_uuid = uuid.uuid4()
             new_uuids.append(new_code_uuid)
-            new_additional_data = json.dumps(x["additional_data"])
+            new_additional_data = x.get('additional_data')
+            if new_additional_data:
+                new_additional_data = json.dumps(new_additional_data)
             conn.execute(
                 text(
                     """
