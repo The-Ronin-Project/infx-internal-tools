@@ -248,6 +248,8 @@ class ConceptMapNewVersionCreator:
         self.new_source_value_set_version_uuid = new_source_value_set_version_uuid
         self.new_target_value_set_version_uuid = new_target_value_set_version_uuid
 
+        self.lookup_concept_map_uuid()
+
         self.register_new_concept_map_version()
 
         self.load_source_concepts_from_valueset()
@@ -264,6 +266,9 @@ class ConceptMapNewVersionCreator:
         new_source_concepts = self.load_new_sources()
 
         for item in new_source_concepts:
+            print(item)
+            # todo: load old data to put into new
+            # Update the metadata of the new sources to match the metadata from previous version, where applicable
             source_code = SourceConcept.load(item.source_concept_uuid)
             source_code.update(comments=item.comments,
                                additional_context=item.additional_context,
@@ -274,6 +279,7 @@ class ConceptMapNewVersionCreator:
                                reason_for_no_map=item.reason_for_no_map,
                                mapping_group=item.mapping_group,
                                resource_count=item.resource_count)
+            print(source_code)
 
             # Check for a match between previous mappings for a source and the new source
             if (
@@ -926,6 +932,19 @@ class SourceConcept(Code):
     A code being used in the source concept table of a mapping
     """
 
+    def __repr__(self):
+        return f"""SourceConcept(
+        uuid={self.uuid},
+        comments={self.comments},
+        additional_context={self.additional_context},
+        map_status={self.map_status},
+        assigned_mapper={self.assigned_mapper},
+        assigned_reviewer={self.assigned_reviewer},
+        no_map={self.no_map},
+        reason_for_no_map={self.reason_for_no_map},
+        mapping_group={self.mapping_group},
+        resource_count={self.resource_count})"""
+
     def __init__(
         self,
         uuid,
@@ -944,7 +963,13 @@ class SourceConcept(Code):
         mapping_group,
         resource_count,
     ):
-        super().__init__(uuid, system, version, code, display, terminology_version)
+        super().__init__(
+            uuid=uuid,
+            system=system,
+            version=version,
+            code=code,
+            display=display,
+            terminology_version_uuid=terminology_version)
         self.comments = comments
         self.additional_context = additional_context
         self.map_status = map_status
@@ -968,6 +993,9 @@ class SourceConcept(Code):
             ),
             {"source_concept_uuid": source_code_uuid},
         ).first()
+
+        if source_data is None:
+            raise Exception(f'No data in source_concept table for uuid: {source_code_uuid}')
 
         return cls(
             uuid=source_data.uuid,
@@ -1068,8 +1096,8 @@ class Mapping:
     target: Code
     review_status: str = "ready for review"
     mapping_comments: Optional[str] = None
-    created_date: Optional[datetime] = None
-    reviewed_date: Optional[datetime] = None
+    created_date: Optional[datetime.datetime] = None
+    reviewed_date: Optional[datetime.datetime] = None
     author: Optional[str] = None
     review_comment: Optional[str] = None
     reviewed_by: Optional[str] = None

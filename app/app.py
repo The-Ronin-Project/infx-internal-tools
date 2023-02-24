@@ -510,10 +510,11 @@ def create_app(script_info=None):
             "new_target_value_set_version_uuid"
         )
 
-        new_version = ConceptMap.new_version_from_previous(
-            previous_version_uuid=previous_version_uuid,
+        new_version_creator = ConceptMapNewVersionCreator()
+        new_version = new_version_creator.new_version_from_previous(
+            previous_concept_map_version_uuid=previous_version_uuid,
             new_version_description=new_version_description,
-            new_version_num=new_version_num,
+            new_version_number=new_version_num,
             new_source_value_set_version_uuid=new_source_value_set_version_uuid,
             new_target_value_set_version_uuid=new_target_value_set_version_uuid,
         )
