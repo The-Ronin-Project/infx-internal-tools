@@ -80,13 +80,14 @@ class VSRule:
     ):
         """
         This method initializes the VSRule object with the provided parameters.
+        The property, operator, and value are the core pieces.
 
+        :param prop: A string this can be a code, display, specimen or other fundamental property of the code system
+        :param operator: Defines the relationship between the property and the value.
+        :param value: A string representing the user supplied value for the property (this could be code value, etc.)
         :param uuid: A string representing the UUID of the rule.
-        :param position: An integer representing the position of the rule.
+        :param position: An integer that represents position when we are displaying the rule in the UI to provide structure
         :param description: A string representing the description of the rule.
-        :param prop: A string representing the property of the rule.
-        :param operator: A string representing the operator of the rule.
-        :param value: A string representing the value of the rule.
         :param include: An integer indicating whether to include the results in the value set.
         :param value_set_version: A string representing the value set version of the rule.
         :param fhir_system: A string representing the FHIR system of the rule.
@@ -186,7 +187,7 @@ class VSRule:
 
     def serialize(self):
         """
-        Serializes and returns the property, operator, and value of the rule.
+        Prepares a JSON representation to return to the API and returns the property, operator, and value of the rule
 
         :return: A dictionary containing the property, operator, and value of the rule.
         """
@@ -281,6 +282,10 @@ class ICD10CMRule(VSRule):
         self.results = set(results)
 
     def self_and_descendents(self):
+        """
+        Looks up the UUIDs for all codes and gets all descendants of the provided codes through a recursive query
+        :return: Returns a set with the fhir_system, terminology version, code, and display.
+        """
         conn = get_db()
         query = ""
 
@@ -312,7 +317,7 @@ class ICD10CMRule(VSRule):
       and version_uuid=:version_uuid)
       order by code
       """
-            # See link for tutorial in recursive queries: https://www.cybertec-postgresql.com/en/recursive-queries-postgresql/
+        # See link for tutorial in recursive queries: https://www.cybertec-postgresql.com/en/recursive-queries-postgresql/
 
         converted_query = text(query).bindparams(bindparam("codes", expanding=True))
 
@@ -327,6 +332,10 @@ class ICD10CMRule(VSRule):
         self.results = set(results)
 
     def descendent_of(self):
+        """
+        Lookup UUIDs and gets all descendants of the provided codes through a recursive query
+        :return: Returns a set with the fhir_system, terminology version, code, and display for the descendents.
+        """
         conn = get_db()
         query = ""
 
@@ -1199,14 +1208,11 @@ class ValueSet:
 
     Attributes:
         uuid: str, the unique identifier for the value set.
-        name: str, the name of the value set.
-        title: str, the title of the value set.
-        publisher: str, the publisher of the value set.
-        contact: str, the contact information for the value set.
-        description: str, the description of the value set.
+        name: str, the name of the value set. (machine-readable name)
+        title: str, the title of the value set. (FHIR's place to put human-readable)
+        description: str, a human-readable description of the value set to be displayed in the UI
         immutable: bool, specifies if the value set is immutable.
         experimental: bool, specifies if the value set is experimental.
-        purpose: str, the purpose of the value set.
         type: str, the type of the value set.
         synonyms: dict, the synonyms of the value set.
 
