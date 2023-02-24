@@ -1,3 +1,4 @@
+import datetime
 import uuid
 from webbrowser import get
 from sqlalchemy import text
@@ -191,19 +192,32 @@ class Terminology:
         }
 
     @classmethod
-    def insert_new_terminology_version(
+    def new_terminology_version_from_previous(
         cls,
         previous_version_uuid,
-        terminology,
         version,
-        fhir_uri,
-        is_standard,
-        fhir_terminology,
         effective_start,
         effective_end,
     ):
+        if effective_start is None:
+            effective_start = datetime.datetime.now()
+        if effective_end is None:
+            effective_end = datetime.datetime.now() + datetime.timedelta(days=7)
         conn = get_db()
+        previous_version_metadata = conn.execute(
+            text(
+                """
+                select terminology, fhir_uri, is_standard, fhir_terminology from public.terminology_versions
+                where uuid = :previous_version_uuid 
+                """
+            ),
+            {"previous_version_uuid": previous_version_uuid},
+        ).first()
         version_uuid = uuid.uuid4()
+        terminology = previous_version_metadata.terminology
+        fhir_uri = previous_version_metadata.fhir_uri
+        is_standard = previous_version_metadata.is_standard
+        fhir_terminology = previous_version_metadata.fhir_terminology
         conn.execute(
             text(
                 """
