@@ -113,6 +113,9 @@ class DeprecatedConceptMap:
 
 # This is the new maps system
 class ConceptMap:
+    """
+    Represents a concept map and its associated information.
+    """
     def __init__(self, uuid):
         self.uuid = uuid
         self.name = None
@@ -182,6 +185,16 @@ class ConceptMap:
         new_source_value_set_version_uuid,
         new_target_value_set_version_uuid,
     ):
+        """
+        Creates a new version of the concept map based on a previous version.
+
+        Args:
+            previous_version_uuid (str): The UUID of the previous version of the concept map.
+            new_version_description (str): The description of the new version.
+            new_version_num (int): The version number of the new version.
+            new_source_value_set_version_uuid (str): The UUID of the version of the source value set to use for the new version.
+            new_target_value_set_version_uuid (str): The UUID of the version of the target value set to use for the new version.
+        """
         conn = get_db()
         new_version_uuid = uuid.uuid4()
 
@@ -858,6 +871,11 @@ class MappingRelationship:
 
     @classmethod
     def load(cls, uuid):
+        """
+        Load a mapping relationship from the database using the UUID of the mapping relationship.
+
+        :return: The mapping relationship loaded from the database.
+        """
         conn = get_db()
         data = conn.execute(
             text(
@@ -874,6 +892,12 @@ class MappingRelationship:
     @classmethod
     @functools.lru_cache(maxsize=32)
     def load_by_code(cls, code):
+        """
+        Load a mapping relationship from the database by code of the mapping relationship.
+
+        :return: The mapping relationship loaded from the database.
+        """
+
         conn = get_db()
         data = conn.execute(
             text(
@@ -887,6 +911,11 @@ class MappingRelationship:
         return cls(uuid=data.uuid, code=data.code, display=data.display)
 
     def serialize(self):
+        """
+        Serializes the mapping relationship to a dictionary.
+
+        :return: A dictionary containing the serialized mapping relationship.
+        """
         return {"uuid": self.uuid, "code": self.code, "display": self.display}
 
 
