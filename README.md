@@ -10,21 +10,15 @@ Our basic convention is CLIN-{ticket-number}-lower-case-identifier
 
 ### Python Versions and Virtualenvs
 
-You can still use pyenv to manage different versions of python and you can stil use virtualenv. However, do to automation needs we are now using the preferred [pipenv](https://github.com/pypa/pipenv)
+If you do want to manage multiple Python versions on your system, you can use **pyenv** to install and switch between
+different Python versions and then use **pipenv** to create virtual environments and manage dependencies for each project.
 
-pipenv can be installed via pip, pipx or via
+We recommend [pyenv](https://github.com/pyenv/pyenv) for managing multiple Python versions for a project. Pyenv 
+works with all versions of Python and allows you to easily switch between different Python versions on the same
+system. Due to automation needs we are now [pipenv](https://github.com/pypa/pipenv), it is a tool for managing dependencies and virtual environments for Python projects. It provides a way to create 
+isolated Python environments for each project with its own dependencies.
 
-`brew install pipenv`
-
-`pipenv install --dev` will install all deps and ensure the python version is correct 3.9
-
-`pipenv shell` will give you a virtual environment
-
-In addition, according to the docs your current virtual environment should also work. But you will still need to install the deps via pipenv.
-
-A Pipefile.lock is in the working directory along with Pipfile. Please check this in on any changes. We use caching keyed off of the lock file, so the cache will be invalidated on mods to it.
-
-We still recommend [pyenv](https://github.com/pyenv/pyenv) for managing particular versions of Python per project as pyenv works with all versions of Python 2 and 3. if you want to manage different versions of python for various tasks. Or you can use pipenv as well. Your choice.
+### Install pyenv
 
 `brew install pyenv`
 
@@ -80,6 +74,24 @@ You can also activate and deactivate a pyenv virtualenv manually:
 `pyenv deactivate`
 
 virtualenv should work fine with pipenv
+
+### Install Pipenv
+
+pipenv can be installed via pip, pipx or via
+
+`brew install pipenv`
+
+`pipenv install --dev` will install all deps and ensure the python version is correct 3.11.1
+
+`pipenv shell` will give you a virtual environment
+
+In addition, according to the docs your current virtual environment should also work. But you will still need to install the deps via pipenv.
+
+A Pipefile.lock is in the working directory along with Pipfile. Please check this in on any changes. We use caching keyed 
+off of the lock file, so the cache will be invalidated on mods to it. If you have challenges installing your dependencies
+you may need to check your [Pipfile](https://github.com/pypa/pipfile#pipfile-the-replacement-for-requirementstxt) and possibly
+recreate it.
+
 
 ### Testing
 
