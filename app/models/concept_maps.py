@@ -33,6 +33,7 @@ from numpy import source
 
 
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
+#TODO remove this after Alex and Ben have updated the ED model to use concept mapps for ED utilization
 class DeprecatedConceptMap:
     def __init__(self, uuid, relationship_types, concept_map_name):
         self.uuid = uuid
@@ -113,6 +114,24 @@ class DeprecatedConceptMap:
 
 # This is the new maps system
 class ConceptMap:
+    """
+    Class that represents a FHIR ConceptMap resource, which provides mappings between concepts in different code systems
+
+    Attributes:
+        uuid (str): The UUID of the concept map.
+        name (str): The name of the concept map.
+        title (str): The title of the concept map.
+        description (str): The description of the concept map.
+        use_case_uuid (str): The UUID of the use case associated with the concept map.
+        publisher (str): The name of the publisher of the concept map.
+        experimental (bool): Whether the concept map is experimental or not.
+        author (str): The author of the concept map.
+        created_date (datetime): The date when the concept map was created.
+        include_self_map (bool): Whether to include the self-map in the concept map or not.
+        source_value_set_uuid (str): The UUID of the source value set used in the concept map.
+        target_value_set_uuid (str): The UUID of the target value set used in the concept map.
+        most_recent_active_version (str): The UUID of the most recent active version of the concept map.
+    """
     def __init__(self, uuid):
         self.uuid = uuid
         self.name = None
@@ -182,6 +201,16 @@ class ConceptMap:
         new_source_value_set_version_uuid,
         new_target_value_set_version_uuid,
     ):
+        """
+        Creates a new version of the concept map based on a previous version.
+
+        Args:
+            previous_version_uuid (str): The UUID of the previous version of the concept map.
+            new_version_description (str): The description of the new version.
+            new_version_num (int): The version number of the new version.
+            new_source_value_set_version_uuid (str): The UUID of the version of the source value set to use for the new version.
+            new_target_value_set_version_uuid (str): The UUID of the version of the target value set to use for the new version.
+        """
         conn = get_db()
         new_version_uuid = uuid.uuid4()
 
@@ -329,8 +358,8 @@ class ConceptMap:
     def concept_map_metadata(cls, cm_uuid):
         """
         This function executes a sql query to get the concept map based on the uuid passed in.
-        @param cm_uuid: concept map uuid
-        @return: tuple of metadata related to the given concept map uuid
+        :param cm_uuid: concept map uuid
+        :return: tuple of metadata related to the given concept map uuid
         """
         conn = get_db()
         data = conn.execute(
@@ -361,20 +390,20 @@ class ConceptMap:
         target_value_set_version_uuid,
     ):
         """
-        This function creates a brand new concept map and concept map version 1 and inserts the source concept value set version codes, displays and systems into the source concept table.
-        @param name: string concept map name
-        @param title: string concept map title
-        @param publisher: string hard coded Project Ronin
-        @param author: string auto fill as retool current user
-        @param use_case_uuid: uuid use case
-        @param cm_description: string concept map description
-        @param experimental: boolean
-        @param source_value_set_uuid: uuid value set
-        @param target_value_set_uuid: uuid value set
-        @param cm_version_description: string concept map version description
-        @param source_value_set_version_uuid: uuid value set version
-        @param target_value_set_version_uuid: uuid value set version
-        @return: tuple of metadata related to the given concept map uuid
+        This function creates a brand-new concept map and concept map version 1 and inserts the source concept value set version codes, displays and systems into the source concept table.
+        :param name: string concept map name
+        :param title: string concept map title
+        :param publisher: string hard coded Project Ronin
+        :param author: string autofill as retool current user
+        :param use_case_uuid: uuid use case
+        :param cm_description: string concept map description
+        :param experimental: boolean
+        :param source_value_set_uuid: uuid value set
+        :param target_value_set_uuid: uuid value set
+        :param cm_version_description: string concept map version description
+        :param source_value_set_version_uuid: uuid value set version
+        :param target_value_set_version_uuid: uuid value set version
+        :return: tuple of metadata related to the given concept map uuid
         """
         conn = get_db()
         cm_uuid = uuid.uuid4()
@@ -436,9 +465,9 @@ class ConceptMap:
     ):
         """
         This function gets and inserts the codes, displays and systems from the source value set version AND a concept map version uuid, into the source_concept table for mapping.
-        @param cmv_uuid: uuid concept map version
-        @param source_value_set_version_uuid: uuid source value set version
-        @return:none, the items are simply inserted into the concept_maps.source_concepts table
+        :param cmv_uuid: uuid concept map version
+        :param source_value_set_version_uuid: uuid source value set version
+        :return: none, the items are simply inserted into the concept_maps.source_concepts table
         """
         conn = get_db()
         # Populate concept_maps.source_concept
@@ -466,6 +495,13 @@ class ConceptMap:
 
     @staticmethod
     def index_targets(concept_map_version_uuid, target_value_set_version_uuid):
+        """
+        Indexes the target concepts for the given concept map version and target value set version in Elasticsearch.
+
+        Args:
+            concept_map_version_uuid (str): The UUID of the concept map version.
+            target_value_set_version_uuid (str): The UUID of the target value set version.
+        """
         es = get_elasticsearch()
 
         def gendata():
@@ -492,7 +528,7 @@ class ConceptMap:
     def serialize(self):
         """
         This function serializes a concept map object
-        @return: Serialized concept map metadata
+        :return: Serialized concept map metadata
         """
         return {
             "uuid": str(self.uuid),
@@ -529,7 +565,7 @@ class ConceptMapVersion:
         """
         runs sql query to return all information related to specified concept map version, data returned is used to
         set class attributes
-        @rtype: object
+        :rtype: object
         """
         conn = get_db()
         data = conn.execute(
@@ -582,7 +618,7 @@ class ConceptMapVersion:
     def generate_self_mappings(self):
         """
         if self_map flag in db is true, generate the self_mappings here
-        @rtype: mappings dictionary
+        :rtype: mappings dictionary
         """
         if self.concept_map.include_self_map is True:
             for target_terminology in self.allowed_target_terminologies:
@@ -662,7 +698,7 @@ class ConceptMapVersion:
         """
         This function runs a query to retrieve concepts for an in-progress concept map. This should include everything,
         the end user can filter the result as they choose.
-        @return:
+        :return: A data list and field names list
         """
         conn = get_db()
         query = """
@@ -858,6 +894,11 @@ class MappingRelationship:
 
     @classmethod
     def load(cls, uuid):
+        """
+        Load a mapping relationship from the database using the UUID of the mapping relationship.
+
+        :return: The mapping relationship loaded from the database.
+        """
         conn = get_db()
         data = conn.execute(
             text(
@@ -874,6 +915,12 @@ class MappingRelationship:
     @classmethod
     @functools.lru_cache(maxsize=32)
     def load_by_code(cls, code):
+        """
+        Load a mapping relationship from the database by code of the mapping relationship.
+
+        :return: The mapping relationship loaded from the database.
+        """
+
         conn = get_db()
         data = conn.execute(
             text(
@@ -887,11 +934,19 @@ class MappingRelationship:
         return cls(uuid=data.uuid, code=data.code, display=data.display)
 
     def serialize(self):
+        """
+        Prepares a JSON representation of the mapping relationship to return to the API
+
+        :return: A dictionary containing the serialized mapping relationship.
+        """
         return {"uuid": self.uuid, "code": self.code, "display": self.display}
 
 
 @dataclass
 class Mapping:
+    """
+    Represents a mapping relationship between two codes, and provides methods to load, save and use the relationships.
+    """
     source: Code
     relationship: MappingRelationship
     target: Code
@@ -907,9 +962,11 @@ class Mapping:
 
     @classmethod
     def load(cls, uuid):
+        """Loads a Mapping instance from the database by its UUID."""
         pass
 
     def save(self):
+        """Saves the mapping relationship instance to the database."""
         self.cursor.execute(
             text(
                 """
@@ -937,6 +994,7 @@ class Mapping:
         )
 
     def serialize(self):
+        """Prepares a JSON representation of the Mapping instance to return to the API."""
         return {
             "source": self.source.serialize(),
             "relationship": self.relationship.serialize(),
@@ -950,6 +1008,7 @@ class Mapping:
 
 @dataclass
 class MappingSuggestion:
+    """A class representing a mapping suggestion."""
     uuid: UUID
     source_concept_uuid: UUID
     code: Code
@@ -959,6 +1018,7 @@ class MappingSuggestion:
     accepted: bool = None
 
     def save(self):
+        """Saves the mapping suggestion to the database"""
         conn = get_db()
         conn.execute(
             text(
@@ -981,6 +1041,7 @@ class MappingSuggestion:
         )
 
     def serialize(self):
+        """Prepares a JSON representation of the mapping suggestion to return to the API."""
         return {
             "uuid": self.uuid,
             "source_concept_uuid": self.source_concept_uuid,
