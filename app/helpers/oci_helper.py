@@ -88,15 +88,18 @@ def set_up_object_store(object_type, folder):
     ):  # using resourceType to set correct initial folder in path and pull overall uuid
         object_type_uuid = object_type["url"].rsplit("/", 1)[1]
         top_folder_name = "ConceptMaps"
+        schema_version = "v1"
     else:
         object_type_uuid = str(object_type["id"])
         top_folder_name = "ValueSets"
+        schema_version = "v2"
     if (
         object_type["status"] == "active"
         or object_type["status"] == "in progress"
         or object_type["status"] == "pending"
+        or object_type["status"] == "draft"
     ):
-        path = f"{top_folder_name}/v1/{folder}/{object_type_uuid}"
+        path = f"{top_folder_name}/{schema_version}/{folder}/{object_type_uuid}"
     else:
         raise BadRequest(
             "This object cannot be saved in object store, status must be either active or in progress."
@@ -109,7 +112,7 @@ def set_up_object_store(object_type, folder):
             path, object_storage_client, bucket_name, namespace, object_type
         )
         if pre_in_pub:
-            return {"message": "concept map is already in the published bucket"}
+            return {"message": "This object is already in the published bucket"}
     folder_exists = folder_in_bucket(
         path, object_storage_client, bucket_name, namespace
     )
@@ -133,7 +136,7 @@ def set_up_object_store(object_type, folder):
                 path, object_storage_client, bucket_name, namespace
             )
             if version_exist:
-                return {"message": "concept map already in bucket"}
+                return {"message": "This object is already in the published bucket"}
             else:
                 save_to_object_store(
                     path, object_storage_client, bucket_name, namespace, object_type
@@ -167,16 +170,6 @@ def save_to_object_store(
     @param object_type: either concept map or value set object - used here to get the version appended to the folder path
     @return: completion message and concept map
     """
-    if object_type["resourceType"] == "ValueSet":
-        object_type["additionalData"]["value_set_uuid"] = str(
-            object_type["additionalData"]["value_set_uuid"]
-        )
-        object_type["additionalData"]["version_uuid"] = str(
-            object_type["additionalData"]["version_uuid"]
-        )
-        object_type["additionalData"]["expansion_uuid"] = str(
-            object_type["additionalData"]["expansion_uuid"]
-        )
     object_storage_client.put_object(
         namespace,
         bucket_name,
