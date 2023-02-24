@@ -844,6 +844,24 @@ def create_app(script_info=None):
             new_term_version = Terminology.serialize(new_terminology_version)
             return new_term_version
 
+    @app.route("/terminology/new_version_from_previous", methods=["POST"])
+    def create_new_term_version_from_previous():
+        if request.method == "POST":
+            previous_terminology_version_uuid = request.json.get(
+                "previous_terminology_version_uuid"
+            )
+            version = request.json.get("version")
+            effective_start = request.json.get("effective_start")
+            effective_end = request.json.get("effective_end")
+            new_terminology_version = Terminology.new_terminology_version_from_previous(
+                previous_terminology_version_uuid,
+                version,
+                effective_start,
+                effective_end,
+            )
+            new_term_version = Terminology.serialize(new_terminology_version)
+            return new_term_version
+
     return app
 
 

@@ -1,8 +1,10 @@
+import datetime
 import uuid
 import json
 from app.database import get_db
 from sqlalchemy import text
 from app.models.terminologies import Terminology
+from werkzeug.exceptions import BadRequest
 
 
 class Code:
@@ -122,14 +124,35 @@ class Code:
 
     @classmethod
     def add_new_code_to_terminology(cls, data):
+        """
+        This method will insert new codes into a custom terminology. The input is a list of codes to be created.
+        """
         conn = get_db()
+        terminology_version_uuid_list = set(
+            [x.get("terminology_version_uuid") for x in data]
+        )
+        # This will validate the terminology version is still within its effective date range.
+        for terminology_version_uuid in terminology_version_uuid_list:
+            terminology_metadata = conn.execute(
+                text(
+                    """
+                    select effective_end from public.terminology_versions
+                    where uuid = :terminology_version_uuid
+                    """
+                ),
+                {"terminology_version_uuid": terminology_version_uuid},
+            ).first()
+            effective_end = terminology_metadata.effective_end
+            if effective_end < datetime.date.today():
+                raise BadRequest(
+                    f"The terminology effective end date for {terminology_version_uuid} has passed, a new terminology version must be created."
+                )
         new_uuids = []
+        # This will insert the new codes into a custom terminology.
         for x in data:
             new_code_uuid = uuid.uuid4()
             new_uuids.append(new_code_uuid)
-            new_additional_data = x.get('additional_data')
-            if new_additional_data:
-                new_additional_data = json.dumps(new_additional_data)
+            new_additional_data = json.dumps(x["additional_data"])
             conn.execute(
                 text(
                     """
