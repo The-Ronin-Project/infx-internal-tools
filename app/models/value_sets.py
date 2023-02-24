@@ -62,6 +62,9 @@ expansion_member = Table(
 
 
 class VSRule:
+    """
+    This is a base class for creating value set rules.
+    """
     def __init__(
         self,
         uuid,
@@ -75,6 +78,21 @@ class VSRule:
         fhir_system,
         terminology_version,
     ):
+        """
+        This method initializes the VSRule object with the provided parameters.
+        The property, operator, and value are the core pieces.
+
+        :param prop: A string this can be a code, display, specimen or other fundamental property of the code system
+        :param operator: Defines the relationship between the property and the value.
+        :param value: A string representing the user supplied value for the property (this could be code value, etc.)
+        :param uuid: A string representing the UUID of the rule.
+        :param position: An integer that represents position when we are displaying the rule in the UI to provide structure
+        :param description: A string representing the description of the rule.
+        :param include: An integer indicating whether to include the results in the value set.
+        :param value_set_version: A string representing the value set version of the rule.
+        :param fhir_system: A string representing the FHIR system of the rule.
+        :param terminology_version: A TerminologyVersion object representing the terminology version of the rule.
+        """
         self.uuid = uuid
         self.position = uuid
         self.description = description
@@ -93,6 +111,9 @@ class VSRule:
         self.results = set()
 
     def execute(self):
+        """
+        Executes the rule by calling the corresponding method based on the operator and property.
+        """
         if self.operator == "descendent-of":
             self.descendent_of()
         elif self.operator == "self-and-descendents":
@@ -165,11 +186,22 @@ class VSRule:
             self.include_entire_code_system()
 
     def serialize(self):
+        """
+        Prepares a JSON representation to return to the API and returns the property, operator, and value of the rule
+
+        :return: A dictionary containing the property, operator, and value of the rule.
+        """
         return {"property": self.property, "op": self.operator, "value": self.value}
 
 
 class UcumRule(VSRule):
+    """
+    This class inherits from the VSRule class and provides implementation for UCUM specific value set rules.
+    """
     def code_rule(self):
+        """
+        This method executes the code rule by querying the database for the codes provided in the rule's value.
+        """
         conn = get_db()
         codes = self.value.replace(" ", "").split(",")
 
@@ -208,10 +240,19 @@ class UcumRule(VSRule):
 
 
 class ICD10CMRule(VSRule):
+    """
+    This class inherits from the VSRule class and provides implementation for ICD-10-CM specific value set rules.
+    """
     def direct_child(self):
+        """
+        This method executes the direct child rule by querying the database for the direct children of the provided code.
+        """
         pass
 
     def code_rule(self):
+        """
+        This method executes the code rule by querying the database for the codes provided in the rule's value.
+        """
         conn = get_db()
         query = ""
 
@@ -241,6 +282,10 @@ class ICD10CMRule(VSRule):
         self.results = set(results)
 
     def self_and_descendents(self):
+        """
+        Looks up the UUIDs for all codes and gets all descendants of the provided codes through a recursive query
+        :return: Returns a set with the fhir_system, terminology version, code, and display.
+        """
         conn = get_db()
         query = ""
 
@@ -272,7 +317,7 @@ class ICD10CMRule(VSRule):
       and version_uuid=:version_uuid)
       order by code
       """
-            # See link for tutorial in recursive queries: https://www.cybertec-postgresql.com/en/recursive-queries-postgresql/
+        # See link for tutorial in recursive queries: https://www.cybertec-postgresql.com/en/recursive-queries-postgresql/
 
         converted_query = text(query).bindparams(bindparam("codes", expanding=True))
 
@@ -287,6 +332,10 @@ class ICD10CMRule(VSRule):
         self.results = set(results)
 
     def descendent_of(self):
+        """
+        Lookup UUIDs and gets all descendants of the provided codes through a recursive query
+        :return: Returns a set with the fhir_system, terminology version, code, and display for the descendents.
+        """
         conn = get_db()
         query = ""
 
@@ -481,6 +530,9 @@ class SNOMEDRule(VSRule):
 
 
 class RxNormRule(VSRule):
+    """
+    This class inherits from the VSRule class and provides implementation for RxNorm specific value set rules.
+    """
     def json_extract(self, obj, key):
         """Recursively fetch values from nested JSON."""
 
@@ -635,6 +687,9 @@ class RxNormRule(VSRule):
 
 
 class LOINCRule(VSRule):
+    """
+    This class inherits from the VSRule class and provides implementation for LOINC specific value set rules.
+    """
     def loinc_rule(self, query):
         conn = get_db()
 
@@ -823,6 +878,9 @@ class LOINCRule(VSRule):
 
 
 class ICD10PCSRule(VSRule):
+    """
+    This class inherits from the VSRule class and provides implementation for ICD-10-PCS specific value set rules.
+    """
     def icd_10_pcs_rule(self, query):
         conn = get_db()
 
@@ -908,6 +966,9 @@ class ICD10PCSRule(VSRule):
 
 
 class CPTRule(VSRule):
+    """
+    This class inherits from the VSRule class and provides implementation for CPT specific value set rules.
+    """
     @staticmethod
     def parse_cpt_retool_array(retool_array):
         array_string_copy = retool_array
@@ -1040,6 +1101,9 @@ class CPTRule(VSRule):
 
 
 class FHIRRule(VSRule):
+    """
+    This class inherits from the VSRule class and provides implementation for FHIR specific value set rules.
+    """
     def has_fhir_terminology_rule(self):
         conn = get_db()
         query = """
@@ -1161,6 +1225,33 @@ class CustomTerminologyRule(VSRule):
 
 
 class ValueSet:
+    """A class that represents a value set and provides methods to create, load and manipulate value sets.
+
+    Attributes:
+        uuid: str, the unique identifier for the value set.
+        name: str, the name of the value set. (machine-readable name)
+        title: str, the title of the value set. (FHIR's place to put human-readable)
+        description: str, a human-readable description of the value set to be displayed in the UI
+        immutable: bool, specifies if the value set is immutable.
+        experimental: bool, specifies if the value set is experimental.
+        type: str, the type of the value set.
+        synonyms: dict, the synonyms of the value set.
+
+    Methods:
+        __init__(self, uuid, name, title, publisher, contact, description, immutable, experimental, purpose, vs_type, synonyms={}):
+            Initializes the value set with the given attributes.
+        create(cls, name, title, publisher, contact, value_set_description, immutable, experimental, purpose, vs_type, effective_start, effective_end, version_description, use_case_uuid=None):
+            Creates a new value set with the given attributes and adds it to the database.
+        load(cls, vs_uuid):
+            Loads a value set with the given uuid.
+        serialize(self):
+            Returns the serialized version of the value set.
+        delete(self):
+            Deletes the value set from the database.
+        load_all_value_set_metadata(cls, active_only=True):
+            Loads all value sets metadata from the database.
+
+    """
     def __init__(
         self,
         uuid,
@@ -1175,6 +1266,21 @@ class ValueSet:
         vs_type,
         synonyms={},
     ):
+        """Initializes the value set with the given attributes.
+
+        Args:
+            uuid (str): The unique identifier for the value set.
+            name (str): The name of the value set.
+            title (str): The title of the value set.
+            publisher (str): The publisher of the value set.
+            contact (str): The contact information for the value set.
+            description (str): The description of the value set.
+            immutable (bool): Specifies if the value set is immutable.
+            experimental (bool): Specifies if the value set is experimental.
+            purpose (str): The purpose of the value set.
+            vs_type (str): The type of the value set.
+            synonyms (dict, optional): The synonyms of the value set. Defaults to {}.
+        """
         self.uuid = uuid
         self.name = name
         self.title = title
