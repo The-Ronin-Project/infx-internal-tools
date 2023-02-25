@@ -15,7 +15,8 @@ from werkzeug.exceptions import BadRequest, NotFound
 from decouple import config
 from sqlalchemy.sql.expression import bindparam
 from app.models.codes import Code
-from app.models.concept_maps import DeprecatedConceptMap
+
+# from app.models.concept_maps import DeprecatedConceptMap
 from app.models.terminologies import Terminology
 from app.database import get_db, get_elasticsearch
 from flask import current_app
@@ -2048,6 +2049,7 @@ class ValueSetVersion:
         value_set,
         status,
         description,
+        comments,
     ):
         self.uuid = uuid
         self.effective_start = effective_start
@@ -2056,6 +2058,7 @@ class ValueSetVersion:
         self.value_set = value_set
         self.status = status
         self.description = description
+        self.comments = comments
         self.version = version
         self.expansion_uuid = None
 
@@ -2130,6 +2133,7 @@ class ValueSetVersion:
             value_set,
             vs_version_data.status,
             vs_version_data.description,
+            vs_version_data.comments,
         )
         value_set_version.load_rules()
 
@@ -2471,36 +2475,78 @@ class ValueSetVersion:
             return []
 
     def serialize(self):
+        pattern = r"[A-Z]([A-Za-z0-9_]){0,254}"  # name transformer
+        if re.match(pattern, self.value_set.name):  # name follows pattern use name
+            rcdm_name = self.value_set.name
+        else:
+            index = re.search(
+                r"[a-zA-Z]", self.value_set.name
+            ).start()  # name does not follow pattern, uppercase 1st letter
+            rcdm_name = (
+                self.value_set.name[:index]
+                + self.value_set.name[index].upper()
+                + self.value_set.name[index + 1 :]
+            )
+
+        for x in self.expansion:  # id will depend on system
+            if "http://hl7.org/fhir" in x.system:
+                rcdm_id = x.system.split("/")[-1]
+            else:
+                rcdm_id = self.value_set.uuid
+
+        if (
+            self.status == "pending"
+        ):  # has a required binding (translate pending to draft)
+            rcdm_status = "draft"
+        else:
+            rcdm_status = self.status
+
+        if self.status == "active":  # date value set version was made active
+            comment_string = str(self.comments)
+            pull_date = re.search(
+                r"\b\w+\s\d+(?:st|nd|rd|th)? \d{4}, \d{1,2}:\d{2}:\d{2} [ap]m\b",
+                comment_string,
+            )
+            if pull_date is not None:
+                date_string = pull_date.group(0)
+                dt = datetime.strptime(date_string, "%B %dth %Y, %I:%M:%S %p")
+                rcdm_date = dt.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
+            else:
+                rcdm_date = None
+        else:
+            rcdm_date = None
+
         serialized = {
-            # "url": self.value_set.url,
-            "id": self.value_set.uuid,
-            "name": self.value_set.name,
-            "title": self.value_set.title,
-            "publisher": self.value_set.publisher,
-            "contact": [{"name": self.value_set.contact}],
+            "resourceType": "ValueSet",
+            "id": rcdm_id,  # for FHIR value sets, id will be a name (e.g. publication-status).  For Ronin value sets, id will be the value set uuid.
+            "meta": {
+                "profile": [
+                    "http://projectronin.io/fhir/StructureDefinition/ronin-valueSet"
+                ]
+            },
+            "extension": [
+                {
+                    "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-valueSetSchema",
+                    "valueString": "2",
+                }
+            ],
+            "url": f"http://projectronin.io/fhir/ValueSet/{rcdm_id}",  # specific to the overall value set; suffix matching the id field exactly
+            "version": str(self.version),  # Version must be a string
+            "name": rcdm_name,  # name has to match [A-Z]([A-Za-z0-9_]){0,254}
+            "status": rcdm_status,  # has a required binding (translate pending to draft)  (draft, active, retired, unknown)
+            "experimental": self.value_set.experimental,
+            "date": rcdm_date,  # the date the status was set to active
             "description": (self.value_set.description or "")
             + " "
             + (self.description or ""),
-            "immutable": self.value_set.immutable,
-            "experimental": self.value_set.experimental,
             "purpose": self.value_set.purpose,
-            "version": str(self.version),  # Version must be a string
-            "status": self.status,
             "expansion": {
-                "contains": [x.serialize() for x in self.expansion],
+                "identifier": f"urn:uuid:{self.expansion_uuid}",
                 "timestamp": self.expansion_timestamp.strftime("%Y-%m-%d")
                 if self.expansion_timestamp is not None
                 else None,
-            },
-            "compose": {"include": self.serialize_include()},
-            "resourceType": "ValueSet",
-            "additionalData": {  # Place to put custom values that aren't part of the FHIR spec
-                "effective_start": self.effective_start,
-                "effective_end": self.effective_end,
-                "version_uuid": self.uuid,
-                "value_set_uuid": self.value_set.uuid,
-                "expansion_uuid": self.expansion_uuid,
-                "synonyms": self.value_set.synonyms,
+                "total": len(self.expansion),  # total number of codes in the expansion
+                "contains": [x.serialize() for x in self.expansion],
             },
         }
 
