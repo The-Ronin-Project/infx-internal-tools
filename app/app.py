@@ -126,7 +126,7 @@ def create_app(script_info=None):
         serialized = [x.serialize() for x in value_sets]
         return jsonify(serialized)
 
-    @app.route("/ValueSets/<string:identifier>/versions/")
+    @app.route("/ValueSets/<string:identifier>/versions/", methods=["GET"])
     def get_value_set_versions(identifier):
         uuid = ValueSet.name_to_uuid(identifier)
         return jsonify(ValueSet.load_version_metadata(uuid))
@@ -254,6 +254,11 @@ def create_app(script_info=None):
         concept_map_version = ConceptMapVersion(version_uuid)
         concept_map_to_json = concept_map_version.serialize()
         return jsonify(concept_map_to_json)
+
+    @app.route("/ConceptMaps/<string:concept_map_uuid>/versions/", methods=["GET"])
+    def get_concept_map_metadata(concept_map_uuid):
+        concept_map_metadata = ConceptMap.load_cm_version_metadata(concept_map_uuid)
+        return jsonify(concept_map_metadata)
 
     @app.route("/ConceptMaps/<string:version_uuid>/actions/index", methods=["POST"])
     def index_targets(version_uuid):
@@ -518,20 +523,12 @@ def create_app(script_info=None):
             terminology = request.json.get("terminology")
             version = request.json.get("version")
             fhir_uri = request.json.get("fhir_uri")
-            effective_start = request.json.get("effective_start")
-            effective_end = request.json.get("effective_end")
             previous_version_uuid = request.json.get("previous_version_uuid")
-            is_standard = request.json.get("is_standard")
-            fhir_terminology = request.json.get("fhir_terminology")
             new_terminology_version = Terminology.new_terminology_version_from_previous(
                 previous_version_uuid,
                 terminology,
                 version,
                 fhir_uri,
-                is_standard,
-                fhir_terminology,
-                effective_start,
-                effective_end,
             )
             new_term_version = Terminology.serialize(new_terminology_version)
             return new_term_version

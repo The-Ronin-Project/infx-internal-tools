@@ -163,6 +163,36 @@ class ConceptMap:
         else:
             self.most_recent_active_version = None
 
+    @classmethod
+    def load_cm_version_metadata(cls, concept_map_uuid):
+        conn = get_db()
+        metadata = conn.execute(
+            text(
+                """
+                select * from concept_maps.concept_map_version
+                where concept_map_uuid=:concept_map_uuid
+                order by version desc
+                """
+            ),
+            {"concept_map_uuid": concept_map_uuid},
+        )
+        results = []
+        for row in metadata:
+            results.append(
+                {
+                    "version_uuid": row.uuid,
+                    "description": row.description,
+                    "comments": row.comments,
+                    "status": row.status,
+                    "created_date": row.created_date,
+                    "version": row.version,
+                    "published_date": row.published_date,
+                    "source_value_set_version_uuid": row.source_value_set_version_uuid,
+                    "target_value_set_version_uuid": row.target_value_set_version_uuid,
+                }
+            )
+        return results
+
     @staticmethod
     def new_version_from_previous(
         previous_version_uuid,
