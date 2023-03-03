@@ -2519,11 +2519,12 @@ class ValueSetVersion:
                 + self.value_set.name[index + 1 :]
             )
 
-        for x in self.expansion:  # id will depend on system
-            if "http://hl7.org/fhir" in x.system:
-                rcdm_id = x.system.split("/")[-1]
-            else:
-                rcdm_id = self.value_set.uuid
+        # for x in self.expansion:  # id will depend on system
+        #     if "http://hl7.org/fhir" in x.system:
+        #         rcdm_id = x.system.split("/")[-1]
+        #     else:
+        #         rcdm_id = self.value_set.uuid
+        rcdm_id = self.value_set.uuid
 
         if (
             self.status == "pending"
