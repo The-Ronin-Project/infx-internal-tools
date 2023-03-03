@@ -1657,7 +1657,7 @@ class ValueSet:
 
         return new_vs_uuid
 
-    def create_new_version(self, effective_start, effective_end, description):
+    def create_new_version_from_previous(self, effective_start, effective_end, description):
         """
         This will identify the most recent version of the value set and clone it, incrementing the version by 1, to create a new version
         """
@@ -1712,6 +1712,37 @@ class ValueSet:
                     "previous_version_uuid": str(most_recent_vs_version.uuid),
                     "new_version_uuid": str(new_version_uuid),
                 },
+            )
+
+        # Copy over mapping inclusions
+        conn.execute(
+            text(
+                """
+                insert into value_sets.mapping_inclusion
+                (concept_map_uuid, relationship_types, match_source_or_target, concept_map_name, vs_version_uuid)
+                select concept_map_uuid, relationship_types, match_source_or_target, concept_map_name, :new_value_set_version_uuid from value_sets.mapping_inclusion
+                where vs_version_uuid=:previous_version_uuid
+                """
+            ), {
+                "new_value_set_version_uuid": str(new_version_uuid),
+                "previous_version_uuid": str(most_recent_vs_version.uuid)
+            }
+        )
+
+        # Copy over explicitly included codes
+        if current_app.config["MOCK_DB"] is False:
+            conn.execute(
+                text(
+                    """
+                    insert into value_sets.explicitly_included_code
+                    (vs_version_uuid, code_uuid, review_status)
+                    select :new_value_set_version_uuid, code_uuid, review_status from value_sets.explicitly_included_code
+                    where vs_version_uuid = :previous_version_uuid
+                    """
+                ), {
+                    "new_value_set_version_uuid": str(new_version_uuid),
+                    "previous_version_uuid": str(most_recent_vs_version.uuid)
+                }
             )
 
         return new_version_uuid
@@ -2488,11 +2519,12 @@ class ValueSetVersion:
                 + self.value_set.name[index + 1 :]
             )
 
-        for x in self.expansion:  # id will depend on system
-            if "http://hl7.org/fhir" in x.system:
-                rcdm_id = x.system.split("/")[-1]
-            else:
-                rcdm_id = self.value_set.uuid
+        # for x in self.expansion:  # id will depend on system
+        #     if "http://hl7.org/fhir" in x.system:
+        #         rcdm_id = x.system.split("/")[-1]
+        #     else:
+        #         rcdm_id = self.value_set.uuid
+        rcdm_id = self.value_set.uuid
 
         if (
             self.status == "pending"

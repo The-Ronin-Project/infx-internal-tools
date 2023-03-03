@@ -154,7 +154,7 @@ def create_app(script_info=None):
         effective_start = request.json.get("effective_start")
         effective_end = request.json.get("effective_end")
         description = request.json.get("description")
-        new_version_uuid = value_set.create_new_version(
+        new_version_uuid = value_set.create_new_version_from_previous(
             effective_start, effective_end, description
         )
         return str(new_version_uuid), 201
@@ -362,7 +362,7 @@ def create_app(script_info=None):
             effective_start = request.json.get("effective_start")
             effective_end = request.json.get("effective_end")
             description = request.json.get("description")
-            new_version_uuid = value_set.create_new_version(
+            new_version_uuid = value_set.create_new_version_from_previous(
                 effective_start, effective_end, description
             )
             return str(new_version_uuid), 201
