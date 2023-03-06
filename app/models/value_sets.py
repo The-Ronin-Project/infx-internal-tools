@@ -16,7 +16,7 @@ from decouple import config
 from sqlalchemy.sql.expression import bindparam
 from app.models.codes import Code
 
-# from app.models.concept_maps import DeprecatedConceptMap
+from app.models.concept_maps import DeprecatedConceptMap
 from app.models.terminologies import Terminology
 from app.database import get_db, get_elasticsearch
 from flask import current_app
@@ -1697,13 +1697,13 @@ class ValueSet:
         )
 
         # Copy rules from previous version to new version
-        if current_app.config["MOCK_DB"] is False:
+        if current_app.config["MOCK_DB"] == "False":
             conn.execute(
                 text(
                     """
                     insert into value_sets.value_set_rule
-                    (position, description, property, operator, value, include, terminology_version, value_set_version)
-                    select position, description, property, operator, value, include, terminology_version, :new_version_uuid
+                    (position, description, property, operator, value, include, terminology_version, value_set_version, rule_group)
+                    select position, description, property, operator, value, include, terminology_version, :new_version_uuid, rule_group
                     from value_sets.value_set_rule
                     where value_set_version = :previous_version_uuid
                     """
@@ -1715,22 +1715,23 @@ class ValueSet:
             )
 
         # Copy over mapping inclusions
-        conn.execute(
-            text(
-                """
-                insert into value_sets.mapping_inclusion
-                (concept_map_uuid, relationship_types, match_source_or_target, concept_map_name, vs_version_uuid)
-                select concept_map_uuid, relationship_types, match_source_or_target, concept_map_name, :new_value_set_version_uuid from value_sets.mapping_inclusion
-                where vs_version_uuid=:previous_version_uuid
-                """
-            ), {
-                "new_value_set_version_uuid": str(new_version_uuid),
-                "previous_version_uuid": str(most_recent_vs_version.uuid)
-            }
-        )
+        if current_app.config["MOCK_DB"] == "False":
+            conn.execute(
+                text(
+                    """
+                    insert into value_sets.mapping_inclusion
+                    (concept_map_uuid, relationship_types, match_source_or_target, concept_map_name, vs_version_uuid)
+                    select concept_map_uuid, relationship_types, match_source_or_target, concept_map_name, :new_value_set_version_uuid from value_sets.mapping_inclusion
+                    where vs_version_uuid=:previous_version_uuid
+                    """
+                ), {
+                    "new_value_set_version_uuid": str(new_version_uuid),
+                    "previous_version_uuid": str(most_recent_vs_version.uuid)
+                }
+            )
 
         # Copy over explicitly included codes
-        if current_app.config["MOCK_DB"] is False:
+        if current_app.config["MOCK_DB"] == "False":
             conn.execute(
                 text(
                     """
@@ -2168,7 +2169,7 @@ class ValueSetVersion:
         )
         value_set_version.load_rules()
 
-        if current_app.config["MOCK_DB"] is False:
+        if current_app.config["MOCK_DB"] != 'True':
             value_set_version.explicitly_included_codes = (
                 ExplicitlyIncludedCode.load_all_for_vs_version(value_set_version)
             )
