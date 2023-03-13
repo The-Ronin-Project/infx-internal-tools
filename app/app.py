@@ -255,6 +255,8 @@ def create_app(script_info=None):
             vs_version = ValueSetVersion.load(version_uuid)
             vs_version.expand(force_new=force_new)
             value_set_to_json = vs_version.serialize()
+
+            title = vs_version.value_set.title
             value_set_to_json["id"] = str(value_set_to_json["id"])
             value_set_to_datastore = set_up_object_store(
                 value_set_to_json, folder="published"

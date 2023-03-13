@@ -66,6 +66,7 @@ class VSRule:
     """
     This is a base class for creating value set rules.
     """
+
     def __init__(
         self,
         uuid,
@@ -95,7 +96,7 @@ class VSRule:
         :param terminology_version: A TerminologyVersion object representing the terminology version of the rule.
         """
         self.uuid = uuid
-        self.position = uuid
+        self.position = position
         self.description = description
         self.property = prop
         self.operator = operator
@@ -111,94 +112,139 @@ class VSRule:
 
         self.results = set()
 
-    def execute(self):
-        """
-        Executes the rule by calling the corresponding method based on the operator and property.
-        """
-        if self.operator == "descendent-of":
-            self.descendent_of()
-        elif self.operator == "self-and-descendents":
-            self.self_and_descendents()
-        elif self.operator == "direct-child":
-            self.direct_child()
-        elif self.operator == "is-a":
-            self.direct_child()
-        elif self.operator == "in" and self.property == "concept":
-            self.concept_in()
-        elif self.operator == "in-section":
-            self.in_section()
-        elif self.operator == "in-chapter":
-            self.in_chapter()
-        elif self.operator == "has-body-system":
-            self.has_body_system()
-        elif self.operator == "has-root-operation":
-            self.has_root_operation()
-        elif self.operator == "has-body-part":
-            self.has_body_part()
-        elif self.operator == "has-qualifier":
-            self.has_qualifier()
-        elif self.operator == "has-approach":
-            self.has_approach()
-        elif self.operator == "has-device":
-            self.has_device()
+    @classmethod
+    def load(cls, rule_uuid):
+        conn = get_db()
+        result = conn.execute(
+            text(
+                """
+              select * from value_sets.value_set_rule
+              where uuid =:uuid
+              """
+            ),
+            {"uuid": rule_uuid},
+        ).first()
 
-        if self.property == "code" and self.operator == "in":
-            self.code_rule()
-        if self.property == "display" and self.operator == "regex":
-            self.display_regex()
-        elif self.property == "display" and self.operator == "in":
-            self.display_rule()
+        return cls(
+            uuid=result.uuid,
+            position=result.position,
+            description=result.description,
+            prop=result.property,
+            operator=result.operator,
+            value=result.value,
+            include=result.include,
+            value_set_version=result.value_set_version,
+            terminology_version=result.terminology_version,
+            fhir_system=None,
+        )
 
-        # RxNorm Specific
-        if self.property == "term_type_within_class":
-            self.term_type_within_class()
-        if self.property == "term_type":
-            self.rxnorm_term_type()
-        if self.property == "all_active_rxnorm":
-            self.all_active_rxnorm()
+    def update(self, new_terminology_version_uuid):
+        conn = get_db()
+        conn.execute(
+            text(
+                """
+              update value_sets.value_set_rule
+              set terminology_version = :new_terminology_version_uuid
+              where uuid = :rule_uuid
+              """
+            ),
+            {
+                "rule_uuid": self.uuid,
+                "new_terminology_version_uuid": new_terminology_version_uuid,
+            },
+        )
 
-        # SNOMED
-        if self.property == "ecl":
-            self.ecl_query()
 
-        # LOINC
-        if self.property == "property":
-            self.property_rule()
-        elif self.property == "timing":
-            self.timing_rule()
-        elif self.property == "system":
-            self.system_rule()
-        elif self.property == "component":
-            self.component_rule()
-        elif self.property == "scale":
-            self.scale_rule()
-        elif self.property == "method":
-            self.method_rule()
-        elif self.property == "class_type":
-            self.class_type_rule()
-        elif self.property == "order_or_observation":
-            self.order_observation_rule()
+def execute(self):
+    """
+    Executes the rule by calling the corresponding method based on the operator and property.
+    """
+    if self.operator == "descendent-of":
+        self.descendent_of()
+    elif self.operator == "self-and-descendents":
+        self.self_and_descendents()
+    elif self.operator == "direct-child":
+        self.direct_child()
+    elif self.operator == "is-a":
+        self.direct_child()
+    elif self.operator == "in" and self.property == "concept":
+        self.concept_in()
+    elif self.operator == "in-section":
+        self.in_section()
+    elif self.operator == "in-chapter":
+        self.in_chapter()
+    elif self.operator == "has-body-system":
+        self.has_body_system()
+    elif self.operator == "has-root-operation":
+        self.has_root_operation()
+    elif self.operator == "has-body-part":
+        self.has_body_part()
+    elif self.operator == "has-qualifier":
+        self.has_qualifier()
+    elif self.operator == "has-approach":
+        self.has_approach()
+    elif self.operator == "has-device":
+        self.has_device()
 
-        # FHIR
-        if self.property == "has_fhir_terminology":
-            self.has_fhir_terminology_rule()
-        # Include entire code system rules
-        if self.property == "include_entire_code_system":
-            self.include_entire_code_system()
+    if self.property == "code" and self.operator == "in":
+        self.code_rule()
+    if self.property == "display" and self.operator == "regex":
+        self.display_regex()
+    elif self.property == "display" and self.operator == "in":
+        self.display_rule()
 
-    def serialize(self):
-        """
-        Prepares a JSON representation to return to the API and returns the property, operator, and value of the rule
+    # RxNorm Specific
+    if self.property == "term_type_within_class":
+        self.term_type_within_class()
+    if self.property == "term_type":
+        self.rxnorm_term_type()
+    if self.property == "all_active_rxnorm":
+        self.all_active_rxnorm()
 
-        :return: A dictionary containing the property, operator, and value of the rule.
-        """
-        return {"property": self.property, "op": self.operator, "value": self.value}
+    # SNOMED
+    if self.property == "ecl":
+        self.ecl_query()
+
+    # LOINC
+    if self.property == "property":
+        self.property_rule()
+    elif self.property == "timing":
+        self.timing_rule()
+    elif self.property == "system":
+        self.system_rule()
+    elif self.property == "component":
+        self.component_rule()
+    elif self.property == "scale":
+        self.scale_rule()
+    elif self.property == "method":
+        self.method_rule()
+    elif self.property == "class_type":
+        self.class_type_rule()
+    elif self.property == "order_or_observation":
+        self.order_observation_rule()
+
+    # FHIR
+    if self.property == "has_fhir_terminology":
+        self.has_fhir_terminology_rule()
+    # Include entire code system rules
+    if self.property == "include_entire_code_system":
+        self.include_entire_code_system()
+
+
+def serialize(self):
+    """
+    Prepares a JSON representation to return to the API and returns the property, operator, and value of the rule
+
+    :return: A dictionary containing the property, operator, and value of the rule.
+    """
+    return {"property": self.property, "op": self.operator, "value": self.value}
 
 
 class UcumRule(VSRule):
     """
     This class inherits from the VSRule class and provides implementation for UCUM specific value set rules.
     """
+
     def code_rule(self):
         """
         This method executes the code rule by querying the database for the codes provided in the rule's value.
@@ -244,6 +290,7 @@ class ICD10CMRule(VSRule):
     """
     This class inherits from the VSRule class and provides implementation for ICD-10-CM specific value set rules.
     """
+
     def direct_child(self):
         """
         This method executes the direct child rule by querying the database for the direct children of the provided code.
@@ -534,6 +581,7 @@ class RxNormRule(VSRule):
     """
     This class inherits from the VSRule class and provides implementation for RxNorm specific value set rules.
     """
+
     def json_extract(self, obj, key):
         """Recursively fetch values from nested JSON."""
 
@@ -691,6 +739,7 @@ class LOINCRule(VSRule):
     """
     This class inherits from the VSRule class and provides implementation for LOINC specific value set rules.
     """
+
     def loinc_rule(self, query):
         conn = get_db()
 
@@ -882,6 +931,7 @@ class ICD10PCSRule(VSRule):
     """
     This class inherits from the VSRule class and provides implementation for ICD-10-PCS specific value set rules.
     """
+
     def icd_10_pcs_rule(self, query):
         conn = get_db()
 
@@ -970,6 +1020,7 @@ class CPTRule(VSRule):
     """
     This class inherits from the VSRule class and provides implementation for CPT specific value set rules.
     """
+
     @staticmethod
     def parse_cpt_retool_array(retool_array):
         array_string_copy = retool_array
@@ -1105,6 +1156,7 @@ class FHIRRule(VSRule):
     """
     This class inherits from the VSRule class and provides implementation for FHIR specific value set rules.
     """
+
     def has_fhir_terminology_rule(self):
         conn = get_db()
         query = """
@@ -1253,6 +1305,7 @@ class ValueSet:
             Loads all value sets metadata from the database.
 
     """
+
     def __init__(
         self,
         uuid,
@@ -1657,7 +1710,9 @@ class ValueSet:
 
         return new_vs_uuid
 
-    def create_new_version_from_previous(self, effective_start, effective_end, description):
+    def create_new_version_from_previous(
+        self, effective_start, effective_end, description
+    ):
         """
         This will identify the most recent version of the value set and clone it, incrementing the version by 1, to create a new version
         """
@@ -1724,10 +1779,11 @@ class ValueSet:
                     select concept_map_uuid, relationship_types, match_source_or_target, concept_map_name, :new_value_set_version_uuid from value_sets.mapping_inclusion
                     where vs_version_uuid=:previous_version_uuid
                     """
-                ), {
+                ),
+                {
                     "new_value_set_version_uuid": str(new_version_uuid),
-                    "previous_version_uuid": str(most_recent_vs_version.uuid)
-                }
+                    "previous_version_uuid": str(most_recent_vs_version.uuid),
+                },
             )
 
         # Copy over explicitly included codes
@@ -1740,10 +1796,11 @@ class ValueSet:
                     select :new_value_set_version_uuid, code_uuid, review_status from value_sets.explicitly_included_code
                     where vs_version_uuid = :previous_version_uuid
                     """
-                ), {
+                ),
+                {
                     "new_value_set_version_uuid": str(new_version_uuid),
-                    "previous_version_uuid": str(most_recent_vs_version.uuid)
-                }
+                    "previous_version_uuid": str(most_recent_vs_version.uuid),
+                },
             )
 
         return new_version_uuid
@@ -2039,6 +2096,16 @@ class RuleGroup:
 
         return serialized
 
+    def update_terminology_version_in_rules(
+        self, old_terminology_version_uuid, new_terminology_version_uuid
+    ):
+        old_terminology_version = Terminology.load(old_terminology_version_uuid)
+        rules_with_old_terminology = self.rules.get(old_terminology_version)
+        if rules_with_old_terminology is None:
+            return
+        for rule in rules_with_old_terminology:
+            rule.update(new_terminology_version_uuid=new_terminology_version_uuid)
+
     # Move include and exclude rule properties to here
     @property
     def include_rules(self):
@@ -2169,7 +2236,7 @@ class ValueSetVersion:
         )
         value_set_version.load_rules()
 
-        if current_app.config["MOCK_DB"] != 'True':
+        if current_app.config["MOCK_DB"] != "True":
             value_set_version.explicitly_included_codes = (
                 ExplicitlyIncludedCode.load_all_for_vs_version(value_set_version)
             )
@@ -2542,7 +2609,30 @@ class ValueSetVersion:
             )
             if pull_date is not None:
                 date_string = pull_date.group(0)
-                dt = datetime.strptime(date_string, "%B %dth %Y, %I:%M:%S %p")
+                dt = None
+                try:
+                    dt = datetime.strptime(date_string, "%B %drd %Y, %I:%M:%S %p")
+                except ValueError:
+                    pass
+
+                if dt is None:
+                    try:
+                        dt = datetime.strptime(date_string, "%B %dst %Y, %I:%M:%S %p")
+                    except ValueError:
+                        pass
+
+                if dt is None:
+                    try:
+                        dt = datetime.strptime(date_string, "%B %dth %Y, %I:%M:%S %p")
+                    except ValueError:
+                        pass
+
+                if dt is None:
+                    try:
+                        dt = datetime.strptime(date_string, "%B %dnd %Y, %I:%M:%S %p")
+                    except ValueError:
+                        pass
+
                 rcdm_date = dt.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
             else:
                 rcdm_date = None
@@ -2624,6 +2714,15 @@ class ValueSetVersion:
             {"expansion_uuid": expansion_uuid},
         ).first()
         return result.report
+
+    def update_rules_for_terminology(
+        self, old_terminology_version_uuid, new_terminology_version_uuid
+    ):
+        for rule_group in self.rule_groups:
+            rule_group.update_terminology_version_in_rules(
+                old_terminology_version_uuid=old_terminology_version_uuid,
+                new_terminology_version_uuid=new_terminology_version_uuid,
+            )
 
 
 @dataclass
