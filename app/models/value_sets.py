@@ -2789,6 +2789,23 @@ class ValueSetVersion:
 
         return {"removed_codes": removed_codes, "added_codes": added_codes}
 
+    @classmethod
+    def status_update_for_a_version(cls, version_uuid, new_status):
+        if new_status is "active":
+            raise BadRequest(f"Versions can not be set to active in this manner.")
+        conn = get_db()
+        query = conn.execute(
+            text(
+                """
+            update value_sets.value_set_version
+            set status = :new_status
+            where uuid = :uuid
+            """
+            ),
+            {"new_status": new_status, "uuid": str(version_uuid)},
+        )
+        return
+
 
 @dataclass
 class ExplicitlyIncludedCode:
