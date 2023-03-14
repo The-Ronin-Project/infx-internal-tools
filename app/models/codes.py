@@ -143,14 +143,15 @@ class Code:
                 {"terminology_version_uuid": terminology_version_uuid},
             ).first()
             effective_end = terminology_metadata.effective_end
-            # What would we want to do if effective_end is null?
-            if effective_end is not None:
+            if effective_end is None:
+                raise BadRequest(
+                    f"The effective end for this terminology version is null and must be added first."
+                )
+            else:
                 if effective_end < datetime.date.today():
                     raise BadRequest(
                         f"The terminology effective end date for {terminology_version_uuid} has passed, a new terminology version must be created."
                     )
-                else:
-                    pass
             is_standard_boolean = terminology_metadata.is_standard
             if is_standard_boolean:
                 raise BadRequest(
@@ -180,6 +181,7 @@ class Code:
                     "display_value": x["display"],
                 },
             )
+            # Check if the code display pair already appears in the custom terminology.
             if result:
                 raise BadRequest(
                     f"The code display pair already appears in the terminology and cannot be added."
