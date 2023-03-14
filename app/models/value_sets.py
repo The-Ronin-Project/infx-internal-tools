@@ -16,7 +16,7 @@ from decouple import config
 from sqlalchemy.sql.expression import bindparam
 from app.models.codes import Code
 
-from app.models.concept_maps import DeprecatedConceptMap
+import app.models.concept_maps
 from app.models.terminologies import Terminology
 from app.database import get_db, get_elasticsearch
 from flask import current_app
@@ -154,81 +154,80 @@ class VSRule:
             },
         )
 
+    def execute(self):
+        """
+        Executes the rule by calling the corresponding method based on the operator and property.
+        """
+        if self.operator == "descendent-of":
+            self.descendent_of()
+        elif self.operator == "self-and-descendents":
+            self.self_and_descendents()
+        elif self.operator == "direct-child":
+            self.direct_child()
+        elif self.operator == "is-a":
+            self.direct_child()
+        elif self.operator == "in" and self.property == "concept":
+            self.concept_in()
+        elif self.operator == "in-section":
+            self.in_section()
+        elif self.operator == "in-chapter":
+            self.in_chapter()
+        elif self.operator == "has-body-system":
+            self.has_body_system()
+        elif self.operator == "has-root-operation":
+            self.has_root_operation()
+        elif self.operator == "has-body-part":
+            self.has_body_part()
+        elif self.operator == "has-qualifier":
+            self.has_qualifier()
+        elif self.operator == "has-approach":
+            self.has_approach()
+        elif self.operator == "has-device":
+            self.has_device()
 
-def execute(self):
-    """
-    Executes the rule by calling the corresponding method based on the operator and property.
-    """
-    if self.operator == "descendent-of":
-        self.descendent_of()
-    elif self.operator == "self-and-descendents":
-        self.self_and_descendents()
-    elif self.operator == "direct-child":
-        self.direct_child()
-    elif self.operator == "is-a":
-        self.direct_child()
-    elif self.operator == "in" and self.property == "concept":
-        self.concept_in()
-    elif self.operator == "in-section":
-        self.in_section()
-    elif self.operator == "in-chapter":
-        self.in_chapter()
-    elif self.operator == "has-body-system":
-        self.has_body_system()
-    elif self.operator == "has-root-operation":
-        self.has_root_operation()
-    elif self.operator == "has-body-part":
-        self.has_body_part()
-    elif self.operator == "has-qualifier":
-        self.has_qualifier()
-    elif self.operator == "has-approach":
-        self.has_approach()
-    elif self.operator == "has-device":
-        self.has_device()
+        if self.property == "code" and self.operator == "in":
+            self.code_rule()
+        if self.property == "display" and self.operator == "regex":
+            self.display_regex()
+        elif self.property == "display" and self.operator == "in":
+            self.display_rule()
 
-    if self.property == "code" and self.operator == "in":
-        self.code_rule()
-    if self.property == "display" and self.operator == "regex":
-        self.display_regex()
-    elif self.property == "display" and self.operator == "in":
-        self.display_rule()
+        # RxNorm Specific
+        if self.property == "term_type_within_class":
+            self.term_type_within_class()
+        if self.property == "term_type":
+            self.rxnorm_term_type()
+        if self.property == "all_active_rxnorm":
+            self.all_active_rxnorm()
 
-    # RxNorm Specific
-    if self.property == "term_type_within_class":
-        self.term_type_within_class()
-    if self.property == "term_type":
-        self.rxnorm_term_type()
-    if self.property == "all_active_rxnorm":
-        self.all_active_rxnorm()
+        # SNOMED
+        if self.property == "ecl":
+            self.ecl_query()
 
-    # SNOMED
-    if self.property == "ecl":
-        self.ecl_query()
+        # LOINC
+        if self.property == "property":
+            self.property_rule()
+        elif self.property == "timing":
+            self.timing_rule()
+        elif self.property == "system":
+            self.system_rule()
+        elif self.property == "component":
+            self.component_rule()
+        elif self.property == "scale":
+            self.scale_rule()
+        elif self.property == "method":
+            self.method_rule()
+        elif self.property == "class_type":
+            self.class_type_rule()
+        elif self.property == "order_or_observation":
+            self.order_observation_rule()
 
-    # LOINC
-    if self.property == "property":
-        self.property_rule()
-    elif self.property == "timing":
-        self.timing_rule()
-    elif self.property == "system":
-        self.system_rule()
-    elif self.property == "component":
-        self.component_rule()
-    elif self.property == "scale":
-        self.scale_rule()
-    elif self.property == "method":
-        self.method_rule()
-    elif self.property == "class_type":
-        self.class_type_rule()
-    elif self.property == "order_or_observation":
-        self.order_observation_rule()
-
-    # FHIR
-    if self.property == "has_fhir_terminology":
-        self.has_fhir_terminology_rule()
-    # Include entire code system rules
-    if self.property == "include_entire_code_system":
-        self.include_entire_code_system()
+        # FHIR
+        if self.property == "has_fhir_terminology":
+            self.has_fhir_terminology_rule()
+        # Include entire code system rules
+        if self.property == "include_entire_code_system":
+            self.include_entire_code_system()
 
 
 def serialize(self):
@@ -2437,7 +2436,7 @@ class ValueSetVersion:
             allowed_relationship_types = self.parse_mapping_inclusion_retool_array(
                 inclusion.relationship_types
             )
-            concept_map = DeprecatedConceptMap(
+            concept_map = app.models.concept_maps.DeprecatedConceptMap(
                 None, allowed_relationship_types, inclusion.concept_map_name
             )
 
