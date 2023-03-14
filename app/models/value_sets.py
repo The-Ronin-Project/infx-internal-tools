@@ -2723,6 +2723,72 @@ class ValueSetVersion:
                 new_terminology_version_uuid=new_terminology_version_uuid,
             )
 
+    @classmethod
+    def diff_for_removed_and_added_codes(
+        cls,
+        previous_version_uuid,
+        new_version_uuid,
+    ):
+        previous_value_set_version = ValueSetVersion.load(previous_version_uuid)
+        new_value_set_version = ValueSetVersion.load(new_version_uuid)
+
+        previous_value_set_version.expand()
+        new_value_set_version.expand()
+
+        conn = get_db()
+        removed_codes_query = conn.execute(
+            text(
+                """
+                select distinct code, display, system from value_sets.expansion_member
+                where expansion_uuid = :previous_expansion
+                EXCEPT
+                select distinct code, display, system from value_sets.expansion_member
+                where expansion_uuid = :new_expansion
+                order by display asc
+                """
+            ),
+            {
+                "previous_expansion": previous_value_set_version.expansion_uuid,
+                "new_expansion": new_value_set_version.expansion_uuid,
+            },
+        )
+        # removed_codes = [x for x in removed_codes_query]
+        removed_codes = [
+            {
+                "code": x.code,
+                "display": x.display,
+                "system": x.system,
+            }
+            for x in removed_codes_query
+        ]
+
+        added_codes_query = conn.execute(
+            text(
+                """
+                select distinct code, display, system from value_sets.expansion_member
+                where expansion_uuid = :new_expansion
+                EXCEPT
+                select distinct code, display, system from value_sets.expansion_member
+                where expansion_uuid = :previous_expansion
+                order by display asc
+                """
+            ),
+            {
+                "previous_expansion": previous_value_set_version.expansion_uuid,
+                "new_expansion": new_value_set_version.expansion_uuid,
+            },
+        )
+        added_codes = [
+            {
+                "code": x.code,
+                "display": x.display,
+                "system": x.system,
+            }
+            for x in added_codes_query
+        ]
+
+        return {"removed_codes": removed_codes, "added_codes": added_codes}
+
 
 @dataclass
 class ExplicitlyIncludedCode:
