@@ -136,41 +136,70 @@ class Code:
             terminology_metadata = conn.execute(
                 text(
                     """
-                    select effective_end from public.terminology_versions
+                    select is_standard, fhir_terminology, effective_end from public.terminology_versions
                     where uuid = :terminology_version_uuid
                     """
                 ),
                 {"terminology_version_uuid": terminology_version_uuid},
             ).first()
             effective_end = terminology_metadata.effective_end
-            if effective_end < datetime.date.today():
+            # What would we want to do if effective_end is null?
+            if effective_end is not None:
+                if effective_end < datetime.date.today():
+                    raise BadRequest(
+                        f"The terminology effective end date for {terminology_version_uuid} has passed, a new terminology version must be created."
+                    )
+                else:
+                    pass
+            is_standard_boolean = terminology_metadata.is_standard
+            if is_standard_boolean:
                 raise BadRequest(
-                    f"The terminology effective end date for {terminology_version_uuid} has passed, a new terminology version must be created."
+                    f"The terminology is a standard terminology and cannot be edited."
+                )
+            fhir_terminology_boolean = terminology_metadata.fhir_terminology
+            if fhir_terminology_boolean:
+                raise BadRequest(
+                    f"The terminology is a FHIR terminology and cannot be edited."
                 )
         new_uuids = []
-
         # This will insert the new codes into a custom terminology.
         for x in data:
             new_code_uuid = uuid.uuid4()
             new_uuids.append(new_code_uuid)
-            new_additional_data = x.get('additional_data')
-            if new_additional_data:
-                new_additional_data = json.dumps(new_additional_data)
-            conn.execute(
+            new_additional_data = json.dumps(x["additional_data"])
+            result = conn.execute(
                 text(
                     """
-                    Insert into custom_terminologies.code(uuid, code, display, terminology_version_uuid, additional_data)
-                    Values (:uuid, :code, :display, :terminology_version_uuid, :additional_data)
+                    Select * from custom_terminologies.code
+                    where code = :code_value
+                    and display = :display_value 
                     """
                 ),
                 {
-                    "uuid": new_code_uuid,
-                    "code": x["code"],
-                    "display": x["display"],
-                    "terminology_version_uuid": x["terminology_version_uuid"],
-                    "additional_data": new_additional_data,
+                    "code_value": x["code"],
+                    "display_value": x["display"],
                 },
             )
+            if result:
+                raise BadRequest(
+                    f"The code display pair already appears in the terminology and cannot be added."
+                )
+            else:
+                conn.execute(
+                    text(
+                        """
+                        Insert into custom_terminologies.code(uuid, code, display, terminology_version_uuid, additional_data)
+                        Values (:uuid, :code, :display, :terminology_version_uuid, :additional_data)
+                        """
+                    ),
+                    {
+                        "uuid": new_code_uuid,
+                        "code": x["code"],
+                        "display": x["display"],
+                        "terminology_version_uuid": x["terminology_version_uuid"],
+                        "additional_data": new_additional_data,
+                    },
+                )
         new_codes = []
         for new_uuid in new_uuids:
             new_code = cls.load_from_custom_terminology(new_uuid)
