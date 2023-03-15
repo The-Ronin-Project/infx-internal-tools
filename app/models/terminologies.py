@@ -53,6 +53,9 @@ class Terminology:
                 return True
         return False
 
+    def __repr__(self):
+        return f"Terminology({self.uuid})"
+
     @classmethod
     def load(cls, terminology_version_uuid):
         conn = get_db()

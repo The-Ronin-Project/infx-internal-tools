@@ -1825,7 +1825,7 @@ class RuleGroup:
         rules_data = conn.execute(
             text(
                 """
-            select * 
+            select value_set_rule.uuid as rule_uuid, * 
             from value_sets.value_set_rule 
             join terminology_versions
             on terminology_version=terminology_versions.uuid
@@ -1842,7 +1842,7 @@ class RuleGroup:
 
             if terminology.name == "ICD-10 CM":
                 rule = ICD10CMRule(
-                    x.uuid,
+                    x.rule_uuid,
                     x.position,
                     x.description,
                     x.property,
@@ -1855,7 +1855,7 @@ class RuleGroup:
                 )
             elif terminology.name == "SNOMED CT":
                 rule = SNOMEDRule(
-                    x.uuid,
+                    x.rule_uuid,
                     x.position,
                     x.description,
                     x.property,
@@ -1868,7 +1868,7 @@ class RuleGroup:
                 )
             elif terminology.name == "RxNorm":
                 rule = RxNormRule(
-                    x.uuid,
+                    x.rule_uuid,
                     x.position,
                     x.description,
                     x.property,
@@ -1881,7 +1881,7 @@ class RuleGroup:
                 )
             elif terminology.name == "LOINC":
                 rule = LOINCRule(
-                    x.uuid,
+                    x.rule_uuid,
                     x.position,
                     x.description,
                     x.property,
@@ -1894,7 +1894,7 @@ class RuleGroup:
                 )
             elif terminology.name == "CPT":
                 rule = CPTRule(
-                    x.uuid,
+                    x.rule_uuid,
                     x.position,
                     x.description,
                     x.property,
@@ -1907,7 +1907,7 @@ class RuleGroup:
                 )
             elif terminology.name == "ICD-10 PCS":
                 rule = ICD10PCSRule(
-                    x.uuid,
+                    x.rule_uuid,
                     x.position,
                     x.description,
                     x.property,
@@ -1920,7 +1920,7 @@ class RuleGroup:
                 )
             elif terminology.name == "UCUM":
                 rule = UcumRule(
-                    x.uuid,
+                    x.rule_uuid,
                     x.position,
                     x.description,
                     x.property,
@@ -1933,7 +1933,7 @@ class RuleGroup:
                 )
             elif terminology.fhir_terminology == True:
                 rule = FHIRRule(
-                    x.uuid,
+                    x.rule_uuid,
                     x.position,
                     x.description,
                     x.property,
@@ -1946,7 +1946,7 @@ class RuleGroup:
                 )
             elif terminology.fhir_terminology == False:
                 rule = CustomTerminologyRule(
-                    x.uuid,
+                    x.rule_uuid,
                     x.position,
                     x.description,
                     x.property,
