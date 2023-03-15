@@ -57,6 +57,61 @@ def create_app(script_info=None):
     def ping():
         return "OK"
 
+    class TerminologyExpiredError(Exception):
+        pass
+
+    class TerminologyEndNullError(Exception):
+        pass
+
+    class TerminologyUnderConstructionError(Exception):
+        pass
+
+    class NewCodesMissingError(Exception):
+        pass
+
+    class NoCodesRemovedError(Exception):
+        pass
+
+    @app.errorhandler(TerminologyExpiredError)
+    def handle_terminology_end_date_expired_error(error):
+        message = {
+            'error': 'Terminology version expired',
+            'message': 'The effective end date for the value set has passed. Create a new terminology version.'
+        }
+        return jsonify(message), 409
+
+    @app.errorhandler(TerminologyEndNullError)
+    def handle_terminology_end_date_null_error(error):
+        message = {
+            'error': 'Invalid terminology request',
+            'message': 'The effective end date for the value set is null. Specify a valid end date.'
+        }
+        return jsonify(message), 422
+
+    @app.errorhandler(TerminologyUnderConstructionError)
+    def handle_terminology_under_construction_error(error):
+        message = {
+            'error': 'Terminology version is actively under construction',
+            'message': 'The terminology is being edited and cannot undergo automapping. Publish the terminology version'
+        }
+        return jsonify(message), 409
+
+    @app.errorhandler(NewCodesMissingError)
+    def handle_new_codes_missing_error(error):
+        message = {
+            'error': 'New terminology codes are missing',
+            'message': 'The newly added codes are missing after the terminology update. Investigate version differences'
+        }
+        return jsonify(message), 424
+
+    @app.errorhandler(NoCodesRemovedError)
+    def handle_no_codes_removed_error(error):
+        message = {
+            'error': 'No codes were removed',
+            'message': 'No codes were removed following the addition of new codes. Investigate version differences'
+        }
+        return jsonify(message), 424
+
     @app.errorhandler(HTTPException)
     def handle_exception(e):
         logger.critical(e.description, stack_info=True)
