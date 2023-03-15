@@ -72,11 +72,17 @@ def create_app(script_info=None):
     class NoCodesRemovedError(Exception):
         pass
 
+    class TerminologyIsStandardError(Exception):
+        pass
+
+    class TerminologyIsFHIRError(Exception):
+        pass
+
     @app.errorhandler(TerminologyExpiredError)
     def handle_terminology_end_date_expired_error(error):
         message = {
             'error': 'Terminology version expired',
-            'message': 'The effective end date for the value set has passed. Create a new terminology version.'
+            'message': 'The effective end date for the value set has passed. A new terminology version will be created.'
         }
         return jsonify(message), 409
 
@@ -111,6 +117,22 @@ def create_app(script_info=None):
             'message': 'No codes were removed following the addition of new codes. Investigate version differences'
         }
         return jsonify(message), 424
+
+    @app.errorhandler(TerminologyIsStandardError)
+    def handle_terminology_is_standard_error(error):
+        message = {
+            'error': 'The terminology is a standard terminology and cannot be edited.',
+            'message': 'The terminology is a standard so we should not be trying to auto map it'
+        }
+        return jsonify(message), 409
+
+    @app.errorhandler(TerminologyIsFHIRError)
+    def handle_terminology_is_standard_error(error):
+        message = {
+            'error': 'The terminology is a FHIR and cannot be edited.',
+            'message': 'The terminology is a FHIR so we should not be trying to auto map it'
+        }
+        return jsonify(message), 409
 
     @app.errorhandler(HTTPException)
     def handle_exception(e):
