@@ -6,6 +6,7 @@ from sqlalchemy import text
 from app.models.terminologies import Terminology
 from werkzeug.exceptions import BadRequest
 
+INTERNAL_TOOLS_BASE_URL = "https://infx-internal.prod.projectronin.io"
 
 class Code:
     def __init__(
@@ -143,15 +144,6 @@ class Code:
                 {"terminology_version_uuid": terminology_version_uuid},
             ).first()
             effective_end = terminology_metadata.effective_end
-            if effective_end is None:
-                raise BadRequest(
-                    f"The effective end for this terminology version is null and must be added first."
-                )
-            else:
-                if effective_end < datetime.date.today():
-                    raise BadRequest(
-                        f"The terminology effective end date for {terminology_version_uuid} has passed, a new terminology version must be created."
-                    )
             is_standard_boolean = terminology_metadata.is_standard
             if is_standard_boolean:
                 raise BadRequest(
@@ -162,6 +154,21 @@ class Code:
                 raise BadRequest(
                     f"The terminology is a FHIR terminology and cannot be edited."
                 )
+            if effective_end is None:
+                raise BadRequest(
+                    f"The effective end for this terminology version is null and must be added first."
+                )
+            else:
+                if effective_end < datetime.date.today():
+                    raise BadRequest(
+                        f"The terminology effective end date for {terminology_version_uuid} has passed, a new terminology version will be created."
+                    )
+                # Trigger creating a new version of terminology API endpoint
+                requests.post(f{INTERNAL_TOOLS_BASE_URL}"/terminology/new_version_from_previous", json={
+
+                })
+                # When it is
+
         new_uuids = []
         # This will insert the new codes into a custom terminology.
         for x in data:
