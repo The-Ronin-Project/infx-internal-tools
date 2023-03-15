@@ -2789,12 +2789,15 @@ class ValueSetVersion:
 
         return {"removed_codes": removed_codes, "added_codes": added_codes}
 
-    @classmethod
-    def status_update_for_a_version(cls, version_uuid, new_status):
-        if new_status is "active":
-            raise BadRequest(f"Versions can not be set to active in this manner.")
+    def update(self, status=None):
+        if status is None:
+            return
+
+        if status is "active":
+            raise BadRequest(f"Versions can not be set to active in this manner. Go through publication proces instead.")
+
         conn = get_db()
-        query = conn.execute(
+        conn.execute(
             text(
                 """
             update value_sets.value_set_version
@@ -2802,9 +2805,8 @@ class ValueSetVersion:
             where uuid = :uuid
             """
             ),
-            {"new_status": new_status, "uuid": str(version_uuid)},
+            {"new_status": status, "uuid": str(self.uuid)},
         )
-        return
 
 
 @dataclass

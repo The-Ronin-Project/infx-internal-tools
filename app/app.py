@@ -160,13 +160,13 @@ def create_app(script_info=None):
         return "OK"
 
     @app.route(
-        "/ValueSetVersion/status",
-        methods=["POST"],
+        "/ValueSets/<string:value_set_uuid>/versions/<string:version_uuid>",
+        methods=["PATCH"],
     )
-    def version_status_update():
-        version_uuid = request.json.get("version_uuid")
-        new_status = request.json.get("new_status")
-        ValueSetVersion.status_update_for_a_version(version_uuid, new_status)
+    def version_status_update(value_set_uuid, version_uuid):
+        new_status = request.json.get("status")
+        vs_version = ValueSetVersion.load(version_uuid)
+        vs_version.update(status=new_status)
         return "OK"
 
     @app.route("/ValueSets/all/")
