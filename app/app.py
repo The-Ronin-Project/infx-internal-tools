@@ -189,6 +189,41 @@ def create_app(script_info=None):
         )
         return str(duplicated_value_set_uuid), 201
 
+    @app.route(
+        "/ValueSets/<string:value_set_uuid>/versions/<string:version_uuid>/rules/update_terminology",
+        methods=["POST"],
+    )
+    def update_terminology_version_of_rules_in_value_set(value_set_uuid, version_uuid):
+        old_terminology_version_uuid = request.json.get("old_terminology_version_uuid")
+        new_terminology_version_uuid = request.json.get("new_terminology_version_uuid")
+
+        value_set_version = ValueSetVersion.load(version_uuid)
+        value_set_version.update_rules_for_terminology(
+            old_terminology_version_uuid=old_terminology_version_uuid,
+            new_terminology_version_uuid=new_terminology_version_uuid,
+        )
+        return "OK"
+
+    @app.route(
+        "/ValueSetRules/<string:rule_uuid>",
+        methods=["PATCH"],
+    )
+    def update_single_rule(rule_uuid):
+        new_terminology_version_uuid = request.json.get("new_terminology_version_uuid")
+        rule = VSRule.load(rule_uuid)
+        rule.update(new_terminology_version_uuid)
+        return "OK"
+
+    @app.route(
+        "/ValueSets/<string:value_set_uuid>/versions/<string:version_uuid>",
+        methods=["PATCH"],
+    )
+    def version_status_update(value_set_uuid, version_uuid):
+        new_status = request.json.get("status")
+        vs_version = ValueSetVersion.load(version_uuid)
+        vs_version.update(status=new_status)
+        return "OK"
+
     @app.route("/ValueSets/all/")
     def get_all_value_sets():
         status = request.values.get("status").split(",")
@@ -280,6 +315,18 @@ def create_app(script_info=None):
         result = execute_rules(rules_input)
         return jsonify(result)
 
+    @app.route(
+        "/ValueSets/diff",
+        methods=["GET"],
+    )
+    def diff_new_version_against_previous():
+        previous_version_uuid = request.json.get("previous_version_uuid")
+        new_version_uuid = request.json.get("new_version_uuid")
+        diff = ValueSetVersion.diff_for_removed_and_added_codes(
+            previous_version_uuid, new_version_uuid
+        )
+        return jsonify(diff)
+
     @app.route("/ValueSets/<string:version_uuid>/prerelease", methods=["GET", "POST"])
     def get_value_set_version_prerelease(version_uuid):
         object_type = "value_set"
@@ -310,6 +357,8 @@ def create_app(script_info=None):
             vs_version = ValueSetVersion.load(version_uuid)
             vs_version.expand(force_new=force_new)
             value_set_to_json = vs_version.serialize()
+
+            title = vs_version.value_set.title
             value_set_to_json["id"] = str(value_set_to_json["id"])
             value_set_to_datastore = set_up_object_store(
                 value_set_to_json, folder="published"
