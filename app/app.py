@@ -319,17 +319,6 @@ def create_app(script_info=None):
             )
             return jsonify(value_set_from_object_store)
 
-        @app.route("/ValueSets/<string:identifier>/versions/new", methods=["POST"])
-        def create_new_vs_version_v2(identifier):
-            value_set = ValueSet.load(identifier)
-            effective_start = request.json.get("effective_start")
-            effective_end = request.json.get("effective_end")
-            description = request.json.get("description")
-            new_version_uuid = value_set.create_new_version_from_previous(
-                effective_start, effective_end, description
-            )
-            return str(new_version_uuid), 201
-
     # Survey Endpoints
     @app.route("/surveys/<string:survey_uuid>")
     def export_survey(survey_uuid):
