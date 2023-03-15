@@ -1,6 +1,5 @@
 import datetime
 import uuid
-from webbrowser import get
 from sqlalchemy import text
 from functools import lru_cache
 from app.database import get_db
@@ -9,6 +8,16 @@ import app.models.codes
 
 @lru_cache(maxsize=None)
 def terminology_version_uuid_lookup(fhir_uri, version):
+    """
+    Given a FHIR URI and version, this function retrieves the UUID of the corresponding terminology version from the database.
+
+    Args:
+        fhir_uri (str): The FHIR URI of the terminology.
+        version (str): The version of the terminology.
+
+    Returns:
+        UUID: The UUID of the corresponding terminology version.
+    """
     conn = get_db()
     result = conn.execute(
         text(
@@ -58,6 +67,16 @@ class Terminology:
 
     @classmethod
     def load(cls, terminology_version_uuid):
+        """
+        A class method that loads a Terminology given its UUID.
+
+        Args:
+            terminology_version_uuid (UUID): The UUID of the terminology version to load.
+
+        Returns:
+            Terminology: An instance of the Terminology class with the loaded metadata.
+        """
+
         conn = get_db()
         term_data = conn.execute(
             text(
@@ -80,6 +99,13 @@ class Terminology:
         )
 
     def load_content(self):
+        """
+        Loads the content of a FHIR terminology into the Terminology instance.
+
+        Raises:
+            NotImplementedError: If the Terminology instance is not a FHIR terminology.
+        """
+
         if self.fhir_terminology is True:
             conn = get_db()
             content_data = conn.execute(
@@ -111,6 +137,15 @@ class Terminology:
 
     @classmethod
     def load_terminologies_for_value_set_version(cls, vs_version_uuid):
+        """
+        A class method that loads all the terminologies associated with a value set version.
+
+        Args:
+            vs_version_uuid (UUID): The UUID of the value set version.
+
+        Returns:
+            dict: A dictionary containing Terminology instances, keyed by their UUIDs.
+        """
         conn = get_db()
         term_data = conn.execute(
             text(
@@ -151,6 +186,22 @@ class Terminology:
         is_standard,
         fhir_terminology,
     ):
+        """
+        A class method that creates a new terminology in the database with the provided metadata.
+
+        Args:
+            terminology (str): The name of the new terminology.
+            version (str): The version of the new terminology.
+            effective_start (datetime.datetime): The effective start date of the new terminology.
+            effective_end (datetime.datetime): The effective end date of the new terminology.
+            fhir_uri (str): The FHIR URI of the new terminology.
+            is_standard (bool): Whether the new terminology is standard or not.
+            fhir_terminology (bool): Whether the new terminology is a FHIR terminology.
+
+        Returns:
+            Terminology: An instance of the Terminology class with the metadata of the created terminology.
+        """
+
         conn = get_db()
         new_terminology_uuid = uuid.uuid4()
         conn.execute(
@@ -183,6 +234,13 @@ class Terminology:
         return new_terminology
 
     def serialize(self):
+        """
+        Serializes the Terminology instance into a dictionary.
+
+        Returns:
+            dict: A dictionary representation of the Terminology instance.
+        """
+
         return {
             "uuid": self.uuid,
             "name": self.terminology,
@@ -202,6 +260,21 @@ class Terminology:
         effective_start,
         effective_end,
     ):
+        """
+        A class method that creates a new terminology version based on a previous version and the provided metadata.
+
+        This will automatically copy the contents of the previous terminology version into the new version.
+
+        Args:
+            previous_version_uuid (UUID): The UUID of the previous terminology version.
+            version (str): The version of the new terminology.
+            effective_start (datetime.datetime): The effective start date of the new terminology.
+            effective_end (datetime.datetime): The effective end date of the new terminology.
+
+        Returns:
+            Terminology: An instance of the Terminology class with the metadata of the new terminology version.
+        """
+
         if effective_start is None:
             effective_start = datetime.datetime.now()
         if effective_end is None:
