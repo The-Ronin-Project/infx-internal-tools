@@ -159,6 +159,16 @@ def create_app(script_info=None):
         rule.update(new_terminology_version_uuid)
         return "OK"
 
+    @app.route(
+        "/ValueSets/<string:value_set_uuid>/versions/<string:version_uuid>",
+        methods=["PATCH"],
+    )
+    def version_status_update(value_set_uuid, version_uuid):
+        new_status = request.json.get("status")
+        vs_version = ValueSetVersion.load(version_uuid)
+        vs_version.update(status=new_status)
+        return "OK"
+
     @app.route("/ValueSets/all/")
     def get_all_value_sets():
         status = request.values.get("status").split(",")

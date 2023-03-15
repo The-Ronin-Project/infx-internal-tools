@@ -2789,6 +2789,25 @@ class ValueSetVersion:
 
         return {"removed_codes": removed_codes, "added_codes": added_codes}
 
+    def update(self, status=None):
+        if status is None:
+            return
+
+        if status is "active":
+            raise BadRequest(f"Versions can not be set to active in this manner. Go through publication proces instead.")
+
+        conn = get_db()
+        conn.execute(
+            text(
+                """
+            update value_sets.value_set_version
+            set status = :new_status
+            where uuid = :uuid
+            """
+            ),
+            {"new_status": status, "uuid": str(self.uuid)},
+        )
+
 
 @dataclass
 class ExplicitlyIncludedCode:
