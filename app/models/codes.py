@@ -4,9 +4,18 @@ import json
 from app.database import get_db
 from sqlalchemy import text
 from app.models.terminologies import Terminology
+from app.errors import BadRequestWithCode
 from werkzeug.exceptions import BadRequest
+from app.errors import (
+    CodeDisplayPairDuplicatedError,
+    TerminologyIsStandardError,
+    TerminologyExpiredError,
+    TerminologyEndNullError,
+    TerminologyIsFHIRError,
+)
 
-INTERNAL_TOOLS_BASE_URL = "https://infx-internal.prod.projectronin.io"
+# INTERNAL_TOOLS_BASE_URL = "https://infx-internal.prod.projectronin.io"
+
 
 class Code:
     def __init__(
@@ -146,28 +155,31 @@ class Code:
             effective_end = terminology_metadata.effective_end
             is_standard_boolean = terminology_metadata.is_standard
             if is_standard_boolean:
-                raise BadRequest(
-                    f"The terminology is a standard terminology and cannot be edited."
+                raise BadRequestWithCode(
+                    code="TerminologyIsStandard",
+                    description="This is a standard terminology and cannot be edited using this method",
                 )
             fhir_terminology_boolean = terminology_metadata.fhir_terminology
             if fhir_terminology_boolean:
-                raise BadRequest(
-                    f"The terminology is a FHIR terminology and cannot be edited."
+                raise BadRequestWithCode(
+                    code="TerminologyIsFHIR",
+                    description="This is a FHIR terminology and cannot be edited using this method",
                 )
             if effective_end is None:
-                raise BadRequest(
-                    f"The effective end for this terminology version is null and must be added first."
+                raise BadRequestWithCode(
+                    code="Terminology.EffectiveEndNull",
+                    description="This terminology does not have an effective end date",
                 )
             else:
                 if effective_end < datetime.date.today():
-                    raise BadRequest(
-                        f"The terminology effective end date for {terminology_version_uuid} has passed, a new terminology version will be created."
+                    raise BadRequestWithCode(
+                        code="Terminology.EffectiveEndExpired",
+                        description="The terminology cannot have more codes added after the effective end has passed. You must first create a new version of the terminology before you can add additional codes to it.",
                     )
                 # Trigger creating a new version of terminology API endpoint
-                requests.post(f{INTERNAL_TOOLS_BASE_URL}"/terminology/new_version_from_previous", json={
+                # requests.post(f{INTERNAL_TOOLS_BASE_URL}"/terminology/new_version_from_previous", json={
 
-                })
-                # When it is
+                # })
 
         new_uuids = []
         # This will insert the new codes into a custom terminology.
@@ -178,20 +190,23 @@ class Code:
             result = conn.execute(
                 text(
                     """
-                    Select * from custom_terminologies.code
+                    Select count(*) as conflict_count from custom_terminologies.code
                     where code = :code_value
-                    and display = :display_value 
+                    and display = :display_value
+                    and terminology_version_uuid = :terminology_version_uuid 
                     """
                 ),
                 {
                     "code_value": x["code"],
                     "display_value": x["display"],
+                    "terminology_version_uuid": x["terminology_version_uuid"],
                 },
-            )
+            ).one()
             # Check if the code display pair already appears in the custom terminology.
-            if result:
-                raise BadRequest(
-                    f"The code display pair already appears in the terminology and cannot be added."
+            if result.conflict_count > 0:
+                raise BadRequestWithCode(
+                    code="CodeDisplayPairDuplicated",
+                    description="This code display pair already exists in the terminology.",
                 )
             else:
                 conn.execute(
