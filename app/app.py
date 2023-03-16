@@ -15,6 +15,7 @@ from app.models.concept_maps import *
 from app.models.surveys import *
 from app.models.patient_edu import *
 from app.models.data_ingestion_registry import DataNormalizationRegistry
+from app.errors import BadRequestWithCode
 import app.models.rxnorm as rxnorm
 from werkzeug.exceptions import HTTPException
 from app.helpers.oci_helper import (
@@ -56,6 +57,10 @@ def create_app(script_info=None):
     @app.route("/ping")
     def ping():
         return "OK"
+
+    @app.errorhandler(BadRequestWithCode)
+    def handle_bad_request_with_code(e):
+        return jsonify({"code": e.code, "message": e.description}), e.http_status_code
 
     @app.errorhandler(HTTPException)
     def handle_exception(e):

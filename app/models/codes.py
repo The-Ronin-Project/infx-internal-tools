@@ -4,7 +4,10 @@ import json
 from app.database import get_db
 from sqlalchemy import text
 from app.models.terminologies import Terminology
+from app.errors import BadRequestWithCode
 from werkzeug.exceptions import BadRequest
+
+# INTERNAL_TOOLS_BASE_URL = "https://infx-internal.prod.projectronin.io"
 
 
 class Code:
@@ -136,41 +139,84 @@ class Code:
             terminology_metadata = conn.execute(
                 text(
                     """
-                    select effective_end from public.terminology_versions
+                    select is_standard, fhir_terminology, effective_end from public.terminology_versions
                     where uuid = :terminology_version_uuid
                     """
                 ),
                 {"terminology_version_uuid": terminology_version_uuid},
             ).first()
             effective_end = terminology_metadata.effective_end
-            if effective_end < datetime.date.today():
-                raise BadRequest(
-                    f"The terminology effective end date for {terminology_version_uuid} has passed, a new terminology version must be created."
+            is_standard_boolean = terminology_metadata.is_standard
+            if is_standard_boolean:
+                raise BadRequestWithCode(
+                    code="TerminologyIsStandard",
+                    description="This is a standard terminology and cannot be edited using this method",
                 )
-        new_uuids = []
+            fhir_terminology_boolean = terminology_metadata.fhir_terminology
+            if fhir_terminology_boolean:
+                raise BadRequestWithCode(
+                    code="TerminologyIsFHIR",
+                    description="This is a FHIR terminology and cannot be edited using this method",
+                )
+            if effective_end is None:
+                raise BadRequestWithCode(
+                    code="Terminology.EffectiveEndNull",
+                    description="This terminology does not have an effective end date",
+                )
+            else:
+                if effective_end < datetime.date.today():
+                    raise BadRequestWithCode(
+                        code="Terminology.EffectiveEndExpired",
+                        description="The terminology cannot have more codes added after the effective end has passed. You must first create a new version of the terminology before you can add additional codes to it.",
+                    )
+                # Trigger creating a new version of terminology API endpoint
+                # requests.post(f{INTERNAL_TOOLS_BASE_URL}"/terminology/new_version_from_previous", json={
 
+                # })
+
+        new_uuids = []
         # This will insert the new codes into a custom terminology.
         for x in data:
             new_code_uuid = uuid.uuid4()
             new_uuids.append(new_code_uuid)
-            new_additional_data = x.get('additional_data')
-            if new_additional_data:
-                new_additional_data = json.dumps(new_additional_data)
-            conn.execute(
+            new_additional_data = json.dumps(x["additional_data"])
+            result = conn.execute(
                 text(
                     """
-                    Insert into custom_terminologies.code(uuid, code, display, terminology_version_uuid, additional_data)
-                    Values (:uuid, :code, :display, :terminology_version_uuid, :additional_data)
+                    Select count(*) as conflict_count from custom_terminologies.code
+                    where code = :code_value
+                    and display = :display_value
+                    and terminology_version_uuid = :terminology_version_uuid 
                     """
                 ),
                 {
-                    "uuid": new_code_uuid,
-                    "code": x["code"],
-                    "display": x["display"],
+                    "code_value": x["code"],
+                    "display_value": x["display"],
                     "terminology_version_uuid": x["terminology_version_uuid"],
-                    "additional_data": new_additional_data,
                 },
-            )
+            ).one()
+            # Check if the code display pair already appears in the custom terminology.
+            if result.conflict_count > 0:
+                raise BadRequestWithCode(
+                    code="CodeDisplayPairDuplicated",
+                    description="This code display pair already exists in the terminology.",
+                )
+            else:
+                conn.execute(
+                    text(
+                        """
+                        Insert into custom_terminologies.code(uuid, code, display, terminology_version_uuid, additional_data)
+                        Values (:uuid, :code, :display, :terminology_version_uuid, :additional_data)
+                        """
+                    ),
+                    {
+                        "uuid": new_code_uuid,
+                        "code": x["code"],
+                        "display": x["display"],
+                        "terminology_version_uuid": x["terminology_version_uuid"],
+                        "additional_data": new_additional_data,
+                    },
+                )
         new_codes = []
         for new_uuid in new_uuids:
             new_code = cls.load_from_custom_terminology(new_uuid)
