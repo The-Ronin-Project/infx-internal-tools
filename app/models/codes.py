@@ -6,13 +6,6 @@ from sqlalchemy import text
 from app.models.terminologies import Terminology
 from app.errors import BadRequestWithCode
 from werkzeug.exceptions import BadRequest
-from app.errors import (
-    CodeDisplayPairDuplicatedError,
-    TerminologyIsStandardError,
-    TerminologyExpiredError,
-    TerminologyEndNullError,
-    TerminologyIsFHIRError,
-)
 
 # INTERNAL_TOOLS_BASE_URL = "https://infx-internal.prod.projectronin.io"
 

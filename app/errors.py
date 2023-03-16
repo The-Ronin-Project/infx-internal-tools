@@ -1,4 +1,3 @@
-from flask import jsonify, Flask
 from werkzeug.exceptions import BadRequest
 
 
