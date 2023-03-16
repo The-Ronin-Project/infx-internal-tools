@@ -2583,12 +2583,13 @@ class ValueSetVersion:
                 + self.value_set.name[index + 1 :]
             )
 
-        # for x in self.expansion:  # id will depend on system
-        #     if "http://hl7.org/fhir" in x.system:
-        #         rcdm_id = x.system.split("/")[-1]
-        #     else:
-        #         rcdm_id = self.value_set.uuid
         rcdm_id = self.value_set.uuid
+
+        for x in self.expansion:  # id will depend on system
+            if "http://projectronin.io/fhir/" in x.system:
+                rcdm_id = self.value_set.uuid
+            else:
+                rcdm_id = x.system.split("/")[-1]
 
         if (
             self.status == "pending"
@@ -2652,6 +2653,7 @@ class ValueSetVersion:
             "url": f"http://projectronin.io/fhir/ValueSet/{rcdm_id}",  # specific to the overall value set; suffix matching the id field exactly
             "version": str(self.version),  # Version must be a string
             "name": rcdm_name,  # name has to match [A-Z]([A-Za-z0-9_]){0,254}
+            "title": self.value_set.title,
             "status": rcdm_status,  # has a required binding (translate pending to draft)  (draft, active, retired, unknown)
             "experimental": self.value_set.experimental,
             "date": rcdm_date,  # the date the status was set to active
@@ -2791,7 +2793,9 @@ class ValueSetVersion:
             return
 
         if status is "active":
-            raise BadRequest(f"Versions can not be set to active in this manner. Go through publication proces instead.")
+            raise BadRequest(
+                f"Versions can not be set to active in this manner. Go through publication proces instead."
+            )
 
         conn = get_db()
         conn.execute(
