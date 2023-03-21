@@ -1056,3 +1056,19 @@ class MappingSuggestion:
             "timestamp": self.timestamp,
             "accepted": self.accepted,
         }
+
+def update_comments_source_concept(source_concept_uuid, comments):
+    conn = get_db()
+    conn.execute(
+        text(
+            """
+            update concept_maps.source_concept
+            set comments=:comments
+            where uuid=:source_concept_uuid
+            """
+        ),
+        {
+            "source_concept_uuid": source_concept_uuid,
+            "comments": comments
+        }
+    )

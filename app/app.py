@@ -343,6 +343,15 @@ def create_app(script_info=None):
         )
         return response
 
+    @app.route('/SourceConcepts/<string:source_concept_uuid>', methods=['PATCH'])
+    def update_source_concept(source_concept_uuid):
+        comments = request.json.get('comments')
+        update_comments_source_concept(
+            source_concept_uuid=source_concept_uuid,
+            comments=comments
+        )
+        return "OK"
+
     # Concept Map Endpoints
     @app.route("/ConceptMaps/actions/new_version_from_previous", methods=["POST"])
     def new_cm_version_from_previous():
