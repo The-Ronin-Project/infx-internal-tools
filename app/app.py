@@ -284,10 +284,9 @@ def create_app(script_info=None):
             force_new = request.values.get("force_new") == "true"
             vs_version = ValueSetVersion.load(version_uuid)
             vs_version.expand(force_new=force_new)
-            value_set_to_json = vs_version.serialize()
-            value_set_to_json["id"] = str(value_set_to_json["id"])
+            value_set_to_json, initial_path = vs_version.prepare_for_oci()
             value_set_to_datastore = set_up_object_store(
-                value_set_to_json, folder="prerelease"
+                value_set_to_json, initial_path, folder="prerelease"
             )
             return jsonify(value_set_to_datastore)
         if request.method == "GET":
@@ -306,12 +305,10 @@ def create_app(script_info=None):
             force_new = request.values.get("force_new") == "true"
             vs_version = ValueSetVersion.load(version_uuid)
             vs_version.expand(force_new=force_new)
-            value_set_to_json = vs_version.serialize()
+            value_set_to_json, initial_path = vs_version.prepare_for_oci()
 
-            title = vs_version.value_set.title
-            value_set_to_json["id"] = str(value_set_to_json["id"])
             value_set_to_datastore = set_up_object_store(
-                value_set_to_json, folder="published"
+                value_set_to_json, initial_path, folder="published"
             )
             version_set_status_active(version_uuid, object_type)
             return jsonify(value_set_to_datastore)
@@ -454,11 +451,12 @@ def create_app(script_info=None):
             concept_map_version = ConceptMapVersion(
                 version_uuid
             )  # using the version uuid to get the version metadata from the ConceptMapVersion class
-            concept_map_to_json = (
-                concept_map_version.serialize()
-            )  # serialize the metadata
+            (
+                concept_map_to_json,
+                initial_path,
+            ) = concept_map_version.prepare_for_oci()  # serialize the metadata
             concept_map_to_datastore = set_up_object_store(  # use the serialized data with an oci_helper function
-                concept_map_to_json, folder="prerelease"
+                concept_map_to_json, initial_path, folder="prerelease"
             )
             return jsonify(
                 concept_map_to_datastore
@@ -481,11 +479,12 @@ def create_app(script_info=None):
             concept_map_version = ConceptMapVersion(
                 version_uuid
             )  # using the version uuid to get the version metadata from the ConceptMapVersion class
-            concept_map_to_json = (
-                concept_map_version.serialize()
-            )  # serialize the metadata
+            (
+                concept_map_to_json,
+                initial_path,
+            ) = concept_map_version.prepare_for_oci()  # serialize the metadata
             concept_map_to_datastore = set_up_object_store(  # use the serialized data with an oci_helper function
-                concept_map_to_json, folder="published"
+                concept_map_to_json, initial_path, folder="published"
             )
             version_set_status_active(version_uuid, object_type)
             return jsonify(concept_map_to_datastore)

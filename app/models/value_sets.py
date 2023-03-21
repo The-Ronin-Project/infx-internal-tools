@@ -2582,13 +2582,72 @@ class ValueSetVersion:
                 + self.value_set.name[index].upper()
                 + self.value_set.name[index + 1 :]
             )
+        serialized = {
+            "resourceType": "ValueSet",
+            "id": str(self.value_set.uuid),
+            # for FHIR value sets, id will be a name (e.g. publication-status).  For Ronin value sets, id will be the value set uuid.
+            "meta": {
+                "profile": [
+                    "http://projectronin.io/fhir/StructureDefinition/ronin-valueSet"
+                ]
+            },
+            "extension": [
+                {
+                    "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-valueSetSchema",
+                    "valueString": "2",
+                }
+            ],
+            "url": f"http://projectronin.io/fhir/ValueSet/{self.value_set.uuid}",
+            "name": self.value_set.name,
+            "title": self.value_set.title,
+            "publisher": self.value_set.publisher,
+            "contact": [{"name": self.value_set.contact}],
+            "description": (self.value_set.description or "")
+            + " "
+            + (self.description or ""),
+            "immutable": self.value_set.immutable,
+            "experimental": self.value_set.experimental,
+            "purpose": self.value_set.purpose,
+            "version": str(self.version),  # Version must be a string
+            "status": self.status,
+            "expansion": {
+                "contains": [x.serialize() for x in self.expansion],
+                "timestamp": self.expansion_timestamp.strftime("%Y-%m-%d")
+                if self.expansion_timestamp is not None
+                else None,
+            },
+            # "compose": {"include": self.serialize_include()},
+            "additionalData": {  # Place to put custom values that aren't part of the FHIR spec
+                "effective_start": self.effective_start,
+                "effective_end": self.effective_end,
+                "version_uuid": self.uuid,
+                "value_set_uuid": self.value_set.uuid,
+                "expansion_uuid": self.expansion_uuid,
+                "synonyms": self.value_set.synonyms,
+            },
+        }
 
-        # for x in self.expansion:  # id will depend on system
-        #     if "http://hl7.org/fhir" in x.system:
-        #         rcdm_id = x.system.split("/")[-1]
-        #     else:
-        #         rcdm_id = self.value_set.uuid
-        rcdm_id = self.value_set.uuid
+        # serialized_exclude = self.serialize_exclude()
+        # if serialized_exclude:
+        #     serialized["compose"]["exclude"] = serialized_exclude
+        #
+        # if self.value_set.type == "extensional":
+        #     serialized.pop("expansion")
+
+        return serialized
+
+    def prepare_for_oci(self):
+        serialized = self.serialize()
+
+        rcdm_id = serialized.get("id")
+        rcdm_url = "http://projectronin.io/ValueSet/"
+        # id will depend on publisher
+        if self.value_set.publisher == "Project Ronin":
+            rcdm_id = serialized.get("id")
+            rcdm_url = "http://projectronin.io/ValueSet/"
+        elif self.value_set.publisher == "FHIR":
+            rcdm_id = serialized.get("name")
+            rcdm_url = "http://hl7.org/fhir/ValueSet/"
 
         if (
             self.status == "pending"
@@ -2635,67 +2694,31 @@ class ValueSetVersion:
         else:
             rcdm_date = None
 
-        serialized = {
-            "resourceType": "ValueSet",
-            "id": rcdm_id,  # for FHIR value sets, id will be a name (e.g. publication-status).  For Ronin value sets, id will be the value set uuid.
-            "meta": {
-                "profile": [
-                    "http://projectronin.io/fhir/StructureDefinition/ronin-valueSet"
-                ]
-            },
-            "extension": [
-                {
-                    "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-valueSetSchema",
-                    "valueString": "2",
-                }
-            ],
-            "url": f"http://projectronin.io/fhir/ValueSet/{rcdm_id}",  # specific to the overall value set; suffix matching the id field exactly
-            "version": str(self.version),  # Version must be a string
-            "name": rcdm_name,  # name has to match [A-Z]([A-Za-z0-9_]){0,254}
-            "status": rcdm_status,  # has a required binding (translate pending to draft)  (draft, active, retired, unknown)
-            "experimental": self.value_set.experimental,
+        oci_serialized = {
+            "id": rcdm_id,
+            "url": f"{rcdm_url}{rcdm_id}",
+            # specific to the overall value set; suffix matching the id field exactly
+            "status": rcdm_status,
+            # has a required binding (translate pending to draft)  (draft, active, retired, unknown)
             "date": rcdm_date,  # the date the status was set to active
-            "description": (self.value_set.description or "")
-            + " "
-            + (self.description or ""),
-            "purpose": self.value_set.purpose,
             "expansion": {
-                "identifier": f"urn:uuid:{self.expansion_uuid}",
+                "identifier": f"urn:uuid:{self.expansion_uuid}",  # rcdm format specific
+                "total": len(self.expansion),  # total number of codes in the expansion
+                "contains": [x.serialize() for x in self.expansion],
                 "timestamp": self.expansion_timestamp.strftime("%Y-%m-%d")
                 if self.expansion_timestamp is not None
                 else None,
-                "total": len(self.expansion),  # total number of codes in the expansion
-                "contains": [x.serialize() for x in self.expansion],
             },
         }
 
-        if self.value_set.type == "extensional":
-            all_extensional_codes = []
-            for terminology, codes in self.extensional_codes.items():
-                all_extensional_codes += codes
-            serialized["expansion"]["contains"] = [
-                x.serialize() for x in all_extensional_codes
-            ]
-            if (
-                current_app.config["MOCK_DB"] is False
-            ):  # Postgres-specific code, skip during tests
-                # timestamp derived from date version was last updated
-                serialized["expansion"][
-                    "timestamp"
-                ] = self.extensional_vs_time_last_modified().strftime("%Y-%m-%d")
-                # expansion UUID derived from a hash of when timestamp was last updated and the UUID of the ValueSets terminology version from `public.terminology_versions`
-                serialized["additionalData"]["expansion_uuid"] = uuid.uuid3(
-                    namespace=uuid.UUID("{e3dbd59c-aa26-11ec-b909-0242ac120002}"),
-                    name=str(self.extensional_vs_time_last_modified()),
-                )
+        serialized.update(oci_serialized)  # Merge oci_serialized into serialized
+        serialized.pop("additionalData")
+        serialized.pop("immutable")
+        serialized.pop("contact")
+        serialized.pop("publisher")
+        initial_path = f"ValueSets/v2/folder/{self.value_set.uuid}"  # folder is set in oci_helper(determined by api call)
 
-        serialized_exclude = self.serialize_exclude()
-        if serialized_exclude:
-            serialized["compose"]["exclude"] = serialized_exclude
-
-        # if self.value_set.type == 'extensional': serialized.pop('expansion')
-
-        return serialized
+        return serialized, initial_path
 
     @classmethod
     def load_expansion_report(cls, expansion_uuid):
@@ -2790,8 +2813,10 @@ class ValueSetVersion:
         if status is None:
             return
 
-        if status is "active":
-            raise BadRequest(f"Versions can not be set to active in this manner. Go through publication proces instead.")
+        if status == "active":
+            raise BadRequest(
+                f"Versions can not be set to active in this manner. Go through publication proces instead."
+            )
 
         conn = get_db()
         conn.execute(
