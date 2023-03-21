@@ -33,7 +33,7 @@ from numpy import source
 
 
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
-#TODO remove this after Alex and Ben have updated the ED model to use concept mapps for ED utilization
+# TODO remove this after Alex and Ben have updated the ED model to use concept mapps for ED utilization
 # Todo: wait until we've updated (or deprecated) mapping inclusions in value sets to disable this
 class DeprecatedConceptMap:
     def __init__(self, uuid, relationship_types, concept_map_name):
@@ -133,6 +133,7 @@ class ConceptMap:
         target_value_set_uuid (str): The UUID of the target value set used in the concept map.
         most_recent_active_version (str): The UUID of the most recent active version of the concept map.
     """
+
     def __init__(self, uuid):
         self.uuid = uuid
         self.name = None
@@ -886,6 +887,12 @@ class ConceptMapVersion:
             # are not required for our use cases at this time
         }
 
+    def prepare_for_oci(self):
+        serialized = self.serialize()
+        initial_path = f"ConceptMaps/v2/folder/{self.uuid}"  # folder is set in oci_helper(determined by api call)
+
+        return serialized, initial_path
+
 
 @dataclass
 class MappingRelationship:
@@ -948,6 +955,7 @@ class Mapping:
     """
     Represents a mapping relationship between two codes, and provides methods to load, save and use the relationships.
     """
+
     source: Code
     relationship: MappingRelationship
     target: Code
@@ -1010,6 +1018,7 @@ class Mapping:
 @dataclass
 class MappingSuggestion:
     """A class representing a mapping suggestion."""
+
     uuid: UUID
     source_concept_uuid: UUID
     code: Code

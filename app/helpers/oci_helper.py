@@ -74,36 +74,37 @@ def check_for_prerelease_in_published(
     return exists_in_published
 
 
-def set_up_object_store(object_type, folder):
+def set_up_object_store(object_type, initial_path, folder):
     """
     This function is the conditional matrix for saving a concept map to oci.  The function LOOKS
     to see if the concept map already exists and LOOKS to see where it should be saved.
     @param object_type:  either concept map or value set object - dictionary of respective metadata
+    @param initial_path: passed in from serialize method of either concept map or valuse set
     @param folder: string folder destination (prerelease or published)
     @return: object_type if saved to oci, otherwise messages returned based on findings
     """
     object_storage_client = oci_authentication()
-    if (
-        object_type["resourceType"] == "ConceptMap"
-    ):  # using resourceType to set correct initial folder in path and pull overall uuid
-        object_type_uuid = object_type["url"].rsplit("/", 1)[1]
-        top_folder_name = "ConceptMaps"
-        schema_version = "v1"
-    else:
-        object_type_uuid = str(object_type["id"])
-        top_folder_name = "ValueSets"
-        schema_version = "v2"
-    if (
-        object_type["status"] == "active"
-        or object_type["status"] == "in progress"
-        or object_type["status"] == "pending"
-        or object_type["status"] == "draft"
+
+    parts = initial_path.split("/")  # Split the initial by the '/' delimiter
+    (
+        resource_type,
+        schema_version,
+        folder_destination,
+        uuid,
+    ) = parts  # Assign each part to a variable
+    folder_destination = folder
+    path = f"{resource_type}/{schema_version}/{folder_destination}/{str(uuid)}"
+
+    if folder_destination == "ValueSets" and object_type["status"] not in (
+        "active",
+        "in progress",
+        "pending",
+        "draft",
     ):
-        path = f"{top_folder_name}/{schema_version}/{folder}/{object_type_uuid}"
-    else:
         raise BadRequest(
             "This object cannot be saved in object store, status must be either active or in progress."
         )
+
     bucket_name = config("OCI_CLI_BUCKET")
     namespace = object_storage_client.get_namespace().data
 
