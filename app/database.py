@@ -3,6 +3,11 @@ from sqlalchemy import create_engine
 from elasticsearch import Elasticsearch
 from decouple import config
 
+SQL_ALCHEMY_ENGINE = create_engine(f"postgresql://{config('DATABASE_USER')}@{config('DATABASE_HOST')}:{config('DATABASE_PASSWORD')}@{config('DATABASE_HOST')}/{config('DATABASE_NAME')}",
+                                   connect_args={'sslmode':'require'},
+                                   pool_size=2,
+                                   max_overflow=0)
+
 def get_db():
     if 'db' not in g:
         if current_app.config['MOCK_DB'] is True:
@@ -18,11 +23,7 @@ def get_db():
             g.db.execute("attach database 'tests/dbs/loinc.db' as loinc")
             g.db.execute("attach database 'tests/dbs/organizations.db' as organizations")
         else:
-            engine = create_engine(f"postgresql://{config('DATABASE_USER')}@{config('DATABASE_HOST')}:{config('DATABASE_PASSWORD')}@{config('DATABASE_HOST')}/{config('DATABASE_NAME')}",
-                                   connect_args={'sslmode':'require'},
-                                   pool_size=2,
-                                   max_overflow=0)
-            g.db = engine.connect()
+            g.db = SQL_ALCHEMY_ENGINE.connect()
     return g.db
 
 def get_elasticsearch():
