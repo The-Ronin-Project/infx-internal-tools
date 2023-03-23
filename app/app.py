@@ -29,6 +29,7 @@ from app.helpers.oci_helper import (
     get_object_type_from_object_store,
     check_for_prerelease_in_published,
     set_up_object_store,
+    get_json_from_oci,
 )
 
 # Configure the logger when the application is imported. This ensures that
@@ -313,11 +314,19 @@ def create_app(script_info=None):
             version_set_status_active(version_uuid, object_type)
             return jsonify(value_set_to_datastore)
         if request.method == "GET":
-            value_set = get_object_type_from_db(version_uuid)
-            if not value_set:
-                return {"message": "value_set uuid not found."}
-            value_set_from_object_store = get_object_type_from_object_store(
-                object_type, value_set, folder="published"
+            return_content = request.values.get("return_content")
+            if return_content == "false":
+                return_content = False
+
+            value_set_version = ValueSetVersion.load(version_uuid)
+
+            value_set_from_object_store = get_json_from_oci(
+                resource_type="value_set",
+                resource_schema_version=VALUE_SET_SCHEMA_VERSION,
+                release_status="published",
+                resource_id=value_set_version.value_set.uuid,
+                resource_version=value_set_version.version,
+                return_content=return_content,
             )
             return jsonify(value_set_from_object_store)
 

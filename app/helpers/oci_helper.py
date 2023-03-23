@@ -1,8 +1,7 @@
 import oci
-
 from decouple import config
 from oci.object_storage import ObjectStorageClient
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, NotFound
 import datetime
 import json
 from sqlalchemy import text
@@ -253,6 +252,45 @@ def get_object_type_from_db(conn, version_uuid, object_type):
     return {"folder_name": result["concept_map_uuid"], "version": result["version"]}
 
 
+def get_json_from_oci(
+    resource_type,
+    resource_schema_version,
+    release_status,
+    resource_id,
+    resource_version,
+    return_content=True,
+):
+    # Reset to default if not explicitly passed in as False
+    if return_content is None:
+        return_content = True
+
+    if resource_type == "concept_map":
+        resource_folder_name = "ConceptMaps"
+    elif resource_type == "value_set":
+        resource_folder_name = "ValueSets"
+
+    object_storage_client = oci_authentication()
+    bucket_name = config("OCI_CLI_BUCKET")
+    namespace = object_storage_client.get_namespace().data
+    path = f"{resource_folder_name}/v{resource_schema_version}/{release_status}/{resource_id}/{resource_version}.json"
+    try:
+        resource = object_storage_client.get_object(namespace, bucket_name, path)
+        if return_content:
+            return resource.data.json()
+        else:
+            return {
+                "message": f"Found {resource_type} of ID: {resource_id} and version {resource_version} in OCI"
+            }
+    except oci.exceptions.ServiceError as e:
+        if e.status == 404:
+            raise NotFound(
+                f"Resource NOT found {resource_type} of ID: {resource_id} and version {resource_version} in OCI"
+            )
+        else:
+            raise e
+
+
+# todo: deprecate this function
 def get_object_type_from_object_store(object_type, location_info, folder):
     """
     This function gets the requested object_type from oci storage

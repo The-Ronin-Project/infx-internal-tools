@@ -37,6 +37,8 @@ import pandas as pd
 import numpy as np
 from pandas import json_normalize
 
+VALUE_SET_SCHEMA_VERSION = 2
+
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io"
 SNOSTORM_LIMIT = 1000
 
