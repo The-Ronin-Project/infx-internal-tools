@@ -40,7 +40,7 @@ class DNRegistryEntry:
             serialized['value_set_name'] = self.value_set.name
             serialized['value_set_uuid'] = str(self.value_set.uuid)
             serialized['version'] = value_set_version
-            serialized['filename'] = f"ValueSets/v2/published/{self.value_set.uuid}/{value_set_version}.json"
+            serialized['filename'] = f"ValueSets/v{app.models.value_sets.VALUE_SET_SCHEMA_VERSION}/published/{self.value_set.uuid}/{value_set_version}.json"
         if self.registry_entry_type == 'concept_map':
             serialized['concept_map_name'] = self.concept_map.name
             serialized['concept_map_uuid'] = str(self.concept_map.uuid)
