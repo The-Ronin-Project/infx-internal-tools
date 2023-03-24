@@ -888,6 +888,12 @@ class ConceptMapVersion:
             # are not required for our use cases at this time
         }
 
+    def prepare_for_oci(self):
+        serialized = self.serialize()
+        initial_path = f"ConceptMaps/v2/folder/{self.uuid}"  # folder is set in oci_helper(determined by api call)
+
+        return serialized, initial_path
+
 
 @dataclass
 class MappingRelationship:
@@ -1056,3 +1062,19 @@ class MappingSuggestion:
             "timestamp": self.timestamp,
             "accepted": self.accepted,
         }
+
+def update_comments_source_concept(source_concept_uuid, comments):
+    conn = get_db()
+    conn.execute(
+        text(
+            """
+            update concept_maps.source_concept
+            set comments=:comments
+            where uuid=:source_concept_uuid
+            """
+        ),
+        {
+            "source_concept_uuid": source_concept_uuid,
+            "comments": comments
+        }
+    )
