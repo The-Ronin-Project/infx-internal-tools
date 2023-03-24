@@ -13,6 +13,7 @@ from app.helpers.oci_helper import oci_authentication
 from datetime import datetime
 from dateutil import tz
 
+DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION = 2
 
 @dataclass
 class DNRegistryEntry:
@@ -32,20 +33,20 @@ class DNRegistryEntry:
             "data_element": self.data_element,
             "tenant_id": self.tenant_id,
             "source_extension_url": self.source_extension_url,
+            "registry_entry_type": self.registry_entry_type
         }
         if self.registry_entry_type == 'value_set':
             value_set_version = self.value_set.load_most_recent_active_version(self.value_set.uuid).version
             serialized['value_set_name'] = self.value_set.name
             serialized['value_set_uuid'] = str(self.value_set.uuid)
-            serialized['value_set_version'] = value_set_version
-            serialized[
-                'filename'] = f"ValueSets/v2/published/{self.value_set.uuid}/{value_set_version}.json",
+            serialized['version'] = value_set_version
+            serialized['filename'] = f"ValueSets/v2/published/{self.value_set.uuid}/{value_set_version}.json"
         if self.registry_entry_type == 'concept_map':
             serialized['concept_map_name'] = self.concept_map.name
             serialized['concept_map_uuid'] = str(self.concept_map.uuid)
-            serialized['concept_map_version'] = self.concept_map.most_recent_active_version.version
+            serialized['version'] = self.concept_map.most_recent_active_version.version
             serialized[
-                'filename'] = f"ConceptMaps/v1/published/{self.concept_map.uuid}/{self.concept_map.most_recent_active_version.version}.json",
+                'filename'] = f"ConceptMaps/v1/published/{self.concept_map.uuid}/{self.concept_map.most_recent_active_version.version}.json"
         return serialized
 
 
@@ -127,7 +128,7 @@ class DataNormalizationRegistry:
         namespace = object_storage_client.get_namespace().data
         bucket_name = config("OCI_CLI_BUCKET")
         bucket_item = object_storage_client.get_object(
-            namespace, bucket_name, "DataNormalizationRegistry/v1/registry.json"
+            namespace, bucket_name, f"DataNormalizationRegistry/v{DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION}/registry.json"
         )
         return bucket_item.headers["last-modified"]
 
