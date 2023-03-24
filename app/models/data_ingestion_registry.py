@@ -112,7 +112,7 @@ class DataNormalizationRegistry:
         object_storage_client.put_object(
             namespace,
             bucket_name,
-            "DataNormalizationRegistry/v1/registry.json",
+            f"DataNormalizationRegistry/v{DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION}/registry.json",
             json.dumps(registry, indent=2).encode("utf-8"),
         )
         return registry
