@@ -23,6 +23,7 @@ class DNRegistryEntry:
     source_extension_url: str
     registry_uuid: str
     registry_entry_type: str
+    profile_url: str
     concept_map: Optional[app.models.concept_maps.ConceptMap] = None
     value_set: Optional[app.models.value_sets.ValueSet] = None
 
@@ -33,7 +34,8 @@ class DNRegistryEntry:
             "data_element": self.data_element,
             "tenant_id": self.tenant_id,
             "source_extension_url": self.source_extension_url,
-            "registry_entry_type": self.registry_entry_type
+            "registry_entry_type": self.registry_entry_type,
+            "profile_url": self.profile_url
         }
         if self.registry_entry_type == 'value_set':
             value_set_version = self.value_set.load_most_recent_active_version(self.value_set.uuid).version
@@ -78,6 +80,7 @@ class DataNormalizationRegistry:
                         tenant_id=item.tenant_id,
                         source_extension_url=item.source_extension_url,
                         registry_uuid=item.registry_uuid,
+                        profile_url=item.profile_url,
                         registry_entry_type=item.type,
                         concept_map=app.models.concept_maps.ConceptMap(
                             item.concept_map_uuid
@@ -92,6 +95,7 @@ class DataNormalizationRegistry:
                         tenant_id=item.tenant_id,
                         source_extension_url=item.source_extension_url,
                         registry_uuid=item.registry_uuid,
+                        profile_url=item.profile_url,
                         registry_entry_type=item.type,
                         value_set=app.models.value_sets.ValueSet.load(
                             item.value_set_uuid
