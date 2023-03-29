@@ -312,6 +312,7 @@ def create_app(script_info=None):
                 value_set_to_json, initial_path, folder="published"
             )
             version_set_status_active(version_uuid, object_type)
+            vs_version.retire_and_obsolete_previous_version()
             return jsonify(value_set_to_datastore)
         if request.method == "GET":
             return_content = request.values.get("return_content")
@@ -349,12 +350,11 @@ def create_app(script_info=None):
         )
         return response
 
-    @app.route('/SourceConcepts/<string:source_concept_uuid>', methods=['PATCH'])
+    @app.route("/SourceConcepts/<string:source_concept_uuid>", methods=["PATCH"])
     def update_source_concept(source_concept_uuid):
-        comments = request.json.get('comments')
+        comments = request.json.get("comments")
         update_comments_source_concept(
-            source_concept_uuid=source_concept_uuid,
-            comments=comments
+            source_concept_uuid=source_concept_uuid, comments=comments
         )
         return "OK"
 
