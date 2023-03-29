@@ -349,12 +349,11 @@ def create_app(script_info=None):
         )
         return response
 
-    @app.route('/SourceConcepts/<string:source_concept_uuid>', methods=['PATCH'])
+    @app.route("/SourceConcepts/<string:source_concept_uuid>", methods=["PATCH"])
     def update_source_concept(source_concept_uuid):
-        comments = request.json.get('comments')
+        comments = request.json.get("comments")
         update_comments_source_concept(
-            source_concept_uuid=source_concept_uuid,
-            comments=comments
+            source_concept_uuid=source_concept_uuid, comments=comments
         )
         return "OK"
 
@@ -721,6 +720,16 @@ def create_app(script_info=None):
             )
             new_term_version = Terminology.serialize(new_terminology_version)
             return new_term_version
+
+    @app.route("/TerminologyUpdate/ValueSets/report", methods=["GET"])
+    def terminology_update_value_set_report():
+        terminology_fhir_uri = request.values.get("terminology_fhir_uri")
+        exclude_version = request.values.get("exclude_version")
+        if request.method == "GET":
+            report = value_sets_terminology_update_report(
+                terminology_fhir_uri, exclude_version
+            )
+            return jsonify(report)
 
     return app
 
