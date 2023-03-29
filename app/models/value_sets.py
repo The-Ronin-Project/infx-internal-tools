@@ -3052,3 +3052,139 @@ def execute_rules(rules_json):
         terminology_set = terminology_set - remove_set
 
     return [x.serialize() for x in list(terminology_set)]
+
+
+def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
+    """
+     Identifies value sets which include the specified terminology and returns the most recent version of the value set
+    @param terminology_fhir_uri: terminology involved in the update e.g. http://snomed.info/sct
+    @param exclude_version: newest version of the terminology e.g.
+    @return:
+    """
+    conn = get_db()
+
+    ready_for_update = []
+    latest_version_not_active = []
+    already_updated = []
+
+    value_sets = ValueSet.load_all_value_set_metadata(active_only=False)
+
+    value_set_most_recent_version_ids = []
+
+    # Iterate through all value sets
+    for vs in value_sets:
+        value_set_uuid = vs.get("uuid")
+        value_set_name = vs.get("name")
+        value_set_title = vs.get("title")
+
+        versions_metadata = ValueSet.load_version_metadata(value_set_uuid)
+
+        if isinstance(
+            versions_metadata, list
+        ):  # sort the versions and get the most recent even thought versions response is ordered desc
+            sorted_versions = sorted(
+                versions_metadata, key=lambda x: x.get("version"), reverse=True
+            )
+        else:
+            print(
+                "versions_metadata is not a list of dictionaries",
+                value_set_uuid,
+                "failed to load versions metadata",
+            )
+
+        most_recent_version_metadata = sorted_versions[0]
+
+        most_recent_version_uuid = most_recent_version_metadata.get("uuid")
+
+        most_recent_version_rules_query = conn.execute(
+            text(
+                """
+                select distinct em.system, em.version, em.expansion_uuid from value_sets.expansion_member em
+                join value_sets.expansion ex on em.expansion_uuid=ex.uuid
+                join value_sets.value_set_version vsv on ex.vs_version_uuid=vsv.uuid
+                where vsv.uuid=:version_uuid
+                """
+            ).bindparams(version_uuid=most_recent_version_uuid)
+        )
+        result_set = most_recent_version_rules_query.fetchall()
+
+        # Perform checks to determine which category this value set should be classified under in the report
+        exclude_value_set = False
+        value_set_contains_terminology = False
+        status_not_active = False
+
+        if most_recent_version_metadata.get("status") != "active":
+            status_not_active = True
+
+        for item in result_set:
+            if item.system == terminology_fhir_uri:
+                value_set_contains_terminology = True
+            if exclude_version is not None:
+                if (
+                    item.system == terminology_fhir_uri
+                    and item.version == exclude_version
+                ):
+                    exclude_value_set = True
+
+        # Classify to already updated group
+        if exclude_value_set is True:
+            item_dict = {
+                "value_set_uuid": value_set_uuid,
+                "name": value_set_name,
+                "title": value_set_title,
+            }
+            already_updated.append(item_dict)
+            continue
+
+        # Classify to latest version not active group
+        if status_not_active is True and value_set_contains_terminology is True:
+            item_dict = {
+                "value_set_uuid": value_set_uuid,
+                "name": value_set_name,
+                "title": value_set_title,
+            }
+            latest_version_not_active.append(item_dict)
+            continue
+
+        if value_set_contains_terminology is True:
+            item_dict = {
+                "value_set_uuid": value_set_uuid,
+                "name": value_set_name,
+                "title": value_set_title,
+            }
+            ready_for_update.append(item_dict)
+        #     value_set_most_recent_version_ids.append(most_recent_version_uuid)
+        #
+        # value_set_most_recent_version_ids = list(set(value_set_most_recent_version_ids))
+        #
+        # value_set_version_jsons = []
+        # for most_recent_version_uuid in value_set_most_recent_version_ids:
+        #     vs_version = ValueSetVersion.load(most_recent_version_uuid)
+        #     vs_version.expand(force_new=True)
+        #     vs_expansion = vs_version.serialize()
+        #
+        #     if vs_expansion is not None:
+        #         if vs_expansion.status_code == 200:
+        #             json_to_store = vs_expansion.json()
+        #             json_to_store["version_uuid"] = most_recent_version_uuid
+        #             value_set_version_jsons.append(json_to_store)
+        #
+        # value_set_version_jsons.sort(key=lambda x: x["name"])
+        # for item in value_set_version_jsons:
+        #     if item is None:
+        #         # here we were printing noe but what do we do now?
+        #     else:
+        #         value_set_uuid = item.get('value_set_uuid')
+        #         value_set_name = item.get('name')
+        #         value_set_title = item.get('title')
+        #         item_dict = {
+        #             'value_set_uuid': value_set_uuid,
+        #             'name': value_set_name,
+        #             'title': value_set_title,
+        #         }
+        #         ready_for_update.append(item_dict)
+    return {
+        "ready_for_update": ready_for_update,
+        "latest_version_not_active": latest_version_not_active,
+        "already_updated": already_updated,
+    }
