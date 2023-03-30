@@ -670,6 +670,8 @@ def create_app(script_info=None):
     def create_code():
         if request.method == "POST":
             payload = request.json
+            if isinstance(payload, dict):
+                payload = [payload]
             new_code = Code.add_new_code_to_terminology(payload)
             codes = []
             for x in new_code:
