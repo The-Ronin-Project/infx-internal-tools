@@ -2832,6 +2832,34 @@ class ValueSetVersion:
             {"new_status": status, "uuid": str(self.uuid)},
         )
 
+    def retire_and_obsolete_previous_version(self):
+        conn = get_db()
+
+        conn.execute(
+            text(
+                """
+                update value_sets.value_set_version
+                set status = 'retired'
+                where status = 'active'
+                and value_set_uuid =:value_set_uuid
+                and value_set_version.uuid !=:version_uuid
+                """
+            ),
+            {"value_set_uuid": self.value_set.uuid, "version_uuid": self.uuid},
+        )
+        conn.execute(
+            text(
+                """
+                update value_sets.value_set_version
+                set status = 'obsolete'
+                where status in ('pending','in progress','reviewed')
+                and value_set_uuid =:value_set_uuid
+                and value_set_version.uuid !=:version_uuid
+                """
+            ),
+            {"value_set_uuid": self.value_set.uuid, "version_uuid": self.uuid},
+        )
+
 
 @dataclass
 class ExplicitlyIncludedCode:

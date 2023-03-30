@@ -190,7 +190,7 @@ def version_set_status_active(conn, version_uuid, object_type):
     """
     if object_type == "concept_map":
         schema_and_table = "concept_maps.concept_map_version"
-        data = conn.execute(
+        conn.execute(
             text(
                 f"""
                 UPDATE {schema_and_table}
@@ -206,7 +206,7 @@ def version_set_status_active(conn, version_uuid, object_type):
         )
     else:
         schema_and_table = "value_sets.value_set_version"
-        data = conn.execute(
+        conn.execute(
             text(
                 f"""
                 UPDATE {schema_and_table}
@@ -219,7 +219,6 @@ def version_set_status_active(conn, version_uuid, object_type):
                 "version_uuid": version_uuid,
             },
         )
-    return data
 
 
 @db_cursor

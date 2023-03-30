@@ -312,6 +312,7 @@ def create_app(script_info=None):
                 value_set_to_json, initial_path, folder="published"
             )
             version_set_status_active(version_uuid, object_type)
+            vs_version.retire_and_obsolete_previous_version()
             return jsonify(value_set_to_datastore)
         if request.method == "GET":
             return_content = request.values.get("return_content")
