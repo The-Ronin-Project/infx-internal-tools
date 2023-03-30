@@ -349,12 +349,11 @@ def create_app(script_info=None):
         )
         return response
 
-    @app.route('/SourceConcepts/<string:source_concept_uuid>', methods=['PATCH'])
+    @app.route("/SourceConcepts/<string:source_concept_uuid>", methods=["PATCH"])
     def update_source_concept(source_concept_uuid):
-        comments = request.json.get('comments')
+        comments = request.json.get("comments")
         update_comments_source_concept(
-            source_concept_uuid=source_concept_uuid,
-            comments=comments
+            source_concept_uuid=source_concept_uuid, comments=comments
         )
         return "OK"
 
@@ -671,6 +670,8 @@ def create_app(script_info=None):
     def create_code():
         if request.method == "POST":
             payload = request.json
+            if isinstance(payload, dict):
+                payload = [payload]
             new_code = Code.add_new_code_to_terminology(payload)
             codes = []
             for x in new_code:
