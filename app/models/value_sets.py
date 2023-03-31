@@ -1803,6 +1803,55 @@ class ValueSet:
 
         return new_version_uuid
 
+    def perform_terminology_update(self, old_terminology_version_uuid, new_terminology_version_uuid,
+                                   effective_start, effective_end, description):
+        # Safety check: Raise an exception if the highest version does not have a status of 'active'
+        value_set_metadata = ValueSet.load_all_value_set_metadata(active_only=False)
+        sorted_versions = sorted(value_set_metadata, key=lambda x: x['version'], reverse=True)
+        highest_version = sorted_versions[0]
+
+        if highest_version.get('status') != 'active':
+            raise Exception(f"The highest version of the value set '{self.name}' does not have a status of 'active'.")
+
+        # Identify the most recent active version uuid
+        most_recent_version = self.load_most_recent_active_version(self.uuid)
+
+        # Create a new version of the value set
+        new_value_set_version_uuid = self.create_new_version_from_previous(
+            effective_start=effective_start,
+            effective_end=effective_end,
+            description=description
+        )
+        new_value_set_version = ValueSetVersion.load(new_value_set_version_uuid)
+
+        # Update the rules targeting the previous version to target the new version
+        new_value_set_version.update_rules_for_terminology(
+            old_terminology_version_uuid=old_terminology_version_uuid,
+            new_terminology_version_uuid=new_terminology_version_uuid
+        )
+
+        # Expand the previous and new value set versions
+        most_recent_version.expand()
+        try:
+            new_value_set_version.expand()
+        except Exception as e:
+            print(f"Failed to expand new value set version: {e}")
+            return "failed_to_expand"
+
+        # Get the diff between the two value set versions
+        diff = ValueSetVersion.diff_for_removed_and_added_codes(
+            most_recent_version.uuid,
+            new_value_set_version_uuid,
+        )
+
+        # Update the status of the new value set version
+        if not diff["removed_codes"] and not diff["added_codes"]:
+            new_value_set_version.update(status="reviewed")
+            return "reviewed"
+        else:
+            new_value_set_version.update(status="pending")
+            return "pending"
+
 
 class RuleGroup:
     def __init__(self, vs_version_uuid, rule_group_id):
