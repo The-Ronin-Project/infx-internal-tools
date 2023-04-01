@@ -3308,7 +3308,6 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
 #         old_terminology_version_uuid,
 #         new_terminology_version_uuid,
 # ):
-#     import random
 #     new_terminology_version = Terminology.load(new_terminology_version_uuid)
 #
 #     # Get value sets to update
