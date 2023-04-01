@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import date, datetime, timedelta
 from dateutil import parser
+from collections import defaultdict
 import werkzeug
 from werkzeug.exceptions import BadRequest, NotFound
 from decouple import config
@@ -1806,22 +1807,42 @@ class ValueSet:
     def perform_terminology_update(self, old_terminology_version_uuid, new_terminology_version_uuid,
                                    effective_start, effective_end, description):
         # Safety check: Raise an exception if the highest version does not have a status of 'active'
-        value_set_metadata = ValueSet.load_all_value_set_metadata(active_only=False)
+        value_set_metadata = ValueSet.load_version_metadata(self.uuid)
         sorted_versions = sorted(value_set_metadata, key=lambda x: x['version'], reverse=True)
         highest_version = sorted_versions[0]
 
-        if highest_version.get('status') != 'active':
-            raise Exception(f"The highest version of the value set '{self.name}' does not have a status of 'active'.")
+        # Check to see if it's already been updated
+        most_recent_version = ValueSetVersion.load(highest_version.get('uuid'))
+        if most_recent_version.contains_content_from_terminology(new_terminology_version_uuid):
+            return 'already_updated'
 
-        # Identify the most recent active version uuid
-        most_recent_version = self.load_most_recent_active_version(self.uuid)
+        # Check to see if it's active (we will not auto-update pending value sets still being worked on)
+        if most_recent_version.status != 'active':
+            return 'latest_version_not_active'
 
-        # Create a new version of the value set
+    # Create a new version of the value set
         new_value_set_version_uuid = self.create_new_version_from_previous(
             effective_start=effective_start,
             effective_end=effective_end,
             description=description
         )
+
+        # # As a one-time thing, we need to delete older SNOMED content
+        # # todo: remove this section
+        # conn = get_db()
+        # conn.execute(
+        #     text(
+        #         """
+        #         delete from value_sets.value_set_rule
+        #         where value_set_version=:version_uuid
+        #         and terminology_version='5efa6244-32ad-4a2d-9d21-8f237499325a'
+        #         """
+        #     ),
+        #     {
+        #         "version_uuid": new_value_set_version_uuid
+        #     }
+        # )
+
         new_value_set_version = ValueSetVersion.load(new_value_set_version_uuid)
 
         # Update the rules targeting the previous version to target the new version
@@ -1835,7 +1856,6 @@ class ValueSet:
         try:
             new_value_set_version.expand()
         except Exception as e:
-            print(f"Failed to expand new value set version: {e}")
             return "failed_to_expand"
 
         # Get the diff between the two value set versions
@@ -2909,6 +2929,22 @@ class ValueSetVersion:
             {"value_set_uuid": self.value_set.uuid, "version_uuid": self.uuid},
         )
 
+    def contains_content_from_terminology(self, terminology_version_uuid):
+        self.expand()
+
+        # Check for rules
+        for rule_group in self.rule_groups:
+            for terminology, rules in rule_group.rules.items():
+                if terminology.uuid == terminology_version_uuid and rules:
+                    return True
+
+        # Check expansion for codes
+        terminology = Terminology.load(terminology_version_uuid)
+        for code in self.expansion:
+            if code.system == terminology.fhir_uri and code.version == terminology.version:
+                return True
+
+        return False
 
 @dataclass
 class ExplicitlyIncludedCode:
@@ -3265,3 +3301,52 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
         "latest_version_not_active": latest_version_not_active,
         "already_updated": already_updated,
     }
+
+
+# This takes too long to run as an endpoint and should be a Databricks notebook
+# def perform_terminology_update_for_all_value_sets(
+#         old_terminology_version_uuid,
+#         new_terminology_version_uuid,
+# ):
+#     import random
+#     new_terminology_version = Terminology.load(new_terminology_version_uuid)
+#
+#     # Get value sets to update
+#     report_for_update = value_sets_terminology_update_report(
+#         terminology_fhir_uri=new_terminology_version.fhir_uri,
+#         exclude_version=new_terminology_version.version
+#     )
+#
+#     value_sets_to_update = [x.get('value_set_uuid') for x in report_for_update.get('ready_for_update')]
+#
+#     value_set_statuses = defaultdict(list)
+#
+#     for vs_uuid in value_sets_to_update:
+#         value_set = ValueSet.load(vs_uuid)
+#         status = value_set.perform_terminology_update(
+#             old_terminology_version_uuid,
+#             new_terminology_version_uuid,
+#             effective_start=str(new_terminology_version.effective_start),
+#             effective_end=str(new_terminology_version.effective_end),
+#             description=f"Updated for {new_terminology_version.name} {new_terminology_version.version} update"
+#         )
+#         value_set_statuses[status].append({
+#             "name": value_set.name,
+#             "title": value_set.title,
+#             "uuid": value_set.uuid
+#         })
+#
+#     # Generate the JSON report
+#     json_report = {
+#         status: [
+#             {
+#                 "name": vs["name"],
+#                 "title": vs["title"],
+#                 "uuid": vs["uuid"],
+#             }
+#             for vs in value_set_statuses[status]
+#         ]
+#         for status in value_set_statuses
+#     }
+#
+#     return json_report
