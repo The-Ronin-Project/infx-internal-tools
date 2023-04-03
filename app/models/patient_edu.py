@@ -36,7 +36,10 @@ class Status(str, Enum):
 
 @dataclass
 class ExternalResource:
-    """in the event that only elsevier resources are used/linked"""
+    """
+    Represents an external resource (e.g., an Elsevier resource) to be stored in the database.
+    in the event that only elsevier resources are used/linked
+    """
 
     external_id: str
     patient_term: str
@@ -78,6 +81,10 @@ class ExternalResource:
         return True if result else False
 
     def extract_and_modify_resource(self):
+        """
+        Extracts and modifies the external resource. Retrieves the resource from an external URL, extracts
+        relevant information, and saves it to the database if it doesn't already exist.
+        """
         url = config("EXTERNAL_RESOURCE_URL")
         self.external_url = f"{url}{self.language}/{self.external_id}"
         response = requests.get(self.external_url)
@@ -220,6 +227,10 @@ class ExternalResource:
     @staticmethod
     @db_cursor
     def get_all_external_resources(conn):
+        """
+        Retrieves all external resources from the "patient_education.resource_version" table and
+        returns them as a list of dictionaries.
+        """
         all_external_resources = conn.execute(
             text(
                 """
@@ -232,6 +243,10 @@ class ExternalResource:
 
     @staticmethod
     def update_status(status, _uuid):
+        """
+        Updates the status of an external resource in the "patient_education.resource_version" table
+        based on the provided UUID.
+        """
         table_query = {"name": "resource_version", "schema": "patient_education"}
         version_to_update = {"version_uuid": str(_uuid)}
         data = {"status": status}
@@ -258,6 +273,10 @@ class ExternalResource:
 
     @staticmethod
     def format_data_to_export(_uuid):
+        """
+        Retrieves an external resource based on the provided UUID and formats the data for export,
+        returning a dictionary containing the formatted data.
+        """
         table_query = {"name": "resource_version", "schema": "patient_education"}
         data = {"version_uuid": _uuid}
         get_resource = dynamic_select_stmt(table_query, data)
