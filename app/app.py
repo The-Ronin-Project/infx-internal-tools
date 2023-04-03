@@ -43,7 +43,10 @@ root_logger.addHandler(common_handler)
 
 
 def create_app(script_info=None):
-
+    """
+    Initializes and returns the Flask app instance.
+    Sets up configurations and registers routes and error handlers.
+    """
     app = Flask(__name__)
     app.config["MOCK_DB"] = config("MOCK_DB", False)
     app.config["ENABLE_DATADOG_APM"] = config("ENABLE_DATADOG_APM", True)
@@ -57,14 +60,17 @@ def create_app(script_info=None):
 
     @app.route("/ping")
     def ping():
+        """Returns a simple 'OK' response to indicate that the service is up and running."""
         return "OK"
 
     @app.errorhandler(BadRequestWithCode)
     def handle_bad_request_with_code(e):
+        """Handles BadRequestWithCode exceptions by returning a JSON response with the appropriate error code and message."""
         return jsonify({"code": e.code, "message": e.description}), e.http_status_code
 
     @app.errorhandler(HTTPException)
     def handle_exception(e):
+        """Handles general HTTPExceptions by returning a JSON response with the appropriate error message and status code."""
         logger.critical(e.description, stack_info=True)
         return jsonify({"message": e.description}), e.code
 
@@ -72,6 +78,7 @@ def create_app(script_info=None):
     # FHIR endpoint
     @app.route("/ValueSet/<string:uuid>/$expand")
     def expand_value_set(uuid):
+        """Expands the specified ValueSet and returns it as a JSON object."""
         force_new = request.values.get("force_new") == "true"
         vs_version = ValueSetVersion.load(uuid)
         vs_version.expand(force_new=force_new)
@@ -79,6 +86,11 @@ def create_app(script_info=None):
 
     @app.route("/ValueSets/", methods=["GET", "POST"])
     def get_all_value_sets_metadata():
+        """
+        Handles both GET and POST requests for ValueSets metadata.
+        GET: Returns a list of metadata for all ValueSets.
+        POST: Creates a new ValueSet and returns its metadata.
+        """
         if request.method == "GET":
             active_only = (
                 False if request.values.get("active_only") == "false" else True
@@ -118,6 +130,7 @@ def create_app(script_info=None):
 
     @app.route("/ValueSets/<string:identifier>/duplicate", methods=["POST"])
     def duplicate_value_set_and_version(identifier):
+        """Duplicates a ValueSet and its associated version, returning the new ValueSet's UUID."""
         value_set = ValueSet.load(identifier)
         name = (request.json.get("name"),)
         title = (request.json.get("title"),)
@@ -145,6 +158,7 @@ def create_app(script_info=None):
         methods=["POST"],
     )
     def update_terminology_version_of_rules_in_value_set(value_set_uuid, version_uuid):
+        """Updates the terminology version of rules in the specified ValueSet version."""
         old_terminology_version_uuid = request.json.get("old_terminology_version_uuid")
         new_terminology_version_uuid = request.json.get("new_terminology_version_uuid")
 
@@ -160,6 +174,7 @@ def create_app(script_info=None):
         methods=["PATCH"],
     )
     def update_single_rule(rule_uuid):
+        """Updates the terminology version of a single ValueSet rule."""
         new_terminology_version_uuid = request.json.get("new_terminology_version_uuid")
         rule = VSRule.load(rule_uuid)
         rule.update(new_terminology_version_uuid)
@@ -170,6 +185,7 @@ def create_app(script_info=None):
         methods=["PATCH"],
     )
     def version_status_update(value_set_uuid, version_uuid):
+        """Updates the status of a ValueSet version."""
         new_status = request.json.get("status")
         vs_version = ValueSetVersion.load(version_uuid)
         vs_version.update(status=new_status)
@@ -177,6 +193,7 @@ def create_app(script_info=None):
 
     @app.route("/ValueSets/all/")
     def get_all_value_sets():
+        """Returns a list of all ValueSets with their expanded content, filtered by status."""
         status = request.values.get("status").split(",")
         value_sets = ValueSet.load_all_value_sets_by_status(status)
         for x in value_sets:
@@ -186,11 +203,13 @@ def create_app(script_info=None):
 
     @app.route("/ValueSets/<string:identifier>/versions/")
     def get_value_set_versions(identifier):
+        """Returns a list of metadata for all versions of a specified ValueSet."""
         uuid = ValueSet.name_to_uuid(identifier)
         return jsonify(ValueSet.load_version_metadata(uuid))
 
     @app.route("/ValueSets/<string:identifier>/versions/new", methods=["POST"])
     def create_new_vs_version(identifier):
+        """Creates a new version of a specified ValueSet and returns its UUID."""
         value_set = ValueSet.load(identifier)
         effective_start = request.json.get("effective_start")
         effective_end = request.json.get("effective_end")
@@ -202,6 +221,7 @@ def create_app(script_info=None):
 
     @app.route("/ValueSets/<string:value_set_uuid>", methods=["DELETE"])
     def delete_value_set(value_set_uuid):
+        """Deletes a ValueSet and returns a 'Deleted' confirmation."""
         value_set = ValueSet.load(value_set_uuid)
         value_set.delete()
         return "Deleted", 200
@@ -219,6 +239,11 @@ def create_app(script_info=None):
         methods=["POST", "GET"],
     )
     def explicitly_included_code_to_vs_version(value_set_uuid, vs_version_uuid):
+        """
+        Handles both GET and POST requests for explicitly included codes in a ValueSet version.
+        GET: Returns a list of all explicitly included codes for the specified ValueSet version.
+        POST: Adds an explicitly included code to the specified ValueSet version and returns a 'Created' confirmation.
+        """
         if request.method == "GET":
             vs_version = ValueSetVersion.load(vs_version_uuid)
             explicit_code_inclusions = ExplicitlyIncludedCode.load_all_for_vs_version(
@@ -239,6 +264,7 @@ def create_app(script_info=None):
 
     @app.route("/ValueSets/<string:identifier>/most_recent_active_version")
     def get_most_recent_version(identifier):
+        """Returns the most recent active version"""
         uuid = ValueSet.name_to_uuid(identifier)
         version = ValueSet.load_most_recent_active_version(uuid)
         version.expand()
@@ -246,6 +272,10 @@ def create_app(script_info=None):
 
     @app.route("/ValueSets/expansions/<string:expansion_uuid>/report")
     def load_expansion_report(expansion_uuid):
+        """
+        Retrieve a report for a specific ValueSet expansion identified by the expansion_uuid.
+        Returns the report as a CSV file attachment.
+        """
         report = ValueSetVersion.load_expansion_report(expansion_uuid)
         file_buffer = StringIO()
         file_buffer.write(report)
@@ -271,6 +301,10 @@ def create_app(script_info=None):
         methods=["GET"],
     )
     def diff_new_version_against_previous():
+        """
+        Compare a new ValueSet version against a previous version using their UUIDs.
+        Returns the differences between the versions as JSON data.
+        """
         previous_version_uuid = request.json.get("previous_version_uuid")
         new_version_uuid = request.json.get("new_version_uuid")
         diff = ValueSetVersion.diff_for_removed_and_added_codes(
@@ -280,6 +314,11 @@ def create_app(script_info=None):
 
     @app.route("/ValueSets/<string:version_uuid>/prerelease", methods=["GET", "POST"])
     def get_value_set_version_prerelease(version_uuid):
+        """
+        Retrieve or create a prerelease version of a ValueSet identified by the version_uuid.
+        Handles both GET and POST requests.
+        Returns JSON data for the prerelease ValueSet version.
+        """
         object_type = "value_set"
         if request.method == "POST":
             force_new = request.values.get("force_new") == "true"
@@ -301,6 +340,11 @@ def create_app(script_info=None):
 
     @app.route("/ValueSets/<string:version_uuid>/published", methods=["GET", "POST"])
     def get_value_set_version_published(version_uuid):
+        """
+        Retrieve or publish a ValueSet version identified by the version_uuid.
+        Handles both GET and POST requests.
+        Returns JSON data for the published ValueSet version.
+        """
         object_type = "value_set"
         if request.method == "POST":
             force_new = request.values.get("force_new") == "true"
@@ -334,6 +378,10 @@ def create_app(script_info=None):
     # Survey Endpoints
     @app.route("/surveys/<string:survey_uuid>")
     def export_survey(survey_uuid):
+        """
+        Export a survey identified by the survey_uuid as a CSV file.
+        Returns the survey data as a CSV file attachment.
+        """
         organization_uuid = request.values.get("organization_uuid")
         # print(survey_uuid, organization_uuid)
         exporter = SurveyExporter(survey_uuid, organization_uuid)
@@ -352,6 +400,10 @@ def create_app(script_info=None):
 
     @app.route("/SourceConcepts/<string:source_concept_uuid>", methods=["PATCH"])
     def update_source_concept(source_concept_uuid):
+        """
+        Update the comments field of a source concept identified by the source_concept_uuid.
+        Returns a status message.
+        """
         comments = request.json.get("comments")
         update_comments_source_concept(
             source_concept_uuid=source_concept_uuid, comments=comments
@@ -361,6 +413,11 @@ def create_app(script_info=None):
     # Concept Map Endpoints
     @app.route("/ConceptMaps/actions/new_version_from_previous", methods=["POST"])
     def new_cm_version_from_previous():
+        """
+        Create a new ConceptMap version based on a previous version.
+        Takes input from the request payload.
+        Returns a status message.
+        """
         previous_version_uuid = request.json.get("previous_version_uuid")
         new_version_description = request.json.get("new_version_description")
         new_version_num = request.json.get("new_version_num")
@@ -382,12 +439,20 @@ def create_app(script_info=None):
 
     @app.route("/ConceptMaps/<string:version_uuid>", methods=["GET"])
     def get_concept_map_version(version_uuid):
+        """
+        Retrieve a specific ConceptMap version identified by the version_uuid.
+        Returns the ConceptMap version as JSON data.
+        """
         concept_map_version = ConceptMapVersion(version_uuid)
         concept_map_to_json = concept_map_version.serialize()
         return jsonify(concept_map_to_json)
 
     @app.route("/ConceptMaps/<string:version_uuid>/actions/index", methods=["POST"])
     def index_targets(version_uuid):
+        """
+        Index the targets of a ConceptMap version identified by the version_uuid.
+        Returns a status message.
+        """
         target_value_set_version_uuid = request.json.get(
             "target_value_set_version_uuid"
         )
@@ -398,6 +463,10 @@ def create_app(script_info=None):
 
     @app.route("/ConceptMaps/", methods=["POST"])
     def create_initial_concept_map_and_version_one():
+        """
+        Create an initial ConceptMap and its first version based on input from the request payload.
+        Returns the newly created ConceptMap as JSON data.
+        """
         if request.method == "POST":
             name = request.json.get("name")
             title = request.json.get("title")
@@ -434,6 +503,10 @@ def create_app(script_info=None):
 
     @app.route("/ConceptMaps/<string:version_uuid>/draft", methods=["GET"])
     def get_concept_map_draft(version_uuid):
+        """
+        Retrieve a draft of a ConceptMap version identified by the version_uuid.
+        Returns the draft as a CSV file attachment.
+        """
         concept_map_version = ConceptMapVersion(version_uuid)
         csv_data, csv_field_names = concept_map_version.mapping_draft()
         # Create a CSV file-like object in memory
@@ -455,6 +528,11 @@ def create_app(script_info=None):
 
     @app.route("/ConceptMaps/<string:version_uuid>/prerelease", methods=["GET", "POST"])
     def get_concept_map_version_prerelease(version_uuid):
+        """
+        Retrieve or store a pre-release version of a Concept Map using its version UUID.
+        If a POST request is made, a new pre-release version is created and stored.
+        If a GET request is made, the pre-release version is retrieved.
+        """
         object_type = "concept_map"
         if request.method == "POST":
             concept_map_version = ConceptMapVersion(
@@ -483,6 +561,11 @@ def create_app(script_info=None):
 
     @app.route("/ConceptMaps/<string:version_uuid>/published", methods=["GET", "POST"])
     def get_concept_map_version_published(version_uuid):
+        """
+        Retrieve or store a published version of a Concept Map using its version UUID.
+        If a POST request is made, a new published version is created and stored.
+        If a GET request is made, the published version is retrieved.
+        """
         object_type = "concept_map"
         if request.method == "POST":
             concept_map_version = ConceptMapVersion(
@@ -508,6 +591,10 @@ def create_app(script_info=None):
 
     @app.route("/ConceptMapSuggestions/", methods=["POST"])
     def mapping_suggestion():
+        """
+        Create a new Mapping Suggestion with the provided source concept UUID, code, display, terminology_version_uuid,
+        suggestion source, and confidence.
+        """
         if request.method == "POST":
             source_concept_uuid = request.json.get("source_concept_uuid")
             code = request.json.get("code")
@@ -540,6 +627,10 @@ def create_app(script_info=None):
 
     @app.route("/mappings/", methods=["POST"])
     def create_concept_map():
+        """
+        Create a new Concept Map with the provided source concept UUID, relationship code UUID, target concept code,
+        target concept display, target concept terminology version UUID, mapping comments, author, and review status.
+        """
         if request.method == "POST":
             source_concept_uuid = request.json.get("source_concept_uuid")
             relationship_code_uuid = request.json.get("relationship_code_uuid")
@@ -579,6 +670,13 @@ def create_app(script_info=None):
     # Patient Education Endpoints
     @app.route("/PatientEducation/", methods=["GET", "POST", "PATCH", "DELETE"])
     def get_external_resources():
+        """
+        Manage external resources using GET, POST, PATCH, and DELETE methods.
+        GET: Retrieve all external resources.
+        POST: Create a new external resource.
+        PATCH: Update the status of an external resource.
+        DELETE: Unlink an external resource.
+        """
         if request.method == "PATCH":
             status = request.json.get("status")
             _uuid = request.json.get("uuid")
@@ -607,6 +705,7 @@ def create_app(script_info=None):
 
     @app.route("/PatientEducation/export", methods=["POST"])
     def export_data():
+        """ Export data for a specified UUID."""
         if request.method == "POST":
             _uuid = request.json.get("uuid")
             export = ExternalResource.format_data_to_export(_uuid)
@@ -615,12 +714,18 @@ def create_app(script_info=None):
     # RxNorm custom search
     @app.route("/rxnorm_search", methods=["GET"])
     def rxnorm_search():
+        """
+        Perform an RxNorm search with an exact match or an approximate fallback search.
+        """
         query_string = request.values.get("query_string")
         return jsonify(rxnorm.exact_with_approx_fallback_search(query_string))
 
     # Registry
     @app.route("/data_normalization/registry", methods=["GET"])
     def data_ingestion_registry():
+        """
+        Retrieve the data ingestion registry, which contains metadata about data sources and their ingestion processes.
+        """
         if request.method == "GET":
             registry = DataNormalizationRegistry()
             registry.load_entries()
@@ -628,6 +733,9 @@ def create_app(script_info=None):
 
     @app.route("/data_normalization/registry/actions/publish", methods=["POST"])
     def publish_data_normalization_registry():
+        """
+        Publish the data normalization registry to an object store, allowing other services to access the registry information.
+        """
         if request.method == "POST":
             post_registry = DataNormalizationRegistry()
             post_registry.load_entries()
@@ -639,12 +747,19 @@ def create_app(script_info=None):
 
     @app.route("/data_normalization/registry/actions/get_time", methods=["GET"])
     def get_last_published_time():
+        """
+        Retrieve the last published time of the data normalization registry, indicating when it was most recently updated.
+        """
         last_update = DataNormalizationRegistry.get_oci_last_published_time()
         convert_last_update = DataNormalizationRegistry.convert_gmt_time(last_update)
         return convert_last_update
 
     @app.route("/terminology/", methods=["POST"])
     def create_terminology():
+        """
+        Create a new terminology with the provided parameters, such as terminology name, version, effective start and end dates,
+        FHIR URI, standard status, and FHIR terminology.
+        """
         if request.method == "POST":
             terminology = request.json.get("terminology")
             version = request.json.get("version")
@@ -669,6 +784,10 @@ def create_app(script_info=None):
 
     @app.route("/terminology/new_code", methods=["POST"])
     def create_code():
+        """
+        Add one or multiple new codes to a terminology, providing information such as code system, version, code, display,
+        and terminology version.
+        """
         if request.method == "POST":
             payload = request.json
             if isinstance(payload, dict):
@@ -682,6 +801,10 @@ def create_app(script_info=None):
 
     @app.route("/terminology/new_version/", methods=["POST"])
     def create_new_term_version():
+        """
+        Create a new terminology version with the provided parameters, such as terminology name, version, FHIR URI,
+        effective start and end dates, previous version UUID, standard status, and FHIR terminology.
+        """
         if request.method == "POST":
             terminology = request.json.get("terminology")
             version = request.json.get("version")
@@ -708,6 +831,10 @@ def create_app(script_info=None):
 
     @app.route("/terminology/new_version_from_previous", methods=["POST"])
     def create_new_term_version_from_previous():
+        """
+        Create a new terminology version from a previous version, preserving its content and metadata while updating
+        the version number, effective start and end dates.
+        """
         if request.method == "POST":
             previous_terminology_version_uuid = request.json.get(
                 "previous_terminology_version_uuid"
@@ -726,6 +853,10 @@ def create_app(script_info=None):
 
     @app.route("/TerminologyUpdate/ValueSets/report", methods=["GET"])
     def terminology_update_value_set_report():
+        """
+        Generate a report for updating value sets in a terminology, showing information about changes to value sets
+        and their impact on the terminology.
+        """
         terminology_fhir_uri = request.values.get("terminology_fhir_uri")
         exclude_version = request.values.get("exclude_version")
         if request.method == "GET":
