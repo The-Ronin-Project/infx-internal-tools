@@ -1820,7 +1820,7 @@ class ValueSet:
         if most_recent_version.status != 'active':
             return 'latest_version_not_active'
 
-    # Create a new version of the value set
+        # Create a new version of the value set
         new_value_set_version_uuid = self.create_new_version_from_previous(
             effective_start=effective_start,
             effective_end=effective_end,
@@ -1854,7 +1854,7 @@ class ValueSet:
         # Expand the previous and new value set versions
         most_recent_version.expand()
         try:
-            new_value_set_version.expand()
+            new_value_set_version.expand(force_new=True)
         except Exception as e:
             return "failed_to_expand"
 
@@ -3303,7 +3303,7 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
     }
 
 
-# This takes too long to run as an endpoint and should be a Databricks notebook
+# # This takes too long to run as an endpoint and should be a Databricks notebook
 # def perform_terminology_update_for_all_value_sets(
 #         old_terminology_version_uuid,
 #         new_terminology_version_uuid,
