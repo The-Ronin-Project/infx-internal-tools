@@ -4,6 +4,11 @@ RX_NAV_BASE_URL = "https://rxnav.prod.projectronin.io/REST"
 
 
 def exact_search(query_string):
+    """
+    Perform an exact search for the given query string.
+    Returns related RxNorm concept groups and the RxCUI if found, otherwise returns None.
+    """
+
     # Check if input is an RxCUI (numeric code) already
     if query_string.isdigit():
         rxcui = query_string
@@ -37,6 +42,10 @@ def exact_search(query_string):
 
 
 def approx_search(query_string):
+    """
+     Perform an approximate search for the given query string.
+     Returns related RxNorm concept groups and the top RxCUI found.
+     """
     approx_search_json = requests.get(
         f"{RX_NAV_BASE_URL}/approximateTerm.json",
         params={"term": query_string, "maxEntries": 20},
@@ -73,6 +82,10 @@ def approx_search(query_string):
 
 
 def exact_with_approx_fallback_search(query_string):
+    """
+    Perform an exact search for the given query string, falling back to an approximate search if necessary.
+    Returns the search type (EXACT or APPROX), top RxCUI found, and related RxNorm concept groups.
+    """
     exact_results, top_rxcui = exact_search(query_string)
 
     if exact_results is not None:
