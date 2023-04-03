@@ -17,6 +17,10 @@ DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION = 2
 
 @dataclass
 class DNRegistryEntry:
+    class DNRegistryEntry:
+        """
+        A class representing a single entry in the Data Normalization Registry.
+        """
     resource_type: str
     data_element: str
     tenant_id: str
@@ -28,6 +32,9 @@ class DNRegistryEntry:
     value_set: Optional[app.models.value_sets.ValueSet] = None
 
     def serialize(self):
+        """
+        Serialize the DNRegistryEntry object into a dictionary.
+        """
         serialized = {
             "registry_uuid": str(self.registry_uuid),
             "resource_type": self.resource_type,
@@ -55,6 +62,9 @@ class DNRegistryEntry:
 
 @dataclass
 class DataNormalizationRegistry:
+    """
+    A class representing the Data Normalization Registry containing multiple DNRegistryEntry objects.
+    """
     entries: List[DNRegistryEntry] = None
 
     def __post_init__(self):
@@ -62,6 +72,9 @@ class DataNormalizationRegistry:
             self.entries = []
 
     def load_entries(self):
+        """
+        Load all entries from the data_ingestion.registry in the database.
+        """
         conn = get_db()
         query = conn.execute(
             text(
@@ -106,10 +119,16 @@ class DataNormalizationRegistry:
                 raise Exception("Only value_set and concept_map are recognized registry types")
 
     def serialize(self):
+        """
+        Serialize the DataNormalizationRegistry object into a list of dictionaries.
+        """
         return [x.serialize() for x in self.entries]
 
     @staticmethod
     def publish_to_object_store(registry):
+        """
+        Publish the Data Normalization Registry to the Object Storage.
+        """
         object_storage_client = oci_authentication()
         bucket_name = config("OCI_CLI_BUCKET")
         namespace = object_storage_client.get_namespace().data
@@ -124,9 +143,8 @@ class DataNormalizationRegistry:
     @staticmethod
     def get_oci_last_published_time():
         """
-        function to get the last modified time from registry file
-        @return: timestamp string
-        @rtype: string
+        Retrieve the last modified timestamp of the Data Normalization Registry file in the Object Storage.
+        Returns the timestamp as a string.
         """
         object_storage_client = oci_authentication()
         namespace = object_storage_client.get_namespace().data
