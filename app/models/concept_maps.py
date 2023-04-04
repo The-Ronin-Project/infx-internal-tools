@@ -196,167 +196,6 @@ class ConceptMap:
         else:
             self.most_recent_active_version = None
 
-    @staticmethod
-    def new_version_from_previous(
-        previous_version_uuid,
-        new_version_description,
-        new_version_num,
-        new_source_value_set_version_uuid,
-        new_target_value_set_version_uuid,
-    ):
-        """
-        Creates a new version of the concept map based on a previous version.
-
-        Args:
-            previous_version_uuid (str): The UUID of the previous version of the concept map.
-            new_version_description (str): The description of the new version.
-            new_version_num (int): The version number of the new version.
-            new_source_value_set_version_uuid (str): The UUID of the version of the source value set to use for the new version.
-            new_target_value_set_version_uuid (str): The UUID of the version of the target value set to use for the new version.
-        """
-        conn = get_db()
-        new_version_uuid = uuid.uuid4()
-
-        # Lookup concept_map_uuid
-        concept_map_uuid = (
-            conn.execute(
-                text(
-                    """
-                select * from concept_maps.concept_map_version
-                where uuid=:previous_version_uuid
-                """
-                ),
-                {"previous_version_uuid": previous_version_uuid},
-            )
-            .first()
-            .concept_map_uuid
-        )
-
-        # Add entry to concept_maps.concept_map_version
-        conn.execute(
-            text(
-                """
-                insert into concept_maps.concept_map_version
-                (uuid, concept_map_uuid, description, status, created_date, version, source_value_set_version_uuid, target_value_set_version_uuid)
-                values
-                (:new_version_uuid, :concept_map_uuid, :description, 'pending', now(), :version_num, :source_value_set_version_uuid, :target_value_set_version_uuid)
-                """
-            ),
-            {
-                "new_version_uuid": new_version_uuid,
-                "concept_map_uuid": concept_map_uuid,
-                "description": new_version_description,
-                "version_num": new_version_num,
-                "source_value_set_version_uuid": new_source_value_set_version_uuid,
-                "target_value_set_version_uuid": new_target_value_set_version_uuid,
-            },
-        )
-        # Populate concept_maps.source_concept
-        conn.execute(
-            text(
-                """
-                insert into concept_maps.source_concept
-                (uuid, code, display, system, map_status, concept_map_version_uuid)
-                select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid from value_sets.expansion_member
-                join value_sets.expansion
-                on expansion.uuid=expansion_member.expansion_uuid
-                join public.terminology_versions tv
-                on tv.fhir_uri=expansion_member.system
-                and tv.version=expansion_member.version
-                where vs_version_uuid=:new_source_value_set_version_uuid
-                """
-            ),
-            {
-                "new_source_value_set_version_uuid": new_source_value_set_version_uuid,
-                "concept_map_version_uuid": new_version_uuid,
-            },
-        )
-
-        # Load new target value set
-        target_value_set_expansion = conn.execute(
-            text(
-                """
-                select expansion_member.*, tv.uuid as terminology_uuid from value_sets.expansion_member
-                join value_sets.expansion
-                on expansion.uuid=expansion_member.expansion_uuid
-                join public.terminology_versions tv
-                on tv.fhir_uri=expansion_member.system
-                and tv.version=expansion_member.version
-                where vs_version_uuid=:vs_version_uuid
-                """
-            ),
-            {"vs_version_uuid": new_target_value_set_version_uuid},
-        )
-        target_value_set_lookup = {
-            (x.code, x.display, x.system): x for x in target_value_set_expansion
-        }
-
-        # Iterate through source_concepts in new version
-        previous_concept_map_version = ConceptMapVersion(previous_version_uuid)
-        exact_previous_mappings = previous_concept_map_version.mappings
-        code_display_system_previous_mappings = {
-            (key.code, key.display, key.system): value
-            for key, value in exact_previous_mappings.items()
-        }
-
-        new_source_concepts = conn.execute(
-            text(
-                """
-                select tv.fhir_uri, tv.version terminology_version, source_concept.uuid as source_concept_uuid, * from concept_maps.source_concept
-                join public.terminology_versions tv
-                on tv.uuid = cast(source_concept.system as uuid)
-                where concept_map_version_uuid = :new_version_uuid
-                """
-            ),
-            {"new_version_uuid": new_version_uuid},
-        )
-        for item in new_source_concepts:
-            source_code = Code.load_concept_map_source_concept(item.source_concept_uuid)
-
-            if (
-                item.code,
-                item.display,
-                item.fhir_uri,
-            ) in code_display_system_previous_mappings:
-                mappings = code_display_system_previous_mappings[
-                    (item.code, item.display, item.fhir_uri)
-                ]
-
-                for mapping in mappings:
-                    target_code = mapping.target
-
-                    # See if the target from the old mapping is in the new target value set or not
-                    if (
-                        target_code.code,
-                        target_code.display,
-                        target_code.system,
-                    ) in target_value_set_lookup:
-                        # A match was found, copy the mapping over
-                        target_info = target_value_set_lookup.get(
-                            (target_code.code, target_code.display, target_code.system)
-                        )
-
-                        target_code = Code(
-                            code=target_info.code,
-                            display=target_info.display,
-                            system=None,
-                            version=None,
-                            terminology_version=target_info.terminology_uuid,
-                        )
-
-                        new_mapping = Mapping(
-                            source=source_code,
-                            relationship=mapping.relationship,
-                            target=target_code,
-                            mapping_comments=mapping.mapping_comments,
-                            author=mapping.author,
-                            review_status=mapping.review_status,
-                        )
-                        new_mapping.save()
-
-        # Index the targets
-        ConceptMap.index_targets(new_version_uuid, new_target_value_set_version_uuid)
-
     @classmethod
     def concept_map_metadata(cls, cm_uuid):
         """
@@ -952,6 +791,73 @@ class MappingRelationship:
 
 
 @dataclass
+class SourceConcept:
+    uuid: UUID
+    code: str
+    display: str
+    system: Terminology
+    comments: Optional[str] = None
+    additional_context: Optional[str] = None
+    map_status: Optional[str] = None
+    assigned_mapper: Optional[UUID] = None
+    assigned_reviewer: Optional[UUID] = None
+    no_map: Optional[bool] = None
+    reason_for_no_map: Optional[str] = None
+    mapping_group: Optional[str] = None
+
+    def __post_init__(self):
+        self.code_object = Code(
+            code=self.code,
+            display=self.display,
+            system=self.system.fhir_uri,
+            version=self.system.version
+        )
+
+    def update(self, conn, comments: Optional[str] = None, additional_context: Optional[str] = None,
+               map_status: Optional[str] = None, assigned_mapper: Optional[UUID] = None,
+               assigned_reviewer: Optional[UUID] = None, no_map: Optional[bool] = None,
+               reason_for_no_map: Optional[str] = None, mapping_group: Optional[str] = None):
+        # Create a dictionary to store the column names and their corresponding new values
+        updates = {}
+
+        if comments is not None:
+            updates['comments'] = comments
+
+        if additional_context is not None:
+            updates['additional_context'] = additional_context
+
+        if map_status is not None:
+            updates['map_status'] = map_status
+
+        if assigned_mapper is not None:
+            updates['assigned_mapper'] = assigned_mapper
+
+        if assigned_reviewer is not None:
+            updates['assigned_reviewer'] = assigned_reviewer
+
+        if no_map is not None:
+            updates['no_map'] = no_map
+
+        if reason_for_no_map is not None:
+            updates['reason_for_no_map'] = reason_for_no_map
+
+        if mapping_group is not None:
+            updates['mapping_group'] = mapping_group
+
+        # Generate the SQL query
+        query = f"UPDATE concept_maps.source_concept SET "
+        query += ", ".join(f"{column} = %s" for column in updates)
+        query += f" WHERE uuid = %s;"
+
+        # Execute the SQL query
+        conn.execute(query, (*updates.values(), self.uuid))
+
+        # Update the instance attributes
+        for column, value in updates.items():
+            setattr(self, column, value)
+
+
+@dataclass
 class Mapping:
     """
     Represents a mapping relationship between two codes, and provides methods to load, save and use the relationships.
@@ -960,11 +866,16 @@ class Mapping:
     source: Code
     relationship: MappingRelationship
     target: Code
+    uuid: Optional[UUID] = None
+
     mapping_comments: Optional[str] = None
     author: Optional[str] = None
-    uuid: Optional[UUID] = None
     cursor: Optional[None] = None
     review_status: str = "ready for review"
+    created_date = Optional[datetime.datetime] = None
+    reviewed_date = Optional[datetime.datetime] = None
+    review_comment = Optional[str] = None
+    reviewed_by = Optional[str] = None
 
     def __post_init__(self):
         self.cursor = get_db()
