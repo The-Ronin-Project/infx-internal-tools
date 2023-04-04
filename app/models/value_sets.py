@@ -2832,9 +2832,34 @@ class ValueSetVersion:
             {"new_status": status, "uuid": str(self.uuid)},
         )
 
-    def retire_and_obsolete_previous_version(self):
-        conn = get_db()
+    def version_set_status_active(self):
+        """
+        This method updates the status of the value set version, identified by its UUID, to 'active'.
+        """
 
+        conn = get_db()
+        conn.execute(
+            text(
+                """
+                    UPDATE value_sets.value_set_version
+                    SET status=:status
+                    WHERE uuid=:version_uuid
+                    """
+            ),
+            {
+                "status": "active",
+                "version_uuid": self.uuid,
+            },
+        )
+
+    def retire_and_obsolete_previous_version(self):
+        """
+        This method updates the status of previous value set versions based on the current version's UUID and value set's UUID.
+        It sets the status of previously 'active' versions to 'retired' and the status of 'pending', 'in progress', and 'reviewed'
+        versions to 'obsolete'.
+        """
+
+        conn = get_db()
         conn.execute(
             text(
                 """

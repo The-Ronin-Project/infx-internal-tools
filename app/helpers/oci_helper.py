@@ -204,21 +204,6 @@ def version_set_status_active(conn, version_uuid, object_type):
                 "version_uuid": version_uuid,
             },
         )
-    else:
-        schema_and_table = "value_sets.value_set_version"
-        conn.execute(
-            text(
-                f"""
-                UPDATE {schema_and_table}
-                SET status=:status
-                WHERE uuid=:version_uuid
-                """
-            ),
-            {
-                "status": "active",
-                "version_uuid": version_uuid,
-            },
-        )
 
 
 @db_cursor
