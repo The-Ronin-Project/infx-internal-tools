@@ -67,17 +67,12 @@ class ConceptMapVersionCreator:
             },
         )
 
-        # Retrieve and return new sources
-        new_sources = self.conn.execute(
-            text(
-                """
-                select * from concept_maps.source_concept
-                where concept_map_version_uuid=:concept_map_version_uuid
-                """
-            ), {
-                'concept_map_version_uuid': self.new_version_uuid
-            }
-        ).fetchall()
+        sources_and_mappings = self.load_all_sources_and_mappings(self.new_version_uuid)
+
+        new_sources = []
+        for lookup_key, source_and_mapping in sources_and_mappings.items():
+            new_sources.append(source_and_mapping.get('source_concept'))
+
         return new_sources
 
     def load_all_sources_and_mappings(self, concept_map_version_uuid):
@@ -219,6 +214,7 @@ class ConceptMapVersionCreator:
         target_value_set_lookup = {
             (x.code, x.display, x.system): x for x in target_value_set_expansion
         }
+        # todo: adjust so it returns a code instead of a database row
         return target_value_set_lookup
 
 
@@ -257,15 +253,15 @@ class ConceptMapVersionCreator:
 
         new_targets_lookup = self.load_all_targets(self.new_version_uuid)
 
-        for item in new_source_concepts:
-            source_lookup_key = (item.code, item.display, item.system)
+        for new_source_concept in new_source_concepts:
+            source_lookup_key = (new_source_concept.code, new_source_concept.display, new_source_concept.system.fhir_uri)
 
             if source_lookup_key not in previous_sources_and_mappings:
                 # Handle the case of a new source w/ no related previous one
                 pass
 
-            previous_source_concept = item.get('source_concept')
-            previous_mappings = item.get('mappings')
+            previous_source_concept = previous_sources_and_mappings[source_lookup_key].get('source_concept')
+            previous_mappings = previous_sources_and_mappings[source_lookup_key].get('mappings')
 
             # todo: handle updating source metadata
             # What if it was still pending, neither mapped nor no-mapped? (Copy over comments, hold for discussion, etc.)
@@ -275,16 +271,19 @@ class ConceptMapVersionCreator:
                 self.process_no_map()
 
             else:
-                for mapping in previous_mappings:
-                    target_lookup_key = (mapping.target.code, mapping.target.display, mapping.target.system)
+                for previous_mapping in previous_mappings:
+                    target_lookup_key = (previous_mapping.target.code, previous_mapping.target.display, previous_mapping.target.system)
 
                     if target_lookup_key not in new_targets_lookup:
-                        self.process_inactive_target_mapping(mapping)
+                        self.process_inactive_target_mapping(previous_mapping)
                     else:
-                        if mapping.relationship.display == 'Equivalent':
-                            self.process_equivalent_mapping(mapping)
+                        if previous_mapping.relationship.display == 'Equivalent':
+                            self.process_equivalent_mapping(
+                                source_concept=new_source_concept,
+                                mapping=previous_mapping
+                            )
                         else:
-                            self.process_non_equivalent_mapping(mapping)
+                            self.process_non_equivalent_mapping(previous_mapping)
 
             """
             Somewhere in here, we need to handle updating:
@@ -301,35 +300,55 @@ class ConceptMapVersionCreator:
     def process_inactive_target_mapping(self, mapping):
         # todo: Rey to implement
 
-        # Save previous mapping info to "additional context"
+        # Save previous mapping info to previous mapping context
 
         # Add source comments of 'Inactive target'
 
         # Leave map status as 'pending' (should already be the case)
         pass
 
-    def process_equivalent_mapping(self, mapping):
-        # todo: Theresa to implement
+    def process_equivalent_mapping(self, new_source_concept, new_target_concept, previous_mapping):
+        source_code = new_source_concept.code_object
 
-        # use the Mapping class, MappingRelationship class, SourceConcept class, and Code class
-        source_concept = SourceConcept()
+        relationship = previous_mapping.relationship
 
-        source_code = source_concept.code_object
-        relationship = MappingRelationship()
-        target_code = Code()
+        target_code = new_target_concept
 
         new_mapping = Mapping(
-            # todo: implement here
+            source=source_code,
+            relationship=relationship,
+            target=target_code,
+            mapping_comments=previous_mapping.mapping_comments,
+            author=previous_mapping.author,
+            review_status=previous_mapping.review_status,
+            created_date=previous_mapping.created_date,
+            reviewed_date=previous_mapping.reviewed_date,
+            review_comment=previous_mapping.review_comment,
+            reviewed_by=previous_mapping.reviewed_by,
         )
+
         new_mapping.save()
-        pass
 
-    def process_non_equivalent_mapping(self, mapping):
-        # todo: Jon to implement
-        # write additional context (on the source
-        # revert mapping status to ready for review
+    def process_non_equivalent_mapping(self, new_source_concept, new_target_concept, previous_mapping):
+        source_code = new_source_concept.code_object
 
-        pass
+        relationship = previous_mapping.relationship
+
+        target_code = new_target_concept
+
+        # Explicitly over-write the review status to set it back to needing review
+        new_mapping = Mapping(
+            source=source_code,
+            relationship=relationship,
+            target=target_code,
+            mapping_comments=previous_mapping.mapping_comments,
+            author=previous_mapping.author,
+            review_status='ready for review',
+            created_date=previous_mapping.created_date,
+            review_comment=previous_mapping.review_comment, # todo: how to handle this
+        )
+
+        new_mapping.save()
 
     def new_version_from_previous_deprecated(
         previous_version_uuid,

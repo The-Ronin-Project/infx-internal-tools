@@ -807,6 +807,7 @@ class SourceConcept:
 
     def __post_init__(self):
         self.code_object = Code(
+            uuid=self.uuid,
             code=self.code,
             display=self.display,
             system=self.system.fhir_uri,
@@ -867,7 +868,6 @@ class Mapping:
     relationship: MappingRelationship
     target: Code
     uuid: Optional[UUID] = None
-
     mapping_comments: Optional[str] = None
     author: Optional[str] = None
     cursor: Optional[None] = None
