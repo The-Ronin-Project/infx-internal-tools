@@ -201,6 +201,27 @@ class ConceptMapVersionCreator:
 
         return response
 
+    def load_all_targets(self, concept_map_version_uuid):
+        target_value_set_expansion = self.conn.execute(
+            text(
+                """
+                select expansion_member.*, tv.uuid as terminology_uuid from value_sets.expansion_member
+                join value_sets.expansion
+                on expansion.uuid=expansion_member.expansion_uuid
+                join public.terminology_versions tv
+                on tv.fhir_uri=expansion_member.system
+                and tv.version=expansion_member.version
+                where vs_version_uuid=:vs_version_uuid
+                """
+            ),
+            {"vs_version_uuid": concept_map_version_uuid},
+        )
+        target_value_set_lookup = {
+            (x.code, x.display, x.system): x for x in target_value_set_expansion
+        }
+        return target_value_set_lookup
+
+
     def new_version_from_previous(
         self,
         previous_version_uuid,
@@ -234,11 +255,12 @@ class ConceptMapVersionCreator:
         # Iterate through the new sources, compare w/ previous, make decisions:
         previous_sources_and_mappings = self.load_all_sources_and_mappings(self.previous_concept_map_version.uuid)
 
+        new_targets_lookup = self.load_all_targets(self.new_version_uuid)
 
         for item in new_source_concepts:
-            lookup_key = (item.code, item.display, item.system)
+            source_lookup_key = (item.code, item.display, item.system)
 
-            if lookup_key not in previous_sources_and_mappings:
+            if source_lookup_key not in previous_sources_and_mappings:
                 # Handle the case of a new source w/ no related previous one
                 pass
 
@@ -254,10 +276,9 @@ class ConceptMapVersionCreator:
 
             else:
                 for mapping in previous_mappings:
+                    target_lookup_key = (mapping.target.code, mapping.target.display, mapping.target.system)
 
-                    #todo: check if target is still active
-                    target_is_active = True
-                    if target_is_active is False:
+                    if target_lookup_key not in new_targets_lookup:
                         self.process_inactive_target_mapping(mapping)
                     else:
                         if mapping.relationship.display == 'Equivalent':
@@ -279,6 +300,12 @@ class ConceptMapVersionCreator:
 
     def process_inactive_target_mapping(self, mapping):
         # todo: Rey to implement
+
+        # Save previous mapping info to "additional context"
+
+        # Add source comments of 'Inactive target'
+
+        # Leave map status as 'pending' (should already be the case)
         pass
 
     def process_equivalent_mapping(self, mapping):
@@ -299,7 +326,7 @@ class ConceptMapVersionCreator:
 
     def process_non_equivalent_mapping(self, mapping):
         # todo: Jon to implement
-        # write additional context (on the source 
+        # write additional context (on the source
         # revert mapping status to ready for review
 
         pass
@@ -380,23 +407,23 @@ class ConceptMapVersionCreator:
         # )
 
         # Load new target value set
-        target_value_set_expansion = conn.execute(
-            text(
-                """
-                select expansion_member.*, tv.uuid as terminology_uuid from value_sets.expansion_member
-                join value_sets.expansion
-                on expansion.uuid=expansion_member.expansion_uuid
-                join public.terminology_versions tv
-                on tv.fhir_uri=expansion_member.system
-                and tv.version=expansion_member.version
-                where vs_version_uuid=:vs_version_uuid
-                """
-            ),
-            {"vs_version_uuid": new_target_value_set_version_uuid},
-        )
-        target_value_set_lookup = {
-            (x.code, x.display, x.system): x for x in target_value_set_expansion
-        }
+        # target_value_set_expansion = conn.execute(
+        #     text(
+        #         """
+        #         select expansion_member.*, tv.uuid as terminology_uuid from value_sets.expansion_member
+        #         join value_sets.expansion
+        #         on expansion.uuid=expansion_member.expansion_uuid
+        #         join public.terminology_versions tv
+        #         on tv.fhir_uri=expansion_member.system
+        #         and tv.version=expansion_member.version
+        #         where vs_version_uuid=:vs_version_uuid
+        #         """
+        #     ),
+        #     {"vs_version_uuid": new_target_value_set_version_uuid},
+        # )
+        # target_value_set_lookup = {
+        #     (x.code, x.display, x.system): x for x in target_value_set_expansion
+        # }
 
         # Iterate through source_concepts in new version
         previous_concept_map_version = ConceptMapVersion(previous_version_uuid)
