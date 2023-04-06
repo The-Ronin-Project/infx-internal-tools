@@ -336,7 +336,10 @@ class ConceptMap:
         )
 
     @staticmethod
-    def index_targets(concept_map_version_uuid, target_value_set_version_uuid):
+    def index_targets(
+            concept_map_version_uuid: uuid.UUID,
+            target_value_set_version_uuid: uuid.UUID
+    ):
         """
         Indexes the target concepts for the given concept map version and target value set version in Elasticsearch.
 
@@ -804,6 +807,7 @@ class SourceConcept:
     no_map: Optional[bool] = None
     reason_for_no_map: Optional[str] = None
     mapping_group: Optional[str] = None
+    previous_version_context: Optional[dict] = None
 
     def __post_init__(self):
         self.code_object = Code(
@@ -817,7 +821,8 @@ class SourceConcept:
     def update(self, conn, comments: Optional[str] = None, additional_context: Optional[str] = None,
                map_status: Optional[str] = None, assigned_mapper: Optional[UUID] = None,
                assigned_reviewer: Optional[UUID] = None, no_map: Optional[bool] = None,
-               reason_for_no_map: Optional[str] = None, mapping_group: Optional[str] = None):
+               reason_for_no_map: Optional[str] = None, mapping_group: Optional[str] = None,
+               previous_version_context: Optional[dict] = None):
         # Create a dictionary to store the column names and their corresponding new values
         updates = {}
 
@@ -844,6 +849,9 @@ class SourceConcept:
 
         if mapping_group is not None:
             updates['mapping_group'] = mapping_group
+
+        if previous_version_context is not None:
+            updates['previous_version_context'] = previous_version_context
 
         # Generate the SQL query
         query = f"UPDATE concept_maps.source_concept SET "
@@ -872,10 +880,10 @@ class Mapping:
     author: Optional[str] = None
     cursor: Optional[None] = None
     review_status: str = "ready for review"
-    created_date = Optional[datetime.datetime] = None
-    reviewed_date = Optional[datetime.datetime] = None
-    review_comment = Optional[str] = None
-    reviewed_by = Optional[str] = None
+    created_date: Optional[datetime.datetime] = None
+    reviewed_date: Optional[datetime.datetime] = None
+    review_comment: Optional[str] = None
+    reviewed_by: Optional[str] = None
 
     def __post_init__(self):
         self.cursor = get_db()

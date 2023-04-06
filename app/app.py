@@ -14,6 +14,7 @@ from app.models.value_sets import *
 from app.models.concept_maps import *
 from app.models.surveys import *
 from app.models.patient_edu import *
+from app.models.concept_map_versioning import *
 from app.models.data_ingestion_registry import DataNormalizationRegistry
 from app.errors import BadRequestWithCode
 import app.models.rxnorm as rxnorm
@@ -588,6 +589,25 @@ def create_app(script_info=None):
                 object_type, concept_map, folder="published"
             )
             return jsonify(concept_map_from_object_store)
+
+    @app.route("/ConceptMaps/<string:previous_version_uuid>/new_version_from_previous", methods=["POST"])
+    def create_new_concept_map_version_from_previous(previous_version_uuid):
+        new_version_description = request.json.get('new_version_description')
+        new_source_value_set_version_uuid = request.json.get('new_source_value_set_version_uuid')
+        new_target_value_set_version_uuid = request.json.get('new_target_value_set_version_uuid')
+        require_review_for_non_equivalent_relationships = request.json.get('require_review_for_non_equivalent_relationships')
+        require_review_no_maps_not_in_target = request.json.get('require_review_no_maps_not_in_target')
+
+        version_creator = ConceptMapVersionCreator()
+        version_creator.new_version_from_previous(
+            previous_version_uuid,
+            new_version_description,
+            new_source_value_set_version_uuid,
+            new_target_value_set_version_uuid,
+            require_review_for_non_equivalent_relationships,
+            require_review_no_maps_not_in_target
+        )
+        return "Created", 201
 
     @app.route("/ConceptMapSuggestions/", methods=["POST"])
     def mapping_suggestion():
