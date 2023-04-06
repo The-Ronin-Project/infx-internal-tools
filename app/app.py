@@ -799,35 +799,35 @@ def create_app(script_info=None):
                 codes.append(code)
             return codes
 
-    @app.route("/terminology/new_version/", methods=["POST"])
-    def create_new_term_version():
-        """
-        Create a new terminology version with the provided parameters, such as terminology name, version, FHIR URI,
-        effective start and end dates, previous version UUID, standard status, and FHIR terminology.
-        """
-        if request.method == "POST":
-            terminology = request.json.get("terminology")
-            version = request.json.get("version")
-            fhir_uri = request.json.get("fhir_uri")
-            effective_start = request.json.get("effective_start")
-            effective_end = request.json.get("effective_end")
-            if effective_end == "":
-                effective_end = None
-            previous_version_uuid = request.json.get("previous_version_uuid")
-            is_standard = request.json.get("is_standard")
-            fhir_terminology = request.json.get("fhir_terminology")
-            new_terminology_version = Terminology.insert_new_terminology_version(
-                previous_version_uuid,
-                terminology,
-                version,
-                fhir_uri,
-                is_standard,
-                fhir_terminology,
-                effective_start,
-                effective_end,
-            )
-            new_term_version = Terminology.serialize(new_terminology_version)
-            return new_term_version
+    # @app.route("/terminology/new_version/", methods=["POST"])
+    # def create_new_term_version():
+    #     """
+    #     Create a new terminology version with the provided parameters, such as terminology name, version, FHIR URI,
+    #     effective start and end dates, previous version UUID, standard status, and FHIR terminology.
+    #     """
+    #     if request.method == "POST":
+    #         terminology = request.json.get("terminology")
+    #         version = request.json.get("version")
+    #         fhir_uri = request.json.get("fhir_uri")
+    #         effective_start = request.json.get("effective_start")
+    #         effective_end = request.json.get("effective_end")
+    #         if effective_end == "":
+    #             effective_end = None
+    #         previous_version_uuid = request.json.get("previous_version_uuid")
+    #         is_standard = request.json.get("is_standard")
+    #         fhir_terminology = request.json.get("fhir_terminology")
+    #         new_terminology_version = Terminology.create_new_terminology(
+    #             previous_version_uuid,
+    #             terminology,
+    #             version,
+    #             fhir_uri,
+    #             is_standard,
+    #             fhir_terminology,
+    #             effective_start,
+    #             effective_end,
+    #         )
+    #         new_term_version = Terminology.serialize(new_terminology_version)
+    #         return new_term_version
 
     @app.route("/terminology/new_version_from_previous", methods=["POST"])
     def create_new_term_version_from_previous():
