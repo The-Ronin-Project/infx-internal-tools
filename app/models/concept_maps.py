@@ -337,8 +337,7 @@ class ConceptMap:
 
     @staticmethod
     def index_targets(
-            concept_map_version_uuid: uuid.UUID,
-            target_value_set_version_uuid: uuid.UUID
+        concept_map_version_uuid: uuid.UUID, target_value_set_version_uuid: uuid.UUID
     ):
         """
         Indexes the target concepts for the given concept map version and target value set version in Elasticsearch.
@@ -784,6 +783,21 @@ class MappingRelationship:
         ).first()
         return cls(uuid=data.uuid, code=data.code, display=data.display)
 
+    @classmethod
+    @functools.lru_cache(maxsize=32)
+    def load_by_uuid(cls, uuid):
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """
+                select * from concept_maps.relationship_codes
+                where uuid=:uuid
+                """
+            ),
+            {"uuid": uuid},
+        ).first()
+        return cls(uuid=data.uuid, code=data.code, display=data.display)
+
     def serialize(self):
         """
         Prepares a JSON representation of the mapping relationship to return to the API
@@ -815,43 +829,51 @@ class SourceConcept:
             code=self.code,
             display=self.display,
             system=self.system.fhir_uri,
-            version=self.system.version
+            version=self.system.version,
         )
 
-    def update(self, conn, comments: Optional[str] = None, additional_context: Optional[str] = None,
-               map_status: Optional[str] = None, assigned_mapper: Optional[UUID] = None,
-               assigned_reviewer: Optional[UUID] = None, no_map: Optional[bool] = None,
-               reason_for_no_map: Optional[str] = None, mapping_group: Optional[str] = None,
-               previous_version_context: Optional[dict] = None):
+    def update(
+        self,
+        conn,
+        comments: Optional[str] = None,
+        additional_context: Optional[str] = None,
+        map_status: Optional[str] = None,
+        assigned_mapper: Optional[UUID] = None,
+        assigned_reviewer: Optional[UUID] = None,
+        no_map: Optional[bool] = None,
+        reason_for_no_map: Optional[str] = None,
+        mapping_group: Optional[str] = None,
+        previous_version_context: Optional[str] = None,
+    ):
         # Create a dictionary to store the column names and their corresponding new values
         updates = {}
 
         if comments is not None:
-            updates['comments'] = comments
+            updates["comments"] = comments
 
         if additional_context is not None:
-            updates['additional_context'] = additional_context
+            updates["additional_context"] = additional_context
 
         if map_status is not None:
-            updates['map_status'] = map_status
+            updates["map_status"] = map_status
 
         if assigned_mapper is not None:
-            updates['assigned_mapper'] = assigned_mapper
+            updates["assigned_mapper"] = assigned_mapper
 
         if assigned_reviewer is not None:
-            updates['assigned_reviewer'] = assigned_reviewer
+            updates["assigned_reviewer"] = assigned_reviewer
 
         if no_map is not None:
-            updates['no_map'] = no_map
+            updates["no_map"] = no_map
 
         if reason_for_no_map is not None:
-            updates['reason_for_no_map'] = reason_for_no_map
+            updates["reason_for_no_map"] = reason_for_no_map
 
         if mapping_group is not None:
-            updates['mapping_group'] = mapping_group
+            updates["mapping_group"] = mapping_group
 
         if previous_version_context is not None:
-            updates['previous_version_context'] = previous_version_context
+            updates["previous_version_context"] = previous_version_context
 
         # Generate the SQL query
         query = f"UPDATE concept_maps.source_concept SET "
@@ -982,6 +1004,7 @@ class MappingSuggestion:
             "accepted": self.accepted,
         }
 
+
 def update_comments_source_concept(source_concept_uuid, comments):
     conn = get_db()
     conn.execute(
@@ -992,8 +1015,5 @@ def update_comments_source_concept(source_concept_uuid, comments):
             where uuid=:source_concept_uuid
             """
         ),
-        {
-            "source_concept_uuid": source_concept_uuid,
-            "comments": comments
-        }
+        {"source_concept_uuid": source_concept_uuid, "comments": comments},
     )
