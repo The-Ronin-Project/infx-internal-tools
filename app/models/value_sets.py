@@ -2646,7 +2646,7 @@ class ValueSetVersion:
         # id will depend on publisher
         if self.value_set.publisher == "Project Ronin":
             rcdm_id = serialized.get("id")
-            rcdm_url = "http://projectronin.io/ValueSet/"
+            rcdm_url = "http://projectronin.io/fhir/ValueSet/"
         elif self.value_set.publisher == "FHIR":
             rcdm_id = serialized.get("name")
             rcdm_url = "http://hl7.org/fhir/ValueSet/"
