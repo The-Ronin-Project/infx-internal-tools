@@ -289,6 +289,7 @@ class ConceptMapVersionCreator:
         ConceptMap.index_targets(
             self.new_version_uuid, new_target_value_set_version_uuid
         )
+        previous_contexts_list = []
 
         for new_source_concept in new_source_concepts:
             source_lookup_key = (
@@ -324,11 +325,14 @@ class ConceptMapVersionCreator:
 
                 if not previous_mappings:
                     # Handle no-maps
-                    self.process_no_map(
+                    result = self.process_no_map(
                         previous_source_concept,
                         new_source_concept,
                         require_review_no_maps_not_in_target,
+                        previous_contexts_list,
                     )
+                    if result is not None:
+                        previous_contexts_list.append(result)
 
                 else:
                     for previous_mapping in previous_mappings:
@@ -372,6 +376,7 @@ class ConceptMapVersionCreator:
         previous_source_concept: SourceConcept,
         new_source_concept: SourceConcept,
         require_review_no_maps_not_in_target: bool,
+        previous_contexts_list: list,
     ):
         if (
             require_review_no_maps_not_in_target
@@ -389,10 +394,12 @@ class ConceptMapVersionCreator:
             new_source_concept.update(
                 conn=self.conn,
                 previous_version_context=json.dumps(
-                    previous_context, cls=CustomJSONEncoder
+                    previous_contexts_list, cls=CustomJSONEncoder
                 ),
                 map_status="pending",
             )
+            return previous_context
+        return None
         # else:
         #     # Copy over everything w/ no changes
         #     new_source_concept.update(
