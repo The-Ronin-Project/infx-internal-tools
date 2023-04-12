@@ -22,7 +22,7 @@ def terminology_version_uuid_lookup(fhir_uri, version):
     result = conn.execute(
         text(
             """
-            select * from public.terminology_versions
+            select * from terminology_versions
             where fhir_uri=:fhir_uri
             and version=:version
             """
