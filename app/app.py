@@ -672,7 +672,7 @@ def create_app(script_info=None):
                 display=target_concept_display,
                 system=None,
                 version=None,
-                terminology_version=target_concept_terminology_version_uuid,
+                terminology_version_uuid=target_concept_terminology_version_uuid,
             )
 
             new_mapping = Mapping(

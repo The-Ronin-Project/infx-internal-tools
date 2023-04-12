@@ -182,8 +182,7 @@ class ConceptMapVersionCreator:
                 target_code = Code(
                     code=row.target_concept_code,
                     display=row.target_concept_display,
-                    system=target_system.fhir_uri,
-                    version=target_system.version,
+                    terminology_version_uuid=row.target_concept_system_version_uuid,
                 )
 
                 mapping = Mapping(
