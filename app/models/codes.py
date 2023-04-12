@@ -20,7 +20,7 @@ class Code:
         additional_data=None,
         uuid=None,
         system_name=None,
-        terminology_version=None,
+        terminology_version: Terminology=None,
         terminology_version_uuid=None,
     ):
         self.system = system
@@ -30,17 +30,16 @@ class Code:
         self.additional_data = additional_data
         self.uuid = uuid
         self.system_name = system_name
-        self.terminology_version = terminology_version  # todo: is this a duplicate of self.terminology_version_uuid?
-        self.terminology_version_uuid = terminology_version_uuid
+        self.terminology_version: Terminology = terminology_version
+        self.terminology_version_uuid: uuid.UUID = terminology_version_uuid
 
         if (
             self.terminology_version is not None
             and self.system is None
             and self.version is None
         ):
-            terminology = load_terminology_version_with_cache(self.terminology_version_uuid)
-            self.system = terminology.fhir_uri
-            self.version = terminology.version
+            self.system = self.terminology_version.fhir_uri
+            self.version = self.terminology_version.version
 
         if (
             self.terminology_version_uuid is None
@@ -50,6 +49,13 @@ class Code:
             self.terminology_version_uuid = terminology_version_uuid_lookup(
                 system, version
             )
+            self.terminology_version = load_terminology_version_with_cache(self.terminology_version_uuid)
+
+        if (
+            self.terminology_version_uuid is None
+            and self.terminology_version is not None
+        ):
+            self.terminology_version_uuid = self.terminology_version.uuid
 
     def __repr__(self):
         return f"Code({self.code}, {self.display}, {self.system}, {self.version})"
