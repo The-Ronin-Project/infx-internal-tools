@@ -5,9 +5,6 @@ import datetime
 import json
 from flask import g, has_request_context
 from werkzeug.exceptions import NotFound
-from sqlalchemy import text
-from app.database import get_db
-from app.helpers.db_helper import db_cursor
 import requests
 
 
@@ -191,61 +188,61 @@ if __name__ == "__main__":
     # access_token = authenticate_simplifier()
     # resource = get_from_simplifier("ValueSet", "2040eb90-6d8b-11ec-bcc4-f7e61651b088")
     # print(resource)
-    resource_type = "ValueSet"
-    resource_id = "a3735146-9329-422d-bdf3-cac25e48d011"
-    resource_body = {
-        "date": "2023-01-06T10:51:25.000000+00:00",
-        "description": "Contains SNOMED CT and ICD-10-CM codes that indicate RMSF Initial version",
-        "expansion": {
-            "contains": [
-                {
-                    "code": "A77.0",
-                    "display": "Spotted fever due to Rickettsia rickettsii",
-                    "system": "http://hl7.org/fhir/sid/icd-10-cm",
-                    "version": "2022",
-                },
-                {
-                    "code": "240615004",
-                    "display": "Western Rocky Mountain spotted fever (disorder)",
-                    "system": "http://snomed.info/sct",
-                    "version": "2022-09-01",
-                },
-                {
-                    "code": "186772009",
-                    "display": "Rocky Mountain spotted fever (disorder)",
-                    "system": "http://snomed.info/sct",
-                    "version": "2022-09-01",
-                },
-                {
-                    "code": "240616003",
-                    "display": "Eastern Rocky Mountain spotted fever (disorder)",
-                    "system": "http://snomed.info/sct",
-                    "version": "2022-09-01",
-                },
-            ],
-            "identifier": "urn:uuid:3d4d9738-8de2-11ed-8239-4ed2cdfbd88f",
-            "timestamp": "2023-01-06",
-            "total": 4,
-        },
-        "experimental": True,
-        "extension": [
-            {
-                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-valueSetSchema",
-                "valueString": "2",
-            }
-        ],
-        "id": "a3735146-9329-422d-bdf3-cac25e48d011",
-        "meta": {
-            "profile": [
-                "http://projectronin.io/fhir/StructureDefinition/ronin-valueSet"
-            ]
-        },
-        "name": "Testrmsf",
-        "purpose": "Practice VS creation",
-        "resourceType": "ValueSet",
-        "url": "http://projectronin.io/fhir/ValueSet/a3735146-9329-422d-bdf3-cac25e48d011",
-        "version": "1",
-    }
-
-    result = add_file(resource_type, resource_id, resource_body)
-    print(result)
+    # resource_type = "ValueSet"
+    # resource_id = "a3735146-9329-422d-bdf3-cac25e48d011"
+    # resource_body = {
+    #     "date": "2023-01-06T10:51:25.000000+00:00",
+    #     "description": "Contains SNOMED CT and ICD-10-CM codes that indicate RMSF Initial version",
+    #     "expansion": {
+    #         "contains": [
+    #             {
+    #                 "code": "A77.0",
+    #                 "display": "Spotted fever due to Rickettsia rickettsii",
+    #                 "system": "http://hl7.org/fhir/sid/icd-10-cm",
+    #                 "version": "2022",
+    #             },
+    #             {
+    #                 "code": "240615004",
+    #                 "display": "Western Rocky Mountain spotted fever (disorder)",
+    #                 "system": "http://snomed.info/sct",
+    #                 "version": "2022-09-01",
+    #             },
+    #             {
+    #                 "code": "186772009",
+    #                 "display": "Rocky Mountain spotted fever (disorder)",
+    #                 "system": "http://snomed.info/sct",
+    #                 "version": "2022-09-01",
+    #             },
+    #             {
+    #                 "code": "240616003",
+    #                 "display": "Eastern Rocky Mountain spotted fever (disorder)",
+    #                 "system": "http://snomed.info/sct",
+    #                 "version": "2022-09-01",
+    #             },
+    #         ],
+    #         "identifier": "urn:uuid:3d4d9738-8de2-11ed-8239-4ed2cdfbd88f",
+    #         "timestamp": "2023-01-06",
+    #         "total": 4,
+    #     },
+    #     "experimental": True,
+    #     "extension": [
+    #         {
+    #             "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-valueSetSchema",
+    #             "valueString": "2",
+    #         }
+    #     ],
+    #     "id": "a3735146-9329-422d-bdf3-cac25e48d011",
+    #     "meta": {
+    #         "profile": [
+    #             "http://projectronin.io/fhir/StructureDefinition/ronin-valueSet"
+    #         ]
+    #     },
+    #     "name": "Testrmsf",
+    #     "purpose": "Practice VS creation",
+    #     "resourceType": "ValueSet",
+    #     "url": "http://projectronin.io/fhir/ValueSet/a3735146-9329-422d-bdf3-cac25e48d011",
+    #     "version": "1",
+    # }
+    #
+    # result = add_file(resource_type, resource_id, resource_body)
+    # print(result)
