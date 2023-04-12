@@ -119,7 +119,7 @@ class Code:
             version=None,
             code=source_data.code,
             display=source_data.display,
-            terminology_version=source_data.terminology_version_uuid,
+            terminology_version_uuid=source_data.terminology_version_uuid,
         )
 
     def serialize(self, with_system_and_version=True, with_system_name=False):
