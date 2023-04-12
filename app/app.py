@@ -346,7 +346,7 @@ def create_app(script_info=None):
         Handles both GET and POST requests.
         Returns JSON data for the published ValueSet version.
         """
-        object_type = "value_set"
+        # object_type = "value_set"
         if request.method == "POST":
             force_new = request.values.get("force_new") == "true"
             vs_version = ValueSetVersion.load(version_uuid)
@@ -356,9 +356,12 @@ def create_app(script_info=None):
             value_set_to_datastore = set_up_object_store(
                 value_set_to_json, initial_path, folder="published"
             )
-            version_set_status_active(version_uuid, object_type)
+
+            vs_version.version_set_status_active()
             vs_version.retire_and_obsolete_previous_version()
+
             return jsonify(value_set_to_datastore)
+
         if request.method == "GET":
             return_content = request.values.get("return_content")
             if return_content == "false":
@@ -725,7 +728,7 @@ def create_app(script_info=None):
 
     @app.route("/PatientEducation/export", methods=["POST"])
     def export_data():
-        """ Export data for a specified UUID."""
+        """Export data for a specified UUID."""
         if request.method == "POST":
             _uuid = request.json.get("uuid")
             export = ExternalResource.format_data_to_export(_uuid)
