@@ -14,6 +14,7 @@ from app.models.value_sets import *
 from app.models.concept_maps import *
 from app.models.surveys import *
 from app.models.patient_edu import *
+from app.models.concept_map_versioning import *
 from app.models.data_ingestion_registry import DataNormalizationRegistry
 from app.errors import BadRequestWithCode
 from app.helpers.simplifier_helper import (
@@ -354,7 +355,7 @@ def create_app(script_info=None):
         Raises:
             NotFound: If the ValueSet version with the specified UUID is not found.
         """
-        object_type = "value_set"
+        # object_type = "value_set"
         if request.method == "POST":
             force_new = request.values.get("force_new") == "true"
             vs_version = ValueSetVersion.load(version_uuid)
@@ -367,13 +368,15 @@ def create_app(script_info=None):
             value_set_to_datastore = set_up_object_store(
                 value_set_to_json, initial_path, folder="published"
             )
-            version_set_status_active(version_uuid, object_type)
+
+            vs_version.version_set_status_active()
             vs_version.retire_and_obsolete_previous_version()
             value_set_uuid = vs_version.value_set.uuid
             resource_type = "ValueSet"  # param for Simplifier
             value_set_to_json_copy["status"] = "active"
             publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
             return jsonify(value_set_to_datastore)
+
         if request.method == "GET":
             return_content = request.values.get("return_content")
             if return_content == "false":
@@ -605,6 +608,25 @@ def create_app(script_info=None):
             )
             return jsonify(concept_map_from_object_store)
 
+    @app.route("/ConceptMaps/<string:previous_version_uuid>/new_version_from_previous", methods=["POST"])
+    def create_new_concept_map_version_from_previous(previous_version_uuid):
+        new_version_description = request.json.get('new_version_description')
+        new_source_value_set_version_uuid = request.json.get('new_source_value_set_version_uuid')
+        new_target_value_set_version_uuid = request.json.get('new_target_value_set_version_uuid')
+        require_review_for_non_equivalent_relationships = request.json.get('require_review_for_non_equivalent_relationships')
+        require_review_no_maps_not_in_target = request.json.get('require_review_no_maps_not_in_target')
+
+        version_creator = ConceptMapVersionCreator()
+        version_creator.new_version_from_previous(
+            previous_version_uuid,
+            new_version_description,
+            new_source_value_set_version_uuid,
+            new_target_value_set_version_uuid,
+            require_review_for_non_equivalent_relationships,
+            require_review_no_maps_not_in_target
+        )
+        return "Created", 201
+
     @app.route("/ConceptMapSuggestions/", methods=["POST"])
     def mapping_suggestion():
         """
@@ -668,7 +690,7 @@ def create_app(script_info=None):
                 display=target_concept_display,
                 system=None,
                 version=None,
-                terminology_version=target_concept_terminology_version_uuid,
+                terminology_version_uuid=target_concept_terminology_version_uuid,
             )
 
             new_mapping = Mapping(

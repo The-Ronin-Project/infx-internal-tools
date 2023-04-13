@@ -22,7 +22,7 @@ def terminology_version_uuid_lookup(fhir_uri, version):
     result = conn.execute(
         text(
             """
-            select * from public.terminology_versions
+            select * from terminology_versions
             where fhir_uri=:fhir_uri
             and version=:version
             """
@@ -30,6 +30,25 @@ def terminology_version_uuid_lookup(fhir_uri, version):
         {"fhir_uri": fhir_uri, "version": version},
     ).first()
     return result.uuid
+
+
+@lru_cache(maxsize=None)
+def load_terminology_version_with_cache(terminology_version_uuid):
+    """
+    Load a Terminology instance with the given UUID and cache the result.
+
+    This function utilizes an LRU (Least Recently Used) cache with an
+    unlimited size. The caching mechanism allows for faster retrieval of
+    Terminology instances that have been previously loaded, reducing the
+    number of database queries needed for repeated lookups.
+
+    Args:
+        terminology_version_uuid (UUID): The UUID of the Terminology instance to be loaded.
+
+    Returns:
+        Terminology: The Terminology instance corresponding to the provided UUID.
+    """
+    return Terminology.load(terminology_version_uuid)
 
 
 class Terminology:

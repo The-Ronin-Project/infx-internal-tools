@@ -3,7 +3,7 @@ import uuid
 import json
 from app.database import get_db
 from sqlalchemy import text
-from app.models.terminologies import Terminology
+from app.models.terminologies import Terminology, load_terminology_version_with_cache, terminology_version_uuid_lookup
 from app.errors import BadRequestWithCode
 from werkzeug.exceptions import BadRequest
 
@@ -11,6 +11,24 @@ from werkzeug.exceptions import BadRequest
 
 
 class Code:
+    """
+    This class represents a code object used for encoding and maintaining information about a specific concept or term within a coding system or terminology. It provides a way to manage various attributes related to the code and the coding system it belongs to.
+
+    Attributes:
+    system (str): The identifier of the coding system that the code is a part of.
+    version (str): The version of the coding system.
+    code (str): The code representing the specific concept or term.
+    display (str): The human-readable display text for the code.
+    additional_data (dict, optional): Any additional data associated with the code.
+    uuid (str, optional): The unique identifier for the code.
+    system_name (str, optional): The name of the coding system.
+    terminology_version (str, optional): The identifier of the specific terminology version the code belongs to.
+    terminology_version_uuid (str, optional): The unique identifier for the terminology version.
+
+    Methods:
+    init: Initializes a new instance of the Code class and sets its attributes.
+    """
+
     def __init__(
         self,
         system,
@@ -20,7 +38,7 @@ class Code:
         additional_data=None,
         uuid=None,
         system_name=None,
-        terminology_version=None,
+        terminology_version: Terminology=None,
         terminology_version_uuid=None,
     ):
         self.system = system
@@ -30,25 +48,73 @@ class Code:
         self.additional_data = additional_data
         self.uuid = uuid
         self.system_name = system_name
-        self.terminology_version = terminology_version
-        self.terminology_version_uuid = terminology_version_uuid
+        self.terminology_version: Terminology = terminology_version
+        self.terminology_version_uuid: uuid.UUID = terminology_version_uuid
 
         if (
             self.terminology_version is not None
             and self.system is None
             and self.version is None
         ):
-            terminology = Terminology.load(self.terminology_version)
-            self.system = terminology.fhir_uri
-            self.version = terminology.version
+            self.system = self.terminology_version.fhir_uri
+            self.version = self.terminology_version.version
+
+        if (
+            self.terminology_version_uuid is None
+            and self.system is not None
+            and self.version is not None
+        ):
+            self.terminology_version_uuid = terminology_version_uuid_lookup(
+                system, version
+            )
+            self.terminology_version = load_terminology_version_with_cache(self.terminology_version_uuid)
+
+        if (
+            self.terminology_version_uuid is None
+            and self.terminology_version is not None
+        ):
+            self.terminology_version_uuid = self.terminology_version.uuid
 
     def __repr__(self):
+        """
+        This method returns a human-readable representation of the Code instance. It overrides the default representation method for the Code class.
+
+        Returns:
+        str: A string representation of the Code instance in the format "Code(code, display, system, version)".
+
+        Usage:
+        To get the string representation of a Code instance, use the following syntax:
+        repr_string = repr(code)
+        """
         return f"Code({self.code}, {self.display}, {self.system}, {self.version})"
 
     def __hash__(self) -> int:
+        """
+        This method computes a hash value for the Code instance based on its string representation. It overrides the default hash method for the Code class.
+
+        Returns:
+        int: A hash value computed from the string representation of the Code instance.
+
+        Usage:
+        To compute the hash value of a Code instance, use the following syntax:
+        code_hash = hash(code)
+        """
         return hash(self.__repr__())
 
     def __eq__(self, other: object) -> bool:
+        """
+        This method checks if two Code instances are equal by comparing their code, display, system, and version attributes. It overrides the default equality operator for the Code class.
+
+        Args:
+        other (object): The other object to compare with the current instance.
+
+        Returns:
+        bool: True if the two Code instances have the same code, display, system, and version attributes, otherwise False.
+
+        Usage:
+        To compare two Code instances for equality, use the following syntax:
+        are_equal = code1 == code2
+        """
         if isinstance(other, Code):
             return (
                 (self.code == other.code)
@@ -60,6 +126,19 @@ class Code:
 
     @classmethod
     def load_from_custom_terminology(cls, code_uuid):
+        """
+        This class method is used to load a code object from a custom terminology using its unique identifier (UUID). It retrieves the code data from the database and initializes a new instance of the Code class with the fetched data.
+
+        Args:
+        code_uuid (str): The unique identifier (UUID) of the code to be loaded.
+
+        Returns:
+        Code: An instance of the Code class, initialized with the data fetched from the database.
+
+        Usage:
+        To load a code object from a custom terminology by its UUID, use the following syntax:
+        code = Code.load_from_custom_terminology(code_uuid)
+        """
         conn = get_db()
         code_data = conn.execute(
             text(
@@ -86,6 +165,19 @@ class Code:
 
     @classmethod
     def load_concept_map_source_concept(cls, source_code_uuid):
+        """
+        This class method is used to load a source concept from a concept map using its unique identifier (UUID). It retrieves the source concept data from the database and initializes a new instance of the Code class with the fetched data.
+
+        Args:
+        source_code_uuid (str): The unique identifier (UUID) of the source concept to be loaded.
+
+        Returns:
+        Code: An instance of the Code class, initialized with the data fetched from the database.
+
+        Usage:
+        To load a source concept from a concept map by its UUID, use the following syntax:
+        source_concept = Code.load_concept_map_source_concept(source_code_uuid)
+        """
         conn = get_db()
 
         source_data = conn.execute(
@@ -104,10 +196,24 @@ class Code:
             version=None,
             code=source_data.code,
             display=source_data.display,
-            terminology_version=source_data.terminology_version_uuid,
+            terminology_version_uuid=source_data.terminology_version_uuid,
         )
 
     def serialize(self, with_system_and_version=True, with_system_name=False):
+        """
+        This method serializes the Code instance into a dictionary format, including the system, version, code, and display attributes. It provides options to include or exclude the system and version attributes and to include the system_name attribute.
+
+        Args:
+        with_system_and_version (bool, optional): Whether to include the system and version attributes in the serialized output. Defaults to True.
+        with_system_name (bool, optional): Whether to include the system_name attribute in the serialized output. Defaults to False.
+
+        Returns:
+        dict: A dictionary containing the serialized attributes of the Code instance.
+
+        Usage:
+        To serialize a Code instance, use the following syntax:
+        serialized_code = code.serialize(with_system_and_version=True, with_system_name=False)
+        """
 
         serialized = {
             "system": self.system,
@@ -128,8 +234,27 @@ class Code:
     @classmethod
     def add_new_code_to_terminology(cls, data):
         """
-        This method will insert new codes into a custom terminology. The input is a list of codes to be created.
+        This class method adds new codes to a custom terminology. It takes a list of code data dictionaries as input and validates if the terminology can be edited, and if there are no conflicts with existing codes. If all validations pass, the new codes are inserted into the custom terminology, and the newly created code instances are returned.
+
+        Args:
+        data (List[dict]): A list of dictionaries containing the data for the new codes to be added. Each dictionary must include the following keys:
+        - code (str): The code value.
+        - display (str): The human-readable display text for the code.
+        - terminology_version_uuid (str): The unique identifier (UUID) for the terminology version the code belongs to.
+        - additional_data (dict, optional): Any additional data associated with the code.
+
+        Returns:
+        List[Code]: A list of newly created Code instances.
+
+        Raises:
+        BadRequestWithCode: If the terminology is a standard or FHIR terminology, has no effective end date, or if the effective end date has passed.
+        BadRequestWithCode: If the code-display pair already exists in the custom terminology.
+
+        Usage:
+        To add new codes to a custom terminology, use the following syntax:
+        new_codes = Code.add_new_code_to_terminology(data)
         """
+
         conn = get_db()
         terminology_version_uuid_list = set(
             [x.get("terminology_version_uuid") for x in data]
