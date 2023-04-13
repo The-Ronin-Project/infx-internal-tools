@@ -17,18 +17,15 @@ from app.models.patient_edu import *
 from app.models.concept_map_versioning import *
 from app.models.data_ingestion_registry import DataNormalizationRegistry
 from app.errors import BadRequestWithCode
+from app.helpers.simplifier_helper import (
+    publish_to_simplifier,
+)
 import app.models.rxnorm as rxnorm
 from werkzeug.exceptions import HTTPException
 from app.helpers.oci_helper import (
-    oci_authentication,
-    folder_path_for_oci,
-    folder_in_bucket,
-    pre_export_validate,
-    save_to_object_store,
     version_set_status_active,
     get_object_type_from_db,
     get_object_type_from_object_store,
-    check_for_prerelease_in_published,
     set_up_object_store,
     get_json_from_oci,
 )
@@ -343,8 +340,20 @@ def create_app(script_info=None):
     def get_value_set_version_published(version_uuid):
         """
         Retrieve or publish a ValueSet version identified by the version_uuid.
-        Handles both GET and POST requests.
-        Returns JSON data for the published ValueSet version.
+
+        This endpoint handles both GET and POST requests. For GET requests, it returns the JSON data
+        for the published ValueSet version. For POST requests, it publishes the ValueSet version to OCI,
+        sets the version to active,applicable previous versions are retired or obsolete, pushes to Simplifier, and
+        returns the JSON data of the published ValueSet.
+
+        Args:
+            version_uuid (str): The UUID of the ValueSet version to retrieve or publish.
+
+        Returns:
+            flask.Response: A JSON response containing the data of the published ValueSet version.
+
+        Raises:
+            NotFound: If the ValueSet version with the specified UUID is not found.
         """
         # object_type = "value_set"
         if request.method == "POST":
@@ -352,6 +361,9 @@ def create_app(script_info=None):
             vs_version = ValueSetVersion.load(version_uuid)
             vs_version.expand(force_new=force_new)
             value_set_to_json, initial_path = vs_version.prepare_for_oci()
+            value_set_to_json_copy = (
+                value_set_to_json.copy()
+            )  # Simplifier requires status
 
             value_set_to_datastore = set_up_object_store(
                 value_set_to_json, initial_path, folder="published"
@@ -359,7 +371,10 @@ def create_app(script_info=None):
 
             vs_version.version_set_status_active()
             vs_version.retire_and_obsolete_previous_version()
-
+            value_set_uuid = vs_version.value_set.uuid
+            resource_type = "ValueSet"  # param for Simplifier
+            value_set_to_json_copy["status"] = "active"
+            publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
             return jsonify(value_set_to_datastore)
 
         if request.method == "GET":
