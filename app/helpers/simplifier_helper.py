@@ -11,7 +11,7 @@ import requests
 # Use config() to read values from the .env file
 # BASE_URL = config("SIMPLIFIER_BASE_URL")
 BASE_URL = config("DATABASE_HOST", default="https://fhir.simplifier.net")
-TOKEN_BASE_URL = config("SIMPLIFIER_TOKEN_URL")
+TOKEN_BASE_URL = config("DATABASE_HOST", default="https://api.simplifier.net/token")
 
 
 def get_access_token():
