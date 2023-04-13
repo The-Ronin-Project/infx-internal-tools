@@ -2600,7 +2600,7 @@ class ValueSetVersion:
                 }
             ],
             "url": f"http://projectronin.io/fhir/ValueSet/{self.value_set.uuid}",
-            "name": rcdm_name,
+            "name": self.value_set.name,
             "title": self.value_set.title,
             "publisher": self.value_set.publisher,
             "contact": [{"name": self.value_set.contact}],
@@ -2639,18 +2639,6 @@ class ValueSetVersion:
         return serialized
 
     def prepare_for_oci(self):
-        """
-        This method prepares the serialized representation of a value set for OCI publishing.
-
-        It takes into account the value set's publisher, status, and other attributes to create an RCDM-compliant
-        dictionary representation, including relevant fields such as ID, URL, status, date, and expansion.
-        The method also determines the initial path for storage based on the value set's UUID.
-
-        Returns:
-        tuple: A tuple containing two elements:
-        1. dict: The RCDM-compliant serialized representation of the value set.
-        2. str: The initial storage path for the value set, based on its UUID.
-        """
         serialized = self.serialize()
 
         rcdm_id = serialized.get("id")
@@ -2704,11 +2692,9 @@ class ValueSetVersion:
 
                 rcdm_date = dt.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
             else:
-                rcdm_date_now = datetime.now()
-                rcdm_date = rcdm_date_now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+                rcdm_date = None
         else:
-            rcdm_date_now = datetime.now()
-            rcdm_date = rcdm_date_now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+            rcdm_date = None
 
         oci_serialized = {
             "id": rcdm_id,
