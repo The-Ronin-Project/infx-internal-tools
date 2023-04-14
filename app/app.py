@@ -394,6 +394,17 @@ def create_app(script_info=None):
             )
             return jsonify(value_set_from_object_store)
 
+    @app.route("/ValueSets/<string:version_uuid>/simplifier", methods=["POST"])
+    def push_value_set_version_to_simplifier(version_uuid):
+        force_new = request.values.get("force_new") == "true"
+        vs_version = ValueSetVersion.load(version_uuid)
+        vs_version.expand(force_new=force_new)
+        value_set_to_json, initial_path = vs_version.prepare_for_oci()
+        value_set_uuid = vs_version.value_set.uuid
+        resource_type = "ValueSet"  # param for Simplifier
+        publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json)
+        return jsonify(value_set_to_json)
+
     # Survey Endpoints
     @app.route("/surveys/<string:survey_uuid>")
     def export_survey(survey_uuid):
@@ -608,13 +619,24 @@ def create_app(script_info=None):
             )
             return jsonify(concept_map_from_object_store)
 
-    @app.route("/ConceptMaps/<string:previous_version_uuid>/new_version_from_previous", methods=["POST"])
+    @app.route(
+        "/ConceptMaps/<string:previous_version_uuid>/new_version_from_previous",
+        methods=["POST"],
+    )
     def create_new_concept_map_version_from_previous(previous_version_uuid):
-        new_version_description = request.json.get('new_version_description')
-        new_source_value_set_version_uuid = request.json.get('new_source_value_set_version_uuid')
-        new_target_value_set_version_uuid = request.json.get('new_target_value_set_version_uuid')
-        require_review_for_non_equivalent_relationships = request.json.get('require_review_for_non_equivalent_relationships')
-        require_review_no_maps_not_in_target = request.json.get('require_review_no_maps_not_in_target')
+        new_version_description = request.json.get("new_version_description")
+        new_source_value_set_version_uuid = request.json.get(
+            "new_source_value_set_version_uuid"
+        )
+        new_target_value_set_version_uuid = request.json.get(
+            "new_target_value_set_version_uuid"
+        )
+        require_review_for_non_equivalent_relationships = request.json.get(
+            "require_review_for_non_equivalent_relationships"
+        )
+        require_review_no_maps_not_in_target = request.json.get(
+            "require_review_no_maps_not_in_target"
+        )
 
         version_creator = ConceptMapVersionCreator()
         version_creator.new_version_from_previous(
@@ -623,7 +645,7 @@ def create_app(script_info=None):
             new_source_value_set_version_uuid,
             new_target_value_set_version_uuid,
             require_review_for_non_equivalent_relationships,
-            require_review_no_maps_not_in_target
+            require_review_no_maps_not_in_target,
         )
         return "Created", 201
 
