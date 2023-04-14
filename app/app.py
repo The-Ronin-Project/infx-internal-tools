@@ -681,7 +681,8 @@ def create_app(script_info=None):
             author = request.json.get("author")
             review_status = request.json.get("review_status")
 
-            source_code = Code.load_concept_map_source_concept(source_concept_uuid)
+            # source_code = Code.load_concept_map_source_concept(source_concept_uuid)
+            source_code = SourceConcept.load(source_concept_uuid)
 
             relationship = MappingRelationship.load(relationship_code_uuid)
 
