@@ -334,6 +334,7 @@ class ConceptMapVersionCreator:
                         previous_contexts_list.append(result)
 
                 else:
+                    previous_mapping_context = []
                     for previous_mapping in previous_mappings:
                         target_lookup_key = (
                             previous_mapping.target.code,
@@ -342,10 +343,12 @@ class ConceptMapVersionCreator:
                         )
 
                         if target_lookup_key not in new_targets_lookup:
-                            self.process_inactive_target_mapping(
+                            # Append previous context to list in case multiple mappings which need to save it
+                            previous_context_for_row = self.process_inactive_target_mapping(
                                 new_source_concept=new_source_concept,
                                 previous_mapping=previous_mapping,
                             )
+                            previous_mapping_context.append(previous_context_for_row)
                         else:
                             new_target_concept = new_targets_lookup[target_lookup_key]
 
@@ -368,6 +371,15 @@ class ConceptMapVersionCreator:
                                         new_target_code=new_target_concept,
                                         previous_mapping=previous_mapping,
                                     )
+                    if previous_mapping_context:
+                        # If previous context needs to be written to the source, do it after the loop so we have it all
+                        new_source_concept.update(
+                            conn=self.conn,
+                            previous_version_context=json.dumps(
+                                previous_mapping_context, cls=CustomJSONEncoder
+                            )
+                        )
+
         # self.conn.execute(text("rollback"))
 
     def process_no_map(
@@ -435,11 +447,9 @@ class ConceptMapVersionCreator:
         }
         new_source_concept.update(
             conn=self.conn,
-            previous_version_context=json.dumps(
-                previous_mapping_context, cls=CustomJSONEncoder
-            ),
             map_status="pending",
         )
+        return previous_mapping_context
 
     def copy_mapping_exact(
         self,
