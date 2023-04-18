@@ -374,6 +374,21 @@ def create_app(script_info=None):
             value_set_uuid = vs_version.value_set.uuid
             resource_type = "ValueSet"  # param for Simplifier
             value_set_to_json_copy["status"] = "active"
+            # Check if the 'expansion' and 'contains' keys are present
+            if (
+                "expansion" in value_set_to_json_copy
+                and "contains" in value_set_to_json_copy["expansion"]
+            ):
+                # Store the original total value
+                original_total = value_set_to_json_copy["expansion"]["total"]
+
+                # Limit the contains list to the top 50 entries
+                value_set_to_json_copy["expansion"]["contains"] = value_set_to_json[
+                    "expansion"
+                ]["contains"][:50]
+
+                # Set the 'total' field to the original total
+                value_set_to_json_copy["expansion"]["total"] = original_total
             publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
             return jsonify(value_set_to_datastore)
 
@@ -402,6 +417,21 @@ def create_app(script_info=None):
         value_set_to_json, initial_path = vs_version.prepare_for_oci()
         value_set_uuid = vs_version.value_set.uuid
         resource_type = "ValueSet"  # param for Simplifier
+        # Check if the 'expansion' and 'contains' keys are present
+        if (
+            "expansion" in value_set_to_json
+            and "contains" in value_set_to_json["expansion"]
+        ):
+            # Store the original total value
+            original_total = value_set_to_json["expansion"]["total"]
+
+            # Limit the contains list to the top 50 entries
+            value_set_to_json["expansion"]["contains"] = value_set_to_json["expansion"][
+                "contains"
+            ][:50]
+
+            # Set the 'total' field to the original total
+            value_set_to_json["expansion"]["total"] = original_total
         publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json)
         return jsonify(value_set_to_json)
 
