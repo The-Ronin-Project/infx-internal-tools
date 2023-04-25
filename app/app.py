@@ -415,8 +415,8 @@ def create_app(script_info=None):
         vs_version = ValueSetVersion.load(version_uuid)
         vs_version.expand(force_new=force_new)
         value_set_to_json, initial_path = vs_version.prepare_for_oci()
-        value_set_uuid = vs_version.value_set.uuid
-        resource_type = "ValueSet"  # param for Simplifier
+        resource_id = value_set_to_json["id"]
+        resource_type = value_set_to_json["resourceType"]  # param for Simplifier
         # Check if the 'expansion' and 'contains' keys are present
         if (
             "expansion" in value_set_to_json
@@ -432,7 +432,7 @@ def create_app(script_info=None):
 
             # Set the 'total' field to the original total
             value_set_to_json["expansion"]["total"] = original_total
-        publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json)
+        publish_to_simplifier(resource_type, resource_id, value_set_to_json)
         return jsonify(value_set_to_json)
 
     # Survey Endpoints
