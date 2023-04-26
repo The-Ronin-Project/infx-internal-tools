@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import date, datetime, timedelta
 from dateutil import parser
+from collections import defaultdict
 import werkzeug
 from werkzeug.exceptions import BadRequest, NotFound
 from decouple import config
@@ -1803,6 +1804,102 @@ class ValueSet:
 
         return new_version_uuid
 
+    def perform_terminology_update(
+        self,
+        old_terminology_version_uuid,
+        new_terminology_version_uuid,
+        effective_start,
+        effective_end,
+        description,
+    ):
+        """
+        This function performs a terminology update on a value set by creating a new version of the value set with updated terminology rules. It first checks if the highest version of the value set is active and has not been updated already. If the conditions are met, it creates a new version of the value set and updates the rules to target the new terminology version. The function then expands the previous and new value set versions and calculates the diff between them. Finally, it updates the status of the new value set version based on the differences in codes.
+
+        Args:
+        old_terminology_version_uuid (str): The UUID of the old terminology version to be replaced.
+        new_terminology_version_uuid (str): The UUID of the new terminology version to replace the old one.
+        effective_start (str): The effective start date for the new value set version.
+        effective_end (str): The effective end date for the new value set version.
+        description (str): A description of the new value set version.
+
+        Returns:
+        str: A string representing the status of the new value set version, which can be one of the following:
+        - "already_updated": The value set has already been updated with the new terminology version.
+        - "latest_version_not_active": The latest version of the value set is not active.
+        - "failed_to_expand": An exception occurred while expanding the new value set version.
+        - "reviewed": The new value set version has no differences in codes and is marked as reviewed.
+        - "pending": The new value set version has differences in codes and is marked as pending.
+        """
+        # Safety check: Raise an exception if the highest version does not have a status of 'active'
+        value_set_metadata = ValueSet.load_version_metadata(self.uuid)
+        sorted_versions = sorted(
+            value_set_metadata, key=lambda x: x["version"], reverse=True
+        )
+        highest_version = sorted_versions[0]
+
+        # Check to see if it's already been updated
+        most_recent_version = ValueSetVersion.load(highest_version.get("uuid"))
+        if most_recent_version.contains_content_from_terminology(
+            new_terminology_version_uuid
+        ):
+            return "already_updated"
+
+        # Check to see if it's active (we will not auto-update pending value sets still being worked on)
+        if most_recent_version.status != "active":
+            return "latest_version_not_active"
+
+        # Create a new version of the value set
+        new_value_set_version_uuid = self.create_new_version_from_previous(
+            effective_start=effective_start,
+            effective_end=effective_end,
+            description=description,
+        )
+
+        # # As a one-time thing, we need to delete older SNOMED content
+        # # todo: remove this section
+        # conn = get_db()
+        # conn.execute(
+        #     text(
+        #         """
+        #         delete from value_sets.value_set_rule
+        #         where value_set_version=:version_uuid
+        #         and terminology_version='5efa6244-32ad-4a2d-9d21-8f237499325a'
+        #         """
+        #     ),
+        #     {
+        #         "version_uuid": new_value_set_version_uuid
+        #     }
+        # )
+
+        new_value_set_version = ValueSetVersion.load(new_value_set_version_uuid)
+
+        # Update the rules targeting the previous version to target the new version
+        new_value_set_version.update_rules_for_terminology(
+            old_terminology_version_uuid=old_terminology_version_uuid,
+            new_terminology_version_uuid=new_terminology_version_uuid,
+        )
+
+        # Expand the previous and new value set versions
+        most_recent_version.expand()
+        try:
+            new_value_set_version.expand(force_new=True)
+        except Exception as e:
+            return "failed_to_expand"
+
+        # Get the diff between the two value set versions
+        diff = ValueSetVersion.diff_for_removed_and_added_codes(
+            most_recent_version.uuid,
+            new_value_set_version_uuid,
+        )
+
+        # Update the status of the new value set version
+        if not diff["removed_codes"] and not diff["added_codes"]:
+            new_value_set_version.update(status="reviewed")
+            return "reviewed"
+        else:
+            new_value_set_version.update(status="pending")
+            return "pending"
+
 
 class RuleGroup:
     def __init__(self, vs_version_uuid, rule_group_id):
@@ -2758,6 +2855,7 @@ class ValueSetVersion:
                 old_terminology_version_uuid=old_terminology_version_uuid,
                 new_terminology_version_uuid=new_terminology_version_uuid,
             )
+        self.load_rules()
 
     @classmethod
     def diff_for_removed_and_added_codes(
@@ -2898,6 +2996,26 @@ class ValueSetVersion:
             ),
             {"value_set_uuid": self.value_set.uuid, "version_uuid": self.uuid},
         )
+
+    def contains_content_from_terminology(self, terminology_version_uuid):
+        self.expand()
+
+        # Check for rules
+        for rule_group in self.rule_groups:
+            for terminology, rules in rule_group.rules.items():
+                if terminology.uuid == terminology_version_uuid and rules:
+                    return True
+
+        # Check expansion for codes
+        terminology = Terminology.load(terminology_version_uuid)
+        for code in self.expansion:
+            if (
+                code.system == terminology.fhir_uri
+                and code.version == terminology.version
+            ):
+                return True
+
+        return False
 
 
 @dataclass
@@ -3255,3 +3373,51 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
         "latest_version_not_active": latest_version_not_active,
         "already_updated": already_updated,
     }
+
+
+# # This takes too long to run as an endpoint and should be a Databricks notebook
+# def perform_terminology_update_for_all_value_sets(
+#         old_terminology_version_uuid,
+#         new_terminology_version_uuid,
+# ):
+#     new_terminology_version = Terminology.load(new_terminology_version_uuid)
+#
+#     # Get value sets to update
+#     report_for_update = value_sets_terminology_update_report(
+#         terminology_fhir_uri=new_terminology_version.fhir_uri,
+#         exclude_version=new_terminology_version.version
+#     )
+#
+#     value_sets_to_update = [x.get('value_set_uuid') for x in report_for_update.get('ready_for_update')]
+#
+#     value_set_statuses = defaultdict(list)
+#
+#     for vs_uuid in value_sets_to_update:
+#         value_set = ValueSet.load(vs_uuid)
+#         status = value_set.perform_terminology_update(
+#             old_terminology_version_uuid,
+#             new_terminology_version_uuid,
+#             effective_start=str(new_terminology_version.effective_start),
+#             effective_end=str(new_terminology_version.effective_end),
+#             description=f"Updated for {new_terminology_version.name} {new_terminology_version.version} update"
+#         )
+#         value_set_statuses[status].append({
+#             "name": value_set.name,
+#             "title": value_set.title,
+#             "uuid": value_set.uuid
+#         })
+#
+#     # Generate the JSON report
+#     json_report = {
+#         status: [
+#             {
+#                 "name": vs["name"],
+#                 "title": vs["title"],
+#                 "uuid": vs["uuid"],
+#             }
+#             for vs in value_set_statuses[status]
+#         ]
+#         for status in value_set_statuses
+#     }
+#
+#     return json_report
