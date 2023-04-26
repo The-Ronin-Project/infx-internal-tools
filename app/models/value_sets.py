@@ -1804,27 +1804,55 @@ class ValueSet:
 
         return new_version_uuid
 
-    def perform_terminology_update(self, old_terminology_version_uuid, new_terminology_version_uuid,
-                                   effective_start, effective_end, description):
+    def perform_terminology_update(
+        self,
+        old_terminology_version_uuid,
+        new_terminology_version_uuid,
+        effective_start,
+        effective_end,
+        description,
+    ):
+        """
+        This function performs a terminology update on a value set by creating a new version of the value set with updated terminology rules. It first checks if the highest version of the value set is active and has not been updated already. If the conditions are met, it creates a new version of the value set and updates the rules to target the new terminology version. The function then expands the previous and new value set versions and calculates the diff between them. Finally, it updates the status of the new value set version based on the differences in codes.
+
+        Args:
+        old_terminology_version_uuid (str): The UUID of the old terminology version to be replaced.
+        new_terminology_version_uuid (str): The UUID of the new terminology version to replace the old one.
+        effective_start (str): The effective start date for the new value set version.
+        effective_end (str): The effective end date for the new value set version.
+        description (str): A description of the new value set version.
+
+        Returns:
+        str: A string representing the status of the new value set version, which can be one of the following:
+        - "already_updated": The value set has already been updated with the new terminology version.
+        - "latest_version_not_active": The latest version of the value set is not active.
+        - "failed_to_expand": An exception occurred while expanding the new value set version.
+        - "reviewed": The new value set version has no differences in codes and is marked as reviewed.
+        - "pending": The new value set version has differences in codes and is marked as pending.
+        """
         # Safety check: Raise an exception if the highest version does not have a status of 'active'
         value_set_metadata = ValueSet.load_version_metadata(self.uuid)
-        sorted_versions = sorted(value_set_metadata, key=lambda x: x['version'], reverse=True)
+        sorted_versions = sorted(
+            value_set_metadata, key=lambda x: x["version"], reverse=True
+        )
         highest_version = sorted_versions[0]
 
         # Check to see if it's already been updated
-        most_recent_version = ValueSetVersion.load(highest_version.get('uuid'))
-        if most_recent_version.contains_content_from_terminology(new_terminology_version_uuid):
-            return 'already_updated'
+        most_recent_version = ValueSetVersion.load(highest_version.get("uuid"))
+        if most_recent_version.contains_content_from_terminology(
+            new_terminology_version_uuid
+        ):
+            return "already_updated"
 
         # Check to see if it's active (we will not auto-update pending value sets still being worked on)
-        if most_recent_version.status != 'active':
-            return 'latest_version_not_active'
+        if most_recent_version.status != "active":
+            return "latest_version_not_active"
 
         # Create a new version of the value set
         new_value_set_version_uuid = self.create_new_version_from_previous(
             effective_start=effective_start,
             effective_end=effective_end,
-            description=description
+            description=description,
         )
 
         # # As a one-time thing, we need to delete older SNOMED content
@@ -1848,7 +1876,7 @@ class ValueSet:
         # Update the rules targeting the previous version to target the new version
         new_value_set_version.update_rules_for_terminology(
             old_terminology_version_uuid=old_terminology_version_uuid,
-            new_terminology_version_uuid=new_terminology_version_uuid
+            new_terminology_version_uuid=new_terminology_version_uuid,
         )
 
         # Expand the previous and new value set versions
@@ -2813,6 +2841,7 @@ class ValueSetVersion:
                 old_terminology_version_uuid=old_terminology_version_uuid,
                 new_terminology_version_uuid=new_terminology_version_uuid,
             )
+        self.load_rules()
 
     @classmethod
     def diff_for_removed_and_added_codes(
@@ -2941,10 +2970,14 @@ class ValueSetVersion:
         # Check expansion for codes
         terminology = Terminology.load(terminology_version_uuid)
         for code in self.expansion:
-            if code.system == terminology.fhir_uri and code.version == terminology.version:
+            if (
+                code.system == terminology.fhir_uri
+                and code.version == terminology.version
+            ):
                 return True
 
         return False
+
 
 @dataclass
 class ExplicitlyIncludedCode:
