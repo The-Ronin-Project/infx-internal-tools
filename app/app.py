@@ -4,6 +4,7 @@ from io import StringIO
 import string
 from uuid import UUID, uuid4
 import logging
+
 from app.helpers.structlog import config_structlog, common_handler
 import structlog
 import os
@@ -465,10 +466,10 @@ def create_app(script_info=None):
         Returns a status message.
         """
         comments = request.json.get("comments")
-        update_comments_source_concept(
-            source_concept_uuid=source_concept_uuid, comments=comments
-        )
-        return "OK"
+        assigned_mapper = request.json.get("assigned_mapper")
+        source_concept = SourceConcept.load(source_concept_uuid)
+        source_concept.update(comments=comments, assigned_mapper=assigned_mapper)
+        return jsonify(source_concept.serialize())
 
     # Concept Map Endpoints
     @app.route("/ConceptMaps/actions/new_version_from_previous", methods=["POST"])

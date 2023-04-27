@@ -262,7 +262,7 @@ class Terminology:
 
         return {
             "uuid": self.uuid,
-            "name": self.terminology,
+            "name": self.name,
             "version": self.version,
             "effective_start": self.effective_start,
             "effective_end": self.effective_end,

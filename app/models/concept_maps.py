@@ -834,7 +834,7 @@ class SourceConcept:
 
     def update(
         self,
-        conn,
+        conn: Optional = None,
         comments: Optional[str] = None,
         additional_context: Optional[str] = None,
         map_status: Optional[str] = None,
@@ -845,6 +845,7 @@ class SourceConcept:
         mapping_group: Optional[str] = None,
         previous_version_context: Optional[str] = None,
     ):
+        conn = get_db()
         # Create a dictionary to store the column names and their corresponding new values
         updates = {}
 
@@ -886,6 +887,66 @@ class SourceConcept:
         # Update the instance attributes
         for column, value in updates.items():
             setattr(self, column, value)
+
+    @classmethod
+    def load(cls, source_concept_uuid: UUID):
+        conn = get_db()  # returns a sqlalchemy connection object
+
+        query = text(
+            """
+            SELECT *
+            FROM concept_maps.source_concept
+            WHERE uuid = :source_concept_uuid
+        """
+        )
+        result = conn.execute(query, source_concept_uuid=source_concept_uuid)
+        row = result.fetchone()
+
+        if not row:
+            raise ValueError(
+                f"SourceConcept with UUID {source_concept_uuid} not found."
+            )
+
+        system = Terminology.load(row["system"])
+
+        source_concept = cls(
+            uuid=row["uuid"],
+            code=row["code"],
+            display=row["display"],
+            system=system,
+            comments=row["comments"],
+            additional_context=row["additional_context"],
+            map_status=row["map_status"],
+            assigned_mapper=row["assigned_mapper"],
+            assigned_reviewer=row["assigned_reviewer"],
+            no_map=row["no_map"],
+            reason_for_no_map=row["reason_for_no_map"],
+            mapping_group=row["mapping_group"],
+        )
+
+        return source_concept
+
+    def serialize(self):
+        serialized_data = {
+            "uuid": str(self.uuid),
+            "code": self.code,
+            "display": self.display,
+            "system": self.system.serialize(),
+            "comments": self.comments,
+            "additional_context": self.additional_context,
+            "map_status": self.map_status,
+            "assigned_mapper": str(self.assigned_mapper)
+            if self.assigned_mapper
+            else None,
+            "assigned_reviewer": str(self.assigned_reviewer)
+            if self.assigned_reviewer
+            else None,
+            "no_map": self.no_map,
+            "reason_for_no_map": self.reason_for_no_map,
+            "mapping_group": self.mapping_group,
+        }
+
+        return serialized_data
 
 
 @dataclass
