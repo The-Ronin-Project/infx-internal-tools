@@ -845,7 +845,8 @@ class SourceConcept:
         mapping_group: Optional[str] = None,
         previous_version_context: Optional[str] = None,
     ):
-        conn = get_db()
+        if conn is None:
+            conn = get_db()
         # Create a dictionary to store the column names and their corresponding new values
         updates = {}
 
