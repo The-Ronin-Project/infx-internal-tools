@@ -937,7 +937,7 @@ class Mapping:
                 "relationship_code_uuid": self.relationship.uuid,
                 "target_concept_code": self.target.code,
                 "target_concept_display": self.target.display,
-                "target_concept_system_version_uuid": self.target.terminology_version,
+                "target_concept_system_version_uuid": self.target.terminology_version_uuid,
                 "mapping_comments": self.mapping_comments,
                 "author": self.author,
                 "created_date": datetime.datetime.now(),
