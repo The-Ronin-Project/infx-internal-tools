@@ -152,13 +152,18 @@ def create_app(script_info=None):
         )
         return str(duplicated_value_set_uuid), 201
 
-    @app.route("/ValueSets/<string:identifier>/actions/perform_terminology_update", methods=["POST"])
+    @app.route(
+        "/ValueSets/<string:identifier>/actions/perform_terminology_update",
+        methods=["POST"],
+    )
     def perform_terminology_update_for_value_set(identifier):
-        old_terminology_version_uuid = request.json.get('old_terminology_version_uuid')
-        new_terminology_version_uuid = request.json.get('new_terminology_version_uuid')
-        new_value_set_effective_start = request.json.get('new_value_set_effective_start')
-        new_value_set_effective_end = request.json.get('new_value_set_effective_end')
-        new_value_set_description = request.json.get('new_value_set_description')
+        old_terminology_version_uuid = request.json.get("old_terminology_version_uuid")
+        new_terminology_version_uuid = request.json.get("new_terminology_version_uuid")
+        new_value_set_effective_start = request.json.get(
+            "new_value_set_effective_start"
+        )
+        new_value_set_effective_end = request.json.get("new_value_set_effective_end")
+        new_value_set_description = request.json.get("new_value_set_description")
 
         value_set = ValueSet.load(identifier)
         result = value_set.perform_terminology_update(
@@ -166,7 +171,7 @@ def create_app(script_info=None):
             new_terminology_version_uuid=new_terminology_version_uuid,
             effective_start=new_value_set_effective_start,
             effective_end=new_value_set_effective_end,
-            description=new_value_set_description
+            description=new_value_set_description,
         )
         return jsonify(result)
 
@@ -974,17 +979,17 @@ def create_app(script_info=None):
             )
             return jsonify(report)
 
-    # @app.route('/TerminologyUpdate/ValueSets/actions/perform_update', methods=['POST'])
-    # def perform_terminology_update_for_value_sets():
-    #     old_terminology_version_uuid = request.json.get('old_terminology_version_uuid')
-    #     new_terminology_version_uuid = request.json.get('new_terminology_version_uuid')
-    #
-    #     result = perform_terminology_update_for_all_value_sets(
-    #         old_terminology_version_uuid=old_terminology_version_uuid,
-    #         new_terminology_version_uuid=new_terminology_version_uuid,
-    #     )
-    #
-    #     return jsonify(result)
+    @app.route("/TerminologyUpdate/ValueSets/actions/perform_update", methods=["POST"])
+    def perform_terminology_update_for_value_sets():
+        old_terminology_version_uuid = request.json.get("old_terminology_version_uuid")
+        new_terminology_version_uuid = request.json.get("new_terminology_version_uuid")
+
+        result = perform_terminology_update_for_all_value_sets(
+            old_terminology_version_uuid=old_terminology_version_uuid,
+            new_terminology_version_uuid=new_terminology_version_uuid,
+        )
+
+        return jsonify(result)
 
     return app
 
