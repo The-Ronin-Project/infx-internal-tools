@@ -3317,6 +3317,9 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
                 "value_set_uuid": value_set_uuid,
                 "name": value_set_name,
                 "title": value_set_title,
+                "most_recent_version_status": most_recent_version_metadata.get(
+                    "status"
+                ),
             }
             already_updated.append(item_dict)
             continue
@@ -3376,48 +3379,48 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
 
 
 # # This takes too long to run as an endpoint and should be a Databricks notebook
-# def perform_terminology_update_for_all_value_sets(
-#         old_terminology_version_uuid,
-#         new_terminology_version_uuid,
-# ):
-#     new_terminology_version = Terminology.load(new_terminology_version_uuid)
-#
-#     # Get value sets to update
-#     report_for_update = value_sets_terminology_update_report(
-#         terminology_fhir_uri=new_terminology_version.fhir_uri,
-#         exclude_version=new_terminology_version.version
-#     )
-#
-#     value_sets_to_update = [x.get('value_set_uuid') for x in report_for_update.get('ready_for_update')]
-#
-#     value_set_statuses = defaultdict(list)
-#
-#     for vs_uuid in value_sets_to_update:
-#         value_set = ValueSet.load(vs_uuid)
-#         status = value_set.perform_terminology_update(
-#             old_terminology_version_uuid,
-#             new_terminology_version_uuid,
-#             effective_start=str(new_terminology_version.effective_start),
-#             effective_end=str(new_terminology_version.effective_end),
-#             description=f"Updated for {new_terminology_version.name} {new_terminology_version.version} update"
-#         )
-#         value_set_statuses[status].append({
-#             "name": value_set.name,
-#             "title": value_set.title,
-#             "uuid": value_set.uuid
-#         })
-#
-#     # Generate the JSON report
-#     json_report = {
-#         status: [
-#             {
-#                 "name": vs["name"],
-#                 "title": vs["title"],
-#                 "uuid": vs["uuid"],
-#             }
-#             for vs in value_set_statuses[status]
-#         ]
-#         for status in value_set_statuses
-#     }
-#
-#     return json_report
+def perform_terminology_update_for_all_value_sets(
+    old_terminology_version_uuid,
+    new_terminology_version_uuid,
+):
+    new_terminology_version = Terminology.load(new_terminology_version_uuid)
+
+    # Get value sets to update
+    report_for_update = value_sets_terminology_update_report(
+        terminology_fhir_uri=new_terminology_version.fhir_uri,
+        exclude_version=new_terminology_version.version,
+    )
+
+    value_sets_to_update = [
+        x.get("value_set_uuid") for x in report_for_update.get("ready_for_update")
+    ]
+
+    value_set_statuses = defaultdict(list)
+
+    for vs_uuid in value_sets_to_update:
+        value_set = ValueSet.load(vs_uuid)
+        status = value_set.perform_terminology_update(
+            old_terminology_version_uuid,
+            new_terminology_version_uuid,
+            effective_start=str(new_terminology_version.effective_start),
+            effective_end=str(new_terminology_version.effective_end),
+            description=f"F",
+        )
+        value_set_statuses[status].append(
+            {"name": value_set.name, "title": value_set.title, "uuid": value_set.uuid}
+        )
+
+    # Generate the JSON report
+    json_report = {
+        status: [
+            {
+                "name": vs["name"],
+                "title": vs["title"],
+                "uuid": vs["uuid"],
+            }
+            for vs in value_set_statuses[status]
+        ]
+        for status in value_set_statuses
+    }
+
+    return json_report
