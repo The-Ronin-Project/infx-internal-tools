@@ -213,6 +213,7 @@ class ConceptMapVersionCreator:
                 no_map=row.source_concept_no_map,
                 reason_for_no_map=row.source_concept_reason_for_no_map,
                 mapping_group=row.source_concept_mapping_group,
+                concept_map_version_uuid=row.source_concept_map_version_uuid
             )
 
             mapping = None

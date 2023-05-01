@@ -15,7 +15,7 @@ from uuid import UUID
 from typing import Optional
 from app.database import get_db, get_elasticsearch
 from app.models.codes import Code
-from app.models.terminologies import Terminology, terminology_version_uuid_lookup
+from app.models.terminologies import Terminology, terminology_version_uuid_lookup, load_terminology_version_with_cache
 from app.helpers.oci_helper import (
     oci_authentication,
     folder_path_for_oci,
@@ -114,6 +114,60 @@ class DeprecatedConceptMap:
         return result
 
 
+@dataclass
+class ConceptMapSettings:
+    auto_advance_after_mapping: bool
+    auto_fill_search_bar: bool
+    show_target_codes_in_mapping_interface: bool
+
+    def serialize(self):
+        return {key: value for key, value in self.__dict__.items()}
+
+    @classmethod
+    @functools.lru_cache
+    def load(cls, concept_map_uuid):
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """
+                select * from concept_maps.concept_map
+                where uuid=:concept_map_uuid
+                """
+            ),
+            {"concept_map_uuid": concept_map_uuid},
+        ).first()
+        return ConceptMapSettings(
+            auto_advance_after_mapping=bool(data.auto_advance_mapping),
+            auto_fill_search_bar=bool(data.auto_fill_search),
+            show_target_codes_in_mapping_interface=bool(data.show_target_codes)
+        )
+
+    @classmethod
+    @functools.lru_cache
+    def load_by_concept_map_version_uuid(cls, concept_map_version_uuid):
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """
+                SELECT
+                    cm.*
+                FROM
+                    concept_maps.concept_map_version cmv
+                JOIN
+                    concept_maps.concept_map cm ON cmv.concept_map_uuid = cm.uuid
+                WHERE
+                    cmv.uuid = :concept_map_version_uuid
+                """
+            ),
+            {"concept_map_version_uuid": concept_map_version_uuid},
+        ).first()
+        return ConceptMapSettings(
+            auto_advance_after_mapping=bool(data.auto_advance_mapping),
+            auto_fill_search_bar=bool(data.auto_fill_search),
+            show_target_codes_in_mapping_interface=bool(data.show_target_codes)
+        )
+
+
 # This is the new maps system
 class ConceptMap:
     """
@@ -150,6 +204,7 @@ class ConceptMap:
         self.target_value_set_uuid = None
 
         self.most_recent_active_version = None
+        self.settings = None
 
         self.load_data()
 
@@ -176,6 +231,12 @@ class ConceptMap:
         self.experimental = data.experimental
         self.author = data.author
         self.created_date = data.created_date
+
+        self.settings = ConceptMapSettings(
+            auto_advance_after_mapping=bool(data.auto_advance_mapping),
+            auto_fill_search_bar=bool(data.auto_fill_search),
+            show_target_codes_in_mapping_interface=bool(data.show_target_codes)
+        )
 
         version = conn.execute(
             text(
@@ -386,6 +447,7 @@ class ConceptMap:
             "use_case_uuid": self.use_case_uuid,
             "source_value_set_uuid": str(self.source_value_set_uuid),
             "target_value_set_uuid": str(self.target_value_set_uuid),
+            "settings": self.settings.serialize()
         }
 
 
@@ -435,7 +497,7 @@ class ConceptMapVersion:
         self.published_date = data.published_date
         self.load_allowed_target_terminologies()
         self.load_mappings()
-        self.generate_self_mappings()
+        # self.generate_self_mappings()
 
     def load_allowed_target_terminologies(self):
         """
@@ -459,30 +521,33 @@ class ConceptMapVersion:
                 Terminology.load(terminology_version_uuid)
             )
 
-    def generate_self_mappings(self):
-        """
-        if self_map flag in db is true, generate the self_mappings here
-        :rtype: mappings dictionary
-        """
-        if self.concept_map.include_self_map is True:
-            for target_terminology in self.allowed_target_terminologies:
-                target_terminology.load_content()
-                for code in target_terminology.codes:
-                    self.mappings[code] = [
-                        Mapping(
-                            source=code,
-                            relationship=MappingRelationship.load_by_code("equivalent"),
-                            target=code,  # self is equivalent to self
-                            mapping_comments="Auto-generated self map",
-                        )
-                    ]
+    # def generate_self_mappings(self):
+    #     """
+    #     if self_map flag in db is true, generate the self_mappings here
+    #     :rtype: mappings dictionary
+    #     """
+    #     if self.concept_map.include_self_map is True:
+    #         for target_terminology in self.allowed_target_terminologies:
+    #             target_terminology.load_content()
+    #             for code in target_terminology.codes:
+    #                 self.mappings[code] = [
+    #                     Mapping(
+    #                         source=code,
+    #                         relationship=MappingRelationship.load_by_code("equivalent"),
+    #                         target=code,  # self is equivalent to self
+    #                         mapping_comments="Auto-generated self map",
+    #                     )
+    #                 ]
 
     def load_mappings(self):
         conn = get_db()
         query = """
             select concept_relationship.uuid as mapping_uuid, concept_relationship.author, concept_relationship.review_status, concept_relationship.mapping_comments,
-            source_concept.code as source_code, source_concept.display as source_display, source_concept.system as source_system, 
+            source_concept.uuid as source_concept_uuid, source_concept.code as source_code, source_concept.display as source_display, source_concept.system as source_system, 
             tv_source.version as source_version, tv_source.fhir_uri as source_fhir_uri,
+            source_concept.comments as source_comments, source_concept.additional_context as source_additional_context, source_concept.map_status as source_map_status,
+            source_concept.assigned_mapper as source_assigned_mapper, source_concept.assigned_reviewer as source_assigned_reviewer, source_concept.no_map,
+            source_concept.reason_for_no_map, source_concept.mapping_group as source_mapping_group, source_concept.previous_version_context as source_previous_version_context
             relationship_codes.code as relationship_code, source_concept.map_status,
             concept_relationship.target_concept_code, concept_relationship.target_concept_display,
             concept_relationship.target_concept_system_version_uuid as target_system,
@@ -508,11 +573,21 @@ class ConceptMapVersion:
         )
 
         for item in results:
-            source_code = Code(
-                item.source_fhir_uri,
-                item.source_version,
-                item.source_code,
-                item.source_display,
+            source_code = SourceConcept(
+                uuid=item.source_concept_uuid,
+                code=item.source_code,
+                display=item.source_display,
+                system=load_terminology_version_with_cache(item.source_system),
+                comments=item.source_comments,
+                additional_context=item.source_additional_context,
+                map_status=item.source_map_status,
+                assigned_mapper=item.source_assigned_mapper,
+                assigned_reviewer=item.source_assigned_reviewer,
+                no_map=item.no_map,
+                reason_for_no_map=item.reason_for_no_map,
+                mapping_group=item.source_mapping_group,
+                previous_version_context=item.source_previous_version_context,
+                concept_map_version_uuid=self.uuid
             )
             target_code = Code(
                 item.target_fhir_uri,
@@ -822,6 +897,7 @@ class SourceConcept:
     reason_for_no_map: Optional[str] = None
     mapping_group: Optional[str] = None
     previous_version_context: Optional[dict] = None
+    concept_map_version_uuid: Optional[UUID] = None
 
     def __post_init__(self):
         self.code_object = Code(
@@ -831,6 +907,39 @@ class SourceConcept:
             system=self.system.fhir_uri,
             version=self.system.version,
         )
+
+    @classmethod
+    def load(cls, source_concept_uuid: UUID) -> "SourceConcept":
+        conn = get_db()
+        query = text("""
+                SELECT uuid, code, display, system, comments,
+                       additional_context, map_status, assigned_mapper,
+                       assigned_reviewer, no_map, reason_for_no_map,
+                       mapping_group, previous_version_context, concept_map_version_uuid
+                FROM concept_maps.source_concept
+                WHERE uuid = :uuid;
+            """)
+        result = conn.execute(query, uuid=str(source_concept_uuid)).fetchone()
+
+        if result:
+            return cls(
+                uuid=result.uuid,
+                code=result.code,
+                display=result.display,
+                system=Terminology.load(result.system),
+                comments=result.comments,
+                additional_context=result.additional_context,
+                map_status=result.map_status,
+                assigned_mapper=result.assigned_mapper,
+                assigned_reviewer=result.assigned_reviewer,
+                no_map=result.no_map,
+                reason_for_no_map=result.reason_for_no_map,
+                mapping_group=result.mapping_group,
+                previous_version_context=result.previous_version_context,
+                concept_map_version_uuid=result.concept_map_version_uuid
+            )
+        else:
+            raise ValueError(f"No source concept found with UUID {source_concept_uuid}")
 
     def update(
         self,
@@ -927,7 +1036,7 @@ class SourceConcept:
 
         return source_concept
 
-    def serialize(self):
+    def serialize(self) -> dict:
         serialized_data = {
             "uuid": str(self.uuid),
             "code": self.code,
@@ -936,19 +1045,13 @@ class SourceConcept:
             "comments": self.comments,
             "additional_context": self.additional_context,
             "map_status": self.map_status,
-            "assigned_mapper": str(self.assigned_mapper)
-            if self.assigned_mapper
-            else None,
-            "assigned_reviewer": str(self.assigned_reviewer)
-            if self.assigned_reviewer
-            else None,
+            "assigned_mapper": str(self.assigned_mapper) if self.assigned_mapper else None,
+            "assigned_reviewer": str(self.assigned_reviewer) if self.assigned_reviewer else None,
             "no_map": self.no_map,
             "reason_for_no_map": self.reason_for_no_map,
             "mapping_group": self.mapping_group,
+            "previous_version_context": self.previous_version_context,
         }
-
-        return serialized_data
-
 
 @dataclass
 class Mapping:
@@ -956,13 +1059,13 @@ class Mapping:
     Represents a mapping relationship between two codes, and provides methods to load, save and use the relationships.
     """
 
-    source: Code
+    source: SourceConcept
     relationship: MappingRelationship
     target: Code
     uuid: Optional[UUID] = None
     mapping_comments: Optional[str] = None
     author: Optional[str] = None
-    cursor: Optional[None] = None
+    conn: Optional[None] = None
     review_status: str = "ready for review"
     created_date: Optional[datetime.datetime] = None
     reviewed_date: Optional[datetime.datetime] = None
@@ -970,7 +1073,7 @@ class Mapping:
     reviewed_by: Optional[str] = None
 
     def __post_init__(self):
-        self.cursor = get_db()
+        self.conn = get_db()
         self.uuid = uuid.uuid4()
 
     @classmethod
@@ -980,7 +1083,7 @@ class Mapping:
 
     def save(self):
         """Saves the mapping relationship instance to the database."""
-        self.cursor.execute(
+        self.conn.execute(
             text(
                 """
                 INSERT INTO concept_maps.concept_relationship(
@@ -1005,6 +1108,14 @@ class Mapping:
                 "created_date": datetime.datetime.now(),
             },
         )
+
+        # If auto-advance is on, mark the source_concept as ready for review
+        concept_map_settings = ConceptMapSettings.load_by_concept_map_version_uuid(self.source.concept_map_version_uuid)
+        if concept_map_settings.auto_advance_after_mapping:
+            self.source.update(
+                conn=self.conn,
+                map_status='ready for review'
+            )
 
     def serialize(self):
         """Prepares a JSON representation of the Mapping instance to return to the API."""
