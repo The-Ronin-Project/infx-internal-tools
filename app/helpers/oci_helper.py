@@ -43,9 +43,7 @@ def folder_path_for_oci(folder, object_type, path):
     @return: string of folder path
     """
     if folder == "prerelease":
-        path = (
-            path + f"/{datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')}.json"
-        )
+        path = path + f"/{datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S')}.json"
         return path
     if folder == "published":
         path = path + f"/{object_type['version']}.json"

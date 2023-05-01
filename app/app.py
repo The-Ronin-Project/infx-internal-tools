@@ -4,6 +4,7 @@ from io import StringIO
 import string
 from uuid import UUID, uuid4
 import logging
+
 from app.helpers.structlog import config_structlog, common_handler
 import structlog
 import os
@@ -150,6 +151,24 @@ def create_app(script_info=None):
             use_case_uuid=None,
         )
         return str(duplicated_value_set_uuid), 201
+
+    @app.route("/ValueSets/<string:identifier>/actions/perform_terminology_update", methods=["POST"])
+    def perform_terminology_update_for_value_set(identifier):
+        old_terminology_version_uuid = request.json.get('old_terminology_version_uuid')
+        new_terminology_version_uuid = request.json.get('new_terminology_version_uuid')
+        new_value_set_effective_start = request.json.get('new_value_set_effective_start')
+        new_value_set_effective_end = request.json.get('new_value_set_effective_end')
+        new_value_set_description = request.json.get('new_value_set_description')
+
+        value_set = ValueSet.load(identifier)
+        result = value_set.perform_terminology_update(
+            old_terminology_version_uuid=old_terminology_version_uuid,
+            new_terminology_version_uuid=new_terminology_version_uuid,
+            effective_start=new_value_set_effective_start,
+            effective_end=new_value_set_effective_end,
+            description=new_value_set_description
+        )
+        return jsonify(result)
 
     @app.route(
         "/ValueSets/<string:value_set_uuid>/versions/<string:version_uuid>/rules/update_terminology",
@@ -374,6 +393,21 @@ def create_app(script_info=None):
             value_set_uuid = vs_version.value_set.uuid
             resource_type = "ValueSet"  # param for Simplifier
             value_set_to_json_copy["status"] = "active"
+            # Check if the 'expansion' and 'contains' keys are present
+            if (
+                "expansion" in value_set_to_json_copy
+                and "contains" in value_set_to_json_copy["expansion"]
+            ):
+                # Store the original total value
+                original_total = value_set_to_json_copy["expansion"]["total"]
+
+                # Limit the contains list to the top 50 entries
+                value_set_to_json_copy["expansion"]["contains"] = value_set_to_json[
+                    "expansion"
+                ]["contains"][:50]
+
+                # Set the 'total' field to the original total
+                value_set_to_json_copy["expansion"]["total"] = original_total
             publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
             return jsonify(value_set_to_datastore)
 
@@ -400,9 +434,24 @@ def create_app(script_info=None):
         vs_version = ValueSetVersion.load(version_uuid)
         vs_version.expand(force_new=force_new)
         value_set_to_json, initial_path = vs_version.prepare_for_oci()
-        value_set_uuid = vs_version.value_set.uuid
-        resource_type = "ValueSet"  # param for Simplifier
-        publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json)
+        resource_id = value_set_to_json["id"]
+        resource_type = value_set_to_json["resourceType"]  # param for Simplifier
+        # Check if the 'expansion' and 'contains' keys are present
+        if (
+            "expansion" in value_set_to_json
+            and "contains" in value_set_to_json["expansion"]
+        ):
+            # Store the original total value
+            original_total = value_set_to_json["expansion"]["total"]
+
+            # Limit the contains list to the top 50 entries
+            value_set_to_json["expansion"]["contains"] = value_set_to_json["expansion"][
+                "contains"
+            ][:50]
+
+            # Set the 'total' field to the original total
+            value_set_to_json["expansion"]["total"] = original_total
+        publish_to_simplifier(resource_type, resource_id, value_set_to_json)
         return jsonify(value_set_to_json)
 
     # Survey Endpoints
@@ -435,10 +484,10 @@ def create_app(script_info=None):
         Returns a status message.
         """
         comments = request.json.get("comments")
-        update_comments_source_concept(
-            source_concept_uuid=source_concept_uuid, comments=comments
-        )
-        return "OK"
+        assigned_mapper = request.json.get("assigned_mapper")
+        source_concept = SourceConcept.load(source_concept_uuid)
+        source_concept.update(comments=comments, assigned_mapper=assigned_mapper)
+        return jsonify(source_concept.serialize())
 
     # Concept Map Endpoints
     @app.route("/ConceptMaps/actions/new_version_from_previous", methods=["POST"])
@@ -925,6 +974,18 @@ def create_app(script_info=None):
                 terminology_fhir_uri, exclude_version
             )
             return jsonify(report)
+
+    # @app.route('/TerminologyUpdate/ValueSets/actions/perform_update', methods=['POST'])
+    # def perform_terminology_update_for_value_sets():
+    #     old_terminology_version_uuid = request.json.get('old_terminology_version_uuid')
+    #     new_terminology_version_uuid = request.json.get('new_terminology_version_uuid')
+    #
+    #     result = perform_terminology_update_for_all_value_sets(
+    #         old_terminology_version_uuid=old_terminology_version_uuid,
+    #         new_terminology_version_uuid=new_terminology_version_uuid,
+    #     )
+    #
+    #     return jsonify(result)
 
     return app
 

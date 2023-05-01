@@ -137,7 +137,7 @@ def add_file(resource_type, resource_id, resource_body):
 
     Args:
         resource_type (str): The FHIR resource type (e.g., "Patient", "Observation").
-        resource_id (str): The unique identifier for the FHIR resource.
+        resource_id (str): The id of the value set, uuid for Ronin and name for HL7.
         resource_body (dict): A Python dictionary representing the FHIR resource body.
 
     Returns:
@@ -158,8 +158,6 @@ def add_file(resource_type, resource_id, resource_body):
     else:
         return f"Error: {add.status_code}, {add.text}"
 
-    return "File added"
-
 
 def publish_to_simplifier(resource_type, resource_id, resource_body):
     """
@@ -170,6 +168,7 @@ def publish_to_simplifier(resource_type, resource_id, resource_body):
 
     :param resource_type: A string representing the resource type of the file to be published.
     :param resource_id: A string representing the resource ID of the file to be published.
+    :@param resource_body: a JSON expansion of the version in RCDM format
     :return: None
     """
 
@@ -187,62 +186,62 @@ def publish_to_simplifier(resource_type, resource_id, resource_body):
 
 
 # if __name__ == "__main__":
-# access_token = authenticate_simplifier()
-# resource = get_from_simplifier("ValueSet", "2040eb90-6d8b-11ec-bcc4-f7e61651b088")
-# print(resource)
+#     access_token = authenticate_simplifier()
+# #     resource = get_from_simplifier("ValueSet", "administrative-gender")
+# #     print(resource)
 # resource_type = "ValueSet"
-# resource_id = "a3735146-9329-422d-bdf3-cac25e48d011"
+# resource_id = "AdministrativeGender"
 # resource_body = {
-#     "date": "2023-01-06T10:51:25.000000+00:00",
-#     "description": "Contains SNOMED CT and ICD-10-CM codes that indicate RMSF Initial version",
+#     "date": "2022-09-09T13:58:04.000000+00:00",
+#     "description": "{{pagelink:Ronin-Implementation-Guide-Home/List/Valuesets/AdministrativeGender.page.md}} Initial version",
 #     "expansion": {
 #         "contains": [
 #             {
-#                 "code": "A77.0",
-#                 "display": "Spotted fever due to Rickettsia rickettsii",
-#                 "system": "http://hl7.org/fhir/sid/icd-10-cm",
-#                 "version": "2022",
+#                 "code": "female",
+#                 "display": "Female",
+#                 "system": "http://hl7.org/fhir/administrative-gender",
+#                 "version": "4.0.1",
 #             },
 #             {
-#                 "code": "240615004",
-#                 "display": "Western Rocky Mountain spotted fever (disorder)",
-#                 "system": "http://snomed.info/sct",
-#                 "version": "2022-09-01",
+#                 "code": "unknown",
+#                 "display": "Unknown",
+#                 "system": "http://hl7.org/fhir/administrative-gender",
+#                 "version": "4.0.1",
 #             },
 #             {
-#                 "code": "186772009",
-#                 "display": "Rocky Mountain spotted fever (disorder)",
-#                 "system": "http://snomed.info/sct",
-#                 "version": "2022-09-01",
+#                 "code": "male",
+#                 "display": "Male",
+#                 "system": "http://hl7.org/fhir/administrative-gender",
+#                 "version": "4.0.1",
 #             },
 #             {
-#                 "code": "240616003",
-#                 "display": "Eastern Rocky Mountain spotted fever (disorder)",
-#                 "system": "http://snomed.info/sct",
-#                 "version": "2022-09-01",
+#                 "code": "other",
+#                 "display": "Other",
+#                 "system": "http://hl7.org/fhir/administrative-gender",
+#                 "version": "4.0.1",
 #             },
 #         ],
-#         "identifier": "urn:uuid:3d4d9738-8de2-11ed-8239-4ed2cdfbd88f",
-#         "timestamp": "2023-01-06",
+#         "identifier": "urn:uuid:b9bee2a2-306f-11ed-b1fb-9a3d1799f71d",
+#         "timestamp": "2022-09-09",
 #         "total": 4,
 #     },
-#     "experimental": True,
+#     "experimental": False,
 #     "extension": [
 #         {
 #             "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-valueSetSchema",
 #             "valueString": "2",
 #         }
 #     ],
-#     "id": "a3735146-9329-422d-bdf3-cac25e48d011",
+#     "id": "AdministrativeGender",
 #     "meta": {
-#         "profile": [
-#             "http://projectronin.io/fhir/StructureDefinition/ronin-valueSet"
-#         ]
+#         "profile": ["http://projectronin.io/fhir/StructureDefinition/ronin-valueSet"]
 #     },
-#     "name": "Testrmsf",
-#     "purpose": "Practice VS creation",
+#     "name": "AdministrativeGender",
+#     "purpose": "FHIR Interops",
 #     "resourceType": "ValueSet",
-#     "url": "http://projectronin.io/fhir/ValueSet/a3735146-9329-422d-bdf3-cac25e48d011",
+#     "status": "active",
+#     "title": "AdministrativeGender",
+#     "url": "http://hl7.org/fhir/ValueSet/AdministrativeGender",
 #     "version": "1",
 # }
 #

@@ -17,6 +17,20 @@ from app.models.terminologies import Terminology, load_terminology_version_with_
 
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
+        """
+        This method is used to handle custom object types during the JSON encoding process.
+        It defines how to convert datetime and UUID objects into JSON-compatible data types.
+
+        If the object type is datetime.datetime or uuid.UUID, this method will convert it to
+        a string representation. For other object types, the default JSON encoding method
+        is called.
+
+        Args:
+            obj: An object of any type.
+
+        Returns:
+            A JSON-compatible representation of the object.
+        """
         if isinstance(obj, datetime.datetime):
             return obj.isoformat()
         if isinstance(obj, uuid.UUID):
@@ -35,6 +49,16 @@ class ConceptMapVersionCreator:
         self.new_target_value_set_version_uuid = None
 
     def register_new_concept_map_version(self, new_version_description):
+        """
+        Registers the new ConceptMapVersion in the database.
+
+        This method inserts a new record into the concept_maps.concept_map_version table with the
+        given values for the new ConceptMapVersion. The new_version_uuid, concept_map_uuid, and other
+        fields are set using the provided data.
+
+        Args:
+            new_version_description (str): The description of the new ConceptMapVersion.
+        """
         # Determine what the new version number should be
         new_version_num = self.previous_concept_map_version.version + 1
         # Register the new version in concept_maps.concept_map_version
@@ -59,6 +83,16 @@ class ConceptMapVersionCreator:
         )
 
     def populate_source_concepts(self):
+        """
+        Populates the concept_maps.source_concept table with the latest expansion of the new target value set version.
+
+        This method inserts new records into the concept_maps.source_concept table by selecting the
+        latest expansion_members from the value_sets.expansion_member table. The new source concepts
+        are created with a status of 'pending'.
+
+        Returns:
+            list: A list of new SourceConcept instances.
+        """
         # Populate all the sources with a status  of pending
         self.conn.execute(
             text(
@@ -92,6 +126,20 @@ class ConceptMapVersionCreator:
         return new_sources
 
     def load_all_sources_and_mappings(self, concept_map_version_uuid):
+        """
+        Loads all source concepts and their mappings for a given ConceptMapVersion.
+
+        This method queries the database to get all source concepts and their associated mappings
+        for the given ConceptMapVersion. It iterates through the query results and organizes the
+        data into a dictionary where the key is a tuple (code, display, system) and the value is
+        a dictionary containing the source concept and a list of its mappings.
+
+        Args:
+            concept_map_version_uuid (uuid.UUID): The UUID of the ConceptMapVersion.
+
+        Returns:
+            dict: A dictionary containing source concepts and their mappings.
+        """
         all_data = self.conn.execute(
             text(
                 """
@@ -222,6 +270,16 @@ class ConceptMapVersionCreator:
         return response
 
     def load_all_targets(self):
+        """
+        Loads all target concepts from the new target value set version.
+
+        This method queries the database to get all target concepts from the latest expansion
+        of the new target value set version. The results are organized into a dictionary where
+        the key is a tuple (code, display, system) and the value is a Code instance.
+
+        Returns:
+            dict: A dictionary containing target concepts.
+        """
         target_value_set_expansion = self.conn.execute(
             text(
                 """
@@ -256,6 +314,25 @@ class ConceptMapVersionCreator:
         require_review_for_non_equivalent_relationships: bool,
         require_review_no_maps_not_in_target: bool,
     ):
+        """
+        Creates a new ConceptMapVersion based on the previous version.
+
+        This method performs the following steps to create the new ConceptMapVersion:
+        1. Set up variables and open a persistent database connection.
+        2. Register the new ConceptMapVersion in the database.
+        3. Populate the source concepts with the latest expansion of the new target value set version.
+        4. Iterate through the new source concepts and compare them with the previous version.
+        5. Process no-maps and mappings with inactive targets, and copy mappings exactly or require review.
+        6. Save the new ConceptMapVersion.
+
+        Args:
+            previous_version_uuid (uuid.UUID): The UUID of the previous ConceptMapVersion.
+            new_version_description (str): The description of the new ConceptMapVersion.
+            new_source_value_set_version_uuid (uuid.UUID): The UUID of the new source value set version.
+            new_target_value_set_version_uuid (uuid.UUID): The UUID of the new target value set version.
+            require_review_for_non_equivalent_relationships (bool): Whether to require review for non-equivalent relationships.
+            require_review_no_maps_not_in_target (bool): Whether to require review for no-maps not in the target.
+        """
         # Set up our variables we need to work with
         self.previous_concept_map_version = ConceptMapVersion(previous_version_uuid)
         self.new_source_value_set_version_uuid = new_source_value_set_version_uuid
@@ -335,6 +412,7 @@ class ConceptMapVersionCreator:
                         previous_contexts_list.append(result)
 
                 else:
+                    previous_mapping_context = []
                     for previous_mapping in previous_mappings:
                         target_lookup_key = (
                             previous_mapping.target.code,
@@ -343,10 +421,12 @@ class ConceptMapVersionCreator:
                         )
 
                         if target_lookup_key not in new_targets_lookup:
-                            self.process_inactive_target_mapping(
+                            # Append previous context to list in case multiple mappings which need to save it
+                            previous_context_for_row = self.process_inactive_target_mapping(
                                 new_source_concept=new_source_concept,
                                 previous_mapping=previous_mapping,
                             )
+                            previous_mapping_context.append(previous_context_for_row)
                         else:
                             new_target_concept = new_targets_lookup[target_lookup_key]
 
@@ -369,6 +449,15 @@ class ConceptMapVersionCreator:
                                         new_target_code=new_target_concept,
                                         previous_mapping=previous_mapping,
                                     )
+                    if previous_mapping_context:
+                        # If previous context needs to be written to the source, do it after the loop so we have it all
+                        new_source_concept.update(
+                            conn=self.conn,
+                            previous_version_context=json.dumps(
+                                previous_mapping_context, cls=CustomJSONEncoder
+                            )
+                        )
+
         # self.conn.execute(text("rollback"))
 
     def process_no_map(
@@ -378,6 +467,22 @@ class ConceptMapVersionCreator:
         require_review_no_maps_not_in_target: bool,
         previous_contexts_list: list,
     ):
+        """
+        Processes a source concept with explicit no maps from the previous version.
+
+        This method checks if a review is required for no-maps not in the target.
+        If a review is required, it sets the map_status of the new source concept to 'pending'
+        and adds the previous context to the previous_contexts_list. If not, it takes no action.
+
+        Args:
+            previous_source_concept (SourceConcept): The previous source concept.
+            new_source_concept (SourceConcept): The new source concept.
+            require_review_no_maps_not_in_target (bool): Whether to require review for no-maps not in the target.
+            previous_contexts_list (list): A list of previous contexts.
+
+        Returns:
+            dict: A dictionary containing the previous context if a review is required, otherwise None.
+        """
         if (
             require_review_no_maps_not_in_target
             and previous_source_concept.reason_for_no_map == "Not in target code system"
@@ -417,6 +522,17 @@ class ConceptMapVersionCreator:
     def process_inactive_target_mapping(
         self, new_source_concept: SourceConcept, previous_mapping: Mapping
     ):
+        """
+        Processes a mapping with an inactive target.
+
+        This method saves the previous mapping information to the previous_mapping_context
+        and updates the new source concept with the previous mapping context and a map_status
+        of 'pending'.
+
+        Args:
+            new_source_concept (SourceConcept): The new source concept.
+            previous_mapping (Mapping): The previous mapping.
+        """
 
         # Save previous mapping info to previous mapping context
         previous_mapping_context = {
@@ -436,11 +552,9 @@ class ConceptMapVersionCreator:
         }
         new_source_concept.update(
             conn=self.conn,
-            previous_version_context=json.dumps(
-                previous_mapping_context, cls=CustomJSONEncoder
-            ),
             map_status="pending",
         )
+        return previous_mapping_context
 
     def copy_mapping_exact(
         self,
@@ -448,6 +562,17 @@ class ConceptMapVersionCreator:
         new_target_code: Code,
         previous_mapping: Mapping,
     ):
+        """
+        Copies a mapping exactly from the previous version to the new version.
+
+        This method creates a new Mapping instance with the same values as the previous mapping,
+        and saves the new mapping to the database.
+
+        Args:
+            new_source_concept (SourceConcept): The new source concept.
+            new_target_code (Code): The new target code.
+            previous_mapping (Mapping): The previous mapping.
+        """
         source_code = new_source_concept.code_object
 
         relationship = previous_mapping.relationship
@@ -475,6 +600,18 @@ class ConceptMapVersionCreator:
         new_target_concept: Code,
         previous_mapping: Mapping,
     ):
+        """
+        Copies a mapping from the previous version to the new version and sets its review status to "ready for review".
+
+        This method creates a new Mapping instance with the same values as the previous mapping,
+        except for the review_status which is set to "ready for review", and saves the new mapping
+        to the database.
+
+        Args:
+            new_source_concept (SourceConcept): The new source concept.
+            new_target_concept (Code): The new target code.
+            previous_mapping (Mapping): The previous mapping.
+        """
         source_code = new_source_concept.code_object
 
         relationship = previous_mapping.relationship
