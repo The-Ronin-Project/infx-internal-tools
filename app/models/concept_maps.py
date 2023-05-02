@@ -917,7 +917,7 @@ class SourceConcept:
                        assigned_reviewer, no_map, reason_for_no_map,
                        mapping_group, previous_version_context, concept_map_version_uuid
                 FROM concept_maps.source_concept
-                WHERE uuid = :uuid;
+                WHERE uuid = :uuid
             """)
         result = conn.execute(query, uuid=str(source_concept_uuid)).fetchone()
 
@@ -997,44 +997,6 @@ class SourceConcept:
         # Update the instance attributes
         for column, value in updates.items():
             setattr(self, column, value)
-
-    @classmethod
-    def load(cls, source_concept_uuid: UUID):
-        conn = get_db()  # returns a sqlalchemy connection object
-
-        query = text(
-            """
-            SELECT *
-            FROM concept_maps.source_concept
-            WHERE uuid = :source_concept_uuid
-        """
-        )
-        result = conn.execute(query, source_concept_uuid=source_concept_uuid)
-        row = result.fetchone()
-
-        if not row:
-            raise ValueError(
-                f"SourceConcept with UUID {source_concept_uuid} not found."
-            )
-
-        system = Terminology.load(row["system"])
-
-        source_concept = cls(
-            uuid=row["uuid"],
-            code=row["code"],
-            display=row["display"],
-            system=system,
-            comments=row["comments"],
-            additional_context=row["additional_context"],
-            map_status=row["map_status"],
-            assigned_mapper=row["assigned_mapper"],
-            assigned_reviewer=row["assigned_reviewer"],
-            no_map=row["no_map"],
-            reason_for_no_map=row["reason_for_no_map"],
-            mapping_group=row["mapping_group"],
-        )
-
-        return source_concept
 
     def serialize(self) -> dict:
         serialized_data = {
