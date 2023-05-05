@@ -191,11 +191,9 @@ class DataNormalizationRegistry:
     @staticmethod
     def publish_data_normalization_registry():
         post_registry = DataNormalizationRegistry()
-
         post_registry.load_entries()
         all_registries = post_registry.serialize()
         registries_to_post = DataNormalizationRegistry.publish_to_object_store(
             all_registries
         )
-
-        return jsonify(registries_to_post)
+        return registries_to_post
