@@ -15,7 +15,11 @@ from uuid import UUID
 from typing import Optional
 from app.database import get_db, get_elasticsearch
 from app.models.codes import Code
-from app.models.terminologies import Terminology, terminology_version_uuid_lookup, load_terminology_version_with_cache
+from app.models.terminologies import (
+    Terminology,
+    terminology_version_uuid_lookup,
+    load_terminology_version_with_cache,
+)
 from app.helpers.oci_helper import (
     oci_authentication,
     folder_path_for_oci,
@@ -139,7 +143,7 @@ class ConceptMapSettings:
         return ConceptMapSettings(
             auto_advance_after_mapping=bool(data.auto_advance_mapping),
             auto_fill_search_bar=bool(data.auto_fill_search),
-            show_target_codes_in_mapping_interface=bool(data.show_target_codes)
+            show_target_codes_in_mapping_interface=bool(data.show_target_codes),
         )
 
     @classmethod
@@ -164,7 +168,7 @@ class ConceptMapSettings:
         return ConceptMapSettings(
             auto_advance_after_mapping=bool(data.auto_advance_mapping),
             auto_fill_search_bar=bool(data.auto_fill_search),
-            show_target_codes_in_mapping_interface=bool(data.show_target_codes)
+            show_target_codes_in_mapping_interface=bool(data.show_target_codes),
         )
 
 
@@ -235,7 +239,7 @@ class ConceptMap:
         self.settings = ConceptMapSettings(
             auto_advance_after_mapping=bool(data.auto_advance_mapping),
             auto_fill_search_bar=bool(data.auto_fill_search),
-            show_target_codes_in_mapping_interface=bool(data.show_target_codes)
+            show_target_codes_in_mapping_interface=bool(data.show_target_codes),
         )
 
         version = conn.execute(
@@ -447,7 +451,7 @@ class ConceptMap:
             "use_case_uuid": self.use_case_uuid,
             "source_value_set_uuid": str(self.source_value_set_uuid),
             "target_value_set_uuid": str(self.target_value_set_uuid),
-            "settings": self.settings.serialize()
+            "settings": self.settings.serialize(),
         }
 
 
@@ -587,7 +591,7 @@ class ConceptMapVersion:
                 reason_for_no_map=item.reason_for_no_map,
                 mapping_group=item.source_mapping_group,
                 previous_version_context=item.source_previous_version_context,
-                concept_map_version_uuid=self.uuid
+                concept_map_version_uuid=self.uuid,
             )
             target_code = Code(
                 item.target_fhir_uri,
@@ -911,14 +915,16 @@ class SourceConcept:
     @classmethod
     def load(cls, source_concept_uuid: UUID) -> "SourceConcept":
         conn = get_db()
-        query = text("""
+        query = text(
+            """
                 SELECT uuid, code, display, system, comments,
                        additional_context, map_status, assigned_mapper,
                        assigned_reviewer, no_map, reason_for_no_map,
                        mapping_group, previous_version_context, concept_map_version_uuid
                 FROM concept_maps.source_concept
                 WHERE uuid = :uuid
-            """)
+            """
+        )
         result = conn.execute(query, uuid=str(source_concept_uuid)).fetchone()
 
         if result:
@@ -936,7 +942,7 @@ class SourceConcept:
                 reason_for_no_map=result.reason_for_no_map,
                 mapping_group=result.mapping_group,
                 previous_version_context=result.previous_version_context,
-                concept_map_version_uuid=result.concept_map_version_uuid
+                concept_map_version_uuid=result.concept_map_version_uuid,
             )
         else:
             raise ValueError(f"No source concept found with UUID {source_concept_uuid}")
@@ -1007,13 +1013,18 @@ class SourceConcept:
             "comments": self.comments,
             "additional_context": self.additional_context,
             "map_status": self.map_status,
-            "assigned_mapper": str(self.assigned_mapper) if self.assigned_mapper else None,
-            "assigned_reviewer": str(self.assigned_reviewer) if self.assigned_reviewer else None,
+            "assigned_mapper": str(self.assigned_mapper)
+            if self.assigned_mapper
+            else None,
+            "assigned_reviewer": str(self.assigned_reviewer)
+            if self.assigned_reviewer
+            else None,
             "no_map": self.no_map,
             "reason_for_no_map": self.reason_for_no_map,
             "mapping_group": self.mapping_group,
             "previous_version_context": self.previous_version_context,
         }
+
 
 @dataclass
 class Mapping:
@@ -1072,12 +1083,11 @@ class Mapping:
         )
 
         # If auto-advance is on, mark the source_concept as ready for review
-        concept_map_settings = ConceptMapSettings.load_by_concept_map_version_uuid(self.source.concept_map_version_uuid)
+        concept_map_settings = ConceptMapSettings.load_by_concept_map_version_uuid(
+            self.source.concept_map_version_uuid
+        )
         if concept_map_settings.auto_advance_after_mapping:
-            self.source.update(
-                conn=self.conn,
-                map_status='ready for review'
-            )
+            self.source.update(conn=self.conn, map_status="ready for review")
 
     def serialize(self):
         """Prepares a JSON representation of the Mapping instance to return to the API."""
