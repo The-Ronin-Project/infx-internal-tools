@@ -414,6 +414,9 @@ def create_app(script_info=None):
                 # Set the 'total' field to the original total
                 value_set_to_json_copy["expansion"]["total"] = original_total
             publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
+
+            # Publish new version of data normalization registry
+            DataNormalizationRegistry.publish_data_normalization_registry()
             return jsonify(value_set_to_datastore)
 
         if request.method == "GET":
@@ -663,6 +666,7 @@ def create_app(script_info=None):
                 concept_map_to_json, initial_path, folder="published"
             )
             version_set_status_active(version_uuid, object_type)
+            DataNormalizationRegistry.publish_data_normalization_registry()
             return jsonify(concept_map_to_datastore)
         if request.method == "GET":
             concept_map = get_object_type_from_db(version_uuid, object_type)
@@ -740,13 +744,17 @@ def create_app(script_info=None):
             return jsonify(new_suggestion.serialize())
 
     @app.route("/mappings/", methods=["POST"])
-    def create_concept_map():
+    def create_mappings():
         """
-        Create a new Concept Map with the provided source concept UUID, relationship code UUID, target concept code,
+        Create a new Concept Map with the provided source concept UUID(s), relationship code UUID, target concept code,
         target concept display, target concept terminology version UUID, mapping comments, author, and review status.
         """
+
         if request.method == "POST":
-            source_concept_uuid = request.json.get("source_concept_uuid")
+            source_concept_uuids = request.json.get("source_concept_uuid")
+            if not isinstance(source_concept_uuids, list):
+                source_concept_uuids = [source_concept_uuids]
+
             relationship_code_uuid = request.json.get("relationship_code_uuid")
             target_concept_code = request.json.get("target_concept_code")
             target_concept_display = request.json.get("target_concept_display")
@@ -756,9 +764,6 @@ def create_app(script_info=None):
             mapping_comments = request.json.get("mapping_comments")
             author = request.json.get("author")
             review_status = request.json.get("review_status")
-
-            # source_code = Code.load_concept_map_source_concept(source_concept_uuid)
-            source_code = SourceConcept.load(source_concept_uuid)
 
             relationship = MappingRelationship.load(relationship_code_uuid)
 
@@ -770,17 +775,22 @@ def create_app(script_info=None):
                 terminology_version_uuid=target_concept_terminology_version_uuid,
             )
 
-            new_mapping = Mapping(
-                source=source_code,
-                relationship=relationship,
-                target=target_code,
-                mapping_comments=mapping_comments,
-                author=author,
-                review_status=review_status,
-            )
-            new_mapping.save()
+            new_mappings = []
+            for source_concept_uuid in source_concept_uuids:
+                source_code = SourceConcept.load(source_concept_uuid)
 
-            return jsonify(new_mapping.serialize())
+                new_mapping = Mapping(
+                    source=source_code,
+                    relationship=relationship,
+                    target=target_code,
+                    mapping_comments=mapping_comments,
+                    author=author,
+                    review_status=review_status,
+                )
+                new_mapping.save()
+                new_mappings.append(new_mapping.serialize())
+
+            return jsonify(new_mappings)
 
     @app.route("/ConceptMaps/update/mapping_relationships", methods=["PATCH"])
     def update_mapping_relationship():
@@ -876,7 +886,7 @@ def create_app(script_info=None):
             return jsonify(registry.serialize())
 
     @app.route("/data_normalization/registry/actions/publish", methods=["POST"])
-    def publish_data_normalization_registry():
+    def publish_data_normalization_registry_endpoint():
         """
         Publish the data normalization registry to an object store, allowing other services to access the registry information.
         """

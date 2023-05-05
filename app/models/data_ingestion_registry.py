@@ -1,6 +1,9 @@
 import json
 import datetime
 import uuid
+
+from flask import jsonify
+
 import app.models.concept_maps
 import app.models.value_sets
 
@@ -15,12 +18,14 @@ from dateutil import tz
 
 DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION = 2
 
+
 @dataclass
 class DNRegistryEntry:
     class DNRegistryEntry:
         """
         A class representing a single entry in the Data Normalization Registry.
         """
+
     resource_type: str
     data_element: str
     tenant_id: str
@@ -42,22 +47,26 @@ class DNRegistryEntry:
             "tenant_id": self.tenant_id,
             "source_extension_url": self.source_extension_url,
             "registry_entry_type": self.registry_entry_type,
-            "profile_url": self.profile_url
+            "profile_url": self.profile_url,
         }
-        if self.registry_entry_type == 'value_set':
-            value_set_version = self.value_set.load_most_recent_active_version(self.value_set.uuid).version
-            serialized['value_set_name'] = self.value_set.name
-            serialized['value_set_uuid'] = str(self.value_set.uuid)
-            serialized['version'] = value_set_version
-            serialized['filename'] = f"ValueSets/v{app.models.value_sets.VALUE_SET_SCHEMA_VERSION}/published/{self.value_set.uuid}/{value_set_version}.json"
-        if self.registry_entry_type == 'concept_map':
-            serialized['concept_map_name'] = self.concept_map.name
-            serialized['concept_map_uuid'] = str(self.concept_map.uuid)
-            serialized['version'] = self.concept_map.most_recent_active_version.version
+        if self.registry_entry_type == "value_set":
+            value_set_version = self.value_set.load_most_recent_active_version(
+                self.value_set.uuid
+            ).version
+            serialized["value_set_name"] = self.value_set.name
+            serialized["value_set_uuid"] = str(self.value_set.uuid)
+            serialized["version"] = value_set_version
             serialized[
-                'filename'] = f"ConceptMaps/v1/published/{self.concept_map.uuid}/{self.concept_map.most_recent_active_version.version}.json"
+                "filename"
+            ] = f"ValueSets/v{app.models.value_sets.VALUE_SET_SCHEMA_VERSION}/published/{self.value_set.uuid}/{value_set_version}.json"
+        if self.registry_entry_type == "concept_map":
+            serialized["concept_map_name"] = self.concept_map.name
+            serialized["concept_map_uuid"] = str(self.concept_map.uuid)
+            serialized["version"] = self.concept_map.most_recent_active_version.version
+            serialized[
+                "filename"
+            ] = f"ConceptMaps/v1/published/{self.concept_map.uuid}/{self.concept_map.most_recent_active_version.version}.json"
         return serialized
-
 
 
 @dataclass
@@ -65,6 +74,7 @@ class DataNormalizationRegistry:
     """
     A class representing the Data Normalization Registry containing multiple DNRegistryEntry objects.
     """
+
     entries: List[DNRegistryEntry] = None
 
     def __post_init__(self):
@@ -85,7 +95,7 @@ class DataNormalizationRegistry:
         )
 
         for item in query:
-            if item.type == 'concept_map':
+            if item.type == "concept_map":
                 self.entries.append(
                     DNRegistryEntry(
                         resource_type=item.resource_type,
@@ -97,10 +107,10 @@ class DataNormalizationRegistry:
                         registry_entry_type=item.type,
                         concept_map=app.models.concept_maps.ConceptMap(
                             item.concept_map_uuid
-                        )
+                        ),
                     )
                 )
-            elif item.type == 'value_set':
+            elif item.type == "value_set":
                 self.entries.append(
                     DNRegistryEntry(
                         resource_type=item.resource_type,
@@ -112,11 +122,13 @@ class DataNormalizationRegistry:
                         registry_entry_type=item.type,
                         value_set=app.models.value_sets.ValueSet.load(
                             item.value_set_uuid
-                        )
+                        ),
                     )
                 )
             else:
-                raise Exception("Only value_set and concept_map are recognized registry types")
+                raise Exception(
+                    "Only value_set and concept_map are recognized registry types"
+                )
 
     def serialize(self):
         """
@@ -150,7 +162,9 @@ class DataNormalizationRegistry:
         namespace = object_storage_client.get_namespace().data
         bucket_name = config("OCI_CLI_BUCKET")
         bucket_item = object_storage_client.get_object(
-            namespace, bucket_name, f"DataNormalizationRegistry/v{DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION}/registry.json"
+            namespace,
+            bucket_name,
+            f"DataNormalizationRegistry/v{DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION}/registry.json",
         )
         return bucket_item.headers["last-modified"]
 
@@ -173,3 +187,13 @@ class DataNormalizationRegistry:
         # convert time zone to PST
         pacific_time = str(gmt.astimezone(to_zone))
         return {"last_modified": pacific_time + " PST"}
+
+    @staticmethod
+    def publish_data_normalization_registry():
+        post_registry = DataNormalizationRegistry()
+        post_registry.load_entries()
+        all_registries = post_registry.serialize()
+        registries_to_post = DataNormalizationRegistry.publish_to_object_store(
+            all_registries
+        )
+        return registries_to_post

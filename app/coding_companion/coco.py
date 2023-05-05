@@ -14,14 +14,14 @@ import app.coding_companion.github
 import app.coding_companion.openai
 
 # Set up environment variables and API keys
-JIRA_URL = config('JIRA_URL')
-JIRA_USERNAME = config('JIRA_USERNAME')
-JIRA_PASSWORD = config('JIRA_PASSWORD')
-OPENAI_API_KEY = config('OPENAI_API_KEY')
+JIRA_URL = config("JIRA_URL")
+JIRA_USERNAME = config("JIRA_USERNAME")
+JIRA_PASSWORD = config("JIRA_PASSWORD")
+OPENAI_API_KEY = config("OPENAI_API_KEY")
 
 # Authenticate with the JIRA API
 jira = JIRA(JIRA_URL, basic_auth=(JIRA_USERNAME, JIRA_PASSWORD))
-jira_datetime_format = '%Y-%m-%dT%H:%M:%S.%f%z'
+jira_datetime_format = "%Y-%m-%dT%H:%M:%S.%f%z"
 
 # Authenticate with the OpenAI API
 # openai.api_type = "azure"
@@ -63,7 +63,9 @@ def get_coco_enabled_tickets() -> List[Ticket]:
     all_epics = jira.search_issues(jql)
 
     # Filter epics with the 'coco-enabled' label
-    coco_enabled_epics = [epic for epic in all_epics if 'coco-enabled' in epic.fields.labels]
+    coco_enabled_epics = [
+        epic for epic in all_epics if "coco-enabled" in epic.fields.labels
+    ]
 
     # Get all the tickets associated with the filtered epics and with a status of "To Do" or "In Progress"
     tickets = []
@@ -77,7 +79,9 @@ def get_coco_enabled_tickets() -> List[Ticket]:
                 description=issue.fields.description,
                 acceptance_criteria=None,  # todo: identify appropriate field from issue.fields
                 scope=None,  # todo: identify appropriate field from issue.fields
-                last_updated=datetime.strptime(issue.fields.updated, jira_datetime_format)
+                last_updated=datetime.strptime(
+                    issue.fields.updated, jira_datetime_format
+                ),
             )
             tickets.append(ticket)
 
@@ -92,7 +96,7 @@ def get_ticket_by_id(ticket_id: str) -> Ticket:
         description=issue.fields.description,
         acceptance_criteria=None,  # todo: identify appropriate field from issue.fields
         scope=None,  # todo: identify appropriate field from issue.fields
-        last_updated=datetime.strptime(issue.fields.updated, jira_datetime_format)
+        last_updated=datetime.strptime(issue.fields.updated, jira_datetime_format),
     )
     return ticket
 
@@ -101,9 +105,13 @@ def add_ticket_comment(ticket: Ticket, response: str) -> None:
     jira.add_comment(ticket.ticket_id, response)
 
 
-def save_chat_thread(ticket: Ticket, conversation: Conversation, messages: List[Message]) -> None:
+def save_chat_thread(
+    ticket: Ticket, conversation: Conversation, messages: List[Message]
+) -> None:
     with get_db() as session:
-        session.execute(text("""  
+        session.execute(
+            text(
+                """  
             INSERT INTO coding_companion.tickets (ticket_id, title, description, acceptance_criteria, scope, last_updated)  
             VALUES (:ticket_id, :title, :description, :acceptance_criteria, :scope, :last_updated)  
             ON CONFLICT (ticket_id) DO UPDATE SET  
@@ -112,18 +120,31 @@ def save_chat_thread(ticket: Ticket, conversation: Conversation, messages: List[
                 acceptance_criteria = EXCLUDED.acceptance_criteria,  
                 scope = EXCLUDED.scope,  
                 last_updated = EXCLUDED.last_updated;  
-        """), ticket.__dict__)
+        """
+            ),
+            ticket.__dict__,
+        )
 
-        session.execute(text("""  
+        session.execute(
+            text(
+                """  
             INSERT INTO coding_companion.conversations (conversation_id, ticket_id, start_time, end_time)  
             VALUES (:conversation_id, :ticket_id, :start_time, :end_time);  
-        """), conversation.__dict__)
+        """
+            ),
+            conversation.__dict__,
+        )
 
         for message in messages:
-            session.execute(text("""  
+            session.execute(
+                text(
+                    """  
                 INSERT INTO coding_companion.messages (message_id, conversation_id, sender, content, timestamp)  
                 VALUES (:message_id, :conversation_id, :sender, :content, :timestamp);  
-            """), message.__dict__)
+            """
+                ),
+                message.__dict__,
+            )
 
         session.commit()
 
@@ -147,7 +168,7 @@ if __name__ == "__main__":
     # main()
 
     # ticket = get_ticket_by_id('INFX-2387')
-    ticket = get_ticket_by_id('INFX-2390')
+    ticket = get_ticket_by_id("INFX-2415")
     print(ticket)
     response = app.coding_companion.openai.generate_response(ticket)
     print("Response")
