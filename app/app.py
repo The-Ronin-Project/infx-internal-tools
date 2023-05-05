@@ -786,35 +786,24 @@ def create_app(script_info=None):
     def update_mapping_relationship():
         data = request.get_json()
 
-        # Check if the input data is a list of dictionaries or a single dictionary
-        if isinstance(data, list):
-            updates = data
-        elif isinstance(data, dict):
-            updates = [data]
-        else:
+        # Check if required fields are provided in the update
+        if "mapping_uuid" not in data or "new_relationship_code_uuid" not in data:
             return BadRequest(
-                "Input data must be a dictionary or a list of dictionaries"
+                "mapping_uuid and new_relationship_code_uuid are required fields"
             )
 
-            # Process each update in the input data
-        for update in updates:
-            # Check if required fields are provided in the update
-            if (
-                "mapping_uuid" not in update
-                or "new_relationship_code_uuid" not in update
-            ):
-                return BadRequest(
-                    "mapping_uuid and new_relationship_code_uuid are required fields"
-                )
+            # Convert the new_relationship_code_uuid from string to UUID object
+        try:
+            new_relationship_code_uuid = UUID(data["new_relationship_code_uuid"])
+        except ValueError:
+            return BadRequest("Invalid UUID format for new_relationship_code_uuid")
 
-                # Convert the UUIDs from strings to UUID objects
+            # Iterate over each mapping_uuid and update the relationship_code_uuid
+        for mapping_uuid_str in data["mapping_uuid"]:
             try:
-                mapping_uuid = UUID(update["mapping_uuid"])
-                new_relationship_code_uuid = UUID(update["new_relationship_code_uuid"])
+                mapping_uuid = UUID(mapping_uuid_str)
             except ValueError:
-                return BadRequest(
-                    "Invalid UUID format for mapping_uuid or new_relationship_code_uuid"
-                )
+                return BadRequest("Invalid UUID format for mapping_uuid")
 
                 # Update the relationship_code_uuid for the specified mapping_uuid in the database
             Mapping.update_relationship_code(mapping_uuid, new_relationship_code_uuid)
