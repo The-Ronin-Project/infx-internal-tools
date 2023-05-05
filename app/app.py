@@ -394,6 +394,7 @@ def create_app(script_info=None):
             )
 
             vs_version.version_set_status_active()
+            vs_version.publish_data_normalization_registry()
             vs_version.retire_and_obsolete_previous_version()
             value_set_uuid = vs_version.value_set.uuid
             resource_type = "ValueSet"  # param for Simplifier
@@ -663,6 +664,7 @@ def create_app(script_info=None):
                 concept_map_to_json, initial_path, folder="published"
             )
             version_set_status_active(version_uuid, object_type)
+            publish_data_normalization_registry(version_uuid, object_type)
             return jsonify(concept_map_to_datastore)
         if request.method == "GET":
             concept_map = get_object_type_from_db(version_uuid, object_type)
