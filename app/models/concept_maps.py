@@ -1024,6 +1024,7 @@ class SourceConcept:
             "mapping_group": self.mapping_group,
             "previous_version_context": self.previous_version_context,
         }
+        return serialized_data
 
 
 @dataclass

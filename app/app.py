@@ -749,7 +749,7 @@ def create_app(script_info=None):
         """
 
         if request.method == "POST":
-            source_concept_uuids = request.json.get("source_concept_uuids")
+            source_concept_uuids = request.json.get("source_concept_uuid")
             if not isinstance(source_concept_uuids, list):
                 source_concept_uuids = [source_concept_uuids]
 
