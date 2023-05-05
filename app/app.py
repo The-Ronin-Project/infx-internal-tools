@@ -782,7 +782,47 @@ def create_app(script_info=None):
 
             return jsonify(new_mapping.serialize())
 
-    # Patient Education Endpoints
+    @app.route("/ConceptMaps/update/mapping_relationships", methods=["PATCH"])
+    def update_mapping_relationship():
+        data = request.get_json()
+
+        # Check if the input data is a list of dictionaries or a single dictionary
+        if isinstance(data, list):
+            updates = data
+        elif isinstance(data, dict):
+            updates = [data]
+        else:
+            return BadRequest(
+                "Input data must be a dictionary or a list of dictionaries"
+            )
+
+            # Process each update in the input data
+        for update in updates:
+            # Check if required fields are provided in the update
+            if (
+                "mapping_uuid" not in update
+                or "new_relationship_code_uuid" not in update
+            ):
+                return BadRequest(
+                    "mapping_uuid and new_relationship_code_uuid are required fields"
+                )
+
+                # Convert the UUIDs from strings to UUID objects
+            try:
+                mapping_uuid = UUID(update["mapping_uuid"])
+                new_relationship_code_uuid = UUID(update["new_relationship_code_uuid"])
+            except ValueError:
+                return BadRequest(
+                    "Invalid UUID format for mapping_uuid or new_relationship_code_uuid"
+                )
+
+                # Update the relationship_code_uuid for the specified mapping_uuid in the database
+            Mapping.update_relationship_code(mapping_uuid, new_relationship_code_uuid)
+
+        return jsonify({"message": "Successfully updated mapping relationship(s)"})
+
+        # Patient Education Endpoints
+
     @app.route("/PatientEducation/", methods=["GET", "POST", "PATCH", "DELETE"])
     def get_external_resources():
         """
