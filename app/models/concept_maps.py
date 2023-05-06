@@ -545,6 +545,7 @@ class ConceptMapVersion:
 
     def load_mappings(self):
         conn = get_db()
+        # todo: fix query
         query = """
             select concept_relationship.uuid as mapping_uuid, concept_relationship.author, concept_relationship.review_status, concept_relationship.mapping_comments,
             source_concept.uuid as source_concept_uuid, source_concept.code as source_code, source_concept.display as source_display, source_concept.system as source_system, 
