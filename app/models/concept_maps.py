@@ -551,7 +551,7 @@ class ConceptMapVersion:
             tv_source.version as source_version, tv_source.fhir_uri as source_fhir_uri,
             source_concept.comments as source_comments, source_concept.additional_context as source_additional_context, source_concept.map_status as source_map_status,
             source_concept.assigned_mapper as source_assigned_mapper, source_concept.assigned_reviewer as source_assigned_reviewer, source_concept.no_map,
-            source_concept.reason_for_no_map, source_concept.mapping_group as source_mapping_group, source_concept.previous_version_context as source_previous_version_context
+            source_concept.reason_for_no_map, source_concept.mapping_group as source_mapping_group, source_concept.previous_version_context as source_previous_version_context,
             relationship_codes.code as relationship_code, source_concept.map_status,
             concept_relationship.target_concept_code, concept_relationship.target_concept_display,
             concept_relationship.target_concept_system_version_uuid as target_system,
@@ -911,6 +911,9 @@ class SourceConcept:
             system=self.system.fhir_uri,
             version=self.system.version,
         )
+
+    def __hash__(self):
+        return hash((self.uuid, self.code, self.display, self.system))
 
     @classmethod
     def load(cls, source_concept_uuid: UUID) -> "SourceConcept":
