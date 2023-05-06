@@ -415,9 +415,12 @@ def create_app(script_info=None):
                 value_set_to_json_copy["expansion"]["total"] = original_total
             publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
 
-            # todo: rebuild this so a failure does not interfere w/ endpoint executing
-            # # Publish new version of data normalization registry
-            # DataNormalizationRegistry.publish_data_normalization_registry()
+            # Publish new version of data normalization registry
+            try:
+                DataNormalizationRegistry.publish_data_normalization_registry()
+            except:
+                pass
+
             return jsonify(value_set_to_datastore)
 
         if request.method == "GET":
@@ -668,9 +671,12 @@ def create_app(script_info=None):
             )
             version_set_status_active(version_uuid, object_type)
 
-            # todo: rebuild this so a failure does not interfere w/ endpoint executing
-            # # Publish new version of data normalization registry
-            # DataNormalizationRegistry.publish_data_normalization_registry()
+            # Publish new version of data normalization registry
+            try:
+                DataNormalizationRegistry.publish_data_normalization_registry()
+            except:
+                pass # todo: find better error handling
+
             return jsonify(concept_map_to_datastore)
         if request.method == "GET":
             concept_map = get_object_type_from_db(version_uuid, object_type)
