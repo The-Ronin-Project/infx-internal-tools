@@ -16,6 +16,7 @@ from app.models.concept_maps import *
 from app.models.surveys import *
 from app.models.patient_edu import *
 from app.models.concept_map_versioning import *
+from app.models.value_set_registry import *
 from app.models.data_ingestion_registry import DataNormalizationRegistry
 from app.errors import BadRequestWithCode
 from app.helpers.simplifier_helper import (
@@ -466,7 +467,128 @@ def create_app(script_info=None):
         publish_to_simplifier(resource_type, resource_id, value_set_to_json)
         return jsonify(value_set_to_json)
 
-    # Survey Endpoints
+    # Value Set Registry Endpoints
+
+    @app.route("/register/element_type", methods=["POST"])
+    def register_element_type():
+        data = request.get_json()
+        element_type = ElementType.register_new_element_type(
+            data["element_type"],
+            data["product_element_type_label"],
+            data["value_set_uuid"],
+        )
+
+        # Create a first element_type_version for the new element_type
+        ucum_ref_units = data.get("ucum_ref_units", None)
+        ref_range_high = data.get("ref_range_high", None)
+        ref_range_low = data.get("ref_range_low", None)
+        ElementTypeVersion.create_element_type_version(
+            element_type.element_type_uuid,
+            ucum_ref_units,
+            ref_range_high,
+            ref_range_low,
+        )
+
+        return (
+            jsonify(
+                {"message": "new element_type and initial element_type_version added"}
+            ),
+            201,
+        )
+
+    @app.route("/element_type/<element_type_uuid>/new_version", methods=["POST"])
+    def create_new_element_type_version(element_type_uuid):
+        data = request.get_json()
+        ucum_ref_units = data.get("ucum_ref_units", None)
+        ref_range_high = data.get("ref_range_high", None)
+        ref_range_low = data.get("ref_range_low", None)
+
+        # Create a new element_type_version for the specified element_type
+        ElementTypeVersion.create_element_type_version(
+            element_type_uuid,
+            ucum_ref_units,
+            ref_range_high,
+            ref_range_low,
+        )
+
+        return (
+            jsonify(
+                {
+                    "message": f"new element_type_version added for element_type {element_type_uuid}"
+                }
+            ),
+            201,
+        )
+
+    @app.route("/register/group", methods=["POST"])
+    def register_group():
+        data = request.get_json()
+        group = Group.create_group(
+            data["product_group_label"],
+            data["group_sequence"],
+            data["group_description"],
+        )
+
+        # Create a first group_version for the new group
+        group_version_description = data.get(
+            "group_version_description", "Initial group version"
+        )
+        GroupVersion.create_group_version(
+            group.group_uuid,
+            group_version_description,
+        )
+
+        return jsonify({"message": "new group and initial group_version added"}), 201
+
+    @app.route("/group/<group_uuid>/new_version", methods=["POST"])
+    def create_new_group_version(group_uuid):
+        data = request.get_json()
+        group_version_description = data.get(
+            "group_version_description", "New group version"
+        )
+
+        # Create a new group_version for the specified group
+        GroupVersion.create_group_version(
+            group_uuid,
+            group_version_description,
+        )
+
+        return (
+            jsonify({"message": f"new group_version added for group {group_uuid}"}),
+            201,
+        )
+
+    @app.route("/register/group_member", methods=["POST"])
+    def register_group_member():
+        data = request.get_json()
+        GroupMember.register_element_type(
+            data["group_version_uuid"],
+            data["element_type_version_uuid"],
+            data["element_type_sequence_number"],
+        )
+        return (
+            jsonify({"message": "element_type_version registered as group_member"}),
+            201,
+        )
+
+    @app.route("/group_members/<group_version_uuid>", methods=["GET"])
+    def get_group_members(group_version_uuid):
+        group_members = Group.expand_group(group_version_uuid)
+
+        group_members_data = []
+        for member in group_members:
+            member_data = {
+                "group_member_uuid": member.group_member_uuid,
+                "group_version_uuid": member.group_version_uuid,
+                "element_type_version_uuid": member.element_type_version_uuid,
+                "element_type_sequence_number": member.element_type_sequence_number,
+            }
+            group_members_data.append(member_data)
+
+        return jsonify({"group_members": group_members_data}), 200
+
+        # Survey Endpoints
+
     @app.route("/surveys/<string:survey_uuid>")
     def export_survey(survey_uuid):
         """
@@ -675,7 +797,7 @@ def create_app(script_info=None):
             try:
                 DataNormalizationRegistry.publish_data_normalization_registry()
             except:
-                pass # todo: find better error handling
+                pass  # todo: find better error handling
 
             return jsonify(concept_map_to_datastore)
         if request.method == "GET":
