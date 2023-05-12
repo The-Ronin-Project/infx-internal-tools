@@ -55,7 +55,7 @@ class Terminology:
     def __init__(
         self,
         uuid,
-        name,
+        terminology,
         version,
         effective_start,
         effective_end,
@@ -63,7 +63,7 @@ class Terminology:
         fhir_terminology,
     ):
         self.uuid = uuid
-        self.name = name
+        self.terminology = terminology
         self.version = version
         self.effective_start = effective_start
         self.effective_end = effective_end
@@ -149,7 +149,7 @@ class Terminology:
                     code=item.code,
                     display=item.display,
                     uuid=item.uuid,
-                    system_name=self.name,
+                    system_name=self.terminology,
                     terminology_version=self,
                 )
             )
@@ -262,7 +262,7 @@ class Terminology:
 
         return {
             "uuid": self.uuid,
-            "name": self.name,
+            "name": self.terminology,
             "version": self.version,
             "effective_start": self.effective_start,
             "effective_end": self.effective_end,
