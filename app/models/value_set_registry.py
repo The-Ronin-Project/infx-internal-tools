@@ -169,10 +169,10 @@ class Group:
 
         conn.execute(
             text(
-                """  
-              insert into value_set_registry."group"  
-              (group_uuid, product_group_label, group_sequence, group_description)  
-              values (:group_uuid, :product_group_label,:group_sequence, :group_description)  
+                """    
+              insert into value_set_registry."group"    
+              (group_uuid, product_group_label, group_sequence, group_description)    
+              values (:group_uuid, :product_group_label,:group_sequence, :group_description)    
               """
             ),
             {
@@ -183,6 +183,14 @@ class Group:
             },
         )
         conn.execute(text("commit"))
+
+        # Return the created group instance
+        return cls(
+            group_uuid=group_uuid,
+            product_group_label=product_group_label,
+            group_sequence=group_sequence,
+            group_description=group_description,
+        )
 
     @classmethod
     def load(cls, group_uuid):
