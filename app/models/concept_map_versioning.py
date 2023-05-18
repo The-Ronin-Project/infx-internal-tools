@@ -487,7 +487,7 @@ class ConceptMapVersionCreator:
             require_review_no_maps_not_in_target
             and previous_source_concept.reason_for_no_map == "Not in target code system"
         ):
-            # Set map_status back to 'pending' so the user reviews whether a no-map is still appropriate
+            # Set map_status back to 'no map' so the user reviews whether a no-map is still appropriate
             previous_context = {
                 "reason": "previous no-map",
                 "no_map_reason": previous_source_concept.reason_for_no_map,
@@ -501,7 +501,7 @@ class ConceptMapVersionCreator:
                 previous_version_context=json.dumps(
                     previous_contexts_list, cls=CustomJSONEncoder
                 ),
-                map_status="pending",
+                map_status="no map",
             )
             return previous_context
         return None
