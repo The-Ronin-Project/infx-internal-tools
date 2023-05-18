@@ -109,7 +109,7 @@ class Terminology:
 
         return cls(
             uuid=term_data.uuid,
-            name=term_data.terminology,
+            terminology=term_data.terminology,
             version=term_data.version,
             effective_start=term_data.effective_start,
             effective_end=term_data.effective_end,
