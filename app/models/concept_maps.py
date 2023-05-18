@@ -687,8 +687,8 @@ class ConceptMapVersion:
         source_target_pairs_set = set()
 
         for source_code, mappings in self.mappings.items():
-            source_uri = source_code.system
-            source_version = source_code.version
+            source_uri = source_code.system.fhir_uri
+            source_version = source_code.system.version
             for mapping in mappings:
                 target_uri = mapping.target.system
                 target_version = mapping.target.version
@@ -709,8 +709,8 @@ class ConceptMapVersion:
             elements = []
             for source_code, mappings in self.mappings.items():
                 if (
-                    source_code.system == source_uri
-                    and source_code.version == source_version
+                    source_code.system.fhir_uri == source_uri
+                    and source_code.system.version == source_version
                 ):
                     filtered_mappings = [
                         x
