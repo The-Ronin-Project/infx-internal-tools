@@ -503,6 +503,28 @@ class ConceptMapVersion:
         self.load_mappings()
         # self.generate_self_mappings()
 
+    @classmethod
+    def load_by_concept_map_uuid_and_version(cls, concept_map_uuid, version):
+        """
+        Receives a concept_map_uuid and version and returns the appropriate ConceptMapVersion, if it exists
+        """
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """
+                SELECT * FROM concept_maps.concept_map_version
+                WHERE concept_map_uuid=:concept_map_uuid
+                AND version=:version
+                """
+            ),
+            {"concept_map_uuid": concept_map_uuid, "version": version},
+        ).first()
+        if data:
+            concept_map_version = ConceptMapVersion(data.uuid)
+            return concept_map_version
+        else:
+            return None
+
     def load_allowed_target_terminologies(self):
         """
         runs query to get target terminology related to concept map version, called from the load method above.
