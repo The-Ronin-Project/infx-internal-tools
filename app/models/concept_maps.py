@@ -810,7 +810,7 @@ class ConceptMapVersion:
 
     def prepare_for_oci(self):
         serialized = self.serialize()
-        initial_path = f"ConceptMaps/v2/folder/{self.uuid}"  # folder is set in oci_helper(determined by api call)
+        initial_path = f"ConceptMaps/v2/folder/{self.concept_map.uuid}"  # folder is set in oci_helper(determined by api call)
 
         return serialized, initial_path
 

@@ -72,6 +72,10 @@ class Terminology:
         self.codes = []
         self.is_standard = None
 
+    @property
+    def name(self):
+        return self.terminology
+
     def __hash__(self):
         return hash(self.uuid)
 
