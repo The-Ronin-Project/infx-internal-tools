@@ -235,6 +235,8 @@ class ConceptMap:
         self.experimental = data.experimental
         self.author = data.author
         self.created_date = data.created_date
+        self.source_value_set_uuid = data.source_value_set_uuid
+        self.target_value_set_uuid = data.target_value_set_uuid
 
         self.settings = ConceptMapSettings(
             auto_advance_after_mapping=bool(data.auto_advance_mapping),
@@ -468,10 +470,12 @@ class ConceptMapVersion:
         self.allowed_target_terminologies = []
         self.mappings = {}
         self.url = None
+        self.source_value_set_version_uuid = None
+        self.target_value_set_version_uuid = None
 
         self.load_data(concept_map=concept_map)
 
-    def load_data(self, concept_map=None):
+    def load_data(self, concept_map: ConceptMap = None):
         """
         runs sql query to return all information related to specified concept map version, data returned is used to
         set class attributes
@@ -499,6 +503,8 @@ class ConceptMapVersion:
         self.created_date = data.created_date
         self.version = data.version
         self.published_date = data.published_date
+        self.source_value_set_version_uuid = data.source_value_set_version_uuid
+        self.target_value_set_version_uuid = data.target_value_set_version_uuid
         self.load_allowed_target_terminologies()
         self.load_mappings()
         # self.generate_self_mappings()
@@ -783,7 +789,7 @@ class ConceptMapVersion:
             return result.description
         return None
 
-    def serialize(self):
+    def serialize(self, include_internal_info=False):
         serial_mappings = self.serialize_mappings()
         for mapped_object in serial_mappings:
             for nested in mapped_object["element"]:
@@ -803,7 +809,7 @@ class ConceptMapVersion:
                             if item["comment"]
                             else "source-is-broader-than-target"
                         )
-        return {
+        serialized = {
             "resourceType": "ConceptMap",
             "title": self.concept_map.title,
             "id": self.uuid,
@@ -829,6 +835,15 @@ class ConceptMapVersion:
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and
             # are not required for our use cases at this time
         }
+
+        if include_internal_info:
+            serialized['internalInfo'] = {
+                'source_value_set_uuid': self.concept_map.source_value_set_uuid,
+                'source_value_set_verion_uuid': self.source_value_set_version_uuid,
+                'target_value_set_uuid': self.concept_map.target_value_set_uuid,
+                'target_value_set_version_uuid': self.target_value_set_version_uuid
+            }
+        return serialized
 
     def prepare_for_oci(self):
         serialized = self.serialize()
