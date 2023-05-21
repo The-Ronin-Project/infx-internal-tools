@@ -837,7 +837,7 @@ class ConceptMapVersion:
         }
 
         if include_internal_info:
-            serialized['internalInfo'] = {
+            serialized['internalData'] = {
                 'source_value_set_uuid': self.concept_map.source_value_set_uuid,
                 'source_value_set_verion_uuid': self.source_value_set_version_uuid,
                 'target_value_set_uuid': self.concept_map.target_value_set_uuid,
