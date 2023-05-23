@@ -534,8 +534,9 @@ def create_app(script_info=None):
         Retrieve a specific ConceptMap version identified by the version_uuid.
         Returns the ConceptMap version as JSON data.
         """
+        include_internal_info = bool(request.values.get('include_internal_info'))
         concept_map_version = ConceptMapVersion(version_uuid)
-        concept_map_to_json = concept_map_version.serialize()
+        concept_map_to_json = concept_map_version.serialize(include_internal_info=include_internal_info)
         return jsonify(concept_map_to_json)
 
     @app.route("/ConceptMaps/<string:version_uuid>/actions/index", methods=["POST"])
@@ -552,7 +553,7 @@ def create_app(script_info=None):
         )
         return "OK"
 
-    @app.route("/ConceptMaps/", methods=["POST"])
+    @app.route("/ConceptMaps/", methods=["GET", "POST"])
     def create_initial_concept_map_and_version_one():
         """
         Create an initial ConceptMap and its first version based on input from the request payload.
@@ -591,6 +592,27 @@ def create_app(script_info=None):
                 target_value_set_version_uuid=target_value_set_version_uuid,
             )
             return jsonify(ConceptMap.serialize(new_cm))
+        elif request.method == "GET":
+            concept_map_uuid = request.values.get("concept_map_uuid")
+            version = request.values.get("version")
+            include_internal_info = request.values.get('include_internal_info')
+            include_internal_info = bool(include_internal_info)
+
+            if not concept_map_uuid or not version:
+                return jsonify(
+                    {"error": "A concept_map_uuid and version must be supplied."}, 400
+                )
+
+            concept_map_version = ConceptMapVersion.load_by_concept_map_uuid_and_version(
+                concept_map_uuid=concept_map_uuid,
+                version=version
+            )
+
+            if not concept_map_version:
+                return jsonify({"error": "Concept Map Version not found."}, 404)
+
+            serialized_concept_map_version = concept_map_version.serialize(include_internal_info=include_internal_info)
+            return jsonify(serialized_concept_map_version)
 
     @app.route("/ConceptMaps/<string:version_uuid>/draft", methods=["GET"])
     def get_concept_map_draft(version_uuid):
