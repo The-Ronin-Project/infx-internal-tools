@@ -835,6 +835,10 @@ class ConceptMapVersion:
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and
             # are not required for our use cases at this time
         }
+        if self.published_date is not None:
+            serialized['meta'] = {
+                "lastUpdated": self.published_date.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
+            }
 
         if include_internal_info:
             serialized['internalData'] = {
