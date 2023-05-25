@@ -38,6 +38,7 @@ from app.helpers.db_helper import db_cursor
 from elasticsearch import TransportError
 from numpy import source
 
+CONCEPT_MAPS_SCHEMA_VERSION = 3
 
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
 # TODO remove this after Alex and Ben have updated the ED model to use concept mapps for ED utilization
@@ -870,7 +871,7 @@ class ConceptMapVersion:
 
     def prepare_for_oci(self):
         serialized = self.serialize()
-        initial_path = f"ConceptMaps/v2/folder/{self.concept_map.uuid}"  # folder is set in oci_helper(determined by api call)
+        initial_path = f"ConceptMaps/v{CONCEPT_MAPS_SCHEMA_VERSION}/folder/{self.concept_map.uuid}"  # folder is set in oci_helper(determined by api call)
 
         return serialized, initial_path
 
