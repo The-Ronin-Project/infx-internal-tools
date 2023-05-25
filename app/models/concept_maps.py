@@ -2,6 +2,7 @@ import datetime
 import uuid
 import functools
 import json
+import re
 
 import app.models.codes
 import app.models.value_sets
@@ -713,7 +714,6 @@ class ConceptMapVersion:
     def serialize_mappings(self):
         # Identify all the source terminology / target terminology pairings in the mappings
         source_target_pairs_set = set()
-
         for source_code, mappings in self.mappings.items():
             source_uri = source_code.system.fhir_uri
             source_version = source_code.system.version
@@ -725,9 +725,13 @@ class ConceptMapVersion:
                     (source_uri, source_version, target_uri, target_version)
                 )
 
-        # Serialize the mappings
         groups = []
 
+        # Function for checking if we have a coding array string that used to be JSON
+        def is_coding_array(source_code_string):
+            return source_code_string.strip().startswith('[{')
+
+        # Serialize the mappings
         for (
             source_uri,
             source_version,
@@ -746,10 +750,22 @@ class ConceptMapVersion:
                         if x.target.system == target_uri
                         and x.target.version == target_version
                     ]
+                    # Do relevant checks on the code and display
+                    source_code_code = source_code.code.rstrip()
+                    source_code_display = source_code.display.rstrip()
+
+
+                    # Checking to see if the display is a coding array TODO: INFX-2521 this is a temporary problem that we should fix in the future
+                    if is_coding_array(source_code_display):
+                        source_code_code, source_code_display = source_code_display, source_code_code
+
+                    # We want the text string array that is supposed to be json to be formatted correctly
+                    if is_coding_array(source_code_code):  # If it's not an array, this should return the original as whatever it was
+                        source_code_code = transform_struct_string_to_json(source_code_code)
                     elements.append(
                         {
-                            "code": source_code.code.rstrip(),
-                            "display": source_code.display.rstrip(),
+                            "code": source_code_code,  # potentially problematic
+                            "display": source_code_display,  # potentially problematic
                             "target": [
                                 {
                                     "code": mapping.target.code,
@@ -1208,6 +1224,34 @@ class MappingSuggestion:
             "timestamp": self.timestamp,
             "accepted": self.accepted,
         }
+
+
+#TODO: This is a temporary function to solve a short term problem we have
+def transform_struct_string_to_json(struct_string):
+    # Parse the coding elements and the text that trails at the end
+    # The regular expression matches three parts inside each pair of braces
+    coding_strings = re.findall(r'\{(.*?)\}', struct_string)
+    text_string = re.search(r'\},(.*?)\}$', struct_string).group(1).strip()
+
+    # Process each coding element
+    # We are hard coding added dictionary keys that were lost in the original transformation process
+    coding = []
+    for coding_string in coding_strings:
+        parts = coding_string.split(', ')
+        coding.append({
+            'code': parts[0].strip(),
+            'display': parts[1].strip(),
+            'system': parts[2].strip()
+        })
+
+    # Construct the result dictionary
+    result = {
+        'coding': coding,
+        'text': text_string
+    }
+
+    # Convert the dictionary into a JSON string
+    return json.dumps(result)
 
 
 def update_comments_source_concept(source_concept_uuid, comments):
