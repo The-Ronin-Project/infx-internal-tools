@@ -231,6 +231,8 @@ class ConceptMapVersionCreator:
                 target_code = Code(
                     code=row.target_concept_code,
                     display=row.target_concept_display,
+                    system=None,
+                    version=None,
                     terminology_version_uuid=row.target_concept_system_version_uuid,
                 )
 
