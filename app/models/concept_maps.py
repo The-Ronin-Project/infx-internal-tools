@@ -764,12 +764,7 @@ class ConceptMapVersion:
                         source_code_code = transform_struct_string_to_json(source_code_code)
                     elements.append(
                         {
-                            "code": [
-                                # Wrapping in valueCodeableConcept to have better FHIR format
-                                {
-                                    "valueCodeableConcept": source_code_code,
-                                }
-                            ],
+                            "code": source_code_code,
                             "display": source_code_display,
                             "target": [
                                 {
@@ -1267,6 +1262,9 @@ def transform_struct_string_to_json(struct_string):
 
     if text_string is not None:
         result["text"] = text_string
+
+    # Wrapping the result with 'valueCodeableConcept'
+    result = {"valueCodeableConcept": result}
 
     # Convert the dictionary into a JSON string
     return json.dumps(result)
