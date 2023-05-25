@@ -2,6 +2,7 @@ import datetime
 import uuid
 import functools
 import json
+import hashlib
 
 import app.models.codes
 import app.models.value_sets
@@ -748,6 +749,7 @@ class ConceptMapVersion:
                     ]
                     elements.append(
                         {
+                            "id": source_code.id,
                             "code": source_code.code.rstrip(),
                             "display": source_code.display.rstrip(),
                             "target": [
@@ -955,6 +957,12 @@ class SourceConcept:
 
     def __hash__(self):
         return hash((self.uuid, self.code, self.display, self.system))
+
+    @property
+    def id(self):
+        combined = (self.code.strip() + self.display.strip()).encode("utf-8")
+        # todo: add the dependsOn in as well to be part of the hash
+        return hashlib.md5(combined).hexdigest()
 
     @classmethod
     def load(cls, source_concept_uuid: UUID) -> "SourceConcept":
