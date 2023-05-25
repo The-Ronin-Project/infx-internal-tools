@@ -501,32 +501,32 @@ def create_app(script_info=None):
         source_concept.update(comments=comments, assigned_mapper=assigned_mapper)
         return jsonify(source_concept.serialize())
 
-    # Concept Map Endpoints
-    @app.route("/ConceptMaps/actions/new_version_from_previous", methods=["POST"])
-    def new_cm_version_from_previous():
-        """
-        Create a new ConceptMap version based on a previous version.
-        Takes input from the request payload.
-        Returns a status message.
-        """
-        previous_version_uuid = request.json.get("previous_version_uuid")
-        new_version_description = request.json.get("new_version_description")
-        new_version_num = request.json.get("new_version_num")
-        new_source_value_set_version_uuid = request.json.get(
-            "new_source_value_set_version_uuid"
-        )
-        new_target_value_set_version_uuid = request.json.get(
-            "new_target_value_set_version_uuid"
-        )
-
-        new_version = ConceptMap.new_version_from_previous(
-            previous_version_uuid=previous_version_uuid,
-            new_version_description=new_version_description,
-            new_version_num=new_version_num,
-            new_source_value_set_version_uuid=new_source_value_set_version_uuid,
-            new_target_value_set_version_uuid=new_target_value_set_version_uuid,
-        )
-        return "OK"
+    # # Concept Map Endpoints
+    # @app.route("/ConceptMaps/actions/new_version_from_previous", methods=["POST"])
+    # def new_cm_version_from_previous():
+    #     """
+    #     Create a new ConceptMap version based on a previous version.
+    #     Takes input from the request payload.
+    #     Returns a status message.
+    #     """
+    #     previous_version_uuid = request.json.get("previous_version_uuid")
+    #     new_version_description = request.json.get("new_version_description")
+    #     new_version_num = request.json.get("new_version_num")
+    #     new_source_value_set_version_uuid = request.json.get(
+    #         "new_source_value_set_version_uuid"
+    #     )
+    #     new_target_value_set_version_uuid = request.json.get(
+    #         "new_target_value_set_version_uuid"
+    #     )
+    #
+    #     new_version = ConceptMap.new_version_from_previous(
+    #         previous_version_uuid=previous_version_uuid,
+    #         new_version_description=new_version_description,
+    #         new_version_num=new_version_num,
+    #         new_source_value_set_version_uuid=new_source_value_set_version_uuid,
+    #         new_target_value_set_version_uuid=new_target_value_set_version_uuid,
+    #     )
+    #     return "OK"
 
     @app.route("/ConceptMaps/<string:version_uuid>", methods=["GET"])
     def get_concept_map_version(version_uuid):
