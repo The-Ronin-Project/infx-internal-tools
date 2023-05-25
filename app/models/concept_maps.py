@@ -2,6 +2,7 @@ import datetime
 import uuid
 import functools
 import json
+import hashlib
 import re
 
 import app.models.codes
@@ -764,10 +765,12 @@ class ConceptMapVersion:
                         source_code_code = transform_struct_string_to_json(source_code_code)
                     elements.append(
                         {
+                            "id": source_code.id,
                             "code": source_code_code,
                             "display": source_code_display,
                             "target": [
                                 {
+                                    "id": mapping.id,
                                     "code": mapping.target.code,
                                     "display": mapping.target.display,
                                     "equivalence": mapping.relationship.code,
@@ -851,6 +854,10 @@ class ConceptMapVersion:
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and
             # are not required for our use cases at this time
         }
+        if self.published_date is not None:
+            serialized['meta'] = {
+                "lastUpdated": self.published_date.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
+            }
 
         if include_internal_info:
             serialized['internalData'] = {
@@ -967,6 +974,25 @@ class SourceConcept:
 
     def __hash__(self):
         return hash((self.uuid, self.code, self.display, self.system))
+
+    @property
+    def id(self):
+        """
+        Calculates a unique MD5 hash for the current instance.
+
+        This property combines `code` and `display` attributes, strips off any leading or trailing white spaces,
+        and then converts the combined string to an MD5 hash. Note that the combined string is encoded in UTF-8
+        before generating the hash.
+
+        Returns:
+            str: A hexadecimal string representing the MD5 hash of the `code` and `display` attributes.
+
+        Raises:
+            AttributeError: If the `code` or `display` attribute is not set for the instance.
+        """
+        combined = (self.code.strip() + self.display.strip()).encode("utf-8")
+        # todo: add the dependsOn in as well to be part of the hash
+        return hashlib.md5(combined).hexdigest()
 
     @classmethod
     def load(cls, source_concept_uuid: UUID) -> "SourceConcept":
@@ -1105,6 +1131,32 @@ class Mapping:
     def __post_init__(self):
         self.conn = get_db()
         self.uuid = uuid.uuid4()
+
+    @property
+    def id(self):
+        """
+        Generates and returns an MD5 hash as a hexadecimal string.
+
+        The hash is created using the following attributes:
+        - source.id
+        - relationship.code
+        - target.code
+        - target.display
+        - target.system
+
+        This method does not take any arguments, and it returns a string representing the hexadecimal value of the MD5 hash.
+
+        :return: a string of hexadecimal digits representing an MD5 hash
+        """
+        # concatenate the required attributes into a string
+        concat_str = str(
+            self.source.id) + self.relationship.code + self.target.code + self.target.display + self.target.system
+        # create a new md5 hash object
+        hash_object = hashlib.md5()
+        # update the hash object with the bytes-like object
+        hash_object.update(concat_str.encode('utf-8'))
+        # return the hexadecimal representation of the hash
+        return hash_object.hexdigest()
 
     @classmethod
     def load(cls, uuid):
