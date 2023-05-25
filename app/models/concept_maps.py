@@ -285,19 +285,19 @@ class ConceptMap:
 
     @classmethod
     def initial_concept_map_creation(
-        cls,
-        name,
-        title,
-        publisher,
-        author,
-        use_case_uuid,
-        cm_description,
-        experimental,
-        source_value_set_uuid,
-        target_value_set_uuid,
-        cm_version_description,
-        source_value_set_version_uuid,
-        target_value_set_version_uuid,
+            cls,
+            name,
+            title,
+            publisher,
+            author,
+            use_case_uuid,
+            cm_description,
+            experimental,
+            source_value_set_uuid,
+            target_value_set_uuid,
+            cm_version_description,
+            source_value_set_version_uuid,
+            target_value_set_version_uuid,
     ):
         """
         This function creates a brand-new concept map and concept map version 1 and inserts the source concept value set version codes, displays and systems into the source concept table.
@@ -371,7 +371,7 @@ class ConceptMap:
 
     @classmethod
     def insert_source_concepts_for_mapping(
-        cls, cmv_uuid, source_value_set_version_uuid
+            cls, cmv_uuid, source_value_set_version_uuid
     ):
         """
         This function gets and inserts the codes, displays and systems from the source value set version AND a concept map version uuid, into the source_concept table for mapping.
@@ -405,7 +405,7 @@ class ConceptMap:
 
     @staticmethod
     def index_targets(
-        concept_map_version_uuid: uuid.UUID, target_value_set_version_uuid: uuid.UUID
+            concept_map_version_uuid: uuid.UUID, target_value_set_version_uuid: uuid.UUID
     ):
         """
         Indexes the target concepts for the given concept map version and target value set version in Elasticsearch.
@@ -733,39 +733,44 @@ class ConceptMapVersion:
 
         # Serialize the mappings
         for (
-            source_uri,
-            source_version,
-            target_uri,
-            target_version,
+                source_uri,
+                source_version,
+                target_uri,
+                target_version,
         ) in source_target_pairs_set:
             elements = []
             for source_code, mappings in self.mappings.items():
                 if (
-                    source_code.system.fhir_uri == source_uri
-                    and source_code.system.version == source_version
+                        source_code.system.fhir_uri == source_uri
+                        and source_code.system.version == source_version
                 ):
                     filtered_mappings = [
                         x
                         for x in mappings
                         if x.target.system == target_uri
-                        and x.target.version == target_version
+                           and x.target.version == target_version
                     ]
                     # Do relevant checks on the code and display
                     source_code_code = source_code.code.rstrip()
                     source_code_display = source_code.display.rstrip()
-
 
                     # Checking to see if the display is a coding array TODO: INFX-2521 this is a temporary problem that we should fix in the future
                     if is_coding_array(source_code_display):
                         source_code_code, source_code_display = source_code_display, source_code_code
 
                     # We want the text string array that is supposed to be json to be formatted correctly
-                    if is_coding_array(source_code_code):  # If it's not an array, this should return the original as whatever it was
+                    # If it's not an array it should return the original string
+                    if is_coding_array(source_code_code):
                         source_code_code = transform_struct_string_to_json(source_code_code)
                     elements.append(
                         {
-                            "code": source_code_code,  # potentially problematic
-                            "display": source_code_display,  # potentially problematic
+                            "code": [
+                                # Wrapping in valueCodeableConcept to have better FHIR format
+                                {
+                                    "valueCodeableConcept": source_code_code,
+                                }
+                            ],
+                            "display": source_code_display,
                             "target": [
                                 {
                                     "code": mapping.target.code,
@@ -1004,17 +1009,17 @@ class SourceConcept:
             raise ValueError(f"No source concept found with UUID {source_concept_uuid}")
 
     def update(
-        self,
-        conn: Optional = None,
-        comments: Optional[str] = None,
-        additional_context: Optional[str] = None,
-        map_status: Optional[str] = None,
-        assigned_mapper: Optional[UUID] = None,
-        assigned_reviewer: Optional[UUID] = None,
-        no_map: Optional[bool] = None,
-        reason_for_no_map: Optional[str] = None,
-        mapping_group: Optional[str] = None,
-        previous_version_context: Optional[str] = None,
+            self,
+            conn: Optional = None,
+            comments: Optional[str] = None,
+            additional_context: Optional[str] = None,
+            map_status: Optional[str] = None,
+            assigned_mapper: Optional[UUID] = None,
+            assigned_reviewer: Optional[UUID] = None,
+            no_map: Optional[bool] = None,
+            reason_for_no_map: Optional[str] = None,
+            mapping_group: Optional[str] = None,
+            previous_version_context: Optional[str] = None,
     ):
         if conn is None:
             conn = get_db()
@@ -1081,7 +1086,6 @@ class SourceConcept:
             "previous_version_context": self.previous_version_context,
         }
         return serialized_data
-
 
 
 @dataclass
@@ -1226,29 +1230,43 @@ class MappingSuggestion:
         }
 
 
-#TODO: This is a temporary function to solve a short term problem we have
+# TODO: This is a temporary function to solve a short term problem we have
 def transform_struct_string_to_json(struct_string):
     # Parse the coding elements and the text that trails at the end
-    # The regular expression matches three parts inside each pair of braces
-    coding_strings = re.findall(r'\{(.*?)\}', struct_string)
-    text_string = re.search(r'\},(.*?)\}$', struct_string).group(1).strip()
+    # Handle different start/end characters
+    if struct_string.startswith('{') and struct_string.endswith('}'):
+        # Remove the outer curly braces
+        input_str = struct_string[1:-1]
+        # Split on '],'
+        tuple_str, text_string = input_str.rsplit('],', 1)
+        text_string = text_string.strip()
+    elif struct_string.startswith('[') and struct_string.endswith(']'):
+        # Remove the outer square brackets
+        tuple_str = struct_string[1:-1]
+        text_string = None
+    else:
+        raise ValueError("Invalid input string format")
 
-    # Process each coding element
+    # Find the tuples using a regular expression
+    tuple_pattern = r'\{([^}]+)\}'
+    tuple_matches = re.findall(tuple_pattern, tuple_str)
+
+    # Convert each matched tuple into a dictionary
     # We are hard coding added dictionary keys that were lost in the original transformation process
-    coding = []
-    for coding_string in coding_strings:
-        parts = coding_string.split(', ')
-        coding.append({
-            'code': parts[0].strip(),
-            'display': parts[1].strip(),
-            'system': parts[2].strip()
-        })
+    coding_array = []
+    for match in tuple_matches:
+        items = match.split(', ')
+        d = {
+            "code": items[0],
+            "display": None if items[1] == 'null' else ", ".join(items[1:-1]),
+            "system": items[-1],
+        }
+        coding_array.append(d)
 
-    # Construct the result dictionary
-    result = {
-        'coding': coding,
-        'text': text_string
-    }
+    result = {"coding": coding_array}
+
+    if text_string is not None:
+        result["text"] = text_string
 
     # Convert the dictionary into a JSON string
     return json.dumps(result)
