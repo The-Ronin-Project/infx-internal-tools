@@ -833,7 +833,7 @@ class ConceptMapVersion:
             "resourceType": "ConceptMap",
             "title": self.concept_map.title,
             "id": self.uuid,
-            "name": self.concept_map.name,
+            "name": self.concept_map.name.capitalize() if self.concept_map.name is not None else None,
             "contact": [{"name": self.concept_map.author}],
             "url": f"http://projectronin.io/fhir/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
@@ -848,7 +848,7 @@ class ConceptMapVersion:
             "group": serial_mappings,
             "extension": [
                 {
-                    "url": "http://projectronin.io/fhir/ronin.common-fhir-model.uscore-r4/StructureDefinition/Extension/ronin-ConceptMapSchema",
+                    "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema",
                     "valueString": "1.0.0",
                 }
             ]
