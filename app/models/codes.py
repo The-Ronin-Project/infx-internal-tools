@@ -40,6 +40,10 @@ class Code:
         system_name=None,
         terminology_version: Terminology=None,
         terminology_version_uuid=None,
+        depends_on_property: str=None,
+        depends_on_system: str=None,
+        depends_on_value: str=None,
+        depends_on_display: str=None
     ):
         self.system = system
         self.version = version
@@ -50,6 +54,11 @@ class Code:
         self.system_name = system_name
         self.terminology_version: Terminology = terminology_version
         self.terminology_version_uuid: uuid.UUID = terminology_version_uuid
+
+        self.depends_on_property = depends_on_property
+        self.depends_on_system = depends_on_system
+        self.depends_on_value = depends_on_value
+        self.depends_on_display = depends_on_display
 
         if (
             self.terminology_version is not None
@@ -80,13 +89,28 @@ class Code:
         This method returns a human-readable representation of the Code instance. It overrides the default representation method for the Code class.
 
         Returns:
-        str: A string representation of the Code instance in the format "Code(code, display, system, version)".
+        str: A string representation of the Code instance in the format "Code(code, display, system, version, depends_on_property, depends_on_system, depends_on_value, depends_on_display)".
 
         Usage:
         To get the string representation of a Code instance, use the following syntax:
         repr_string = repr(code)
         """
-        return f"Code({self.code}, {self.display}, {self.system}, {self.version})"
+        repr_string = f"Code({self.code}, {self.display}, {self.system}, {self.version}"
+        depends_on_parts = []
+
+        if self.depends_on_property:
+            depends_on_parts.append(f"depends_on_property={self.depends_on_property}")
+        if self.depends_on_system:
+            depends_on_parts.append(f"depends_on_system={self.depends_on_system}")
+        if self.depends_on_value:
+            depends_on_parts.append(f"depends_on_value={self.depends_on_value}")
+        if self.depends_on_display:
+            depends_on_parts.append(f"depends_on_display={self.depends_on_display}")
+
+        if depends_on_parts:
+            repr_string += ", " + ", ".join(depends_on_parts)
+
+        return repr_string + ")"
 
     def __hash__(self) -> int:
         """
@@ -103,13 +127,13 @@ class Code:
 
     def __eq__(self, other: object) -> bool:
         """
-        This method checks if two Code instances are equal by comparing their code, display, system, and version attributes. It overrides the default equality operator for the Code class.
+        This method checks if two Code instances are equal by comparing their code, display, system, version and the 'depends on' attributes. It overrides the default equality operator for the Code class.
 
         Args:
         other (object): The other object to compare with the current instance.
 
         Returns:
-        bool: True if the two Code instances have the same code, display, system, and version attributes, otherwise False.
+        bool: True if the two Code instances have the same code, display, system, version and 'depends on' attributes, otherwise False.
 
         Usage:
         To compare two Code instances for equality, use the following syntax:
@@ -117,10 +141,14 @@ class Code:
         """
         if isinstance(other, Code):
             return (
-                (self.code == other.code)
-                and (self.display == other.display)
-                and (self.system == other.system)
-                and (self.version == other.version)
+                    (self.code == other.code)
+                    and (self.display == other.display)
+                    and (self.system == other.system)
+                    and (self.version == other.version)
+                    and (self.depends_on_property == other.depends_on_property)
+                    and (self.depends_on_system == other.depends_on_system)
+                    and (self.depends_on_value == other.depends_on_value)
+                    and (self.depends_on_display == other.depends_on_display)
             )
         return False
 
@@ -143,7 +171,9 @@ class Code:
         code_data = conn.execute(
             text(
                 """
-                select code.uuid, code.code, display, tv.fhir_uri as system_url, tv.version, tv.terminology as system_name, tv.uuid as terminology_version_uuid
+                select code.uuid, code.code, code.depends_on_value, code.depends_on_display, 
+                code.depends_on_property, code.depends_on_system, display, tv.fhir_uri as system_url, 
+                tv.version, tv.terminology as system_name, tv.uuid as terminology_version_uuid
                 from custom_terminologies.code
                 join terminology_versions tv
                 on code.terminology_version_uuid = tv.uuid
@@ -161,43 +191,48 @@ class Code:
             system_name=code_data.system_name,
             terminology_version_uuid=code_data.terminology_version_uuid,
             uuid=code_uuid,
+            depends_on_value=code_data.depends_on_value,
+            depends_on_display=code_data.depends_on_display,
+            depends_on_property=code_data.depends_on_property,
+            depends_on_system=code_data.depends_on_system
         )
 
-    @classmethod
-    def load_concept_map_source_concept(cls, source_code_uuid):
-        """
-        This class method is used to load a source concept from a concept map using its unique identifier (UUID). It retrieves the source concept data from the database and initializes a new instance of the Code class with the fetched data.
-
-        Args:
-        source_code_uuid (str): The unique identifier (UUID) of the source concept to be loaded.
-
-        Returns:
-        Code: An instance of the Code class, initialized with the data fetched from the database.
-
-        Usage:
-        To load a source concept from a concept map by its UUID, use the following syntax:
-        source_concept = Code.load_concept_map_source_concept(source_code_uuid)
-        """
-        conn = get_db()
-
-        source_data = conn.execute(
-            text(
-                """
-                select system as terminology_version_uuid, * from concept_maps.source_concept
-                where uuid=:source_concept_uuid
-                """
-            ),
-            {"source_concept_uuid": source_code_uuid},
-        ).first()
-
-        return cls(
-            uuid=source_data.uuid,
-            system=None,
-            version=None,
-            code=source_data.code,
-            display=source_data.display,
-            terminology_version_uuid=source_data.terminology_version_uuid,
-        )
+    # todo: likely deprecated, verify and remove
+    # @classmethod
+    # def load_concept_map_source_concept(cls, source_code_uuid):
+    #     """
+    #     This class method is used to load a source concept from a concept map using its unique identifier (UUID). It retrieves the source concept data from the database and initializes a new instance of the Code class with the fetched data.
+    #
+    #     Args:
+    #     source_code_uuid (str): The unique identifier (UUID) of the source concept to be loaded.
+    #
+    #     Returns:
+    #     Code: An instance of the Code class, initialized with the data fetched from the database.
+    #
+    #     Usage:
+    #     To load a source concept from a concept map by its UUID, use the following syntax:
+    #     source_concept = Code.load_concept_map_source_concept(source_code_uuid)
+    #     """
+    #     conn = get_db()
+    #
+    #     source_data = conn.execute(
+    #         text(
+    #             """
+    #             select system as terminology_version_uuid, * from concept_maps.source_concept
+    #             where uuid=:source_concept_uuid
+    #             """
+    #         ),
+    #         {"source_concept_uuid": source_code_uuid},
+    #     ).first()
+    #
+    #     return cls(
+    #         uuid=source_data.uuid,
+    #         system=None,
+    #         version=None,
+    #         code=source_data.code,
+    #         display=source_data.display,
+    #         terminology_version_uuid=source_data.terminology_version_uuid,
+    #     )
 
     def serialize(self, with_system_and_version=True, with_system_name=False):
         """
@@ -305,21 +340,31 @@ class Code:
             new_code_uuid = uuid.uuid4()
             new_uuids.append(new_code_uuid)
             new_additional_data = json.dumps(x["additional_data"])
+            depends_on = x.get('dependsOn', {})
             result = conn.execute(
                 text(
                     """
                     Select count(*) as conflict_count from custom_terminologies.code
                     where code = :code_value
                     and display = :display_value
-                    and terminology_version_uuid = :terminology_version_uuid 
+                    and terminology_version_uuid = :terminology_version_uuid
+                    and depends_on_property = :depends_on_property
+                    and depends_on_system = :depends_on_system
+                    and depends_on_value = :depends_on_value
+                    and depends_on_display = :depends_on_display
                     """
                 ),
                 {
                     "code_value": x["code"],
                     "display_value": x["display"],
                     "terminology_version_uuid": x["terminology_version_uuid"],
+                    "depends_on_property": depends_on.get('property', ''),
+                    "depends_on_system": depends_on.get('system', ''),
+                    "depends_on_value": depends_on.get('value', ''),
+                    "depends_on_display": depends_on.get('display', ''),
                 },
             ).one()
+
             # Check if the code display pair already appears in the custom terminology.
             if result.conflict_count > 0:
                 raise BadRequestWithCode(
@@ -330,8 +375,8 @@ class Code:
                 conn.execute(
                     text(
                         """
-                        Insert into custom_terminologies.code(uuid, code, display, terminology_version_uuid, additional_data)
-                        Values (:uuid, :code, :display, :terminology_version_uuid, :additional_data)
+                        Insert into custom_terminologies.code(uuid, code, display, terminology_version_uuid, additional_data, depends_on_property, depends_on_system, depends_on_value, depends_on_display)
+                        Values (:uuid, :code, :display, :terminology_version_uuid, :additional_data, :depends_on_property, :depends_on_system, :depends_on_value, :depends_on_display)
                         """
                     ),
                     {
@@ -340,6 +385,10 @@ class Code:
                         "display": x["display"],
                         "terminology_version_uuid": x["terminology_version_uuid"],
                         "additional_data": new_additional_data,
+                        "depends_on_property": depends_on.get('property', ''),
+                        "depends_on_system": depends_on.get('system', ''),
+                        "depends_on_value": depends_on.get('value', ''),
+                        "depends_on_display": depends_on.get('display', ''),
                     },
                 )
         new_codes = []

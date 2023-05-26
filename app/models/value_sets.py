@@ -1217,7 +1217,16 @@ class CustomTerminologyRule(VSRule):
             text(query), {"terminology_version_uuid": self.terminology_version.uuid}
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            Code(
+                self.fhir_system,
+                self.terminology_version.version,
+                x.code,
+                x.display,
+                depends_on_property=x.depends_on_property,
+                depends_on_system=x.depends_on_system,
+                depends_on_value=x.depends_on_value,
+                depends_on_display=x.depends_on_display
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -1237,7 +1246,16 @@ class CustomTerminologyRule(VSRule):
             },
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            Code(
+                self.fhir_system,
+                self.terminology_version.version,
+                x.code,
+                x.display,
+                depends_on_property=x.depends_on_property,
+                depends_on_system=x.depends_on_system,
+                depends_on_value=x.depends_on_value,
+                depends_on_display=x.depends_on_display
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -1258,7 +1276,16 @@ class CustomTerminologyRule(VSRule):
             },
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            Code(
+                self.fhir_system,
+                self.terminology_version.version,
+                x.code,
+                x.display,
+                depends_on_property=x.depends_on_property,
+                depends_on_system=x.depends_on_system,
+                depends_on_value=x.depends_on_value,
+                depends_on_display=x.depends_on_display
+            )
             for x in results_data
         ]
         self.results = set(results)
