@@ -3,7 +3,11 @@ import uuid
 import json
 from app.database import get_db
 from sqlalchemy import text
-from app.models.terminologies import Terminology, load_terminology_version_with_cache, terminology_version_uuid_lookup
+from app.models.terminologies import (
+    Terminology,
+    load_terminology_version_with_cache,
+    terminology_version_uuid_lookup,
+)
 from app.errors import BadRequestWithCode
 from werkzeug.exceptions import BadRequest
 
@@ -38,7 +42,7 @@ class Code:
         additional_data=None,
         uuid=None,
         system_name=None,
-        terminology_version: Terminology=None,
+        terminology_version: Terminology = None,
         terminology_version_uuid=None,
     ):
         self.system = system
@@ -67,7 +71,9 @@ class Code:
             self.terminology_version_uuid = terminology_version_uuid_lookup(
                 system, version
             )
-            self.terminology_version = load_terminology_version_with_cache(self.terminology_version_uuid)
+            self.terminology_version = load_terminology_version_with_cache(
+                self.terminology_version_uuid
+            )
 
         if (
             self.terminology_version_uuid is None
@@ -311,7 +317,7 @@ class Code:
                     Select count(*) as conflict_count from custom_terminologies.code
                     where code = :code_value
                     and display = :display_value
-                    and terminology_version_uuid = :terminology_version_uuid 
+                    and terminology_version_uuid = :terminology_version_uuid
                     """
                 ),
                 {
@@ -330,8 +336,8 @@ class Code:
                 conn.execute(
                     text(
                         """
-                        Insert into custom_terminologies.code(uuid, code, display, terminology_version_uuid, additional_data)
-                        Values (:uuid, :code, :display, :terminology_version_uuid, :additional_data)
+                        Insert into custom_terminologies.code(uuid, code, display, terminology_version_uuid, additional_data, depends_on_property, depends_on_system, depends_on_value, depends_on_display)
+                        Values (:uuid, :code, :display, :terminology_version_uuid, :additional_data, :depends_on_property, :depends_on_system, :depends_on_value, :depends_on_display)
                         """
                     ),
                     {
@@ -340,6 +346,10 @@ class Code:
                         "display": x["display"],
                         "terminology_version_uuid": x["terminology_version_uuid"],
                         "additional_data": new_additional_data,
+                        "depends_on_property": x["depends_on_property"],
+                        "depends_on_system": x["depends_on_system"],
+                        "depends_on_value": x["depends_on_value"],
+                        "depends_on_display": x["depends_on_display"],
                     },
                 )
         new_codes = []
