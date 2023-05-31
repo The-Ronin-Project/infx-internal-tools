@@ -3,7 +3,11 @@ import uuid
 import json
 from app.database import get_db
 from sqlalchemy import text
-from app.models.terminologies import Terminology, load_terminology_version_with_cache, terminology_version_uuid_lookup
+from app.models.terminologies import (
+    Terminology,
+    load_terminology_version_with_cache,
+    terminology_version_uuid_lookup,
+)
 from app.errors import BadRequestWithCode
 from werkzeug.exceptions import BadRequest
 
@@ -38,7 +42,7 @@ class Code:
         additional_data=None,
         uuid=None,
         system_name=None,
-        terminology_version: Terminology=None,
+        terminology_version: Terminology = None,
         terminology_version_uuid=None,
         depends_on_property: str=None,
         depends_on_system: str=None,
@@ -76,7 +80,9 @@ class Code:
             self.terminology_version_uuid = terminology_version_uuid_lookup(
                 system, version
             )
-            self.terminology_version = load_terminology_version_with_cache(self.terminology_version_uuid)
+            self.terminology_version = load_terminology_version_with_cache(
+                self.terminology_version_uuid
+            )
 
         if (
             self.terminology_version_uuid is None

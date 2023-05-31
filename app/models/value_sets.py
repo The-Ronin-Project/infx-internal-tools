@@ -38,6 +38,8 @@ import pandas as pd
 import numpy as np
 from pandas import json_normalize
 
+from app.models.use_case import load_use_case_by_value_set_uuid
+
 VALUE_SET_SCHEMA_VERSION = 2
 
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io"
@@ -59,6 +61,7 @@ expansion_member = Table(
     Column("version", String, nullable=False),
     schema="value_sets",
 )
+
 
 #
 # Value Set Rules
@@ -2708,6 +2711,8 @@ class ValueSetVersion:
                 + self.value_set.name[index].upper()
                 + self.value_set.name[index + 1 :]
             )
+        use_case = load_use_case_by_value_set_uuid(self.value_set.uuid)
+        use_case_name = use_case.name if use_case else "unknown"
         serialized = {
             "resourceType": "ValueSet",
             "id": str(self.value_set.uuid),
@@ -2731,6 +2736,22 @@ class ValueSetVersion:
             "description": (self.value_set.description or "")
             + " "
             + (self.description or ""),
+            "useContext": [
+                {
+                    "code": {
+                        "system": "http://terminology.hl7.org/CodeSystem/usage-context-type",  # static value
+                        "code": "workflow",  # static value
+                        "display": "Workflow Setting",
+                    },
+                    "valueCodeableConcept": {
+                        "coding": [
+                            {
+                                "code": use_case_name,  # the value will be the use case name
+                            }
+                        ],
+                    },
+                }
+            ],
             "immutable": self.value_set.immutable,
             "experimental": self.value_set.experimental,
             "purpose": self.value_set.purpose,
@@ -2776,7 +2797,6 @@ class ValueSetVersion:
         2. str: The initial storage path for the value set, based on its UUID.
         """
         serialized = self.serialize()
-
         rcdm_id = serialized.get("id")
         rcdm_url = "http://projectronin.io/ValueSet/"
         # id will depend on publisher
@@ -2785,6 +2805,8 @@ class ValueSetVersion:
             rcdm_url = "http://projectronin.io/fhir/ValueSet/"
         elif self.value_set.publisher == "FHIR":
             rcdm_id = serialized.get("name")
+            # transform rcdm_id in place
+            rcdm_id = re.sub("([a-z])([A-Z])", r"\1-\2", rcdm_id).lower()
             rcdm_url = "http://hl7.org/fhir/ValueSet/"
 
         if (
