@@ -30,7 +30,7 @@ class DNRegistryEntry:
     registry_uuid: str
     registry_entry_type: str
     profile_url: str
-    concept_map: Optional[app.concept_maps.concept_maps.ConceptMap] = None
+    concept_map: Optional[app.concept_maps.models.ConceptMap] = None
     value_set: Optional[app.value_sets.models.ValueSet] = None
 
     def serialize(self):

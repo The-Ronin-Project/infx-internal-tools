@@ -7,12 +7,26 @@ from app.terminologies.models import *
 terminologies_blueprint = Blueprint('terminologies', __name__)
 
 
-@terminologies_blueprint.route("/terminology/", methods=["POST"])
+@terminologies_blueprint.route("/terminology/", methods=["POST", "GET"])
 def create_terminology():
     """
     Create a new terminology with the provided parameters, such as terminology name, version, effective start and end dates,
     FHIR URI, standard status, and FHIR terminology.
     """
+    if request.method == "GET":
+        fhir_uri = request.values.get("fhir_uri")
+        version = request.values.get("version")
+
+        if not fhir_uri or not version:
+            return jsonify({"error": "fhir_uri and version parameters are required."}), 400
+
+        terminology = Terminology.load_by_fhir_uri_and_version(fhir_uri, version)
+
+        if not terminology:
+            return jsonify({"error": "Terminology not found with the given parameters."}), 404
+
+        return jsonify(terminology.serialize())
+
     if request.method == "POST":
         terminology = request.json.get("terminology")
         version = request.json.get("version")
