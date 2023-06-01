@@ -6,37 +6,19 @@ import hashlib
 import re
 
 import app.models.codes
-import app.models.value_sets
-import csv
+import app.value_sets.models
 from elasticsearch.helpers import bulk
-from decouple import config
-from werkzeug.exceptions import BadRequest
 from sqlalchemy import text
 from dataclasses import dataclass
 from uuid import UUID
 from typing import Optional
 from app.database import get_db, get_elasticsearch
 from app.models.codes import Code
-from app.models.terminologies import (
+from app.terminologies.models import (
     Terminology,
     terminology_version_uuid_lookup,
     load_terminology_version_with_cache,
 )
-from app.helpers.oci_helper import (
-    oci_authentication,
-    folder_path_for_oci,
-    folder_in_bucket,
-    pre_export_validate,
-    save_to_object_store,
-    version_set_status_active,
-    get_object_type_from_db,
-    get_object_type_from_object_store,
-    check_for_prerelease_in_published,
-    set_up_object_store,
-)
-from app.helpers.db_helper import db_cursor
-from elasticsearch import TransportError
-from numpy import source
 
 CONCEPT_MAPS_SCHEMA_VERSION = 3
 
@@ -419,7 +401,7 @@ class ConceptMap:
         es = get_elasticsearch()
 
         def gendata():
-            vs_version = app.models.value_sets.ValueSetVersion.load(
+            vs_version = app.value_sets.value_sets.ValueSetVersion.load(
                 target_value_set_version_uuid
             )
             vs_version.expand()

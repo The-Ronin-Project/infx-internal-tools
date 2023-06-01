@@ -3,13 +3,13 @@ import uuid
 import json
 from app.database import get_db
 from sqlalchemy import text
-from app.models.terminologies import (
+from app.terminologies.models import (
     Terminology,
     load_terminology_version_with_cache,
     terminology_version_uuid_lookup,
 )
 from app.errors import BadRequestWithCode
-from werkzeug.exceptions import BadRequest
+
 
 # INTERNAL_TOOLS_BASE_URL = "https://infx-internal.prod.projectronin.io"
 

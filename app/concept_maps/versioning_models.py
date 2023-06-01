@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy import text
 
 from app.database import get_db
-from app.models.concept_maps import (
+from app.concept_maps.models import (
     ConceptMap,
     ConceptMapVersion,
     Mapping,
@@ -12,7 +12,7 @@ from app.models.concept_maps import (
     MappingRelationship,
 )
 from app.models.codes import Code
-from app.models.terminologies import Terminology, load_terminology_version_with_cache
+from app.terminologies.models import load_terminology_version_with_cache
 
 
 class CustomJSONEncoder(json.JSONEncoder):
