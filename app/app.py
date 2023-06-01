@@ -1,10 +1,11 @@
+import dataclasses
 import io
 from bdb import effective
 from io import StringIO
 import string
 from uuid import UUID, uuid4
 import logging
-
+from dataclasses import dataclass, asdict
 from app.helpers.structlog import config_structlog, common_handler
 import structlog
 import os
@@ -534,9 +535,11 @@ def create_app(script_info=None):
         Retrieve a specific ConceptMap version identified by the version_uuid.
         Returns the ConceptMap version as JSON data.
         """
-        include_internal_info = bool(request.values.get('include_internal_info'))
+        include_internal_info = bool(request.values.get("include_internal_info"))
         concept_map_version = ConceptMapVersion(version_uuid)
-        concept_map_to_json = concept_map_version.serialize(include_internal_info=include_internal_info)
+        concept_map_to_json = concept_map_version.serialize(
+            include_internal_info=include_internal_info
+        )
         return jsonify(concept_map_to_json)
 
     @app.route("/ConceptMaps/<string:version_uuid>/actions/index", methods=["POST"])
@@ -595,7 +598,7 @@ def create_app(script_info=None):
         elif request.method == "GET":
             concept_map_uuid = request.values.get("concept_map_uuid")
             version = request.values.get("version")
-            include_internal_info = request.values.get('include_internal_info')
+            include_internal_info = request.values.get("include_internal_info")
             include_internal_info = bool(include_internal_info)
 
             if not concept_map_uuid or not version:
@@ -603,15 +606,18 @@ def create_app(script_info=None):
                     {"error": "A concept_map_uuid and version must be supplied."}, 400
                 )
 
-            concept_map_version = ConceptMapVersion.load_by_concept_map_uuid_and_version(
-                concept_map_uuid=concept_map_uuid,
-                version=version
+            concept_map_version = (
+                ConceptMapVersion.load_by_concept_map_uuid_and_version(
+                    concept_map_uuid=concept_map_uuid, version=version
+                )
             )
 
             if not concept_map_version:
                 return jsonify({"error": "Concept Map Version not found."}, 404)
 
-            serialized_concept_map_version = concept_map_version.serialize(include_internal_info=include_internal_info)
+            serialized_concept_map_version = concept_map_version.serialize(
+                include_internal_info=include_internal_info
+            )
             return jsonify(serialized_concept_map_version)
 
     @app.route("/ConceptMaps/<string:version_uuid>/draft", methods=["GET"])
@@ -697,7 +703,7 @@ def create_app(script_info=None):
             try:
                 DataNormalizationRegistry.publish_data_normalization_registry()
             except:
-                pass # todo: find better error handling
+                pass  # todo: find better error handling
 
             return jsonify(concept_map_to_datastore)
         if request.method == "GET":
@@ -984,6 +990,38 @@ def create_app(script_info=None):
                 code = Code.serialize(x)
                 codes.append(code)
             return codes
+
+    @app.route("/terminology/<terminology_version_uuid>", methods=["GET"])
+    def get_terminology(terminology_version_uuid):
+        page = int(request.args.get("page", 1))
+        per_page = int(request.args.get("per_page", 10))
+
+        terminology = Terminology.load(terminology_version_uuid)
+
+        # Paginate the codes within the Terminology instance
+        start = (page - 1) * per_page
+        end = start + per_page
+        paginated_codes = terminology.codes[start:end]
+
+        return jsonify(
+            {
+                "terminology": {
+                    "uuid": terminology.uuid,
+                    "name": terminology.name,
+                    "version": terminology.version,
+                    "effective_start": terminology.effective_start,
+                    "effective_end": terminology.effective_end,
+                    "fhir_uri": terminology.fhir_uri,
+                    "codes": [dataclasses.asdict(code) for code in paginated_codes],
+                },
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total_codes": len(terminology.codes),
+                    "total_pages": (len(terminology.codes) + per_page - 1) // per_page,
+                },
+            }
+        )
 
     # @app.route("/terminology/new_version/", methods=["POST"])
     # def create_new_term_version():
