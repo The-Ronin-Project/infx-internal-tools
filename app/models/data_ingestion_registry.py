@@ -1,16 +1,13 @@
 import json
 import datetime
-import uuid
 
-from flask import jsonify
-
-import app.models.concept_maps
-import app.models.value_sets
+import app.concept_maps.models
+import app.value_sets.models
 
 from dataclasses import dataclass
 from decouple import config
 from sqlalchemy import text
-from typing import List, cast, Optional
+from typing import List, Optional
 from app.database import get_db
 from app.helpers.oci_helper import oci_authentication
 from datetime import datetime
@@ -33,8 +30,8 @@ class DNRegistryEntry:
     registry_uuid: str
     registry_entry_type: str
     profile_url: str
-    concept_map: Optional[app.models.concept_maps.ConceptMap] = None
-    value_set: Optional[app.models.value_sets.ValueSet] = None
+    concept_map: Optional[app.concept_maps.models.ConceptMap] = None
+    value_set: Optional[app.value_sets.models.ValueSet] = None
 
     def serialize(self):
         """
@@ -58,7 +55,7 @@ class DNRegistryEntry:
             serialized["version"] = value_set_version
             serialized[
                 "filename"
-            ] = f"ValueSets/v{app.models.value_sets.VALUE_SET_SCHEMA_VERSION}/published/{self.value_set.uuid}/{value_set_version}.json"
+            ] = f"ValueSets/v{app.value_sets.value_sets.VALUE_SET_SCHEMA_VERSION}/published/{self.value_set.uuid}/{value_set_version}.json"
         if self.registry_entry_type == "concept_map":
             serialized["concept_map_name"] = self.concept_map.name
             serialized["concept_map_uuid"] = str(self.concept_map.uuid)
@@ -105,7 +102,7 @@ class DataNormalizationRegistry:
                         registry_uuid=item.registry_uuid,
                         profile_url=item.profile_url,
                         registry_entry_type=item.type,
-                        concept_map=app.models.concept_maps.ConceptMap(
+                        concept_map=app.concept_maps.concept_maps.ConceptMap(
                             item.concept_map_uuid
                         ),
                     )
@@ -120,7 +117,7 @@ class DataNormalizationRegistry:
                         registry_uuid=item.registry_uuid,
                         profile_url=item.profile_url,
                         registry_entry_type=item.type,
-                        value_set=app.models.value_sets.ValueSet.load(
+                        value_set=app.value_sets.models.ValueSet.load(
                             item.value_set_uuid
                         ),
                     )

@@ -1,42 +1,23 @@
-import math
 import datetime
 import json
 from dataclasses import dataclass, field
 import re
 import requests
 import concurrent.futures
-from sqlalchemy import create_engine, text, MetaData, Table, Column, String
+from sqlalchemy import text, MetaData, Table, Column, String
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import datetime
 from dateutil import parser
 from collections import defaultdict
-import werkzeug
 from werkzeug.exceptions import BadRequest, NotFound
-from decouple import config
 from sqlalchemy.sql.expression import bindparam
 from app.models.codes import Code
 
-import app.models.concept_maps
-from app.models.terminologies import Terminology
+import app.concept_maps.models
+from app.terminologies.models import Terminology
 from app.database import get_db, get_elasticsearch
 from flask import current_app
-from app.helpers.oci_helper import (
-    oci_authentication,
-    folder_path_for_oci,
-    folder_in_bucket,
-    pre_export_validate,
-    save_to_object_store,
-    version_set_status_active,
-    get_object_type_from_db,
-    get_object_type_from_object_store,
-    check_for_prerelease_in_published,
-    set_up_object_store,
-)
-from app.helpers.db_helper import db_cursor
-import pandas as pd
-import numpy as np
-from pandas import json_normalize
 
 from app.models.use_case import load_use_case_by_value_set_uuid
 
@@ -2562,7 +2543,7 @@ class ValueSetVersion:
             allowed_relationship_types = self.parse_mapping_inclusion_retool_array(
                 inclusion.relationship_types
             )
-            concept_map = app.models.concept_maps.DeprecatedConceptMap(
+            concept_map = app.concept_maps.models.DeprecatedConceptMap(
                 None, allowed_relationship_types, inclusion.concept_map_name
             )
 

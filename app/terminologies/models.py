@@ -29,7 +29,8 @@ def terminology_version_uuid_lookup(fhir_uri, version):
         ),
         {"fhir_uri": fhir_uri, "version": version},
     ).first()
-    return result.uuid
+    if result:
+        return result.uuid
 
 
 @lru_cache(maxsize=None)
@@ -120,6 +121,12 @@ class Terminology:
             fhir_uri=term_data.fhir_uri,
             fhir_terminology=term_data.fhir_terminology,
         )
+
+    @classmethod
+    def load_by_fhir_uri_and_version(cls, fhir_uri, version):
+        terminology_version_uuid = terminology_version_uuid_lookup(fhir_uri, version)
+        if terminology_version_uuid:
+            return cls.load(terminology_version_uuid)
 
     def load_content(self):
         """
