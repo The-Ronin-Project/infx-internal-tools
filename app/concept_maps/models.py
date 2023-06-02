@@ -713,7 +713,7 @@ class ConceptMapVersion:
 
         # Function for checking if we have a coding array string that used to be JSON
         def is_coding_array(source_code_string):
-            return source_code_string.strip().startswith("[{")
+            return source_code_string.strip().startswith("[{") or source_code_string.strip().startswith("{[{")
 
         # Serialize the mappings
         for (
