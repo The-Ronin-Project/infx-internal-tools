@@ -13,7 +13,7 @@ from app.helpers.oci_helper import oci_authentication
 from datetime import datetime
 from dateutil import tz
 
-DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION = 2
+DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION = 3
 
 
 @dataclass
@@ -55,14 +55,14 @@ class DNRegistryEntry:
             serialized["version"] = value_set_version
             serialized[
                 "filename"
-            ] = f"ValueSets/v{app.value_sets.value_sets.VALUE_SET_SCHEMA_VERSION}/published/{self.value_set.uuid}/{value_set_version}.json"
+            ] = f"ValueSets/v{app.value_sets.models.VALUE_SET_SCHEMA_VERSION}/published/{self.value_set.uuid}/{value_set_version}.json"
         if self.registry_entry_type == "concept_map":
             serialized["concept_map_name"] = self.concept_map.name
             serialized["concept_map_uuid"] = str(self.concept_map.uuid)
             serialized["version"] = self.concept_map.most_recent_active_version.version
             serialized[
                 "filename"
-            ] = f"ConceptMaps/v1/published/{self.concept_map.uuid}/{self.concept_map.most_recent_active_version.version}.json"
+            ] = f"ConceptMaps/v{app.concept_maps.models.CONCEPT_MAPS_SCHEMA_VERSION}/published/{self.concept_map.uuid}/{self.concept_map.most_recent_active_version.version}.json"
         return serialized
 
 
@@ -102,7 +102,7 @@ class DataNormalizationRegistry:
                         registry_uuid=item.registry_uuid,
                         profile_url=item.profile_url,
                         registry_entry_type=item.type,
-                        concept_map=app.concept_maps.concept_maps.ConceptMap(
+                        concept_map=app.concept_maps.models.ConceptMap(
                             item.concept_map_uuid
                         ),
                     )
