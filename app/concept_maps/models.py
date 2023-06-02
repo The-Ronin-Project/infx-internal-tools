@@ -401,7 +401,7 @@ class ConceptMap:
         es = get_elasticsearch()
 
         def gendata():
-            vs_version = app.value_sets.value_sets.ValueSetVersion.load(
+            vs_version = app.value_sets.models.ValueSetVersion.load(
                 target_value_set_version_uuid
             )
             vs_version.expand()
