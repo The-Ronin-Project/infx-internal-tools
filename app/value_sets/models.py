@@ -19,7 +19,10 @@ from app.terminologies.models import Terminology
 from app.database import get_db, get_elasticsearch
 from flask import current_app
 
-from app.models.use_case import load_use_case_by_value_set_uuid
+from app.models.use_case import (
+    load_use_case_by_value_set_uuid,
+    use_case_set_up_on_value_set_creation,
+)
 
 VALUE_SET_SCHEMA_VERSION = 2
 
@@ -1209,7 +1212,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_property=x.depends_on_property,
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
-                depends_on_display=x.depends_on_display
+                depends_on_display=x.depends_on_display,
             )
             for x in results_data
         ]
@@ -1238,7 +1241,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_property=x.depends_on_property,
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
-                depends_on_display=x.depends_on_display
+                depends_on_display=x.depends_on_display,
             )
             for x in results_data
         ]
@@ -1268,7 +1271,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_property=x.depends_on_property,
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
-                depends_on_display=x.depends_on_display
+                depends_on_display=x.depends_on_display,
             )
             for x in results_data
         ]
@@ -1379,18 +1382,40 @@ class ValueSet:
         effective_start,
         effective_end,
         version_description,
-        use_case_uuid=None,
+        use_case_uuids=None,
     ):
+        """
+        Create a new value_set, its initial version and associate it with the given use_case UUIDs.
+
+        Parameters:
+        - name (str): The name of the value_set.
+        - title (str): The title of the value_set.
+        - publisher (str): The publisher of the value_set.
+        - contact (str): The contact information for the value_set.
+        - value_set_description (str): The description of the value_set.
+        - immutable (bool): Whether the value_set is immutable or not.
+        - experimental (bool): Whether the value_set is experimental or not.
+        - purpose (str): The purpose of the value_set.
+        - vs_type (str): The type of the value_set.
+        - effective_start (datetime): The effective start date of the value_set.
+        - effective_end (datetime): The effective end date of the value_set.
+        - version_description (str): The description of the value_set version.
+        - use_case_uuids (list, optional): A list of use_case UUIDs to associate with the value_set. Defaults to None.
+
+        Returns:
+        - ValueSet: The created value_set instance.
+        """
         conn = get_db()
         vs_uuid = uuid.uuid4()
 
+        # Insert the value_set into the value_sets.value_set table
         conn.execute(
             text(
-                """
-                insert into value_sets.value_set
-                (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type, use_case_uuid)
-                values
-                (:uuid, :name, :title, :publisher, :contact, :value_set_description, :immutable, :experimental, :purpose, :vs_type, :use_case_uuid)
+                """  
+                insert into value_sets.value_set  
+                (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type)  
+                values  
+                (:uuid, :name, :title, :publisher, :contact, :value_set_description, :immutable, :experimental, :purpose, :vs_type)  
                 """
             ),
             {
@@ -1404,18 +1429,22 @@ class ValueSet:
                 "experimental": experimental,
                 "purpose": purpose,
                 "vs_type": vs_type,
-                "use_case_uuid": use_case_uuid,
             },
         )
         conn.execute(text("commit"))
+
+        # Call to insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
+        use_case_set_up_on_value_set_creation(use_case_uuids, vs_uuid)
+
+        # Insert the value_set_version into the value_sets.value_set_version table
         new_version_uuid = uuid.uuid4()
         conn.execute(
             text(
-                """
-                insert into value_sets.value_set_version
-                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)
-                values
-                (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :version_description, :created_date, :version)
+                """  
+                insert into value_sets.value_set_version  
+                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)  
+                values  
+                (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :version_description, :created_date, :version)  
                 """
             ),
             {
@@ -1430,6 +1459,7 @@ class ValueSet:
             },
         )
         conn.execute(text("commit"))
+
         return cls.load(vs_uuid)
 
     @classmethod
@@ -1456,6 +1486,10 @@ class ValueSet:
         )
         synonyms = {x.context: x.synonym for x in synonym_data}
 
+        use_case_info = load_use_case_by_value_set_uuid(vs_uuid)
+        # Extract the names from use_case_info
+        use_case_names = [uc.name for uc in use_case_info] if use_case_info else []
+
         value_set = cls(
             vs_data.uuid,
             vs_data.name,
@@ -1469,9 +1503,12 @@ class ValueSet:
             vs_data.type,
             synonyms,
         )
-        return value_set
+        return value_set, use_case_names
 
     def serialize(self):
+        use_case_info = load_use_case_by_value_set_uuid(self.uuid)
+        # Extract the names from use_case_info
+        use_case_names = [uc.name for uc in use_case_info] if use_case_info else []
         return {
             "uuid": self.uuid,
             "name": self.name,
@@ -1483,6 +1520,7 @@ class ValueSet:
             "experimental": self.experimental,
             "purpose": self.purpose,
             "type": self.type,
+            "use case names": use_case_names,
         }
 
     def delete(self):
@@ -1497,10 +1535,20 @@ class ValueSet:
             ),
             {"uuid": str(self.uuid)},
         ).first()
-        # reject if has version
+
+        use_case_info = load_use_case_by_value_set_uuid(self.uuid)
+        # Extract the names from use_case_info
+        use_case_names = [uc.name for uc in use_case_info] if use_case_info else []
+
+        # reject request if has version
         if vs_version_data is not None:
             raise BadRequest(
-                "ValueSet version is not eligible for deletion because there is an associated version"
+                "ValueSet is not eligible for deletion because there is an associated version"
+            )
+        # reject request if has use case
+        elif len(use_case_names) > 0:
+            raise BadRequest(
+                "ValueSet is not eligible for deletion because there are associated uses cases"
             )
         else:
             conn.execute(
@@ -1538,8 +1586,13 @@ class ValueSet:
                 """
                 )
             )
+        value_sets_metadata = []
+        for x in results:
+            use_case_info = load_use_case_by_value_set_uuid(x.uuid)
+            # Extract the names from use_case_info
+            use_case_names = [uc.name for uc in use_case_info] if use_case_info else []
 
-        return [
+        value_sets_metadata.append(
             {
                 "uuid": x.uuid,
                 "name": x.name,
@@ -1551,9 +1604,11 @@ class ValueSet:
                 "experimental": x.experimental,
                 "purpose": x.purpose,
                 "type": x.type,
+                "use_case_names": use_case_names,  # Add use_case_names to the dictionary
             }
-            for x in results
-        ]
+        )
+
+        return value_sets_metadata
 
     @classmethod
     def load_all_value_sets_by_status(cls, status):
