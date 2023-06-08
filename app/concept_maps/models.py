@@ -836,7 +836,7 @@ class ConceptMapVersion:
             "extension": [
                 {
                     "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema",
-                    "valueString": "1.0.0",
+                    "valueString": f"{CONCEPT_MAPS_SCHEMA_VERSION}.0.0",
                 }
             ]
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and
