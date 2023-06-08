@@ -19,10 +19,12 @@ from app.concept_maps.models import *
 from app.concept_maps.versioning_models import *
 from app.models.data_ingestion_registry import DataNormalizationRegistry
 
-concept_maps_blueprint = Blueprint('concept_maps', __name__)
+concept_maps_blueprint = Blueprint("concept_maps", __name__)
 
 
-@concept_maps_blueprint.route("/SourceConcepts/<string:source_concept_uuid>", methods=["PATCH"])
+@concept_maps_blueprint.route(
+    "/SourceConcepts/<string:source_concept_uuid>", methods=["PATCH"]
+)
 def update_source_concept(source_concept_uuid):
     """
     Update the comments field of a source concept identified by the source_concept_uuid.
@@ -33,6 +35,7 @@ def update_source_concept(source_concept_uuid):
     source_concept = SourceConcept.load(source_concept_uuid)
     source_concept.update(comments=comments, assigned_mapper=assigned_mapper)
     return jsonify(source_concept.serialize())
+
 
 # # Concept Map Endpoints
 # @app.route("/ConceptMaps/actions/new_version_from_previous", methods=["POST"])
@@ -76,15 +79,15 @@ def get_concept_map_version(version_uuid):
     return jsonify(concept_map_to_json)
 
 
-@concept_maps_blueprint.route("/ConceptMaps/<string:version_uuid>/actions/index", methods=["POST"])
+@concept_maps_blueprint.route(
+    "/ConceptMaps/<string:version_uuid>/actions/index", methods=["POST"]
+)
 def index_targets(version_uuid):
     """
     Index the targets of a ConceptMap version identified by the version_uuid.
     Returns a status message.
     """
-    target_value_set_version_uuid = request.json.get(
-        "target_value_set_version_uuid"
-    )
+    target_value_set_version_uuid = request.json.get("target_value_set_version_uuid")
     ConceptMap.index_targets(
         version_uuid, target_value_set_version_uuid=target_value_set_version_uuid
     )
@@ -141,10 +144,8 @@ def create_initial_concept_map_and_version_one():
                 {"error": "A concept_map_uuid and version must be supplied."}, 400
             )
 
-        concept_map_version = (
-            ConceptMapVersion.load_by_concept_map_uuid_and_version(
-                concept_map_uuid=concept_map_uuid, version=version
-            )
+        concept_map_version = ConceptMapVersion.load_by_concept_map_uuid_and_version(
+            concept_map_uuid=concept_map_uuid, version=version
         )
 
         if not concept_map_version:
@@ -156,7 +157,9 @@ def create_initial_concept_map_and_version_one():
         return jsonify(serialized_concept_map_version)
 
 
-@concept_maps_blueprint.route("/ConceptMaps/<string:version_uuid>/draft", methods=["GET"])
+@concept_maps_blueprint.route(
+    "/ConceptMaps/<string:version_uuid>/draft", methods=["GET"]
+)
 def get_concept_map_draft(version_uuid):
     """
     Retrieve a draft of a ConceptMap version identified by the version_uuid.
@@ -182,7 +185,9 @@ def get_concept_map_draft(version_uuid):
     return output
 
 
-@concept_maps_blueprint.route("/ConceptMaps/<string:version_uuid>/prerelease", methods=["GET", "POST"])
+@concept_maps_blueprint.route(
+    "/ConceptMaps/<string:version_uuid>/prerelease", methods=["GET", "POST"]
+)
 def get_concept_map_version_prerelease(version_uuid):
     """
     Retrieve or store a pre-release version of a Concept Map using its version UUID.
@@ -198,8 +203,10 @@ def get_concept_map_version_prerelease(version_uuid):
             concept_map_to_json,
             initial_path,
         ) = concept_map_version.prepare_for_oci()  # serialize the metadata
-        concept_map_to_datastore = set_up_object_store(  # use the serialized data with an oci_helper function
-            concept_map_to_json, initial_path, folder="prerelease"
+        concept_map_to_datastore = (
+            set_up_object_store(  # use the serialized data with an oci_helper function
+                concept_map_to_json, initial_path, folder="prerelease"
+            )
         )
         return jsonify(
             concept_map_to_datastore
@@ -216,7 +223,9 @@ def get_concept_map_version_prerelease(version_uuid):
         return jsonify(concept_map_from_object_store)  # returns the file from OCI
 
 
-@concept_maps_blueprint.route("/ConceptMaps/<string:version_uuid>/published", methods=["GET", "POST"])
+@concept_maps_blueprint.route(
+    "/ConceptMaps/<string:version_uuid>/published", methods=["GET", "POST"]
+)
 def get_concept_map_version_published(version_uuid):
     """
     Retrieve or store a published version of a Concept Map using its version UUID.
@@ -232,8 +241,10 @@ def get_concept_map_version_published(version_uuid):
             concept_map_to_json,
             initial_path,
         ) = concept_map_version.prepare_for_oci()  # serialize the metadata
-        concept_map_to_datastore = set_up_object_store(  # use the serialized data with an oci_helper function
-            concept_map_to_json, initial_path, folder="published"
+        concept_map_to_datastore = (
+            set_up_object_store(  # use the serialized data with an oci_helper function
+                concept_map_to_json, initial_path, folder="published"
+            )
         )
         version_set_status_active(version_uuid, object_type)
 
@@ -330,7 +341,7 @@ def create_mappings():
     """
 
     if request.method == "POST":
-        source_concept_uuids = request.json.get("source_concept_uuid")
+        source_concept_uuids = request.json.get("source_concept_uuids")
         if not isinstance(source_concept_uuids, list):
             source_concept_uuids = [source_concept_uuids]
 
@@ -356,8 +367,8 @@ def create_mappings():
 
         new_mappings = []
         for source_concept_uuid in source_concept_uuids:
+            make_author_assigned_mapper(source_concept_uuid, author)
             source_code = SourceConcept.load(source_concept_uuid)
-
             new_mapping = Mapping(
                 source=source_code,
                 relationship=relationship,
@@ -372,7 +383,9 @@ def create_mappings():
         return jsonify(new_mappings)
 
 
-@concept_maps_blueprint.route("/ConceptMaps/update/mapping_relationships", methods=["PATCH"])
+@concept_maps_blueprint.route(
+    "/ConceptMaps/update/mapping_relationships", methods=["PATCH"]
+)
 def update_mapping_relationship():
     data = request.get_json()
 
