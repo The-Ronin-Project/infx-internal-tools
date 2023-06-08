@@ -22,6 +22,7 @@ from app.terminologies.models import (
 
 CONCEPT_MAPS_SCHEMA_VERSION = 3
 
+
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
 # TODO remove this after Alex and Ben have updated the ED model to use concept mapps for ED utilization
 # Todo: wait until we've updated (or deprecated) mapping inclusions in value sets to disable this
@@ -713,7 +714,9 @@ class ConceptMapVersion:
 
         # Function for checking if we have a coding array string that used to be JSON
         def is_coding_array(source_code_string):
-            return source_code_string.strip().startswith("[{") or source_code_string.strip().startswith("{[{")
+            return source_code_string.strip().startswith(
+                "[{"
+            ) or source_code_string.strip().startswith("{[{")
 
         # Serialize the mappings
         for (
@@ -820,7 +823,9 @@ class ConceptMapVersion:
             "resourceType": "ConceptMap",
             "title": self.concept_map.title,
             "id": self.uuid,
-            "name": self.concept_map.name.capitalize() if self.concept_map.name is not None else None,
+            "name": self.concept_map.name.capitalize()
+            if self.concept_map.name is not None
+            else None,
             "contact": [{"name": self.concept_map.author}],
             "url": f"http://projectronin.io/fhir/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
@@ -1329,3 +1334,38 @@ def update_comments_source_concept(source_concept_uuid, comments):
         ),
         {"source_concept_uuid": source_concept_uuid, "comments": comments},
     )
+
+
+def make_author_assigned_mapper(source_concept_uuid, author):
+    conn = get_db()
+    user_uuid_query = conn.execute(
+        text(
+            """  
+            select uuid from project_management.user  
+            where first_last_name = :author
+            """
+        ),
+        {
+            "author": author,
+        },
+    ).first()
+
+    if user_uuid_query:
+        assigned_mapper_update = (
+            conn.execute(
+                text(
+                    """  
+                update concept_maps.source_concept  
+                set assigned_mapper = :user_uuid  
+                where uuid = :source_concept_uuid  
+                """
+                ),
+                {
+                    "user_uuid": user_uuid_query.uuid,
+                    "source_concept_uuid": source_concept_uuid,
+                },
+            ),
+        )
+        return "ok"
+    else:
+        return "Author not found"
