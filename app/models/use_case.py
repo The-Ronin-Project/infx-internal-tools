@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String
 from app.database import get_db
 from typing import List, Optional
+from werkzeug.exceptions import BadRequest, NotFound
 
 
 @dataclass
@@ -76,23 +77,29 @@ class UseCase:
         conn.commit()
 
 
-def use_case_set_up_on_value_set_creation(use_case_uuids, vs_uuid):
+def value_set_use_case_link_set_up(use_case_data, vs_uuid):
     # Insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
     conn = get_db()
-    if use_case_uuids is None:
-        use_case_uuids = []
+    if use_case_data is None:
+        use_case_data = []
 
-    for use_case_uuid in use_case_uuids:
+    for use_case_dict in use_case_data:
+        use_case_uuid = use_case_dict.get("use_case_uuid")
+        is_primary = use_case_dict.get("is_primary", False)
         conn.execute(
             text(
-                """    
-                INSERT INTO value_sets.value_set_use_case_link    
-                (value_set_uuid, use_case_uuid)    
-                VALUES    
-                (:value_set_uuid, :use_case_uuid)    
+                """      
+                INSERT INTO value_sets.value_set_use_case_link      
+                (value_set_uuid, use_case_uuid, is_primary)      
+                VALUES      
+                (:value_set_uuid, :use_case_uuid, :is_primary)      
                 """
             ),
-            {"value_set_uuid": vs_uuid, "use_case_uuid": use_case_uuid},
+            {
+                "value_set_uuid": vs_uuid,
+                "use_case_uuid": use_case_uuid,
+                "is_primary": is_primary,
+            },
         )
     conn.execute(text("commit"))
 
@@ -154,13 +161,46 @@ def remove_use_case_from_value_set(
     use_case_uuid: uuid.UUID, value_set_uuid: uuid.UUID
 ) -> None:
     conn = get_db()
-    query = conn.execute(
+    result = conn.execute(
         text(
             """  
-            DELETE FROM value_sets.value_set_use_case_link  
-            WHERE use_case_uuid = :use_case_uuid AND value_set_uuid = :value_set_uuid  
+            select is_primary from value_sets.value_set_use_case_link  
+            where use_case_uuid = :use_case_uuid  
+            and value_set_uuid = :value_set_uuid  
             """
         ),
         {"use_case_uuid": use_case_uuid, "value_set_uuid": value_set_uuid},
     )
-    conn.commit()
+    row = result.fetchone()
+    if row and row["is_primary"]:
+        raise BadRequest(
+            "This use case case is not eligable for deletion because it is the primary use case."
+        )
+    else:
+        query = conn.execute(
+            text(
+                """    
+                DELETE FROM value_sets.value_set_use_case_link    
+                WHERE use_case_uuid = :use_case_uuid AND value_set_uuid = :value_set_uuid    
+                """
+            ),
+            {"use_case_uuid": use_case_uuid, "value_set_uuid": value_set_uuid},
+        )
+        conn.commit()
+
+
+def delete_all_use_cases_for_value_set(value_set_uuid: uuid.UUID) -> None:
+    conn = get_db()
+
+    # Delete all rows associated with the given value_set_uuid from the value_set_use_case_link table
+    conn.execute(
+        text(
+            """  
+            DELETE FROM value_sets.value_set_use_case_link  
+            WHERE value_set_uuid = :value_set_uuid  
+            """
+        ),
+        {"value_set_uuid": value_set_uuid},
+    )
+
+    conn.execute(text("commit"))

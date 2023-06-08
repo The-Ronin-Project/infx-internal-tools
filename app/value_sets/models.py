@@ -21,7 +21,8 @@ from flask import current_app
 
 from app.models.use_case import (
     load_use_case_by_value_set_uuid,
-    use_case_set_up_on_value_set_creation,
+    value_set_use_case_link_set_up,
+    delete_all_use_cases_for_value_set,
 )
 
 VALUE_SET_SCHEMA_VERSION = 2
@@ -1382,10 +1383,10 @@ class ValueSet:
         effective_start,
         effective_end,
         version_description,
-        use_case_uuids=None,
+        use_case_data=None,
     ):
         """
-        Create a new value_set, its initial version and associate it with the given use_case UUIDs.
+        Create a new value_set, its initial version, and associate it with the given use_case UUIDs and is_primary values.
 
         Parameters:
         - name (str): The name of the value_set.
@@ -1400,7 +1401,7 @@ class ValueSet:
         - effective_start (datetime): The effective start date of the value_set.
         - effective_end (datetime): The effective end date of the value_set.
         - version_description (str): The description of the value_set version.
-        - use_case_uuids (list, optional): A list of use_case UUIDs to associate with the value_set. Defaults to None.
+        - use_case_data (list, optional): A list of dictionaries containing use_case UUIDs and is_primary values to associate with the value_set. Defaults to None.
 
         Returns:
         - ValueSet: The created value_set instance.
@@ -1434,7 +1435,7 @@ class ValueSet:
         conn.execute(text("commit"))
 
         # Call to insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
-        use_case_set_up_on_value_set_creation(use_case_uuids, vs_uuid)
+        value_set_use_case_link_set_up(use_case_data, vs_uuid)
 
         # Insert the value_set_version into the value_sets.value_set_version table
         new_version_uuid = uuid.uuid4()
@@ -1965,6 +1966,21 @@ class ValueSet:
         else:
             new_value_set_version.update(status="pending")
             return "pending"
+
+    def overwrite_value_set_use_case_link_data(self, use_case_data):
+        """
+        This method deletes all existing value_set_use_case_link associations for the current value set
+        and creates new associations based on the provided use_case_data.
+
+        Parameters:
+        - use_case_data (list): A list of dictionaries containing use_case_uuid and is_primary key-value pairs.
+                                 Each dictionary represents a new association between the current value set
+                                 and a use_case, with the specified is_primary value.
+        Returns:
+        - None
+        """
+        delete_all_use_cases_for_value_set(self.uuid)
+        value_set_use_case_link_set_up(use_case_data, self.uuid)
 
 
 class RuleGroup:
