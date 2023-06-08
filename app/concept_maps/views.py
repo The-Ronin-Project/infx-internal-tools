@@ -367,8 +367,8 @@ def create_mappings():
 
         new_mappings = []
         for source_concept_uuid in source_concept_uuids:
-            source_code = SourceConcept.load(source_concept_uuid)
             make_author_assigned_mapper(source_concept_uuid, author)
+            source_code = SourceConcept.load(source_concept_uuid)
             new_mapping = Mapping(
                 source=source_code,
                 relationship=relationship,

@@ -22,7 +22,6 @@ from app.terminologies.models import (
 
 CONCEPT_MAPS_SCHEMA_VERSION = 3
 
-
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
 # TODO remove this after Alex and Ben have updated the ED model to use concept mapps for ED utilization
 # Todo: wait until we've updated (or deprecated) mapping inclusions in value sets to disable this
