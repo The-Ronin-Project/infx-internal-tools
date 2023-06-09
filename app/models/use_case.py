@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import uuid
 from sqlalchemy import create_engine, text, MetaData, Table, Column, String
 from app.database import get_db
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from werkzeug.exceptions import BadRequest, NotFound
 
 
@@ -106,7 +106,7 @@ def value_set_use_case_link_set_up(use_case_data, vs_uuid):
 
 def load_use_case_by_value_set_uuid(
     value_set_uuid: uuid.UUID,
-) -> Optional[List[UseCase]]:
+) -> Tuple[UseCase, List[UseCase]]:
     """
     This function is used to fetch use case data associated with a specific value set based on its universally unique identifier (UUID).
 
@@ -127,17 +127,53 @@ def load_use_case_by_value_set_uuid(
             SELECT uc.uuid, uc.name, uc.description, uc.point_of_contact, uc.status, uc.jira_ticket, uc.point_of_contact_email
             FROM project_management.use_case uc   
             INNER JOIN value_sets.value_set_use_case_link link ON uc.uuid = link.use_case_uuid    
-            WHERE link.value_set_uuid = :value_set_uuid    
+            WHERE link.value_set_uuid = :value_set_uuid 
+            and link.is_primary is true
             """
         ),
         {"value_set_uuid": value_set_uuid},
     )
-    use_case_data_list = query.fetchall()
-
-    if use_case_data_list:
-        return [UseCase(*use_case_data) for use_case_data in use_case_data_list]
+    primary_use_case_data = query.first()
+    if primary_use_case_data is not None:
+        primary_use_case = UseCase(
+            uuid=primary_use_case_data.uuid,
+            name=primary_use_case_data.name,
+            description=primary_use_case_data.description,
+            point_of_contact=primary_use_case_data.point_of_contact,
+            status=primary_use_case_data.status,
+            jira_ticket=primary_use_case_data.jira_ticket,
+            point_of_contact_email=primary_use_case_data.point_of_contact_email,
+        )
     else:
-        return None
+        primary_use_case = None
+
+    query = conn.execute(
+        text(
+            """    
+            SELECT uc.uuid, uc.name, uc.description, uc.point_of_contact, uc.status, uc.jira_ticket, uc.point_of_contact_email
+            FROM project_management.use_case uc   
+            INNER JOIN value_sets.value_set_use_case_link link ON uc.uuid = link.use_case_uuid    
+            WHERE link.value_set_uuid = :value_set_uuid 
+            and link.is_primary is false
+            """
+        ),
+        {"value_set_uuid": value_set_uuid},
+    )
+    secondary_use_cases_data = query.fetchall()
+    secondary_use_cases = [
+        UseCase(
+            uuid=item.uuid,
+            name=item.name,
+            description=item.description,
+            point_of_contact=item.point_of_contact,
+            status=item.status,
+            jira_ticket=item.jira_ticket,
+            point_of_contact_email=item.point_of_contact_email,
+        )
+        for item in secondary_use_cases_data
+    ]
+
+    return primary_use_case, secondary_use_cases
 
 
 def remove_is_primary_status(

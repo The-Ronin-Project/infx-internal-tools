@@ -1336,6 +1336,8 @@ class ValueSet:
         purpose,
         vs_type,
         synonyms={},
+        primary_use_case=None,
+        secondary_use_cases=[],
     ):
         """Initializes the value set with the given attributes.
 
@@ -1367,6 +1369,8 @@ class ValueSet:
         self.purpose = purpose
         self.type = vs_type
         self.synonyms = synonyms
+        self.primary_use_case = primary_use_case
+        self.secondary_use_cases = secondary_use_cases
 
     @classmethod
     def create(
@@ -1383,7 +1387,8 @@ class ValueSet:
         effective_start,
         effective_end,
         version_description,
-        use_case_data=None,
+        primary_use_case=None,
+        secondary_use_case=[],
     ):
         """
         Create a new value_set, its initial version, and associate it with the given use_case UUIDs and is_primary values.
@@ -1435,7 +1440,7 @@ class ValueSet:
         conn.execute(text("commit"))
 
         # Call to insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
-        value_set_use_case_link_set_up(use_case_data, vs_uuid)
+        value_set_use_case_link_set_up(primary_use_case, secondary_use_case, vs_uuid)
 
         # Insert the value_set_version into the value_sets.value_set_version table
         new_version_uuid = uuid.uuid4()
@@ -1487,9 +1492,7 @@ class ValueSet:
         )
         synonyms = {x.context: x.synonym for x in synonym_data}
 
-        use_case_info = load_use_case_by_value_set_uuid(vs_uuid)
-        # Extract the names from use_case_info
-        use_case_names = [uc.name for uc in use_case_info] if use_case_info else []
+        primary_use_case, secondary_use_cases = load_use_case_by_value_set_uuid(vs_uuid)
 
         value_set = cls(
             vs_data.uuid,
@@ -1503,8 +1506,10 @@ class ValueSet:
             vs_data.purpose,
             vs_data.type,
             synonyms,
+            primary_use_case,
+            secondary_use_cases,
         )
-        return value_set, use_case_names
+        return value_set
 
     def serialize(self):
         use_case_info = load_use_case_by_value_set_uuid(self.uuid)
@@ -2763,8 +2768,26 @@ class ValueSetVersion:
                 + self.value_set.name[index].upper()
                 + self.value_set.name[index + 1 :]
             )
-        use_case = load_use_case_by_value_set_uuid(self.value_set.uuid)
-        use_case_name = use_case.name if use_case else "unknown"
+
+        # Load the names of all use cases associated with the value set
+        primary_use_case_name = (
+            [self.value_set.primary_use_case.name]
+            if self.value_set.primary_use_case
+            else []
+        )
+        secondary_use_case_names = [x.name for x in self.value_set.secondary_use_cases]
+        all_use_case_names = primary_use_case_name + secondary_use_case_names
+
+        # Transform the use case names into the RCDM-compliant format
+        use_case_coding = [
+            {
+                "code": use_case_name,  # the value will be the use case name
+            }
+            for use_case_name in all_use_case_names
+        ]
+        if not use_case_coding:
+            use_case_coding = [{"code": "unknown"}]
+
         serialized = {
             "resourceType": "ValueSet",
             "id": str(self.value_set.uuid),
@@ -2796,11 +2819,7 @@ class ValueSetVersion:
                         "display": "Workflow Setting",
                     },
                     "valueCodeableConcept": {
-                        "coding": [
-                            {
-                                "code": use_case_name,  # the value will be the use case name
-                            }
-                        ],
+                        "coding": use_case_coding,
                     },
                 }
             ],
