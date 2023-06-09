@@ -17,7 +17,7 @@ class UseCase:
     point_of_contact_email: str
 
     @classmethod
-    def load_all_use_cases(cls) -> List[UseCase]:
+    def load_all_use_cases(cls) -> List["UseCase"]:
         conn = get_db()
         query = conn.execute(
             text(
@@ -33,7 +33,7 @@ class UseCase:
         return use_cases
 
     @classmethod
-    def load_use_case_by_uuid(cls, use_case_uuid: uuid.UUID) -> Optional[UseCase]:
+    def load_use_case_by_uuid(cls, use_case_uuid: uuid.UUID) -> Optional["UseCase"]:
         conn = get_db()
         query = conn.execute(
             text(
@@ -53,7 +53,7 @@ class UseCase:
             return None
 
     @classmethod
-    def create_use_case(cls, use_case: UseCase) -> None:
+    def create_use_case(cls, use_case: "UseCase") -> None:
         conn = get_db()
         query = conn.execute(
             text(
