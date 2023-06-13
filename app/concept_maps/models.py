@@ -369,8 +369,8 @@ class ConceptMap:
             text(
                 """
                 insert into concept_maps.source_concept
-                (uuid, code, display, system, map_status, concept_map_version_uuid)
-                select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid from value_sets.expansion_member
+                (uuid, code, display, system, map_status, concept_map_version_uuid, custom_terminology_uuid)
+                select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid, custom_terminology_uuid from value_sets.expansion_member
                 join public.terminology_versions tv
                 on tv.fhir_uri=expansion_member.system
                 and tv.version=expansion_member.version
@@ -568,10 +568,13 @@ class ConceptMapVersion:
             relationship_codes.code as relationship_code, source_concept.map_status,
             concept_relationship.target_concept_code, concept_relationship.target_concept_display,
             concept_relationship.target_concept_system_version_uuid as target_system,
-            tv_target.version as target_version, tv_target.fhir_uri as target_fhir_uri
+            tv_target.version as target_version, tv_target.fhir_uri as target_fhir_uri,
+            ctc.depends_on_property, ctc.depends_on_system, ctc.depends_on_value, ctc.depends_on_display
             from concept_maps.source_concept
             left join concept_maps.concept_relationship
             on source_concept.uuid = concept_relationship.source_concept_uuid
+            left join custom_terminologies.code ctc
+            on source_concept.custom_terminology_uuid = ctc.uuid
             join concept_maps.relationship_codes
             on relationship_codes.uuid = concept_relationship.relationship_code_uuid
             join terminology_versions as tv_source
@@ -605,6 +608,10 @@ class ConceptMapVersion:
                 mapping_group=item.source_mapping_group,
                 previous_version_context=item.source_previous_version_context,
                 concept_map_version_uuid=self.uuid,
+                depends_on_property=item.depends_on_property,
+                depends_on_system=item.depends_on_system,
+                depends_on_value=item.depends_on_value,
+                depends_on_display=item.depends_on_display
             )
             target_code = Code(
                 item.target_fhir_uri,
@@ -753,23 +760,38 @@ class ConceptMapVersion:
                         source_code_code = transform_struct_string_to_json(
                             source_code_code
                         )
-                    elements.append(
-                        {
-                            "id": source_code.id,
-                            "code": source_code_code,
-                            "display": source_code_display,
-                            "target": [
-                                {
-                                    "id": mapping.id,
-                                    "code": mapping.target.code,
-                                    "display": mapping.target.display,
-                                    "equivalence": mapping.relationship.code,
-                                    "comment": None,
-                                }
-                                for mapping in filtered_mappings
-                            ],
-                        }
-                    )
+                    new_element = {
+                        "id": source_code.id,
+                        "code": source_code_code,
+                        "display": source_code_display,
+                        "target": [],
+                    }
+
+                    # Iterate through each mapping for the source and serialize it
+                    for mapping in filtered_mappings:
+                        target_serialized = {
+                                "id": mapping.id,
+                                "code": mapping.target.code,
+                                "display": mapping.target.display,
+                                "equivalence": mapping.relationship.code,
+                                "comment": None,
+                            }
+
+                        # Add dependsOn data
+                        if source_code.depends_on_property or source_code.depends_on_value:
+                            depends_on = {
+                                "property": source_code.depends_on_property,
+                                "value": source_code.depends_on_value
+                            }
+                            if source_code.depends_on_system:
+                                depends_on['system'] = source_code.depends_on_system
+                            if source_code.depends_on_display:
+                                depends_on['display'] = source_code.depends_on_display
+                            target_serialized['dependsOn'] = depends_on
+
+                        new_element['target'].append(target_serialized)
+
+                    elements.append(new_element)
 
             groups.append(
                 {
@@ -956,6 +978,10 @@ class SourceConcept:
     mapping_group: Optional[str] = None
     previous_version_context: Optional[dict] = None
     concept_map_version_uuid: Optional[UUID] = None
+    depends_on_property: Optional[str] = None
+    depends_on_system: Optional[str] = None
+    depends_on_value: Optional[str] = None
+    depends_on_display: Optional[str] = None
 
     def __post_init__(self):
         self.code_object = Code(
@@ -984,8 +1010,10 @@ class SourceConcept:
         Raises:
             AttributeError: If the `code` or `display` attribute is not set for the instance.
         """
-        combined = (self.code.strip() + self.display.strip()).encode("utf-8")
-        # todo: add the dependsOn in as well to be part of the hash
+        combined = (
+                self.code.strip()
+                + self.display.strip()
+        ).encode("utf-8")
         return hashlib.md5(combined).hexdigest()
 
     @classmethod
@@ -1145,6 +1173,10 @@ class Mapping:
         # concatenate the required attributes into a string
         concat_str = (
             str(self.source.id)
+            + str(self.source.depends_on_property).strip()
+            + str(self.source.depends_on_system).strip()
+            + str(self.source.depends_on_value).strip()
+            + str(self.source.depends_on_display).strip()
             + self.relationship.code
             + self.target.code
             + self.target.display
