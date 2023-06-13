@@ -760,33 +760,37 @@ class ConceptMapVersion:
                         source_code_code = transform_struct_string_to_json(
                             source_code_code
                         )
-                    new_element = (
-                        {
-                            "id": source_code.id,
-                            "code": source_code_code,
-                            "display": source_code_display,
-                            "target": [
-                                {
-                                    "id": mapping.id,
-                                    "code": mapping.target.code,
-                                    "display": mapping.target.display,
-                                    "equivalence": mapping.relationship.code,
-                                    "comment": None,
-                                }
-                                for mapping in filtered_mappings
-                            ],
-                        }
-                    )
-                    if source_code.depends_on_property or source_code.depends_on_value:
-                        depends_on = {
-                            "property": source_code.depends_on_property,
-                            "value": source_code.depends_on_value
-                        }
-                        if source_code.depends_on_system:
-                            depends_on['system'] = source_code.depends_on_system
-                        if source_code.depends_on_display:
-                            depends_on['display'] = source_code.depends_on_display
-                        new_element['target']['dependsOn'] = depends_on
+                    new_element = {
+                        "id": source_code.id,
+                        "code": source_code_code,
+                        "display": source_code_display,
+                        "target": [],
+                    }
+
+                    # Iterate through each mapping for the source and serialize it
+                    for mapping in filtered_mappings:
+                        target_serialized = {
+                                "id": mapping.id,
+                                "code": mapping.target.code,
+                                "display": mapping.target.display,
+                                "equivalence": mapping.relationship.code,
+                                "comment": None,
+                            }
+
+                        # Add dependsOn data
+                        if source_code.depends_on_property or source_code.depends_on_value:
+                            depends_on = {
+                                "property": source_code.depends_on_property,
+                                "value": source_code.depends_on_value
+                            }
+                            if source_code.depends_on_system:
+                                depends_on['system'] = source_code.depends_on_system
+                            if source_code.depends_on_display:
+                                depends_on['display'] = source_code.depends_on_display
+                            target_serialized['dependsOn'] = depends_on
+
+                        new_element['target'].append(target_serialized)
+
                     elements.append(new_element)
 
             groups.append(
@@ -1009,10 +1013,6 @@ class SourceConcept:
         combined = (
                 self.code.strip()
                 + self.display.strip()
-                + str(self.depends_on_property).strip()
-                + str(self.depends_on_system).strip()
-                + str(self.depends_on_value).strip()
-                + str(self.depends_on_display).strip()
         ).encode("utf-8")
         return hashlib.md5(combined).hexdigest()
 
@@ -1173,6 +1173,10 @@ class Mapping:
         # concatenate the required attributes into a string
         concat_str = (
             str(self.source.id)
+            + str(self.source.depends_on_property).strip()
+            + str(self.source.depends_on_system).strip()
+            + str(self.source.depends_on_value).strip()
+            + str(self.source.depends_on_display).strip()
             + self.relationship.code
             + self.target.code
             + self.target.display
