@@ -87,7 +87,7 @@ class Terminology:
         return False
 
     def __repr__(self):
-        return f"Terminology({self.uuid})"
+        return f"Terminology(uuid={self.uuid}, name={self.terminology}, version={self.version})"
 
     @classmethod
     def load(cls, terminology_version_uuid):

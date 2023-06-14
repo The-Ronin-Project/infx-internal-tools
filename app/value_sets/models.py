@@ -1,6 +1,7 @@
 import datetime
 import json
 from dataclasses import dataclass, field
+from typing import List, Dict, Tuple
 import re
 import requests
 import concurrent.futures
@@ -12,6 +13,7 @@ from dateutil import parser
 from collections import defaultdict
 from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
+from sqlalchemy import Connection
 from app.models.codes import Code
 
 import app.concept_maps.models
@@ -1437,7 +1439,7 @@ class ValueSet:
         return cls.load(vs_uuid)
 
     @classmethod
-    def load(cls, vs_uuid):
+    def load(cls, vs_uuid, conn: Connection = None):
         conn = get_db()
         vs_data = conn.execute(
             text(
@@ -1917,7 +1919,7 @@ class ValueSet:
 
 
 class RuleGroup:
-    def __init__(self, vs_version_uuid, rule_group_id):
+    def __init__(self, vs_version_uuid, rule_group_id, conn: Connection = None):
         self.vs_version_uuid = vs_version_uuid
         self.rule_group_id = rule_group_id
         self.expansion = set()
@@ -1925,7 +1927,7 @@ class RuleGroup:
         self.load_rules()
 
     # Move load rules to here, at version level, just load distinct rule groups and instantiate this class
-    def load_rules(self):
+    def load_rules(self, conn: Connection = None):
         """
         Rules will be structured as a dictionary where each key is a terminology
         and the value is a list of rules for that terminology within this value set version.
@@ -2318,7 +2320,7 @@ class ValueSetVersion:
         return cls.load(vsv_uuid)
 
     @classmethod
-    def load(cls, uuid):
+    def load(cls, uuid, conn: Connection = None):
         conn = get_db()
         vs_version_data = conn.execute(
             text(
@@ -2346,10 +2348,9 @@ class ValueSetVersion:
         )
         value_set_version.load_rules()
 
-        if current_app.config["MOCK_DB"] != "True":
-            value_set_version.explicitly_included_codes = (
-                ExplicitlyIncludedCode.load_all_for_vs_version(value_set_version)
-            )
+        value_set_version.explicitly_included_codes = (
+            ExplicitlyIncludedCode.load_all_for_vs_version(value_set_version)
+        )
 
         if value_set.type == "extensional":
             extensional_members_data = conn.execute(
@@ -2381,7 +2382,7 @@ class ValueSetVersion:
 
         return value_set_version
 
-    def load_rules(self):
+    def load_rules(self, conn: Connection = None):
         conn = get_db()
         rule_groups_query = conn.execute(
             text(
@@ -3052,6 +3053,29 @@ class ValueSetVersion:
 
         return False
 
+    def lookup_terminologies_in_value_set_version(self) -> List[Terminology]:
+        """
+        This method scans through an expansion set and collects unique terminologies that are defined
+        in the set. Terminologies are distinguished by a combination of their system and version.
+
+        The expansion set (self.expansion) should be an iterable collection of codes, where each code
+        has a 'system' and a 'version' attribute.
+
+        Returns:
+            A list of unique Terminology objects found in the expansion set.
+        """
+
+        terminologies: Dict[Tuple[str, str], Terminology] = dict()
+
+        for code in self.expansion:
+            key = (code.system, code.version)
+            if key not in terminologies:
+                terminologies[key] = Terminology.load_by_fhir_uri_and_version(
+                    fhir_uri=code.system,
+                    version=code.version
+                )
+
+        return list(terminologies.values())
 
 @dataclass
 class ExplicitlyIncludedCode:
@@ -3094,7 +3118,7 @@ class ExplicitlyIncludedCode:
         }
 
     @classmethod
-    def load_all_for_vs_version(cls, vs_version: ValueSetVersion):
+    def load_all_for_vs_version(cls, vs_version: ValueSetVersion, conn: Connection = None):
         conn = get_db()
 
         code_data = conn.execute(
