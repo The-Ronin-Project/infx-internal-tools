@@ -29,7 +29,18 @@ class UseCase:
         )
         use_cases_data = query.fetchall()
 
-        use_cases = [UseCase(*use_case_data) for use_case_data in use_cases_data]
+        use_cases = [
+            UseCase(
+                uuid=use_case_item.uuid,
+                name=use_case_item.name,
+                description=use_case_item.description,
+                point_of_contact=use_case_item.point_of_contact,
+                status=use_case_item.status,
+                jira_ticket=use_case_item.jira_ticket,
+                point_of_contact_email=use_case_item.point_of_contact_email,
+            )
+            for use_case_item in use_cases_data
+        ]
         return use_cases
 
     @classmethod
@@ -53,7 +64,7 @@ class UseCase:
             return None
 
     @classmethod
-    def create_use_case(cls, use_case: "UseCase") -> None:
+    def save(cls, use_case: "UseCase") -> None:
         conn = get_db()
         query = conn.execute(
             text(
@@ -77,28 +88,42 @@ class UseCase:
         conn.commit()
 
 
-def value_set_use_case_link_set_up(use_case_data, vs_uuid):
+def value_set_use_case_link_set_up(
+    primary_use_case, secondary_use_case, value_set_uuid
+):
     # Insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
     conn = get_db()
-    if use_case_data is None:
-        use_case_data = []
+    if primary_use_case is not None:
+        conn.execute(
+            text(
+                """
+                INSERT INTO value_sets.value_set_use_case_link      
+                (value_set_uuid, use_case_uuid, is_primary)      
+                VALUES      
+                (:value_set_uuid, :secondary_use_case_uuid, :is_primary)
+                """
+            ),
+            {
+                "value_set_uuid": value_set_uuid,
+                "use_case_uuid": primary_use_case,
+                "is_primary": True,
+            },
+        )
 
-    for use_case_dict in use_case_data:
-        use_case_uuid = use_case_dict.get("use_case_uuid")
-        is_primary = use_case_dict.get("is_primary", False)
+    for secondary_use_case_uuid in secondary_use_case:
         conn.execute(
             text(
                 """      
                 INSERT INTO value_sets.value_set_use_case_link      
                 (value_set_uuid, use_case_uuid, is_primary)      
                 VALUES      
-                (:value_set_uuid, :use_case_uuid, :is_primary)      
+                (:value_set_uuid, :secondary_use_case_uuid, :is_primary)      
                 """
             ),
             {
-                "value_set_uuid": vs_uuid,
-                "use_case_uuid": use_case_uuid,
-                "is_primary": is_primary,
+                "value_set_uuid": value_set_uuid,
+                "use_case_uuid": secondary_use_case_uuid,
+                "is_primary": False,
             },
         )
     conn.execute(text("commit"))
@@ -176,59 +201,9 @@ def load_use_case_by_value_set_uuid(
     return primary_use_case, secondary_use_cases
 
 
-def remove_is_primary_status(
-    use_case_uuid: uuid.UUID, value_set_uuid: uuid.UUID
-) -> None:
-    conn = get_db()
-    query = conn.execute(
-        text(
-            """  
-            UPDATE value_sets.value_set_use_case_link  
-            SET is_primary = false  
-            WHERE use_case_uuid = :use_case_uuid AND value_set_uuid = :value_set_uuid  
-            """
-        ),
-        {"use_case_uuid": use_case_uuid, "value_set_uuid": value_set_uuid},
-    )
-    conn.commit()
-
-
-def remove_use_case_from_value_set(
-    use_case_uuid: uuid.UUID, value_set_uuid: uuid.UUID
-) -> None:
-    conn = get_db()
-    result = conn.execute(
-        text(
-            """  
-            select is_primary from value_sets.value_set_use_case_link  
-            where use_case_uuid = :use_case_uuid  
-            and value_set_uuid = :value_set_uuid  
-            """
-        ),
-        {"use_case_uuid": use_case_uuid, "value_set_uuid": value_set_uuid},
-    )
-    row = result.fetchone()
-    if row and row["is_primary"]:
-        raise BadRequest(
-            "This use case case is not eligable for deletion because it is the primary use case."
-        )
-    else:
-        query = conn.execute(
-            text(
-                """    
-                DELETE FROM value_sets.value_set_use_case_link    
-                WHERE use_case_uuid = :use_case_uuid AND value_set_uuid = :value_set_uuid    
-                """
-            ),
-            {"use_case_uuid": use_case_uuid, "value_set_uuid": value_set_uuid},
-        )
-        conn.commit()
-
-
 def delete_all_use_cases_for_value_set(value_set_uuid: uuid.UUID) -> None:
-    conn = get_db()
-
     # Delete all rows associated with the given value_set_uuid from the value_set_use_case_link table
+    conn = get_db()
     conn.execute(
         text(
             """  
