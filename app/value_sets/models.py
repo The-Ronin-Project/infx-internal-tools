@@ -2491,7 +2491,7 @@ class ValueSetVersion:
                         "display": code.display,
                         "system": code.system,
                         "version": code.version,
-                        "custom_terminology_uuid": str(code.custom_terminology_uuid)
+                        "custom_terminology_uuid": str(code.custom_terminology_uuid) if code.custom_terminology_uuid else None
                     }
                     for code in self.expansion
                 ],
