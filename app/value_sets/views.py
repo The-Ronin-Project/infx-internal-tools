@@ -83,12 +83,14 @@ def handle_linked_use_case(value_set_uuid):
 
     if request.method == "POST":
         delete_all_use_cases_for_value_set(value_set_uuid)
-        use_case_data = request.json.get("use_case_data", [])
-        if not use_case_data:
-            return jsonify({"error": "Missing use_case_data in request"}), 400
 
-        value_set_use_case_link_set_up(use_case_data, value_set_uuid)
-        return jsonify({"message": "Use case linked to value set successfully"}), 201
+        primary_use_case = request.json.get("primary_use_case")
+        secondary_use_case = request.json.get("secondary_use_case")
+
+        value_set_use_case_link_set_up(
+            primary_use_case, secondary_use_case, value_set_uuid
+        )
+        return jsonify({"message": "Use case(s) linked to value set successfully"}), 201
 
 
 @value_sets_blueprint.route(

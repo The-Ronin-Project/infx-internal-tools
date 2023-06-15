@@ -10,6 +10,8 @@ from flask import Flask, jsonify, request, Response, make_response
 from app.database import close_db
 from app.value_sets.models import *
 from app.concept_maps.models import *
+from app.models.use_case import *
+from app.models.teams import *
 from app.models.surveys import *
 from app.models.patient_edu import *
 from app.concept_maps.versioning_models import *
@@ -77,7 +79,15 @@ def create_app(script_info=None):
         logger.critical(e.description, stack_info=True)
         return jsonify({"message": e.description}), e.code
 
-
+    # UseCase Endpoints
+    @app.route("/UseCase/", methods=["GET"])
+    def use_case_registry():
+        if request.method == "GET":
+            all_cases = UseCase.load_all_use_cases()
+            return jsonify(all_cases)
+        elif request.method == "DELETE":
+            associated_value_set = request.json.get("value_set_uuid")
+            delete_all_use_cases_for_value_set(associated_value_set)
 
     # Survey Endpoints
     @app.route("/surveys/<string:survey_uuid>")
@@ -101,8 +111,6 @@ def create_app(script_info=None):
             },
         )
         return response
-
-
 
         # Patient Education Endpoints
 
@@ -191,8 +199,6 @@ def create_app(script_info=None):
         last_update = DataNormalizationRegistry.get_oci_last_published_time()
         convert_last_update = DataNormalizationRegistry.convert_gmt_time(last_update)
         return convert_last_update
-
-
 
     @app.route("/TerminologyUpdate/ValueSets/report", methods=["GET"])
     def terminology_update_value_set_report():
