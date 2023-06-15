@@ -14,6 +14,7 @@ from app.models.use_case import *
 from app.models.teams import *
 from app.models.surveys import *
 from app.models.patient_edu import *
+from app.models.teams import *
 from app.concept_maps.versioning_models import *
 from app.models.data_ingestion_registry import DataNormalizationRegistry
 from app.errors import BadRequestWithCode
@@ -85,11 +86,34 @@ def create_app(script_info=None):
         if request.method == "GET":
             all_cases = UseCase.load_all_use_cases()
             return jsonify(all_cases)
-        elif request.method == "DELETE":
-            associated_value_set = request.json.get("value_set_uuid")
-            delete_all_use_cases_for_value_set(associated_value_set)
 
-    # Survey Endpoints
+    # Teams Endpoints
+    @app.route("/Teams/", methods=["GET"])
+    def teams_registry():
+        if request.method == "GET":
+            all_teams = Teams.load_all_teams()
+            return jsonify(all_teams)
+
+    @app.route("/Teams/linked_use_case", methods=["GET", "POST"])
+    def handle_linked_teams():
+        if request.method == "GET":
+            use_case_uuid = request.json.get("use_case_uuid")
+            return jsonify(get_team_names_by_use_case(use_case_uuid))
+        if request.method == "POST":
+            use_case_uuid = request.json.get("use_case_uuid")
+            delete_all_teams_for_a_use_case(use_case_uuid)
+            teams_to_associate = request.json.get("teams")
+            for team_data in teams_to_associate:
+                team = Teams(
+                    name=team_data["name"],
+                    slack_channel=team_data["slack_channel"],
+                    team_uuid=uuid.UUID(team_data["team_uuid"]),
+                )
+                team.save()
+            return jsonify({"status": "success"}), 200
+
+            # Survey Endpoints
+
     @app.route("/surveys/<string:survey_uuid>")
     def export_survey(survey_uuid):
         """

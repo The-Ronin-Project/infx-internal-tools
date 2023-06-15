@@ -64,15 +64,20 @@ class UseCase:
             return None
 
     @classmethod
-    def save(cls, use_case: "UseCase") -> None:
+    def save(
+        cls,
+        use_case: "UseCase",
+        value_set_uuid: Optional[uuid.UUID] = None,
+        is_primary: Optional[bool] = False,
+    ) -> None:
         conn = get_db()
         query = conn.execute(
             text(
-                """  
-                INSERT INTO project_management.use_case  
-                    (uuid, name, description, point_of_contact, status, jira_ticket, point_of_contact_email)  
-                VALUES  
-                    (:uuid, :name, :description, :point_of_contact, :status, :jira_ticket, :point_of_contact_email)  
+                """    
+                INSERT INTO project_management.use_case    
+                    (uuid, name, description, point_of_contact, status, jira_ticket, point_of_contact_email)    
+                VALUES    
+                    (:uuid, :name, :description, :point_of_contact, :status, :jira_ticket, :point_of_contact_email)    
                 """
             ),
             {
@@ -87,46 +92,34 @@ class UseCase:
         )
         conn.commit()
 
+        if value_set_uuid and is_primary is not None:
+            conn.execute(
+                text(
+                    """        
+                    INSERT INTO value_sets.value_set_use_case_link        
+                    (value_set_uuid, use_case_uuid, is_primary)        
+                    VALUES        
+                    (:value_set_uuid, :use_case_uuid, :is_primary)        
+                    """
+                ),
+                {
+                    "value_set_uuid": value_set_uuid,
+                    "use_case_uuid": use_case.uuid,
+                    "is_primary": is_primary,
+                },
+            )
+            conn.commit()
+
 
 def value_set_use_case_link_set_up(
-    primary_use_case, secondary_use_case, value_set_uuid
+    primary_use_case, secondary_use_cases, value_set_uuid
 ):
     # Insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
-    conn = get_db()
     if primary_use_case is not None:
-        conn.execute(
-            text(
-                """
-                INSERT INTO value_sets.value_set_use_case_link      
-                (value_set_uuid, use_case_uuid, is_primary)      
-                VALUES      
-                (:value_set_uuid, :secondary_use_case_uuid, :is_primary)
-                """
-            ),
-            {
-                "value_set_uuid": value_set_uuid,
-                "use_case_uuid": primary_use_case,
-                "is_primary": True,
-            },
-        )
+        UseCase.save(primary_use_case, value_set_uuid, is_primary=True)
 
-    for secondary_use_case_uuid in secondary_use_case:
-        conn.execute(
-            text(
-                """      
-                INSERT INTO value_sets.value_set_use_case_link      
-                (value_set_uuid, use_case_uuid, is_primary)      
-                VALUES      
-                (:value_set_uuid, :secondary_use_case_uuid, :is_primary)      
-                """
-            ),
-            {
-                "value_set_uuid": value_set_uuid,
-                "use_case_uuid": secondary_use_case_uuid,
-                "is_primary": False,
-            },
-        )
-    conn.execute(text("commit"))
+    for secondary_use_case in secondary_use_cases:
+        UseCase.save(secondary_use_case, value_set_uuid, is_primary=False)
 
 
 def load_use_case_by_value_set_uuid(
