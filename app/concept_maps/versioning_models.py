@@ -98,8 +98,8 @@ class ConceptMapVersionCreator:
             text(
                 """
                 insert into concept_maps.source_concept
-                (uuid, code, display, system, map_status, concept_map_version_uuid)
-                select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid from value_sets.expansion_member
+                (uuid, code, display, system, map_status, concept_map_version_uuid, custom_terminology_uuid)
+                select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid, custom_terminology_uuid from value_sets.expansion_member
                 join public.terminology_versions tv
                 on tv.fhir_uri=expansion_member.system
                 and tv.version=expansion_member.version

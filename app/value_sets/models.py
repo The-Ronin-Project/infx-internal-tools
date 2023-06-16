@@ -40,6 +40,7 @@ expansion_member = Table(
     Column("display", String, nullable=False),
     Column("system", String, nullable=False),
     Column("version", String, nullable=False),
+    Column("custom_terminology_uuid", UUID, nullable=True),
     schema="value_sets",
 )
 
@@ -1210,6 +1211,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
+                custom_terminology_uuid=x.uuid
             )
             for x in results_data
         ]
@@ -1239,6 +1241,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
+                custom_terminology_uuid=x.uuid
             )
             for x in results_data
         ]
@@ -1269,6 +1272,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
+                custom_terminology_uuid=x.uuid
             )
             for x in results_data
         ]
@@ -2554,6 +2558,7 @@ class ValueSetVersion:
                         "display": code.display,
                         "system": code.system,
                         "version": code.version,
+                        "custom_terminology_uuid": str(code.custom_terminology_uuid) if code.custom_terminology_uuid else None
                     }
                     for code in self.expansion
                 ],

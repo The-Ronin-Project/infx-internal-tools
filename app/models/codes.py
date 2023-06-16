@@ -47,7 +47,8 @@ class Code:
         depends_on_property: str=None,
         depends_on_system: str=None,
         depends_on_value: str=None,
-        depends_on_display: str=None
+        depends_on_display: str=None,
+        custom_terminology_uuid: uuid.UUID=None
     ):
         self.system = system
         self.version = version
@@ -58,6 +59,7 @@ class Code:
         self.system_name = system_name
         self.terminology_version: Terminology = terminology_version
         self.terminology_version_uuid: uuid.UUID = terminology_version_uuid
+        self.custom_terminology_uuid = custom_terminology_uuid
 
         self.depends_on_property = depends_on_property
         self.depends_on_system = depends_on_system
