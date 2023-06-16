@@ -2,7 +2,8 @@ import re
 import json
 import pytest
 import hashlib
-from app.app import create_app 
+from app.app import create_app
+
 app = create_app()
 # def test_extensional_vs():
 #     app.config['MOCK_DB'] = True
@@ -105,288 +106,308 @@ app = create_app()
 #     assert 'expansion' in response.json
 #     assert 'contains' in response.json.get('expansion')
 
+
 def test_expansion_report():
-    app.config['MOCK_DB'] = True
-    response = app.test_client().get('/ValueSets/expansions/3257aed4-6da1-11ec-bd74-aa665a30495f/report')
+    app.config["MOCK_DB"] = True
+    response = app.test_client().get(
+        "/ValueSets/expansions/3257aed4-6da1-11ec-bd74-aa665a30495f/report"
+    )
     # print('hex digest', hashlib.md5(response.data).hexdigest())
     assert hashlib.md5(response.data).hexdigest() == "ca5613af2d0a65e32d7505849fd1c1d2"
 
+
 def test_survey_export():
-    app.config['MOCK_DB'] = True
-    response = app.test_client().get('/surveys/34775510-1267-11ec-b9a3-77c9d91ff3f2?organization_uuid=866632f0-ff85-11eb-9f47-ffa6d132f8a4')
+    app.config["MOCK_DB"] = True
+    response = app.test_client().get(
+        "/surveys/34775510-1267-11ec-b9a3-77c9d91ff3f2?organization_uuid=866632f0-ff85-11eb-9f47-ffa6d132f8a4"
+    )
     print(hashlib.md5(response.data).hexdigest())
     assert hashlib.md5(response.data).hexdigest() == "d9b0f04d124702c00e160db2507b2852"
 
+
 def test_execute_rules_directly():
-    app.config['MOCK_DB'] = True
+    app.config["MOCK_DB"] = True
     response = app.test_client().post(
-        '/ValueSets/rule_set/execute',
-        data = json.dumps(
-        [{
-            "property": "component",
-            "operator": "in",
-            "value": "{\"Alpha-1-Fetoprotein\"}",
-            "include": True,
-            "terminology_version": "7c19e704-19d9-412b-90c3-79c5fb99ebe8"
-            }]
+        "/ValueSets/rule_set/execute",
+        data=json.dumps(
+            [
+                {
+                    "property": "component",
+                    "operator": "in",
+                    "value": '{"Alpha-1-Fetoprotein"}',
+                    "include": True,
+                    "terminology_version": "7c19e704-19d9-412b-90c3-79c5fb99ebe8",
+                }
+            ]
         ),
-        content_type='application/json'
-        )
+        content_type="application/json",
+    )
     assert len(response.json) == 6
 
+
 def test_icd_10_cm_in_section():
-    app.config['MOCK_DB'] = True
+    app.config["MOCK_DB"] = True
     response = app.test_client().post(
-        '/ValueSets/rule_set/execute',
-        data = json.dumps(
-        [
-            {
-                "property": "code",
-                "operator": "in-section",
-                "value": "d66586d4-5ed0-11ec-8f1f-00163e90ea35",
-                "include": True,
-                "terminology_version": "1ea19640-63e6-4e1b-b82f-be444ba395b4"
-            }
-        ]
+        "/ValueSets/rule_set/execute",
+        data=json.dumps(
+            [
+                {
+                    "property": "code",
+                    "operator": "in-section",
+                    "value": "d66586d4-5ed0-11ec-8f1f-00163e90ea35",
+                    "include": True,
+                    "terminology_version": "1ea19640-63e6-4e1b-b82f-be444ba395b4",
+                }
+            ]
         ),
-        content_type='application/json'
-        )
+        content_type="application/json",
+    )
     assert len(response.json) == 32
 
+
 def test_icd_10_cm_in_chapter():
-    app.config['MOCK_DB'] = True
+    app.config["MOCK_DB"] = True
     response = app.test_client().post(
-        '/ValueSets/rule_set/execute',
-        data = json.dumps(
-        [
-            {
-                "property": "code",
-                "operator": "in-chapter",
-                "value": "3f830074-5ed1-11ec-8f1f-00163e90ea35",
-                "include": True,
-                "terminology_version": "1ea19640-63e6-4e1b-b82f-be444ba395b4"
-            }
-        ]
+        "/ValueSets/rule_set/execute",
+        data=json.dumps(
+            [
+                {
+                    "property": "code",
+                    "operator": "in-chapter",
+                    "value": "3f830074-5ed1-11ec-8f1f-00163e90ea35",
+                    "include": True,
+                    "terminology_version": "1ea19640-63e6-4e1b-b82f-be444ba395b4",
+                }
+            ]
         ),
-        content_type='application/json'
-        )
+        content_type="application/json",
+    )
     assert len(response.json) == 931
 
+
 def test_icd_10_pcs_has_body_system():
-    app.config['MOCK_DB'] = True
+    app.config["MOCK_DB"] = True
     response = app.test_client().post(
-        '/ValueSets/rule_set/execute',
-        data = json.dumps(
-        [
-            {
-               "property": "code",
-                "operator": "has-body-system",
-                "value": [" Eye "],
-                "include": True,
-                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
-            }
-        ]    
+        "/ValueSets/rule_set/execute",
+        data=json.dumps(
+            [
+                {
+                    "property": "code",
+                    "operator": "has-body-system",
+                    "value": [" Eye "],
+                    "include": True,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                }
+            ]
         ),
-        content_type='application/json'
-        )
+        content_type="application/json",
+    )
     assert len(response.json) == 1290
 
+
 def test_icd_10_pcs_has_root_operation():
-    app.config['MOCK_DB'] = True
+    app.config["MOCK_DB"] = True
     response = app.test_client().post(
-        '/ValueSets/rule_set/execute',
-        data = json.dumps(
-        [
-            {
-               "property": "code",
-                "operator": "has-root-operation",
-                "value": [" Magnetic Resonance Imaging (MRI) "],
-                "include": True,
-                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
-            }
-        ]    
+        "/ValueSets/rule_set/execute",
+        data=json.dumps(
+            [
+                {
+                    "property": "code",
+                    "operator": "has-root-operation",
+                    "value": [" Magnetic Resonance Imaging (MRI) "],
+                    "include": True,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                }
+            ]
         ),
-        content_type='application/json'
-        )
-    print(response.json)  
+        content_type="application/json",
+    )
+    print(response.json)
     assert len(response.json) == 421
 
+
 def test_icd_10_pcs_has_device():
-    app.config['MOCK_DB'] = True
+    app.config["MOCK_DB"] = True
     response = app.test_client().post(
-        '/ValueSets/rule_set/execute',
-        data = json.dumps(
-        [
-            {
-               "property": "code",
-                "operator": "has-device",
-                "value": [" Unenhanced and Enhanced "],
-                "include": True,
-                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
-            }
-        ]    
+        "/ValueSets/rule_set/execute",
+        data=json.dumps(
+            [
+                {
+                    "property": "code",
+                    "operator": "has-device",
+                    "value": [" Unenhanced and Enhanced "],
+                    "include": True,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                }
+            ]
         ),
-        content_type='application/json'
-        )
-    assert len(response.json) ==  314
+        content_type="application/json",
+    )
+    assert len(response.json) == 314
+
 
 def test_icd_10_pcs_has_body_part():
-    app.config['MOCK_DB'] = True
+    app.config["MOCK_DB"] = True
     response = app.test_client().post(
-        '/ValueSets/rule_set/execute',
-        data = json.dumps(
-        [
-            {
-               "property": "code",
-                "operator": "has-body-part",
-                "value": [" Spinal Canal "],
-                "include": True,
-                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
-            }
-        ]    
+        "/ValueSets/rule_set/execute",
+        data=json.dumps(
+            [
+                {
+                    "property": "code",
+                    "operator": "has-body-part",
+                    "value": [" Spinal Canal "],
+                    "include": True,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                }
+            ]
         ),
-        content_type='application/json'
-        )
-    assert len (response.json) == 152
+        content_type="application/json",
+    )
+    assert len(response.json) == 152
+
 
 def test_icd_10_pcs_has_approach():
-    app.config['MOCK_DB'] = True
+    app.config["MOCK_DB"] = True
     response = app.test_client().post(
-        '/ValueSets/rule_set/execute',
-        data = json.dumps(
-        [
-            {
-               "property": "code",
-                "operator": "has-approach",
-                "value": [" High Osmolar "],
-                "include": True,
-                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
-            }
-        ]    
+        "/ValueSets/rule_set/execute",
+        data=json.dumps(
+            [
+                {
+                    "property": "code",
+                    "operator": "has-approach",
+                    "value": [" High Osmolar "],
+                    "include": True,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                }
+            ]
         ),
-        content_type='application/json'
-        )
+        content_type="application/json",
+    )
     assert len(response.json) == 581
-    
+
+
 def test_icd_10_pcs_has_qualifier():
-    app.config['MOCK_DB'] = True
+    app.config["MOCK_DB"] = True
     response = app.test_client().post(
-        '/ValueSets/rule_set/execute',
-        data = json.dumps(
-        [
-            {
-               "property": "code",
-                "operator": "has-qualifier",
-                "value": [" Atrium"],
-                "include": True,
-                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a" 
-            }
-        ]    
+        "/ValueSets/rule_set/execute",
+        data=json.dumps(
+            [
+                {
+                    "property": "code",
+                    "operator": "has-qualifier",
+                    "value": [" Atrium"],
+                    "include": True,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                }
+            ]
         ),
-        content_type='application/json'
-        )
+        content_type="application/json",
+    )
     assert len(response.json) == 18
 
+
 def test_icd_10_pcs_multi_rule():
-    app.config['MOCK_DB'] = True
+    app.config["MOCK_DB"] = True
     response = app.test_client().post(
-        '/ValueSets/rule_set/execute',
-        data = json.dumps(
-        [
-            {
-                "property": "code",
-                 "operator": "in-section",
-                 "value": ["Medical and Surgical "],
-                 "include": True,
-                 "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
-            },
-            {
-                "property": "code",
-                "operator": "has-body-system",
-                "value": [" Central Nervous System and Cranial Nerves "],
-                "include": True,
-                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
-            },
-            {
-                "property": "code",
-                "operator": "has-root-operation",
-                "value": [" Bypass "],
-                "include": True,
-                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
-             },
-             {
-                "property": "code",
-                "operator": "has-body-part",
-                "value": [" Spinal Canal "],
-                "include": True,
-                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
-            },
-            {
-                 "property": "code",
-                 "operator": "in",
-                 "value": ["001U077"],
-                 "include": False,
-                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
-            },
-            {
-                "property": "code",
-                "operator": "has-approach",
-                "value": [" Open "],
-                "include": True,
-                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
-             },
-             {
-                "property": "code",
-                "operator": "has-device",
-                "value": [" Autologous Tissue Substitute "],
-                "include": True,
-                "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a"
-             }
-        ]
+        "/ValueSets/rule_set/execute",
+        data=json.dumps(
+            [
+                {
+                    "property": "code",
+                    "operator": "in-section",
+                    "value": ["Medical and Surgical "],
+                    "include": True,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                },
+                {
+                    "property": "code",
+                    "operator": "has-body-system",
+                    "value": [" Central Nervous System and Cranial Nerves "],
+                    "include": True,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                },
+                {
+                    "property": "code",
+                    "operator": "has-root-operation",
+                    "value": [" Bypass "],
+                    "include": True,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                },
+                {
+                    "property": "code",
+                    "operator": "has-body-part",
+                    "value": [" Spinal Canal "],
+                    "include": True,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                },
+                {
+                    "property": "code",
+                    "operator": "in",
+                    "value": ["001U077"],
+                    "include": False,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                },
+                {
+                    "property": "code",
+                    "operator": "has-approach",
+                    "value": [" Open "],
+                    "include": True,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                },
+                {
+                    "property": "code",
+                    "operator": "has-device",
+                    "value": [" Autologous Tissue Substitute "],
+                    "include": True,
+                    "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                },
+            ]
         ),
-        content_type='application/json'
-        )
+        content_type="application/json",
+    )
     assert len(response.json) == 4
 
-def test_create_new_version_value_set():
-    """ This test will create a new version of a value set """
-    app.config['MOCK_DB'] = True
 
-    metadata = app.test_client().get(
-        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
-    )
-    num_versions = len(metadata.json)
+# Deprecated because use cases are now required, but the old test database does not have them
+# def test_create_new_version_value_set():
+#     """ This test will create a new version of a value set """
+#     app.config['MOCK_DB'] = True
+#
+#     metadata = app.test_client().get(
+#         '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
+#     )
+#     num_versions = len(metadata.json)
+#
+#     response = app.test_client().post(
+#         '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/new',
+#         data = json.dumps({
+#             'effective_start': '2022-01-01',
+#             'effective_end': '2022-12-31',
+#             'description': 'test version'
+#         }),
+#         content_type='application/json'
+#     )
+#     new_version_uuid = response.text
+#
+#     metadata = app.test_client().get(
+#         '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
+#     )
+#     new_num_versions = len(metadata.json)
+#
+#     assert num_versions + 1 == new_num_versions
 
-    response = app.test_client().post(
-        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/new',
-        data = json.dumps({
-            'effective_start': '2022-01-01',
-            'effective_end': '2022-12-31',
-            'description': 'test version'
-        }),
-        content_type='application/json'
-    )
-    new_version_uuid = response.text
-    
-    metadata = app.test_client().get(
-        '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
-    )
-    new_num_versions = len(metadata.json)
+# We no longer allow deletes
+# # Now delete the new version
+# app.test_client().delete(
+#     f'/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/{new_version_uuid}'
+# )
 
-    assert num_versions + 1 == new_num_versions
+# metadata = app.test_client().get(
+#     '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
+# )
+# new_num_versions = len(metadata.json)
 
-    # We no longer allow deletes
-    # # Now delete the new version
-    # app.test_client().delete(
-    #     f'/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/{new_version_uuid}'
-    # )
-
-    # metadata = app.test_client().get(
-    #     '/ValueSets/bfcb8eb0-6343-11ec-bd13-cbbf4db9fbeb/versions/'
-    # )
-    # new_num_versions = len(metadata.json)
-
-    # assert num_versions == new_num_versions
+# assert num_versions == new_num_versions
 
 # def test_concept_map_load():
 #     app.config['MOCK_DB'] = True
