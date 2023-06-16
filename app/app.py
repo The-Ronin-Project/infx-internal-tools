@@ -98,7 +98,7 @@ def create_app(script_info=None):
     def handle_linked_teams():
         if request.method == "GET":
             use_case_uuid = request.json.get("use_case_uuid")
-            return jsonify(Teams.get_teams_by_use_case(use_case_uuid))
+            return jsonify(get_teams_by_use_case(use_case_uuid))
         if request.method == "POST":
             use_case_uuid = request.json.get("use_case_uuid")
             delete_all_teams_for_a_use_case(use_case_uuid)
@@ -109,7 +109,7 @@ def create_app(script_info=None):
                     slack_channel=team_data["slack_channel"],
                     team_uuid=uuid.UUID(team_data["team_uuid"]),
                 )
-                team.save()
+                set_up_use_case_teams_link(use_case_uuid, team.team_uuid)
             return jsonify({"status": "success"}), 200
 
             # Survey Endpoints
