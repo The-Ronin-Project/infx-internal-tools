@@ -134,7 +134,7 @@ class DataNormalizationRegistry:
         return [x.serialize() for x in self.entries]
 
     @staticmethod
-    def publish_to_object_store(registry):
+    def publish_to_object_store(registry, filename):
         """
         Publish the Data Normalization Registry to the Object Storage.
         """
@@ -144,7 +144,7 @@ class DataNormalizationRegistry:
         object_storage_client.put_object(
             namespace,
             bucket_name,
-            f"DataNormalizationRegistry/v{DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION}/registry.json",
+            f"DataNormalizationRegistry/v{DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION}/{filename}",
             json.dumps(registry, indent=2).encode("utf-8"),
         )
         return registry
@@ -164,6 +164,18 @@ class DataNormalizationRegistry:
             f"DataNormalizationRegistry/v{DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION}/registry.json",
         )
         return bucket_item.headers["last-modified"]
+
+    @staticmethod
+    def get_last_published_registry():
+        object_storage_client = oci_authentication()
+        namespace = object_storage_client.get_namespace().data
+        bucket_name = config("OCI_CLI_BUCKET")
+        bucket_item = object_storage_client.get_object(
+            namespace,
+            bucket_name,
+            f"DataNormalizationRegistry/v{DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION}/registry.json",
+        )
+        return bucket_item.data.json()
 
     @staticmethod
     def convert_gmt_time(object_time):
@@ -187,10 +199,51 @@ class DataNormalizationRegistry:
 
     @staticmethod
     def publish_data_normalization_registry():
-        post_registry = DataNormalizationRegistry()
-        post_registry.load_entries()
-        all_registries = post_registry.serialize()
-        registries_to_post = DataNormalizationRegistry.publish_to_object_store(
-            all_registries
+        """ Publish the data normalization registry and the diff from previous version """
+        previous_version = DataNormalizationRegistry.get_last_published_registry()
+
+        current_registry = DataNormalizationRegistry()
+        current_registry.load_entries()
+        current_registry_serialized = current_registry.serialize()
+        newly_published_version = DataNormalizationRegistry.publish_to_object_store(
+            current_registry_serialized, 'registry.json'
         )
-        return registries_to_post
+
+        diff_version = get_incremented_versions_and_update(previous_version, newly_published_version)
+        DataNormalizationRegistry.publish_to_object_store(diff_version, "registry_diff.json")
+
+        return newly_published_version
+
+
+def get_incremented_versions_and_update(old_data, new_data):
+    """
+    Identify entries in the new_data list where the version has been incremented compared to old_data.
+    Adds an 'old_version' key to these entries in the new_data list.
+
+    Args:
+        old_data (list): The list of dictionaries representing the old data.
+        new_data (list): The list of dictionaries representing the new data.
+
+    Returns:
+        list: A list of dictionaries from new_data that have incremented versions.
+    """
+
+    # Convert each list to a dictionary with a tuple key for easy comparison
+    old_dict = {(entry["data_element"], entry["tenant_id"], entry["source_extension_url"],
+                 entry["registry_entry_type"], entry["profile_url"]): entry["version"] for entry in old_data}
+
+    incremented_entries = []
+
+    for entry in new_data:
+        key = (
+            entry["data_element"], entry["tenant_id"], entry["source_extension_url"], entry["registry_entry_type"],
+            entry["profile_url"]
+        )
+        if key in old_dict and entry["version"] > old_dict[key]:
+            # Save the old version
+            entry["old_version"] = old_dict[key]
+            incremented_entries.append(entry)
+
+    return incremented_entries
+
+

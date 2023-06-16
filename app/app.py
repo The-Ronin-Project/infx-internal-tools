@@ -165,9 +165,20 @@ def create_app(script_info=None):
         Retrieve the data ingestion registry, which contains metadata about data sources and their ingestion processes.
         """
         if request.method == "GET":
-            registry = DataNormalizationRegistry()
-            registry.load_entries()
-            return jsonify(registry.serialize())
+            from_oci = request.values.get("from_oci")
+            if from_oci is not None:
+                from_oci = from_oci.strip().lower() == 'true'
+            else:
+                from_oci = False
+
+            if from_oci:
+                registry = DataNormalizationRegistry.get_last_published_registry()
+                return jsonify(registry)
+
+            else:
+                registry = DataNormalizationRegistry()
+                registry.load_entries()
+                return jsonify(registry.serialize())
 
     @app.route("/data_normalization/registry/actions/publish", methods=["POST"])
     def publish_data_normalization_registry_endpoint():
@@ -175,13 +186,7 @@ def create_app(script_info=None):
         Publish the data normalization registry to an object store, allowing other services to access the registry information.
         """
         if request.method == "POST":
-            post_registry = DataNormalizationRegistry()
-            post_registry.load_entries()
-            all_registries = post_registry.serialize()
-            registries_to_post = DataNormalizationRegistry.publish_to_object_store(
-                all_registries
-            )
-            return jsonify(registries_to_post)
+            return jsonify(DataNormalizationRegistry.publish_data_normalization_registry())
 
     @app.route("/data_normalization/registry/actions/get_time", methods=["GET"])
     def get_last_published_time():
