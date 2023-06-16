@@ -1211,7 +1211,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid
+                custom_terminology_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1241,7 +1241,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid
+                custom_terminology_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1272,7 +1272,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid
+                custom_terminology_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1440,7 +1440,9 @@ class ValueSet:
         conn.execute(text("commit"))
 
         # Call to insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
-        value_set_use_case_link_set_up(primary_use_case, secondary_use_case, vs_uuid)
+        cls.value_set_use_case_link_set_up(
+            primary_use_case, secondary_use_case, vs_uuid
+        )
 
         # Insert the value_set_version into the value_sets.value_set_version table
         new_version_uuid = uuid.uuid4()
@@ -1972,15 +1974,20 @@ class ValueSet:
             new_value_set_version.update(status="pending")
             return "pending"
 
+    @staticmethod
     def value_set_use_case_link_set_up(
-        self, primary_use_case, secondary_use_cases, value_set_uuid
+        primary_use_case, secondary_use_cases, value_set_uuid
     ):
         # Insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
         if primary_use_case is not None:
-            UseCase.save(primary_use_case, value_set_uuid, is_primary=True)
+            UseCase.save_value_set_link(
+                primary_use_case, value_set_uuid, is_primary=True
+            )
 
         for secondary_use_case in secondary_use_cases:
-            UseCase.save(secondary_use_case, value_set_uuid, is_primary=False)
+            UseCase.save_value_set_link(
+                secondary_use_case, value_set_uuid, is_primary=False
+            )
 
 
 class RuleGroup:
@@ -2558,7 +2565,9 @@ class ValueSetVersion:
                         "display": code.display,
                         "system": code.system,
                         "version": code.version,
-                        "custom_terminology_uuid": str(code.custom_terminology_uuid) if code.custom_terminology_uuid else None
+                        "custom_terminology_uuid": str(code.custom_terminology_uuid)
+                        if code.custom_terminology_uuid
+                        else None,
                     }
                     for code in self.expansion
                 ],

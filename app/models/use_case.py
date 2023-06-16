@@ -67,9 +67,7 @@ class UseCase:
     def save(
         cls,
         use_case: "UseCase",
-        value_set_uuid: Optional[uuid.UUID] = None,
-        is_primary: Optional[bool] = False,
-    ) -> None:
+    ):
         conn = get_db()
         query = conn.execute(
             text(
@@ -92,23 +90,29 @@ class UseCase:
         )
         conn.commit()
 
-        if value_set_uuid and is_primary is not None:
-            conn.execute(
-                text(
-                    """        
-                    INSERT INTO value_sets.value_set_use_case_link        
-                    (value_set_uuid, use_case_uuid, is_primary)        
-                    VALUES        
-                    (:value_set_uuid, :use_case_uuid, :is_primary)        
-                    """
-                ),
-                {
-                    "value_set_uuid": value_set_uuid,
-                    "use_case_uuid": use_case.uuid,
-                    "is_primary": is_primary,
-                },
-            )
-            conn.commit()
+    @classmethod
+    def save_value_set_link(
+        cls,
+        use_case: "UseCase",
+        value_set_uuid: uuid.UUID,
+        is_primary: Optional[bool] = False,
+    ) -> None:
+        conn = get_db()
+        query = conn.execute(
+            text(
+                """        
+                INSERT INTO value_sets.value_set_use_case_link        
+                (value_set_uuid, use_case_uuid, is_primary)        
+                VALUES        
+                (:value_set_uuid, :use_case_uuid, :is_primary)        
+                """
+            ),
+            {
+                "value_set_uuid": value_set_uuid,
+                "use_case_uuid": use_case["uuid"],
+                "is_primary": is_primary,
+            },
+        )
 
 
 def load_use_case_by_value_set_uuid(
@@ -180,7 +184,10 @@ def load_use_case_by_value_set_uuid(
         for item in secondary_use_cases_data
     ]
 
-    return primary_use_case, secondary_use_cases
+    return {
+        "Primary Use Case": primary_use_case,
+        "Secondary Use Case(s)": secondary_use_cases,
+    }
 
 
 def delete_all_use_cases_for_value_set(value_set_uuid: uuid.UUID) -> None:
