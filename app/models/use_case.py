@@ -111,17 +111,6 @@ class UseCase:
             conn.commit()
 
 
-def value_set_use_case_link_set_up(
-    primary_use_case, secondary_use_cases, value_set_uuid
-):
-    # Insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
-    if primary_use_case is not None:
-        UseCase.save(primary_use_case, value_set_uuid, is_primary=True)
-
-    for secondary_use_case in secondary_use_cases:
-        UseCase.save(secondary_use_case, value_set_uuid, is_primary=False)
-
-
 def load_use_case_by_value_set_uuid(
     value_set_uuid: uuid.UUID,
 ) -> Tuple[UseCase, List[UseCase]]:

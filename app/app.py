@@ -98,7 +98,7 @@ def create_app(script_info=None):
     def handle_linked_teams():
         if request.method == "GET":
             use_case_uuid = request.json.get("use_case_uuid")
-            return jsonify(get_team_names_by_use_case(use_case_uuid))
+            return jsonify(Teams.get_teams_by_use_case(use_case_uuid))
         if request.method == "POST":
             use_case_uuid = request.json.get("use_case_uuid")
             delete_all_teams_for_a_use_case(use_case_uuid)

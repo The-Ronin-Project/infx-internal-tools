@@ -14,7 +14,7 @@ from app.models.data_ingestion_registry import DataNormalizationRegistry
 from app.value_sets.models import *
 from app.models.use_case import (
     load_use_case_by_value_set_uuid,
-    value_set_use_case_link_set_up,
+    delete_all_use_cases_for_value_set,
 )
 
 value_sets_blueprint = Blueprint("value_sets", import_name=__name__)
@@ -87,7 +87,7 @@ def handle_linked_use_case(value_set_uuid):
         primary_use_case = request.json.get("primary_use_case")
         secondary_use_case = request.json.get("secondary_use_case")
 
-        value_set_use_case_link_set_up(
+        ValueSet.value_set_use_case_link_set_up(
             primary_use_case, secondary_use_case, value_set_uuid
         )
         return jsonify({"message": "Use case(s) linked to value set successfully"}), 201

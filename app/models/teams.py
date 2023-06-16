@@ -1,9 +1,8 @@
 from dataclasses import dataclass
 import uuid
-from sqlalchemy import create_engine, text, MetaData, Table, Column, String
+from sqlalchemy import text
 from app.database import get_db
-from typing import List, Optional, Tuple
-from werkzeug.exceptions import BadRequest, NotFound
+from app.models.use_case import UseCase
 
 
 @dataclass
@@ -11,10 +10,6 @@ class Teams:
     name: str
     slack_channel: str
     team_uuid: uuid.UUID
-
-    def __post_init__(self):
-        self.conn = get_db()
-        self.team_uuid = uuid.uuid4()
 
     @classmethod
     def load_all_teams(cls):
@@ -40,7 +35,8 @@ class Teams:
         return teams
 
     def save(self):
-        self.conn.execute(
+        conn = get_db()
+        query = conn.execute(
             text(
                 """
                 Insert into project_management.teams
@@ -56,35 +52,42 @@ class Teams:
             },
         )
 
+    def get_teams_by_use_case(self, use_case_uuid):
+        """
+        Get all team names associated with a specific use case from the database.
 
-def get_team_names_by_use_case(use_case_uuid):
-    """
-    Get all team names associated with a specific use case from the database.
+        @param use_case_uuid: UUID of the use case
+        :type use_case_uuid: str
+        @return: List of team names associated with the use case
+        :rtype: list
+        """
+        conn = get_db()
+        query = conn.execute(
+            text(
+                """
+                SELECT t.*
+                FROM project_management.teams t
+                JOIN project_management.use_case_teams_link link 
+                ON t.team_uuid = link.team_uuid
+                WHERE link.use_case_uuid = :use_case_uuid
+                """
+            ),
+            {"use_case_uuid": use_case_uuid},
+        )
+        team_data = query.fetchall()
+        teams_list = [
+            Teams(
+                name=team_item.name,
+                slack_channel=team_item.slack_channel,
+                team_uuid=team_item.team_uuid,
+            )
+            for team_item in team_data
+        ]
 
-    @param use_case_uuid: UUID of the use case
-    :type use_case_uuid: str
-    @return: List of team names associated with the use case
-    :rtype: list
-    """
-    conn = get_db()
-    query = conn.execute(
-        text(
-            """
-            SELECT t.name 
-            FROM project_management.teams t
-            JOIN project_management.use_case_teams_link link 
-            ON t.team_uuid = link.team_uuid
-            WHERE link.use_case_uuid = :use_case_uuid
-            """
-        ),
-        {"use_case_uuid": use_case_uuid},
-    )
-    teams_list = [row[0] for row in query.fetchall()]
-
-    return teams_list
+        return teams_list
 
 
-def get_use_case_names_by_team(team_uuid):
+def get_use_case_by_team(team_uuid):
     """
     Get all use case names associated with a specific team from the database.
 
@@ -97,17 +100,17 @@ def get_use_case_names_by_team(team_uuid):
     query = conn.execute(
         text(
             """
-            SELECT uc.name
-            FROM project_management.use_case uc
-            JOIN project_management.use_case_teams_link link
-            ON uc.uuid = link.use_case_uuid
+            SELECT link.use_case_uuid
+            FROM project_management.use_case_teams_link link
             WHERE link.team_uuid = :team_uuid
             """
         ),
         {"team_uuid": team_uuid},
     )
-    use_case_list = [row[0] for row in query.fetchall()]
-
+    use_case_uuid_results = [query.fetchall()]
+    use_case_list = []
+    for use_case_uuid in use_case_uuid_results:
+        use_case_list.append(UseCase.load_use_case_by_uuid(use_case_uuid))
     return use_case_list
 
 
