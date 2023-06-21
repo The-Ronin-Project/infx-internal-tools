@@ -611,7 +611,7 @@ class ConceptMapVersion:
                 depends_on_property=item.depends_on_property,
                 depends_on_system=item.depends_on_system,
                 depends_on_value=item.depends_on_value,
-                depends_on_display=item.depends_on_display
+                depends_on_display=item.depends_on_display,
             )
             target_code = Code(
                 item.target_fhir_uri,
@@ -664,20 +664,20 @@ class ConceptMapVersion:
                 {
                     "Source Code": row[1],
                     "Source Display": row[2],
-                    "Relationship": row[29],
-                    "Target Code": row[18],
-                    "Target Display": row[19],
-                    "Review Status": row[15],
+                    "Relationship": row[30],
+                    "Target Code": row[19],
+                    "Target Display": row[20],
+                    "Review Status": row[16],
                     "Map Status": row[6],
-                    "Mapping Comments": row[16],
+                    "Mapping Comments": row[17],
                     "Comments": row[4],
                     "Additional Context": row[5],
                     "No-Map": row[10],
                     "No-Map Reason": row[11],
                     "Mapping Group": row[12],
-                    "Mapper": row[23],
-                    "Reviewer": row[28],
-                    "Review Comment": row[27],
+                    "Mapper": row[24],
+                    "Reviewer": row[29],
+                    "Review Comment": row[28],
                 }
             )
 
@@ -770,26 +770,29 @@ class ConceptMapVersion:
                     # Iterate through each mapping for the source and serialize it
                     for mapping in filtered_mappings:
                         target_serialized = {
-                                "id": mapping.id,
-                                "code": mapping.target.code,
-                                "display": mapping.target.display,
-                                "equivalence": mapping.relationship.code,
-                                "comment": None,
-                            }
+                            "id": mapping.id,
+                            "code": mapping.target.code,
+                            "display": mapping.target.display,
+                            "equivalence": mapping.relationship.code,
+                            "comment": None,
+                        }
 
                         # Add dependsOn data
-                        if source_code.depends_on_property or source_code.depends_on_value:
+                        if (
+                            source_code.depends_on_property
+                            or source_code.depends_on_value
+                        ):
                             depends_on = {
                                 "property": source_code.depends_on_property,
-                                "value": source_code.depends_on_value
+                                "value": source_code.depends_on_value,
                             }
                             if source_code.depends_on_system:
-                                depends_on['system'] = source_code.depends_on_system
+                                depends_on["system"] = source_code.depends_on_system
                             if source_code.depends_on_display:
-                                depends_on['display'] = source_code.depends_on_display
-                            target_serialized['dependsOn'] = depends_on
+                                depends_on["display"] = source_code.depends_on_display
+                            target_serialized["dependsOn"] = depends_on
 
-                        new_element['target'].append(target_serialized)
+                        new_element["target"].append(target_serialized)
 
                     elements.append(new_element)
 
@@ -1010,10 +1013,7 @@ class SourceConcept:
         Raises:
             AttributeError: If the `code` or `display` attribute is not set for the instance.
         """
-        combined = (
-                self.code.strip()
-                + self.display.strip()
-        ).encode("utf-8")
+        combined = (self.code.strip() + self.display.strip()).encode("utf-8")
         return hashlib.md5(combined).hexdigest()
 
     @classmethod
