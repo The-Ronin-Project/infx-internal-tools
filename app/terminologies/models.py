@@ -1,5 +1,7 @@
 import datetime
 import uuid
+from typing import Optional
+
 from sqlalchemy import text
 from functools import lru_cache
 from app.database import get_db
@@ -282,13 +284,59 @@ class Terminology:
             "fhir_terminology": self.fhir_terminology,
         }
 
+    def version_to_load_new_content_to(self) -> "Terminology":
+        """
+        A custom terminology should only have content loaded to it if its effective_end date has
+        not yet passed. This method will return a Terminology instance representing the most recent version
+        suitable for loading new content to, or it will create a new version and return it.
+        """
+        # First check if this is the most recent version
+        conn = get_db()
+        terminology_versions_info = conn.execute(
+            text(
+                """
+                select * from public.terminology_versions
+                where terminology=:terminology_name
+                order by version desc
+                """
+            ),
+            {"terminology_name": self.terminology},
+        ).first()
+
+        most_recent_version_uuid = terminology_versions_info.uuid
+        if most_recent_version_uuid == self.uuid:
+            most_recent_terminology = self
+        else:
+            most_recent_terminology = Terminology.load(most_recent_version_uuid)
+
+        # Then check if the effective date has not yet passed
+        if datetime.datetime.today() <= most_recent_terminology.effective_end:
+            return most_recent_terminology
+
+        # We need to create a new version
+        current_version = most_recent_terminology.version
+        try:
+            new_version_string = str(int(current_version) + 1)
+        except TypeError:
+            raise Exception(
+                f"Could not automatically increment version number {current_version}"
+            )
+
+        new_version = Terminology.new_terminology_version_from_previous(
+            previous_version_uuid=most_recent_version_uuid,
+            version=new_version_string,
+            effective_end=None,
+            effective_start=None,
+        )
+        return new_version
+
     @classmethod
     def new_terminology_version_from_previous(
         cls,
         previous_version_uuid,
         version,
-        effective_start,
-        effective_end,
+        effective_start: Optional[datetime.datetime] = None,
+        effective_end: Optional[datetime.datetime] = None,
     ):
         """
         A class method that creates a new terminology version based on a previous version and the provided metadata.
