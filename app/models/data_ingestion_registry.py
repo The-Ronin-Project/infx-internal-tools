@@ -18,10 +18,9 @@ DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION = 3
 
 @dataclass
 class DNRegistryEntry:
-    class DNRegistryEntry:
-        """
-        A class representing a single entry in the Data Normalization Registry.
-        """
+    """
+    A class representing a single entry in the Data Normalization Registry.
+    """
 
     resource_type: str
     data_element: str

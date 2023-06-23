@@ -1,11 +1,13 @@
 import datetime
+import json
 import uuid
-from typing import Optional
+from typing import List, Dict, Union, Optional
 
 from sqlalchemy import text
 from functools import lru_cache
-from app.database import get_db
 import app.models.codes
+from app.database import get_db
+from app.errors import BadRequestWithCode
 
 
 @lru_cache(maxsize=None)
@@ -310,7 +312,7 @@ class Terminology:
             most_recent_terminology = Terminology.load(most_recent_version_uuid)
 
         # Then check if the effective date has not yet passed
-        if datetime.datetime.today() <= most_recent_terminology.effective_end:
+        if datetime.date.today() <= most_recent_terminology.effective_end:
             return most_recent_terminology
 
         # We need to create a new version
@@ -415,3 +417,86 @@ class Terminology:
             {"version_uuid": version_uuid},
         ).first()
         return new_term_version
+
+    def able_to_load_new_codes(self):
+        if self.is_standard or self.fhir_terminology:
+            return False, "Cannot add new codes to a standard or FHIR terminology."
+
+        if (
+            self.effective_end is not None
+            and datetime.date.today() > self.effective_end
+        ):
+            return (
+                False,
+                "Cannot add new codes to a terminology that has ended its effective period.",
+            )
+        return True, None
+
+    def load_new_codes_to_terminology(self, codes: List["app.models.codes.Code"]):
+        """
+        This method loads new codes into the terminology.
+
+        Args:
+        codes (List[Code]): A list of codes that should be added to the terminology.
+
+        Raises:
+        BadRequestWithCode: This exception is raised if the terminology is not a custom terminology,
+        or if the terminology's effective period has ended.
+        """
+        # Get database connection
+        conn = get_db()
+
+        able_to_load, fail_reason = self.able_to_load_new_codes()
+        if not able_to_load:
+            raise BadRequestWithCode(
+                code="invalid_request",
+                description=fail_reason,
+            )
+
+        terminology_uuids = [code.terminology_version_uuid for code in codes]
+        terminology_uuids = list(set(terminology_uuids))
+
+        if len(terminology_uuids) > 1:
+            raise BadRequestWithCode(
+                code="BadRequest",
+                description="Loading to multiple terminologies at once is not allowed",
+            )
+
+        if terminology_uuids[0] != self.uuid:
+            raise BadRequestWithCode(
+                code="BadRequest",
+                description=f"Cannot load codes to Terminology {terminology_uuids[0]} using the class for Terminology {self.uuid}",
+            )
+
+        for code in codes:
+            serialized_code = code.code
+            if type(serialized_code) == dict:
+                serialized_code = json.dumps(serialized_code)
+            # Insert new code into the database
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO custom_terminologies.code (uuid, code, display, additional_data, terminology_version_uuid, depends_on_value, depends_on_display, depends_on_property, depends_on_system)
+                    VALUES (:uuid, :code, :display, :additional_data, :terminology_version_uuid, :depends_on_value, :depends_on_display, :depends_on_property, :depends_on_system)
+                """
+                ),
+                {
+                    "uuid": uuid.uuid4(),
+                    "code": serialized_code,
+                    "display": code.display,
+                    "terminology_version_uuid": code.terminology_version_uuid,
+                    "depends_on_value": code.depends_on_value
+                    if code.depends_on_value
+                    else "",
+                    "depends_on_display": code.depends_on_display
+                    if code.depends_on_display
+                    else "",
+                    "depends_on_property": code.depends_on_property
+                    if code.depends_on_property
+                    else "",
+                    "depends_on_system": code.depends_on_system
+                    if code.depends_on_system
+                    else "",
+                    "additional_data": json.dumps(code.additional_data),
+                },
+            )

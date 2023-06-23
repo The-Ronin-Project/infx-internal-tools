@@ -13,7 +13,6 @@ from dateutil import parser
 from collections import defaultdict
 from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
-from sqlalchemy import Connection
 from app.models.codes import Code
 
 import app.concept_maps.models
@@ -1213,7 +1212,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid
+                custom_terminology_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1243,7 +1242,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid
+                custom_terminology_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1274,7 +1273,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid
+                custom_terminology_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1439,7 +1438,7 @@ class ValueSet:
         return cls.load(vs_uuid)
 
     @classmethod
-    def load(cls, vs_uuid, conn: Connection = None):
+    def load(cls, vs_uuid):
         conn = get_db()
         vs_data = conn.execute(
             text(
@@ -1919,7 +1918,7 @@ class ValueSet:
 
 
 class RuleGroup:
-    def __init__(self, vs_version_uuid, rule_group_id, conn: Connection = None):
+    def __init__(self, vs_version_uuid, rule_group_id):
         self.vs_version_uuid = vs_version_uuid
         self.rule_group_id = rule_group_id
         self.expansion = set()
@@ -1927,7 +1926,7 @@ class RuleGroup:
         self.load_rules()
 
     # Move load rules to here, at version level, just load distinct rule groups and instantiate this class
-    def load_rules(self, conn: Connection = None):
+    def load_rules(self):
         """
         Rules will be structured as a dictionary where each key is a terminology
         and the value is a list of rules for that terminology within this value set version.
@@ -2320,7 +2319,7 @@ class ValueSetVersion:
         return cls.load(vsv_uuid)
 
     @classmethod
-    def load(cls, uuid, conn: Connection = None):
+    def load(cls, uuid):
         conn = get_db()
         vs_version_data = conn.execute(
             text(
@@ -2382,7 +2381,7 @@ class ValueSetVersion:
 
         return value_set_version
 
-    def load_rules(self, conn: Connection = None):
+    def load_rules(self):
         conn = get_db()
         rule_groups_query = conn.execute(
             text(
@@ -2492,7 +2491,9 @@ class ValueSetVersion:
                         "display": code.display,
                         "system": code.system,
                         "version": code.version,
-                        "custom_terminology_uuid": str(code.custom_terminology_uuid) if code.custom_terminology_uuid else None
+                        "custom_terminology_uuid": str(code.custom_terminology_uuid)
+                        if code.custom_terminology_uuid
+                        else None,
                     }
                     for code in self.expansion
                 ],
@@ -3071,11 +3072,11 @@ class ValueSetVersion:
             key = (code.system, code.version)
             if key not in terminologies:
                 terminologies[key] = Terminology.load_by_fhir_uri_and_version(
-                    fhir_uri=code.system,
-                    version=code.version
+                    fhir_uri=code.system, version=code.version
                 )
 
         return list(terminologies.values())
+
 
 @dataclass
 class ExplicitlyIncludedCode:
@@ -3118,7 +3119,7 @@ class ExplicitlyIncludedCode:
         }
 
     @classmethod
-    def load_all_for_vs_version(cls, vs_version: ValueSetVersion, conn: Connection = None):
+    def load_all_for_vs_version(cls, vs_version: ValueSetVersion):
         conn = get_db()
 
         code_data = conn.execute(
