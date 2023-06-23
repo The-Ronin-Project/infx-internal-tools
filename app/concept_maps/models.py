@@ -19,6 +19,7 @@ from app.terminologies.models import (
     terminology_version_uuid_lookup,
     load_terminology_version_with_cache,
 )
+from app.models.use_case import load_use_case_by_value_set_uuid
 
 CONCEPT_MAPS_SCHEMA_VERSION = 3
 
@@ -702,6 +703,26 @@ class ConceptMapVersion:
 
         return data, fieldnames
 
+    def version_set_status_active(self):
+        """
+        This method updates the status of the concept map, identified by its UUID, to 'active'.
+        """
+
+        conn = get_db()
+        conn.execute(
+            text(
+                """
+                    UPDATE concept_maps.concept_map_version
+                    SET status=:status
+                    WHERE uuid=:version_uuid
+                    """
+            ),
+            {
+                "status": "active",
+                "version_uuid": self.uuid,
+            },
+        )
+
     def serialize_mappings(self):
         # Identify all the source terminology / target terminology pairings in the mappings
         source_target_pairs_set = set()
@@ -824,6 +845,19 @@ class ConceptMapVersion:
         return None
 
     def serialize(self, include_internal_info=False):
+        pattern = r"[A-Z]([A-Za-z0-9_]){0,254}"  # name transformer
+        if re.match(pattern, self.concept_map.name):  # name follows pattern use name
+            rcdm_name = self.concept_map.name
+        else:
+            index = re.search(
+                r"[a-zA-Z]", self.concept_map.name
+            ).start()  # name does not follow pattern, uppercase 1st letter
+            rcdm_name = (
+                self.concept_map.name[:index]
+                + self.concept_map.name[index].upper()
+                + self.concept_map.name[index + 1 :]
+            )
+
         serial_mappings = self.serialize_mappings()
         for mapped_object in serial_mappings:
             for nested in mapped_object["element"]:
@@ -846,10 +880,8 @@ class ConceptMapVersion:
         serialized = {
             "resourceType": "ConceptMap",
             "title": self.concept_map.title,
-            "id": self.uuid,
-            "name": self.concept_map.name.capitalize()
-            if self.concept_map.name is not None
-            else None,
+            "id": str(self.concept_map.uuid),
+            "name": rcdm_name if self.concept_map.name is not None else None,
             "contact": [{"name": self.concept_map.author}],
             "url": f"http://projectronin.io/fhir/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
@@ -889,6 +921,46 @@ class ConceptMapVersion:
 
     def prepare_for_oci(self):
         serialized = self.serialize()
+        rcdm_id = serialized.get("id")
+        rcdm_url = "http://projectronin.io/ConceptMap/"
+        # id will depend on publisher
+        if self.concept_map.publisher == "Project Ronin":
+            rcdm_id = serialized.get("id")
+            rcdm_url = "http://projectronin.io/fhir/ConceptMap/"
+        elif self.concept_map.publisher == "FHIR":
+            rcdm_id = serialized.get("name")
+            # transform rcdm_id in place
+            rcdm_id = re.sub("([a-z])([A-Z])", r"\1-\2", rcdm_id).lower()
+            rcdm_url = "http://hl7.org/fhir/ConceptMap/"
+
+        if (
+            self.status == "pending"
+        ):  # has a required binding (translate pending to draft)
+            rcdm_status = "draft"
+        else:
+            rcdm_status = self.status
+
+        rcdm_date_now = datetime.datetime.now()
+        rcdm_date = rcdm_date_now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+        oci_serialized = {
+            "id": rcdm_id,
+            "url": f"{rcdm_url}{rcdm_id}",
+            # specific to the overall value set; suffix matching the id field exactly
+            "status": rcdm_status,
+            # has a required binding (translate pending to draft)  (draft, active, retired, unknown)
+            "date": rcdm_date,  # the date the status was set to active
+            "meta": {
+                "profile": [
+                    "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMap"
+                ]
+            },
+        }
+
+        serialized.update(oci_serialized)  # Merge oci_serialized into serialized
+        serialized.pop("contact")
+        serialized.pop("publisher")
+        serialized.pop("title")
         initial_path = f"ConceptMaps/v{CONCEPT_MAPS_SCHEMA_VERSION}/folder/{self.concept_map.uuid}"  # folder is set in oci_helper(determined by api call)
 
         return serialized, initial_path

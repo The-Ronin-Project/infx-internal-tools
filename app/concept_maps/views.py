@@ -234,6 +234,7 @@ def get_concept_map_version_published(version_uuid):
     """
     object_type = "concept_map"
     if request.method == "POST":
+        concept_map_uuid = ConceptMapVersion(version_uuid).concept_map.uuid
         concept_map_version = ConceptMapVersion(
             version_uuid
         )  # using the version uuid to get the version metadata from the ConceptMapVersion class
@@ -241,13 +242,18 @@ def get_concept_map_version_published(version_uuid):
             concept_map_to_json,
             initial_path,
         ) = concept_map_version.prepare_for_oci()  # serialize the metadata
+        concept_map_to_json_copy = (
+            concept_map_to_json.copy()
+        )  # Simplifier requires status
         concept_map_to_datastore = (
             set_up_object_store(  # use the serialized data with an oci_helper function
                 concept_map_to_json, initial_path, folder="published"
             )
         )
-        version_set_status_active(version_uuid, object_type)
-
+        concept_map_version.version_set_status_active()
+        resource_type = "ConceptMap"  # param for Simplifier
+        concept_map_to_json_copy["status"] = "active"
+        publish_to_simplifier(resource_type, concept_map_uuid, concept_map_to_json_copy)
         # Publish new version of data normalization registry
         try:
             DataNormalizationRegistry.publish_data_normalization_registry()
@@ -255,6 +261,7 @@ def get_concept_map_version_published(version_uuid):
             pass  # todo: find better error handling
 
         return jsonify(concept_map_to_datastore)
+
     if request.method == "GET":
         concept_map = get_object_type_from_db(version_uuid, object_type)
         if not concept_map:
