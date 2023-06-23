@@ -13,7 +13,7 @@ from app.helpers.simplifier_helper import (
 from app.models.data_ingestion_registry import DataNormalizationRegistry
 from app.value_sets.models import *
 
-value_sets_blueprint = Blueprint('value_sets', import_name=__name__)
+value_sets_blueprint = Blueprint("value_sets", import_name=__name__)
 
 
 # Value Set Endpoints
@@ -35,9 +35,7 @@ def get_all_value_sets_metadata():
     POST: Creates a new ValueSet and returns its metadata.
     """
     if request.method == "GET":
-        active_only = (
-            False if request.values.get("active_only") == "false" else True
-        )
+        active_only = False if request.values.get("active_only") == "false" else True
         return jsonify(ValueSet.load_all_value_set_metadata(active_only))
     if request.method == "POST":
         name = request.json.get("name")
@@ -72,7 +70,9 @@ def get_all_value_sets_metadata():
         return jsonify(new_vs.serialize())
 
 
-@value_sets_blueprint.route("/ValueSets/<string:identifier>/duplicate", methods=["POST"])
+@value_sets_blueprint.route(
+    "/ValueSets/<string:identifier>/duplicate", methods=["POST"]
+)
 def duplicate_value_set_and_version(identifier):
     """Duplicates a ValueSet and its associated version, returning the new ValueSet's UUID."""
     value_set = ValueSet.load(identifier)
@@ -105,9 +105,7 @@ def duplicate_value_set_and_version(identifier):
 def perform_terminology_update_for_value_set(identifier):
     old_terminology_version_uuid = request.json.get("old_terminology_version_uuid")
     new_terminology_version_uuid = request.json.get("new_terminology_version_uuid")
-    new_value_set_effective_start = request.json.get(
-        "new_value_set_effective_start"
-    )
+    new_value_set_effective_start = request.json.get("new_value_set_effective_start")
     new_value_set_effective_end = request.json.get("new_value_set_effective_end")
     new_value_set_description = request.json.get("new_value_set_description")
 
@@ -181,14 +179,16 @@ def get_value_set_versions(identifier):
     return jsonify(ValueSet.load_version_metadata(uuid))
 
 
-@value_sets_blueprint.route("/ValueSets/<string:identifier>/versions/new", methods=["POST"])
+@value_sets_blueprint.route(
+    "/ValueSets/<string:identifier>/versions/new", methods=["POST"]
+)
 def create_new_vs_version(identifier):
     """Creates a new version of a specified ValueSet and returns its UUID."""
     value_set = ValueSet.load(identifier)
     effective_start = request.json.get("effective_start")
     effective_end = request.json.get("effective_end")
     description = request.json.get("description")
-    new_version_uuid = value_set.create_new_version_from_previous(
+    new_version_uuid = value_set.create_new_version_from_specified_previous(
         effective_start, effective_end, description
     )
     return str(new_version_uuid), 201
@@ -200,6 +200,7 @@ def delete_value_set(value_set_uuid):
     value_set = ValueSet.load(value_set_uuid)
     value_set.delete()
     return "Deleted", 200
+
 
 # @app.route('/ValueSets/<string:value_set_uuid>/versions/<string:vs_version_uuid>', methods=['DELETE'])
 # def delete_vs_version(value_set_uuid, vs_version_uuid):
@@ -293,7 +294,9 @@ def diff_new_version_against_previous():
     return jsonify(diff)
 
 
-@value_sets_blueprint.route("/ValueSets/<string:version_uuid>/prerelease", methods=["GET", "POST"])
+@value_sets_blueprint.route(
+    "/ValueSets/<string:version_uuid>/prerelease", methods=["GET", "POST"]
+)
 def get_value_set_version_prerelease(version_uuid):
     """
     Retrieve or create a prerelease version of a ValueSet identified by the version_uuid.
@@ -320,7 +323,9 @@ def get_value_set_version_prerelease(version_uuid):
         return jsonify(value_set_from_object_store)
 
 
-@value_sets_blueprint.route("/ValueSets/<string:version_uuid>/published", methods=["GET", "POST"])
+@value_sets_blueprint.route(
+    "/ValueSets/<string:version_uuid>/published", methods=["GET", "POST"]
+)
 def get_value_set_version_published(version_uuid):
     """
     Retrieve or publish a ValueSet version identified by the version_uuid.
@@ -345,9 +350,7 @@ def get_value_set_version_published(version_uuid):
         vs_version = ValueSetVersion.load(version_uuid)
         vs_version.expand(force_new=force_new)
         value_set_to_json, initial_path = vs_version.prepare_for_oci()
-        value_set_to_json_copy = (
-            value_set_to_json.copy()
-        )  # Simplifier requires status
+        value_set_to_json_copy = value_set_to_json.copy()  # Simplifier requires status
 
         value_set_to_datastore = set_up_object_store(
             value_set_to_json, initial_path, folder="published"
@@ -401,7 +404,9 @@ def get_value_set_version_published(version_uuid):
         return jsonify(value_set_from_object_store)
 
 
-@value_sets_blueprint.route("/ValueSets/<string:version_uuid>/simplifier", methods=["POST"])
+@value_sets_blueprint.route(
+    "/ValueSets/<string:version_uuid>/simplifier", methods=["POST"]
+)
 def push_value_set_version_to_simplifier(version_uuid):
     force_new = request.values.get("force_new") == "true"
     vs_version = ValueSetVersion.load(version_uuid)
