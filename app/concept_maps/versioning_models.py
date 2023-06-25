@@ -93,7 +93,7 @@ class ConceptMapVersionCreator:
         Returns:
             list: A list of new SourceConcept instances.
         """
-        # Populate all the sources with a status  of pending
+        # Populate all the sources with a status of pending
         self.conn.execute(
             text(
                 """
@@ -233,7 +233,7 @@ class ConceptMapVersionCreator:
                     display=row.target_concept_display,
                     system=None,
                     version=None,
-                    terminology_version_uuid=row.target_concept_system_version_uuid,
+                    terminology_version=target_system
                 )
 
                 mapping = Mapping(
@@ -391,12 +391,11 @@ class ConceptMapVersionCreator:
 
                 # Some parts of source concept should always carry forward, regardless
                 new_source_concept.update(
-                    conn=self.conn,
                     comments=previous_source_concept.comments,
                     additional_context=previous_source_concept.additional_context,
                     map_status=previous_source_concept.map_status,
-                    assigned_mapper=previous_source_concept.assigned_mapper,
-                    assigned_reviewer=previous_source_concept.assigned_mapper,
+                    assigned_mapper=str(previous_source_concept.assigned_mapper),
+                    assigned_reviewer=str(previous_source_concept.assigned_mapper),
                     no_map=previous_source_concept.no_map,
                     reason_for_no_map=previous_source_concept.reason_for_no_map,
                     mapping_group=previous_source_concept.mapping_group,
@@ -460,7 +459,7 @@ class ConceptMapVersionCreator:
                             )
                         )
 
-        # self.conn.execute(text("rollback"))
+        self.conn.execute(text("commit"))
 
     def process_no_map(
         self,
@@ -575,14 +574,14 @@ class ConceptMapVersionCreator:
             new_target_code (Code): The new target code.
             previous_mapping (Mapping): The previous mapping.
         """
-        source_code = new_source_concept.code_object
+        # source_code = new_source_concept.code_object
 
         relationship = previous_mapping.relationship
 
         target_code = new_target_code
 
         new_mapping = Mapping(
-            source=source_code,
+            source=new_source_concept,
             relationship=relationship,
             target=target_code,
             mapping_comments=previous_mapping.mapping_comments,

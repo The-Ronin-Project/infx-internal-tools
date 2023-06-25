@@ -1125,7 +1125,6 @@ class SourceConcept:
 
     def update(
         self,
-        conn: Optional = None,
         comments: Optional[str] = None,
         additional_context: Optional[str] = None,
         map_status: Optional[str] = None,
@@ -1136,8 +1135,7 @@ class SourceConcept:
         mapping_group: Optional[str] = None,
         previous_version_context: Optional[str] = None,
     ):
-        if conn is None:
-            conn = get_db()
+        conn = get_db()
         # Create a dictionary to store the column names and their corresponding new values
         updates = {}
 
@@ -1170,11 +1168,12 @@ class SourceConcept:
 
         # Generate the SQL query
         query = f"UPDATE concept_maps.source_concept SET "
-        query += ", ".join(f"{column} = %s" for column in updates)
-        query += f" WHERE uuid = %s;"
+        query += ", ".join(f"{column} = :{column}" for column in updates)
+        query += f" WHERE uuid = :uuid"
 
         # Execute the SQL query
-        conn.execute(query, (*updates.values(), self.uuid))
+        updates['uuid'] = str(self.uuid)
+        conn.execute(text(query), updates)
 
         # Update the instance attributes
         for column, value in updates.items():
@@ -1299,7 +1298,7 @@ class Mapping:
             self.source.concept_map_version_uuid
         )
         if concept_map_settings.auto_advance_after_mapping:
-            self.source.update(conn=self.conn, map_status="ready for review")
+            self.source.update(map_status="ready for review")
 
     def serialize(self):
         """Prepares a JSON representation of the Mapping instance to return to the API."""

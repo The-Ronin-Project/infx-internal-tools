@@ -73,6 +73,7 @@ class Code:
         ):
             self.system = self.terminology_version.fhir_uri
             self.version = self.terminology_version.version
+            self.terminology_version_uuid = self.terminology_version.uuid
 
         if (
             self.terminology_version_uuid is None
