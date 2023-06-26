@@ -366,4 +366,5 @@ class Terminology:
             ),
             {"version_uuid": version_uuid},
         ).first()
+        conn.execute(text('commit'))
         return new_term_version
