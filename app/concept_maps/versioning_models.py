@@ -498,7 +498,6 @@ class ConceptMapVersionCreator:
                 "map_status": previous_source_concept.map_status,
             }
             new_source_concept.update(
-                conn=self.conn,
                 previous_version_context=json.dumps(
                     previous_contexts_list, cls=CustomJSONEncoder
                 ),
@@ -552,7 +551,6 @@ class ConceptMapVersionCreator:
             "reviewed_by": previous_mapping.reviewed_by,
         }
         new_source_concept.update(
-            conn=self.conn,
             map_status="pending",
         )
         return previous_mapping_context
@@ -574,8 +572,6 @@ class ConceptMapVersionCreator:
             new_target_code (Code): The new target code.
             previous_mapping (Mapping): The previous mapping.
         """
-        # source_code = new_source_concept.code_object
-
         relationship = previous_mapping.relationship
 
         target_code = new_target_code
