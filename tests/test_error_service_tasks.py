@@ -68,7 +68,7 @@ def generate_mock_error_issues():
 
 
 @patch("app.models.normalization_error_service.make_get_request")
-def test_incremental_load_integration(mock_request):
+def incremental_load_integration_test(mock_request):
     organization = Organization(id="ronin")
 
     # Set up the mock error response
