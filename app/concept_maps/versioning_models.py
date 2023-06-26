@@ -395,7 +395,7 @@ class ConceptMapVersionCreator:
                     additional_context=previous_source_concept.additional_context,
                     map_status=previous_source_concept.map_status,
                     assigned_mapper=str(previous_source_concept.assigned_mapper),
-                    assigned_reviewer=str(previous_source_concept.assigned_mapper),
+                    assigned_reviewer=str(previous_source_concept.assigned_reviewer),
                     no_map=previous_source_concept.no_map,
                     reason_for_no_map=previous_source_concept.reason_for_no_map,
                     mapping_group=previous_source_concept.mapping_group,
