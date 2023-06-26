@@ -1,6 +1,7 @@
 import datetime
 import json
 from dataclasses import dataclass, field
+from typing import List, Dict, Tuple
 import re
 import requests
 import concurrent.futures
@@ -1211,7 +1212,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid
+                custom_terminology_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1241,7 +1242,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid
+                custom_terminology_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1272,7 +1273,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid
+                custom_terminology_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -2346,10 +2347,9 @@ class ValueSetVersion:
         )
         value_set_version.load_rules()
 
-        if current_app.config["MOCK_DB"] != "True":
-            value_set_version.explicitly_included_codes = (
-                ExplicitlyIncludedCode.load_all_for_vs_version(value_set_version)
-            )
+        value_set_version.explicitly_included_codes = (
+            ExplicitlyIncludedCode.load_all_for_vs_version(value_set_version)
+        )
 
         if value_set.type == "extensional":
             extensional_members_data = conn.execute(
@@ -2491,7 +2491,9 @@ class ValueSetVersion:
                         "display": code.display,
                         "system": code.system,
                         "version": code.version,
-                        "custom_terminology_uuid": str(code.custom_terminology_uuid) if code.custom_terminology_uuid else None
+                        "custom_terminology_uuid": str(code.custom_terminology_uuid)
+                        if code.custom_terminology_uuid
+                        else None,
                     }
                     for code in self.expansion
                 ],
@@ -3051,6 +3053,90 @@ class ValueSetVersion:
                 return True
 
         return False
+
+    def lookup_terminologies_in_value_set_version(self) -> List[Terminology]:
+        """
+        This method scans through an expansion set and collects unique terminologies that are defined
+        in the set. Terminologies are distinguished by a combination of their system and version.
+
+        The expansion set (self.expansion) should be an iterable collection of codes, where each code
+        has a 'system' and a 'version' attribute.
+
+        Returns:
+            A list of unique Terminology objects found in the expansion set.
+        """
+
+        terminologies: Dict[Tuple[str, str], Terminology] = dict()
+
+        for code in self.expansion:
+            key = (code.system, code.version)
+            if key not in terminologies:
+                terminologies[key] = Terminology.load_by_fhir_uri_and_version(
+                    fhir_uri=code.system, version=code.version
+                )
+
+        return list(terminologies.values())
+
+    @classmethod
+    def create_new_version_from_specified_previous(
+        cls,
+        version_uuid,
+        new_version_description=None,
+        new_terminology_version_uuid=None,
+    ):
+        # Load the input version of the value set
+        input_version = cls.load(version_uuid)
+
+        # Create a new version of the value set with the same rules as the input version
+        new_version_uuid = uuid.uuid4()
+        new_version_number = input_version.version + 1
+
+        # Save the new version to the database
+        conn = get_db()
+        conn.execute(
+            text(
+                """  
+                INSERT INTO value_sets.value_set_version  
+                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)  
+                VALUES  
+                (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version)  
+                """
+            ),
+            {
+                "new_version_uuid": new_version_uuid,
+                "effective_start": input_version.effective_start,
+                "effective_end": input_version.effective_end,
+                "value_set_uuid": input_version.value_set.uuid,
+                "status": "pending",
+                "description": new_version_description or input_version.description,
+                "created_date": datetime.now(),
+                "version": new_version_number,
+            },
+        )
+
+        # Copy rules from input version to new version
+        conn.execute(
+            text(
+                """  
+                INSERT INTO value_sets.value_set_rule  
+                (position, description, property, operator, value, include, terminology_version, value_set_version, rule_group)  
+                SELECT position, description, property, operator, value, include,  
+                COALESCE(:new_terminology_version_uuid, terminology_version), :new_version_uuid, rule_group  
+                FROM value_sets.value_set_rule  
+                WHERE value_set_version = :input_version_uuid  
+                """
+            ),
+            {
+                "input_version_uuid": version_uuid,
+                "new_version_uuid": new_version_uuid,
+                "new_terminology_version_uuid": new_terminology_version_uuid,
+            },
+        )
+
+        conn.execute(text("commit"))
+
+        # Return the new ValueSetVersion object
+        return cls.load(new_version_uuid)
 
 
 @dataclass
