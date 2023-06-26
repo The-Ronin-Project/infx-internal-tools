@@ -10,7 +10,7 @@ jobs:
   # Run tests and publish coverage to codecov.io
   ###############################################
   test:
-    uses: projectronin/github/.github/workflows/python_test.yml@python_test/v2
+    uses: projectronin/github/.github/workflows/python_test.yml@PLAT-333-cleanup-python-test-workflow
     secrets:
       codecov-token: ${{ secrets.INFX_API_CODECOV_TOKEN  }}
 
