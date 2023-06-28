@@ -22,6 +22,7 @@ from app.helpers.simplifier_helper import (
 import app.value_sets.views as value_set_views
 import app.concept_maps.views as concept_map_views
 import app.terminologies.views as terminology_views
+import app.tasks as tasks
 
 import app.models.rxnorm as rxnorm
 from werkzeug.exceptions import HTTPException
@@ -200,6 +201,12 @@ def create_app(script_info=None):
     def outstanding_errors():
         errors = get_outstanding_errors()
         return jsonify(errors)
+
+    @app.route("/data_normalization/actions/load_outstanding_codes_to_concept_map")
+    def load_outstanding_codes_to_new_concept_map_version():
+        concept_map_uuid = request.json.get("concept_map_uuid")
+        tasks.load_outstanding_codes_to_new_concept_map_version.delay(concept_map_uuid)
+        return "OK"
 
     @app.route("/TerminologyUpdate/ValueSets/report", methods=["GET"])
     def terminology_update_value_set_report():

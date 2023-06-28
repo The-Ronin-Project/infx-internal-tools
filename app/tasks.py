@@ -26,6 +26,7 @@ def load_outstanding_errors_to_custom_terminologies():
     load_concepts_from_errors()
 
 
+@celery_app.task
 def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
 
     # Step 6: look up source and target value set
