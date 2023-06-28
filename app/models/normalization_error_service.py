@@ -353,8 +353,6 @@ def get_outstanding_errors(
                 terminologies_in_value_set_version = (
                     value_set_version.lookup_terminologies_in_value_set_version()
                 )
-                print(value_set_version)
-                print(terminologies_in_value_set_version)
                 if terminologies_in_value_set_version:
                     source_terminology = terminologies_in_value_set_version[0]
 

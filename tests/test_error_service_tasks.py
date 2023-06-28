@@ -3,9 +3,10 @@ from unittest.mock import patch, Mock
 import json
 
 from app.models.models import Organization
-from app.concept_maps.models import ConceptMapVersion
+import app.concept_maps.models
 import app.models.normalization_error_service
 import app.models.data_ingestion_registry
+import app.tasks
 
 
 # def generate_sample_concepts():
@@ -76,8 +77,12 @@ def generate_mock_registry():
 
 
 @patch("app.models.normalization_error_service.make_get_request")
-def incremental_load_integration_test(mock_request):
+def test_incremental_load_integration(mock_request):
     organization = Organization(id="ronin")
+
+    #
+    # PART 1: Loading from Errors to Custom Terminology
+    #
 
     # Set up the mock error response
     # Specifying the resource type as CONDITION
@@ -97,8 +102,10 @@ def incremental_load_integration_test(mock_request):
     mock_request.side_effect = side_effect
 
     # Mock the registry entry
-    test_incremental_load_concept_map_version = ConceptMapVersion(
-        "7bff7e50-7d95-46f6-8268-d18a5257327b"
+    test_incremental_load_concept_map_version = (
+        app.concept_maps.models.ConceptMapVersion(
+            "7bff7e50-7d95-46f6-8268-d18a5257327b"
+        )
     )
 
     with patch(
@@ -110,30 +117,44 @@ def incremental_load_integration_test(mock_request):
             app.models.normalization_error_service.load_concepts_from_errors()
         )
 
-    # # Creating identifiers for concept map and version to use in mock function
-    # concept_map_uuid = "ae61ee9b-3f55-4d3c-96e7-8c7194b53767"
-    # version = 1
-    # include_internal_info = True
     #
-    # # Creating a mock response for ConceptMapVersion.load method
-    # mock_registry_lookup = ConceptMapVersion.load(concept_map_uuid, version)
+    # PART 2: Verify Report Captures New Outstanding Code
     #
-    # # Mock the load_concepts_from_errors function to return the mock_data
-    # # Using Python's mock patching mechanism to replace the original 'load_concepts_from_errors' function
-    # # The function will return the mock data instead of executing the original code
-    # with patch(
-    #     "infx_condition_incremental_load.main.load_concepts_from_errors",
-    #     return_value=mock_error_concept_data,
-    # ):
+    incremental_load_concept_map = app.concept_maps.models.ConceptMap(
+        "ae61ee9b-3f55-4d3c-96e7-8c7194b53767"
+    )
+
+    mock_registry_for_report = (
+        app.models.normalization_error_service.DataNormalizationRegistry()
+    )
+    mock_registry_for_report.entries = [
+        app.models.data_ingestion_registry.DNRegistryEntry(
+            resource_type="Condition",
+            data_element="Condition.code",
+            tenant_id=organization.id,
+            source_extension_url="",
+            registry_uuid="",
+            registry_entry_type="concept_map",
+            profile_url="",
+            concept_map=incremental_load_concept_map,
+        )
+    ]
+    outstanding_errors = app.models.normalization_error_service.get_outstanding_errors(
+        registry=mock_registry_for_report
+    )
+    number_of_outstanding_codes = outstanding_errors[0].get(
+        "number_of_outstanding_codes"
+    )
+    assert (
+        number_of_outstanding_codes > 0
+    )  # Verify the new code we added above is in the report
+
     #
-    #     # Similar to the above, we are mocking the 'lookup_concept_map_version_for_resource_type' function
-    #     # It will return the 'mock_registry_lookup' instead of executing the original code
-    #     with patch(
-    #         "infx_condition_incremental_load.main.lookup_concept_map_version_for_resource_type",
-    #         return_value=mock_registry_lookup,
-    #     ):
-    #         # Calling the process_errors function, which should use our mock data and functions
-    #         process_errors()
+    # PART 3: Load Outstanding Code to New Concept Map Version
+    #
+    app.tasks.load_outstanding_codes_to_new_concept_map_version(
+        incremental_load_concept_map.uuid
+    )
 
 
 def test_outstanding_error_concepts_report():

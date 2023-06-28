@@ -20,6 +20,7 @@ class DatabaseManager:
 
     This is only for use when not working in Flask.
     """
+
     instance = None
 
     class __Database:
@@ -59,7 +60,9 @@ def get_db():
             if current_app.config["MOCK_DB"] is True:
                 engine = create_engine("sqlite:///tests/dbs/public.db")
                 g.db = engine.connect()
-                g.db.execute("attach database 'tests/dbs/concept_maps.db' as concept_maps")
+                g.db.execute(
+                    "attach database 'tests/dbs/concept_maps.db' as concept_maps"
+                )
                 g.db.execute("attach database 'tests/dbs/value_sets.db' as value_sets")
                 g.db.execute("attach database 'tests/dbs/snomedct.db' as snomedct")
                 g.db.execute("attach database 'tests/dbs/icd_10_cm.db' as icd_10_cm")
@@ -83,11 +86,15 @@ def get_elasticsearch():
     Retrieve the Elasticsearch instance for the application.
     If not already connected, connect to the Elasticsearch server using the provided configuration.
     """
-    if "es" not in g:
-        g.es = Elasticsearch(
-            f"https://{config('ELASTICSEARCH_USER')}:{config('ELASTICSEARCH_PASSWORD')}@{config('ELASTICSEARCH_HOST')}/"
-        )
-    return g.es
+    if has_request_context():
+        if "es" not in g:
+            g.es = Elasticsearch(
+                f"https://{config('ELASTICSEARCH_USER')}:{config('ELASTICSEARCH_PASSWORD')}@{config('ELASTICSEARCH_HOST')}/"
+            )
+        return g.es
+    return Elasticsearch(
+        f"https://{config('ELASTICSEARCH_USER')}:{config('ELASTICSEARCH_PASSWORD')}@{config('ELASTICSEARCH_HOST')}/"
+    )
 
 
 def close_db(e=None):

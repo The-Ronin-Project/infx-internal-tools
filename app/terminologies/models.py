@@ -286,11 +286,9 @@ class Terminology:
             "fhir_terminology": self.fhir_terminology,
         }
 
-    def version_to_load_new_content_to(self) -> "Terminology":
+    def load_latest_version(self) -> "Terminology":
         """
-        A custom terminology should only have content loaded to it if its effective_end date has
-        not yet passed. This method will return a Terminology instance representing the most recent version
-        suitable for loading new content to, or it will create a new version and return it.
+        Returns the latest version of the terminology
         """
         # First check if this is the most recent version
         conn = get_db()
@@ -310,6 +308,15 @@ class Terminology:
             most_recent_terminology = self
         else:
             most_recent_terminology = Terminology.load(most_recent_version_uuid)
+        return most_recent_terminology
+
+    def version_to_load_new_content_to(self) -> "Terminology":
+        """
+        A custom terminology should only have content loaded to it if its effective_end date has
+        not yet passed. This method will return a Terminology instance representing the most recent version
+        suitable for loading new content to, or it will create a new version and return it.
+        """
+        most_recent_terminology = self.load_latest_version()
 
         # Then check if the effective date has not yet passed
         if datetime.date.today() <= most_recent_terminology.effective_end:
@@ -325,7 +332,7 @@ class Terminology:
             )
 
         new_version = Terminology.new_terminology_version_from_previous(
-            previous_version_uuid=most_recent_version_uuid,
+            previous_version_uuid=most_recent_terminology.uuid,
             version=new_version_string,
             effective_end=None,
             effective_start=None,
