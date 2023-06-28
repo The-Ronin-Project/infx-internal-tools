@@ -5,6 +5,7 @@ import json
 from app.models.models import Organization
 from app.concept_maps.models import ConceptMapVersion
 import app.models.normalization_error_service
+from app.database import get_db
 
 
 # def generate_sample_concepts():
@@ -68,7 +69,8 @@ def generate_mock_error_issues():
 
 
 @patch("app.models.normalization_error_service.make_get_request")
-def incremental_load_integration_test(mock_request):
+def test_incremental_load_integration(mock_request):
+    conn = get_db()
     organization = Organization(id="ronin")
 
     # Set up the mock error response
@@ -101,6 +103,8 @@ def incremental_load_integration_test(mock_request):
         codes_by_org_and_resource_type = (
             app.models.normalization_error_service.load_concepts_from_errors()
         )
+
+    conn.commit()
 
     # # Creating identifiers for concept map and version to use in mock function
     # concept_map_uuid = "ae61ee9b-3f55-4d3c-96e7-8c7194b53767"
