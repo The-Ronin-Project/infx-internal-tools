@@ -416,7 +416,7 @@ class Terminology:
             ),
             {"version_uuid": version_uuid},
         ).first()
-        conn.execute(text('commit'))
+        conn.execute(text("commit"))
         return new_term_version
 
     def able_to_load_new_codes(self):
@@ -501,3 +501,33 @@ class Terminology:
                     "additional_data": json.dumps(code.additional_data),
                 },
             )
+
+    def get_recent_codes(self, comparison_date):
+        conn = get_db()
+        recent_codes_data = conn.execute(
+            text(
+                """
+        SELECT * FROM
+        custom_terminologies.code
+        WHERE
+        terminology_version_uuid = :source_terminology_uuid
+        AND
+        created_date > :comparison_date
+        """
+            ),
+            {
+                "source_terminology_uuid": self.uuid,
+                "comparison_date": comparison_date,
+            },
+        ).fetchall()
+        recent_codes = [
+            app.models.codes.Code(
+                code=item.code,
+                display=item.display,
+                terminology_version=self,
+                system=self.fhir_uri,
+                version=self.version,
+            )
+            for item in recent_codes_data
+        ]
+        return recent_codes

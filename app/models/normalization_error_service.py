@@ -1,7 +1,7 @@
 import datetime
 import json
 from uuid import UUID
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Optional
 from enum import Enum
 from dataclasses import dataclass
 
@@ -12,8 +12,8 @@ from app.models.models import Organization
 from app.models.codes import Code
 from app.terminologies.models import Terminology
 from app.models.data_ingestion_registry import DataNormalizationRegistry
-from app.concept_maps.models import ConceptMapVersion
-from app.value_sets.models import ValueSet
+from app.concept_maps.models import ConceptMapVersion, ConceptMap
+from app.value_sets.models import ValueSet, ValueSetVersion
 
 DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL = config(
     "DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL", default=""
@@ -328,6 +328,53 @@ def lookup_concept_map_version_for_resource_type(
         raise Exception("No appropriate registry entry found")
 
     return concept_map_version
+
+
+def get_outstanding_errors(
+    registry: DataNormalizationRegistry = None,
+) -> List[Dict]:
+    if registry is None:
+        registry = DataNormalizationRegistry()
+        registry.load_entries()
+
+    outstanding_errors = []
+    for registry_item in registry.entries:
+        if registry_item.registry_entry_type == "concept_map":
+            # Load the most recent concept map version (not just the most recent active)
+            concept_map = registry_item.concept_map
+            concept_map_version = concept_map.get_most_recent_version(active_only=False)
+
+            # Identify the source terminology
+            if concept_map_version.source_value_set_version_uuid is not None:
+                value_set_version = ValueSetVersion.load(
+                    concept_map_version.source_value_set_version_uuid
+                )
+
+                terminologies_in_value_set_version = (
+                    value_set_version.lookup_terminologies_in_value_set_version()
+                )
+                print(value_set_version)
+                print(terminologies_in_value_set_version)
+                if terminologies_in_value_set_version:
+                    source_terminology = terminologies_in_value_set_version[0]
+
+                    # Grab the first item from the list
+
+                    # Write a SQL query to identify all codes in custom_terminology.code
+                    # with a created_date for the code that is more recent than
+                    # the created_date of the underlying source terminology
+                    recent_codes = source_terminology.get_recent_codes(
+                        concept_map_version.created_date
+                    )
+
+                    outstanding_errors.append(
+                        {
+                            "concept_map_uuid": registry_item.concept_map.uuid,
+                            "concept_map_title": registry_item.concept_map.title,
+                            "number_of_outstanding_codes": len(recent_codes),
+                        }
+                    )
+    return outstanding_errors
 
 
 if __name__ == "__main__":

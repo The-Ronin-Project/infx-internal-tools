@@ -2279,6 +2279,9 @@ class ValueSetVersion:
         self.extensional_codes = {}
         self.explicitly_included_codes = []
 
+    def __repr__(self):
+        return f"<ValueSetVersion uuid={self.uuid}, title={self.value_set.title}, version={self.version}>"
+
     @classmethod
     def create(
         cls,
@@ -2320,6 +2323,8 @@ class ValueSetVersion:
 
     @classmethod
     def load(cls, uuid):
+        if uuid is None:
+            raise Exception("Cannot load a Value Set Version with None as uuid")
         conn = get_db()
         vs_version_data = conn.execute(
             text(
@@ -3065,6 +3070,8 @@ class ValueSetVersion:
         Returns:
             A list of unique Terminology objects found in the expansion set.
         """
+        if not self.expansion:
+            self.expand()
 
         terminologies: Dict[Tuple[str, str], Terminology] = dict()
 

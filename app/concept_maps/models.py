@@ -249,6 +249,30 @@ class ConceptMap:
         else:
             self.most_recent_active_version = None
 
+    def get_most_recent_version(self, active_only=False):
+        conn = get_db()
+        if active_only:
+            query = """
+                select * from concept_maps.concept_map_version
+                where concept_map_uuid=:concept_map_uuid
+                and status='active'
+                order by version desc
+                limit 1
+                """
+        else:
+            query = """
+                select * from concept_maps.concept_map_version
+                where concept_map_uuid=:concept_map_uuid
+                order by version desc
+                limit 1
+            """
+
+        version_data = conn.execute(
+            text(query),
+            {"concept_map_uuid": self.uuid},
+        ).first()
+        return ConceptMapVersion(version_data.uuid)
+
     @classmethod
     def concept_map_metadata(cls, cm_uuid):
         """
@@ -1172,7 +1196,7 @@ class SourceConcept:
         query += f" WHERE uuid = :uuid"
 
         # Execute the SQL query
-        updates['uuid'] = str(self.uuid)
+        updates["uuid"] = str(self.uuid)
         conn.execute(text(query), updates)
 
         # Update the instance attributes

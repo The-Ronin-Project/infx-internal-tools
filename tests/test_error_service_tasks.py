@@ -5,6 +5,7 @@ import json
 from app.models.models import Organization
 from app.concept_maps.models import ConceptMapVersion
 import app.models.normalization_error_service
+import app.models.data_ingestion_registry
 
 
 # def generate_sample_concepts():
@@ -67,6 +68,13 @@ def generate_mock_error_issues():
     return sample_normalization_issue_json
 
 
+def generate_mock_registry():
+    with open("sample_registry.json") as sample_registry_file:
+        sample_registry_file = sample_registry_file.read()
+        sample_registry_json = json.loads(sample_registry_file)
+    return sample_registry_json
+
+
 @patch("app.models.normalization_error_service.make_get_request")
 def incremental_load_integration_test(mock_request):
     organization = Organization(id="ronin")
@@ -126,3 +134,27 @@ def incremental_load_integration_test(mock_request):
     #     ):
     #         # Calling the process_errors function, which should use our mock data and functions
     #         process_errors()
+
+
+def test_outstanding_error_concepts_report():
+    concept_map = app.concept_maps.models.ConceptMap(
+        "ae61ee9b-3f55-4d3c-96e7-8c7194b53767"
+    )
+    mock_registry = app.models.data_ingestion_registry.DataNormalizationRegistry
+    mock_registry.entries = [
+        app.models.data_ingestion_registry.DNRegistryEntry(
+            resource_type="Condition",
+            data_element="Condition.code",
+            tenant_id="apposnd",
+            source_extension_url="http://projectronin.io/fhir/StructureDefinition/Extension/tenant-sourceConditionCode",
+            registry_uuid="f9f82c69-3c26-4990-973b-87cf7ccbb120",
+            registry_entry_type="concept_map",
+            profile_url="",
+            concept_map=concept_map,
+        )
+    ]
+
+    report = app.models.normalization_error_service.get_outstanding_errors(
+        registry=mock_registry
+    )
+    print(report)

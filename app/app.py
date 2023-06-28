@@ -8,6 +8,7 @@ from app.helpers.structlog import config_structlog, common_handler
 import structlog
 from flask import Flask, jsonify, request, Response, make_response
 from app.database import close_db
+from app.models.normalization_error_service import get_outstanding_errors
 from app.value_sets.models import *
 from app.concept_maps.models import *
 from app.models.surveys import *
@@ -77,8 +78,6 @@ def create_app(script_info=None):
         logger.critical(e.description, stack_info=True)
         return jsonify({"message": e.description}), e.code
 
-
-
     # Survey Endpoints
     @app.route("/surveys/<string:survey_uuid>")
     def export_survey(survey_uuid):
@@ -101,8 +100,6 @@ def create_app(script_info=None):
             },
         )
         return response
-
-
 
         # Patient Education Endpoints
 
@@ -167,7 +164,7 @@ def create_app(script_info=None):
         if request.method == "GET":
             from_oci = request.values.get("from_oci")
             if from_oci is not None:
-                from_oci = from_oci.strip().lower() == 'true'
+                from_oci = from_oci.strip().lower() == "true"
             else:
                 from_oci = False
 
@@ -186,7 +183,9 @@ def create_app(script_info=None):
         Publish the data normalization registry to an object store, allowing other services to access the registry information.
         """
         if request.method == "POST":
-            return jsonify(DataNormalizationRegistry.publish_data_normalization_registry())
+            return jsonify(
+                DataNormalizationRegistry.publish_data_normalization_registry()
+            )
 
     @app.route("/data_normalization/registry/actions/get_time", methods=["GET"])
     def get_last_published_time():
@@ -197,7 +196,10 @@ def create_app(script_info=None):
         convert_last_update = DataNormalizationRegistry.convert_gmt_time(last_update)
         return convert_last_update
 
-
+    @app.route("/data_normalization/outstanding_mapping_rows", methods=["GET"])
+    def outstanding_errors():
+        errors = get_outstanding_errors()
+        return jsonify(errors)
 
     @app.route("/TerminologyUpdate/ValueSets/report", methods=["GET"])
     def terminology_update_value_set_report():
