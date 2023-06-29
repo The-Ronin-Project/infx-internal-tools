@@ -346,45 +346,10 @@ def get_value_set_version_published(version_uuid):
     """
     # object_type = "value_set"
     if request.method == "POST":
-        force_new = request.values.get("force_new") == "true"
-        vs_version = ValueSetVersion.load(version_uuid)
-        vs_version.expand(force_new=force_new)
-        value_set_to_json, initial_path = vs_version.prepare_for_oci()
-        value_set_to_json_copy = value_set_to_json.copy()  # Simplifier requires status
-
-        value_set_to_datastore = set_up_object_store(
-            value_set_to_json, initial_path, folder="published"
-        )
-
-        vs_version.version_set_status_active()
-        vs_version.retire_and_obsolete_previous_version()
-        value_set_uuid = vs_version.value_set.uuid
-        resource_type = "ValueSet"  # param for Simplifier
-        value_set_to_json_copy["status"] = "active"
-        # Check if the 'expansion' and 'contains' keys are present
-        if (
-            "expansion" in value_set_to_json_copy
-            and "contains" in value_set_to_json_copy["expansion"]
-        ):
-            # Store the original total value
-            original_total = value_set_to_json_copy["expansion"]["total"]
-
-            # Limit the contains list to the top 50 entries
-            value_set_to_json_copy["expansion"]["contains"] = value_set_to_json[
-                "expansion"
-            ]["contains"][:50]
-
-            # Set the 'total' field to the original total
-            value_set_to_json_copy["expansion"]["total"] = original_total
-        publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
-
-        # Publish new version of data normalization registry
-        try:
-            DataNormalizationRegistry.publish_data_normalization_registry()
-        except:
-            pass
-
-        return jsonify(value_set_to_datastore)
+        force_new = request.values.get("force_new")
+        value_set_version = ValueSetVersion.load(version_uuid)
+        value_set_version.publish(force_new)
+        return "Published"
 
     if request.method == "GET":
         return_content = request.values.get("return_content")

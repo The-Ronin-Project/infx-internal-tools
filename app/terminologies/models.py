@@ -286,11 +286,9 @@ class Terminology:
             "fhir_terminology": self.fhir_terminology,
         }
 
-    def version_to_load_new_content_to(self) -> "Terminology":
+    def load_latest_version(self) -> "Terminology":
         """
-        A custom terminology should only have content loaded to it if its effective_end date has
-        not yet passed. This method will return a Terminology instance representing the most recent version
-        suitable for loading new content to, or it will create a new version and return it.
+        Returns the latest version of the terminology
         """
         # First check if this is the most recent version
         conn = get_db()
@@ -310,6 +308,15 @@ class Terminology:
             most_recent_terminology = self
         else:
             most_recent_terminology = Terminology.load(most_recent_version_uuid)
+        return most_recent_terminology
+
+    def version_to_load_new_content_to(self) -> "Terminology":
+        """
+        A custom terminology should only have content loaded to it if its effective_end date has
+        not yet passed. This method will return a Terminology instance representing the most recent version
+        suitable for loading new content to, or it will create a new version and return it.
+        """
+        most_recent_terminology = self.load_latest_version()
 
         # Then check if the effective date has not yet passed
         if datetime.date.today() <= most_recent_terminology.effective_end:
@@ -325,7 +332,7 @@ class Terminology:
             )
 
         new_version = Terminology.new_terminology_version_from_previous(
-            previous_version_uuid=most_recent_version_uuid,
+            previous_version_uuid=most_recent_terminology.uuid,
             version=new_version_string,
             effective_end=None,
             effective_start=None,
@@ -416,7 +423,7 @@ class Terminology:
             ),
             {"version_uuid": version_uuid},
         ).first()
-        conn.execute(text('commit'))
+        conn.execute(text("commit"))
         return new_term_version
 
     def able_to_load_new_codes(self):
@@ -501,3 +508,33 @@ class Terminology:
                     "additional_data": json.dumps(code.additional_data),
                 },
             )
+
+    def get_recent_codes(self, comparison_date):
+        conn = get_db()
+        recent_codes_data = conn.execute(
+            text(
+                """
+        SELECT * FROM
+        custom_terminologies.code
+        WHERE
+        terminology_version_uuid = :source_terminology_uuid
+        AND
+        created_date > :comparison_date
+        """
+            ),
+            {
+                "source_terminology_uuid": self.uuid,
+                "comparison_date": comparison_date,
+            },
+        ).fetchall()
+        recent_codes = [
+            app.models.codes.Code(
+                code=item.code,
+                display=item.display,
+                terminology_version=self,
+                system=self.fhir_uri,
+                version=self.version,
+            )
+            for item in recent_codes_data
+        ]
+        return recent_codes

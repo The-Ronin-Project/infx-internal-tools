@@ -1,0 +1,15 @@
+[
+  {
+    "concept_map_name": "Test Condition Incremental Load Concept Map",
+    "concept_map_uuid": "ae61ee9b-3f55-4d3c-96e7-8c7194b53767",
+    "data_element": "Condition.code",
+    "filename": "ConceptMaps/v3/published/ae61ee9b-3f55-4d3c-96e7-8c7194b53767/3.json",
+    "profile_url": null,
+    "registry_entry_type": "concept_map",
+    "registry_uuid": "f9f82c69-3c26-4990-973b-87cf7ccbb120",
+    "resource_type": "Condition",
+    "source_extension_url": "http://projectronin.io/fhir/StructureDefinition/Extension/tenant-sourceConditionCode",
+    "tenant_id": "apposnd",
+    "version": 3
+  }
+]
