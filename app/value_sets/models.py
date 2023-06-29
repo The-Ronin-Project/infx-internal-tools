@@ -18,7 +18,7 @@ from app.helpers.oci_helper import set_up_object_store
 from app.models.codes import Code
 
 import app.concept_maps.models
-from app.models.data_ingestion_registry import DataNormalizationRegistry
+import app.models.data_ingestion_registry
 from app.terminologies.models import Terminology
 from app.database import get_db, get_elasticsearch
 from flask import current_app
@@ -2901,7 +2901,9 @@ class ValueSetVersion:
         self.version_set_status_active()
         self.retire_and_obsolete_previous_version()
         value_set_uuid = self.value_set.uuid
-        set_up_object_store(value_set_to_json, initial_path, folder="published")  # sending to OCI
+        set_up_object_store(
+            value_set_to_json, initial_path, folder="published"
+        )  # sending to OCI
         resource_type = "ValueSet"  # param for Simplifier
         value_set_to_json_copy["status"] = "active"
         # Check if the 'expansion' and 'contains' keys are present
@@ -2922,7 +2924,7 @@ class ValueSetVersion:
         publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
 
         # Publish new version of data normalization registry
-        DataNormalizationRegistry.publish_data_normalization_registry()
+        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
 
     @classmethod
     def load_expansion_report(cls, expansion_uuid):
