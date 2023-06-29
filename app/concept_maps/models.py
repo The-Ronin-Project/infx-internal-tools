@@ -1173,10 +1173,10 @@ class SourceConcept:
             updates["map_status"] = map_status
 
         if assigned_mapper is not None:
-            updates["assigned_mapper"] = assigned_mapper
+            updates["assigned_mapper"] = str(assigned_mapper)
 
         if assigned_reviewer is not None:
-            updates["assigned_reviewer"] = assigned_reviewer
+            updates["assigned_reviewer"] = str(assigned_reviewer)
 
         if no_map is not None:
             updates["no_map"] = no_map
