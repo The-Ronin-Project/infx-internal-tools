@@ -2901,6 +2901,7 @@ class ValueSetVersion:
         self.version_set_status_active()
         self.retire_and_obsolete_previous_version()
         value_set_uuid = self.value_set.uuid
+        set_up_object_store(value_set_to_json, initial_path, folder="published")  # sending to OCI
         resource_type = "ValueSet"  # param for Simplifier
         value_set_to_json_copy["status"] = "active"
         # Check if the 'expansion' and 'contains' keys are present
