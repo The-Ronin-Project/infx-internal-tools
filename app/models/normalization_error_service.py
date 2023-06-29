@@ -76,7 +76,6 @@ class ErrorServiceResource:
 
     def __post_init__(self):
         self.issues = []
-        self.load_issues()
 
     def load_issues(self):
         # Call the endpoint
@@ -107,12 +106,11 @@ class ErrorServiceResource:
             )
             self.issues.append(issue)
 
-    def filter_issues_by_type(self):
+    def filter_issues_by_type(self, issue_type="NOV_CONMAP_LOOKUP"):
         filtered_issues = []
         for issue in self.issues:
-            if issue.type == "NOV_CONMAP_LOOKUP":
+            if issue.type == issue_type:
                 filtered_issues.append(issue)
-        print(filtered_issues)
 
 
 @dataclass
@@ -200,6 +198,7 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
             reprocessed_by=resource_data.get("reprocessed_by"),
             token=token,
         )
+        resource.load_issues()
         resources.append(resource)
 
     # For some resource types (ex. Location, Appointment), we need to read the issue to know where in the

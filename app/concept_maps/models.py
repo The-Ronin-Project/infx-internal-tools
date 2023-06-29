@@ -1125,7 +1125,7 @@ class SourceConcept:
                 WHERE uuid = :uuid
             """
         )
-        result = conn.execute(query, uuid=str(source_concept_uuid)).fetchone()
+        result = conn.execute(query, {'uuid': str(source_concept_uuid)}).fetchone()
 
         if result:
             return cls(

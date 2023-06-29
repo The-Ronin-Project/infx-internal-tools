@@ -7,6 +7,7 @@ import app.concept_maps.models
 import app.models.normalization_error_service
 import app.models.data_ingestion_registry
 import app.tasks
+from app.database import get_db
 
 
 # def generate_sample_concepts():
