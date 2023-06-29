@@ -4,20 +4,13 @@ import csv
 import string
 from uuid import uuid4
 from werkzeug.exceptions import BadRequest
-
 from app.helpers.oci_helper import (
-    version_set_status_active,
     get_object_type_from_db,
     get_object_type_from_object_store,
-    set_up_object_store,
-    get_json_from_oci,
-)
-from app.helpers.simplifier_helper import (
-    publish_to_simplifier,
 )
 from app.concept_maps.models import *
 from app.concept_maps.versioning_models import *
-from app.models.data_ingestion_registry import DataNormalizationRegistry
+
 
 concept_maps_blueprint = Blueprint("concept_maps", __name__)
 
@@ -234,33 +227,9 @@ def get_concept_map_version_published(version_uuid):
     """
     object_type = "concept_map"
     if request.method == "POST":
-        concept_map_uuid = ConceptMapVersion(version_uuid).concept_map.uuid
-        concept_map_version = ConceptMapVersion(
-            version_uuid
-        )  # using the version uuid to get the version metadata from the ConceptMapVersion class
-        (
-            concept_map_to_json,
-            initial_path,
-        ) = concept_map_version.prepare_for_oci()  # serialize the metadata
-        concept_map_to_json_copy = (
-            concept_map_to_json.copy()
-        )  # Simplifier requires status
-        concept_map_to_datastore = (
-            set_up_object_store(  # use the serialized data with an oci_helper function
-                concept_map_to_json, initial_path, folder="published"
-            )
-        )
-        concept_map_version.version_set_status_active()
-        resource_type = "ConceptMap"  # param for Simplifier
-        concept_map_to_json_copy["status"] = "active"
-        publish_to_simplifier(resource_type, concept_map_uuid, concept_map_to_json_copy)
-        # Publish new version of data normalization registry
-        try:
-            DataNormalizationRegistry.publish_data_normalization_registry()
-        except:
-            pass  # todo: find better error handling
-
-        return jsonify(concept_map_to_datastore)
+        concept_map_version = ConceptMapVersion.load_data(version_uuid)
+        concept_map_version.publish()
+        return "Published"
 
     if request.method == "GET":
         concept_map = get_object_type_from_db(version_uuid, object_type)
@@ -419,3 +388,14 @@ def update_mapping_relationship():
         Mapping.update_relationship_code(mapping_uuid, new_relationship_code_uuid)
 
     return jsonify({"message": "Successfully updated mapping relationship(s)"})
+
+
+@concept_maps_blueprint.route(
+    "/ConceptMaps/<string:version_uuid>/simplifier", methods=["POST"]
+)
+def push_concept_map_version_to_simplifier(version_uuid):
+    uuid_obj = uuid.UUID(version_uuid)  # cast as uuid
+    concept_map_version = ConceptMapVersion(uuid=uuid_obj)  # instantiate object
+    concept_map_version.to_simplifier()
+
+    return "Successfully pushed to simplifier", 200
