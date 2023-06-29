@@ -1,6 +1,5 @@
 import json
 import datetime
-
 import app.concept_maps.models
 import app.value_sets.models
 
@@ -29,8 +28,8 @@ class DNRegistryEntry:
     registry_uuid: str
     registry_entry_type: str
     profile_url: str
-    concept_map: Optional[app.concept_maps.models.ConceptMap] = None
-    value_set: Optional[app.value_sets.models.ValueSet] = None
+    concept_map: Optional["app.concept_maps.models.ConceptMap"] = None
+    value_set: Optional["app.value_sets.models.ValueSet"] = None
 
     def serialize(self):
         """
@@ -198,18 +197,22 @@ class DataNormalizationRegistry:
 
     @staticmethod
     def publish_data_normalization_registry():
-        """ Publish the data normalization registry and the diff from previous version """
+        """Publish the data normalization registry and the diff from previous version"""
         previous_version = DataNormalizationRegistry.get_last_published_registry()
 
         current_registry = DataNormalizationRegistry()
         current_registry.load_entries()
         current_registry_serialized = current_registry.serialize()
         newly_published_version = DataNormalizationRegistry.publish_to_object_store(
-            current_registry_serialized, 'registry.json'
+            current_registry_serialized, "registry.json"
         )
 
-        diff_version = get_incremented_versions_and_update(previous_version, newly_published_version)
-        DataNormalizationRegistry.publish_to_object_store(diff_version, "registry_diff.json")
+        diff_version = get_incremented_versions_and_update(
+            previous_version, newly_published_version
+        )
+        DataNormalizationRegistry.publish_to_object_store(
+            diff_version, "registry_diff.json"
+        )
 
         return newly_published_version
 
@@ -228,15 +231,26 @@ def get_incremented_versions_and_update(old_data, new_data):
     """
 
     # Convert each list to a dictionary with a tuple key for easy comparison
-    old_dict = {(entry["data_element"], entry["tenant_id"], entry["source_extension_url"],
-                 entry["registry_entry_type"], entry["profile_url"]): entry["version"] for entry in old_data}
+    old_dict = {
+        (
+            entry["data_element"],
+            entry["tenant_id"],
+            entry["source_extension_url"],
+            entry["registry_entry_type"],
+            entry["profile_url"],
+        ): entry["version"]
+        for entry in old_data
+    }
 
     incremented_entries = []
 
     for entry in new_data:
         key = (
-            entry["data_element"], entry["tenant_id"], entry["source_extension_url"], entry["registry_entry_type"],
-            entry["profile_url"]
+            entry["data_element"],
+            entry["tenant_id"],
+            entry["source_extension_url"],
+            entry["registry_entry_type"],
+            entry["profile_url"],
         )
         if key in old_dict and entry["version"] > old_dict[key]:
             # Save the old version
@@ -244,5 +258,3 @@ def get_incremented_versions_and_update(old_data, new_data):
             incremented_entries.append(entry)
 
     return incremented_entries
-
-

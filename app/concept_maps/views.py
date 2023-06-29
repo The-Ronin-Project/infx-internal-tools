@@ -227,7 +227,7 @@ def get_concept_map_version_published(version_uuid):
     """
     object_type = "concept_map"
     if request.method == "POST":
-        concept_map_version = ConceptMapVersion.load_data(version_uuid)
+        concept_map_version = ConceptMapVersion(version_uuid)
         concept_map_version.publish()
         return "Published"
 
@@ -396,6 +396,7 @@ def update_mapping_relationship():
 def push_concept_map_version_to_simplifier(version_uuid):
     uuid_obj = uuid.UUID(version_uuid)  # cast as uuid
     concept_map_version = ConceptMapVersion(uuid=uuid_obj)  # instantiate object
+    # check for active status error if false
     concept_map_version.to_simplifier()
 
     return "Successfully pushed to simplifier", 200

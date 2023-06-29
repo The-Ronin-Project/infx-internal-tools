@@ -1000,22 +1000,17 @@ class ConceptMapVersion:
         Normalization Registry and setting status active.
         @return: n/a
         """
-        concept_map_version = ConceptMapVersion(self)
+        concept_map_version = self
         (
             concept_map_to_json,
             initial_path,
-        ) = concept_map_version.prepare_for_oci()  # serialize the metadata
-        concept_map_to_json_copy = (
-            concept_map_to_json.copy()
-        )  # Simplifier requires status
+        ) = self.prepare_for_oci()  # serialize the metadata
+
         set_up_object_store(
             concept_map_to_json, initial_path, folder="published"
         )  # sends to OCI
-        concept_map_version.version_set_status_active()
-        resource_id = concept_map_to_json["id"]
-        resource_type = "ConceptMap"  # param for Simplifier
-        concept_map_to_json_copy["status"] = "active"
-        publish_to_simplifier(resource_type, resource_id, concept_map_to_json_copy)
+        self.version_set_status_active()
+        self.to_simplifier()
         # Publish new version of data normalization registry
         DataNormalizationRegistry.publish_data_normalization_registry()
 
@@ -1027,6 +1022,7 @@ class ConceptMapVersion:
         concept_map_to_json, initial_path = self.prepare_for_oci()
         resource_id = concept_map_to_json["id"]
         resource_type = concept_map_to_json["resourceType"]  # param for Simplifier
+        concept_map_to_json["status"] = "active"  # Simplifier requires status
         # Check if the 'group' key is present
         if "group" in concept_map_to_json and len(concept_map_to_json["group"]) > 0:
             group = concept_map_to_json["group"][0]
