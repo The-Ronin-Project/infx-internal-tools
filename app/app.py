@@ -224,10 +224,13 @@ def create_app(script_info=None):
         errors = get_outstanding_errors(registry)
         return jsonify(errors)
 
-    @app.route("/data_normalization/actions/load_outstanding_codes_to_concept_map")
+    @app.route(
+        "/data_normalization/actions/load_outstanding_codes_to_concept_map",
+        methods=["POST"],
+    )
     def load_outstanding_codes_to_new_concept_map_version():
         concept_map_uuid = request.json.get("concept_map_uuid")
-        tasks.load_outstanding_codes_to_new_concept_map_version.delay(concept_map_uuid)
+        tasks.load_outstanding_codes_to_new_concept_map_version(concept_map_uuid)
         return "OK"
 
     @app.route("/TerminologyUpdate/ValueSets/report", methods=["GET"])
