@@ -2921,10 +2921,10 @@ class ValueSetVersion:
 
             # Set the 'total' field to the original total
             value_set_to_json_copy["expansion"]["total"] = original_total
-        # publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy) # todo: bring back after demo
+        publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
 
         # Publish new version of data normalization registry
-        # app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry() # todo: bring back after demo
+        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
 
     @classmethod
     def load_expansion_report(cls, expansion_uuid):
