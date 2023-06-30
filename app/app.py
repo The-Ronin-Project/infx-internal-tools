@@ -14,13 +14,18 @@ from app.concept_maps.models import *
 from app.models.surveys import *
 from app.models.patient_edu import *
 from app.concept_maps.versioning_models import *
-from app.models.data_ingestion_registry import DataNormalizationRegistry
+from app.models.data_ingestion_registry import (
+    DataNormalizationRegistry,
+    DNRegistryEntry,
+)
 from app.errors import BadRequestWithCode
 from app.helpers.simplifier_helper import (
     publish_to_simplifier,
 )
+from app.models.models import Organization
 import app.value_sets.views as value_set_views
 import app.concept_maps.views as concept_map_views
+import app.concept_maps.models as concept_maps_models
 import app.terminologies.views as terminology_views
 import app.tasks as tasks
 
@@ -199,7 +204,24 @@ def create_app(script_info=None):
 
     @app.route("/data_normalization/outstanding_mapping_rows", methods=["GET"])
     def outstanding_errors():
-        errors = get_outstanding_errors()
+        incremental_load_concept_map = concept_maps_models.ConceptMap(
+            "ae61ee9b-3f55-4d3c-96e7-8c7194b53767"
+        )
+        organization = Organization(id="ronin")
+        registry = DataNormalizationRegistry()
+        registry.entries = [
+            DNRegistryEntry(
+                resource_type="Condition",
+                data_element="Condition.code",
+                tenant_id=organization.id,
+                source_extension_url="",
+                registry_uuid="",
+                registry_entry_type="concept_map",
+                profile_url="",
+                concept_map=incremental_load_concept_map,
+            )
+        ]
+        errors = get_outstanding_errors(registry)
         return jsonify(errors)
 
     @app.route("/data_normalization/actions/load_outstanding_codes_to_concept_map")
