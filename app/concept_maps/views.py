@@ -10,7 +10,8 @@ from app.helpers.oci_helper import (
 )
 from app.concept_maps.models import *
 from app.concept_maps.versioning_models import *
-
+from app.tasks import back_fill_concept_maps_to_simplifier
+import app.tasks as tasks
 
 concept_maps_blueprint = Blueprint("concept_maps", __name__)
 
@@ -400,3 +401,10 @@ def push_concept_map_version_to_simplifier(version_uuid):
     concept_map_version.to_simplifier()
 
     return "Successfully pushed to simplifier", 200
+
+
+@concept_maps_blueprint.route("/ConceptMaps/simplifier/back_fill", methods=["POST"])
+def full_back_fill_to_simplifier():
+    tasks.back_fill_concept_maps_to_simplifier.delay()
+
+    return "Full concept map back fill to Simplifier complete."
