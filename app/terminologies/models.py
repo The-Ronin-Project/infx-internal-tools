@@ -470,7 +470,7 @@ class Terminology:
                 description="Loading to multiple terminologies at once is not allowed",
             )
 
-        if terminology_uuids[0] != self.uuid:
+        if uuid.UUID(terminology_uuids[0]) != self.uuid:
             raise BadRequestWithCode(
                 code="BadRequest",
                 description=f"Cannot load codes to Terminology {terminology_uuids[0]} using the class for Terminology {self.uuid}",
