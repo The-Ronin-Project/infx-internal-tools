@@ -281,8 +281,8 @@ def load_use_case_by_value_set_uuid(
     ]
 
     return {
-        "Primary Use Case": primary_use_case,
-        "Secondary Use Case(s)": secondary_use_cases,
+        "primary_use_case": primary_use_case,
+        "secondary_use_cases": secondary_use_cases,
     }
 
 

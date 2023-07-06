@@ -75,9 +75,9 @@ def get_all_value_sets_metadata():
 
 
 @value_sets_blueprint.route(
-    "/ValueSets/<string:value_set_uuid>/linked_use_case", methods=["GET", "POST"]
+    "/ValueSets/<string:value_set_uuid>/linked_use_cases", methods=["GET", "POST"]
 )
-def handle_linked_use_case(value_set_uuid):
+def handle_linked_use_cases(value_set_uuid):
     """
     Handle GET and POST requests for the linked use case of a value set.
 

@@ -94,7 +94,7 @@ def create_app(script_info=None):
             all_teams = Teams.load_all_teams()
             return jsonify(all_teams)
 
-    @app.route("/teams/linked_use_case", methods=["GET", "POST"])
+    @app.route("/teams/linked_use_cases", methods=["GET", "POST"])
     def handle_linked_teams():
         """
             Handle GET and POST requests to fetch or overwrite the teams linked to a specified use case.
@@ -103,21 +103,13 @@ def create_app(script_info=None):
 
             Parameters
             ----------
-            None
+            use_case_uuid this must be passed as a parameter when using the 'GET' method
 
             Returns
             -------
             Flask Response
                 If the request method is GET, the response will contain a JSON object representing the teams associated with a given use case.
                 If the request method is POST, the response will contain a JSON object with a success message.
-
-            Request Body Example (GET)
-            ---------------------------
-            For a GET request, the request body should be a JSON object with the following structure:
-
-            {
-                "use_case_uuid": <UUID of the use case>
-            }
 
             Request Body Example (POST)
             ---------------------------
@@ -135,7 +127,7 @@ def create_app(script_info=None):
         Each team object should have the following fields: "name" (the name of the team), "slack_channel" (the slack channel of the team), and "team_uuid" (the UUID of the team).
         """
         if request.method == "GET":
-            use_case_uuid = request.json.get("use_case_uuid")
+            use_case_uuid = request.values.get("use_case_uuid")
             return jsonify(get_teams_by_use_case(use_case_uuid))
         if request.method == "POST":
             use_case_uuid = request.json.get("use_case_uuid")
