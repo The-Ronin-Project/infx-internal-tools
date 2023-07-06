@@ -96,7 +96,7 @@ class Teams:
         )
 
 
-def get_teams_by_use_case(use_case_uuid):
+def get_teams_by_use_case(use_case_uuid: uuid.UUID):
     """
     Retrieve teams associated with a specific use case from the database.
 
@@ -140,7 +140,7 @@ def get_teams_by_use_case(use_case_uuid):
     return teams_list
 
 
-def get_use_case_by_team(team_uuid):
+def get_use_case_by_team(team_uuid: uuid.UUID):
     """
     Retrieve use cases associated with a specific team from the database.
 
@@ -176,7 +176,7 @@ def get_use_case_by_team(team_uuid):
     return use_case_list
 
 
-def set_up_use_case_teams_link(use_case_uuid, team_uuid):
+def set_up_use_case_teams_link(use_case_uuid: uuid.UUID, team_uuid: uuid.UUID):
     """
     Set up a link between a use case and a team in the database.
 
@@ -208,7 +208,7 @@ def set_up_use_case_teams_link(use_case_uuid, team_uuid):
     )
 
 
-def delete_all_teams_for_a_use_case(use_case_uuid):
+def delete_all_teams_for_a_use_case(use_case_uuid: uuid.UUID):
     """
     Delete all links between teams and a specific use case in the database.
 
