@@ -81,21 +81,59 @@ def create_app(script_info=None):
         return jsonify({"message": e.description}), e.code
 
     # UseCase Endpoints
-    @app.route("/UseCase/", methods=["GET"])
+    @app.route("/usecase/", methods=["GET"])
     def use_case_registry():
         if request.method == "GET":
             all_cases = UseCase.load_all_use_cases()
             return jsonify(all_cases)
 
     # Teams Endpoints
-    @app.route("/Teams/", methods=["GET"])
+    @app.route("/teams/", methods=["GET"])
     def teams_registry():
         if request.method == "GET":
             all_teams = Teams.load_all_teams()
             return jsonify(all_teams)
 
-    @app.route("/Teams/linked_use_case", methods=["GET", "POST"])
+    @app.route("/teams/linked_use_case", methods=["GET", "POST"])
     def handle_linked_teams():
+        """
+            Handle GET and POST requests to fetch or overwrite the teams linked to a specified use case.
+
+            This endpoint allows users to retrieve or update the team(s) associated with a given use case.
+
+            Parameters
+            ----------
+            None
+
+            Returns
+            -------
+            Flask Response
+                If the request method is GET, the response will contain a JSON object representing the teams associated with a given use case.
+                If the request method is POST, the response will contain a JSON object with a success message.
+
+            Request Body Example (GET)
+            ---------------------------
+            For a GET request, the request body should be a JSON object with the following structure:
+
+            {
+                "use_case_uuid": <UUID of the use case>
+            }
+
+            Request Body Example (POST)
+            ---------------------------
+            For a POST request, the request body should be a JSON object with the following structure:
+
+            {
+                "use_case_uuid": "bf161bfc-05f2-4b02-bd05-6a51bb884065",
+                "teams": [
+                    {"name": "interops", "slack_channel": "interops", "team_uuid": "60c121cb-0084-4680-9959-31eacabe5816"},
+                    {"name": "data science", "slack_channel": "data-science-team", "team_uuid": "985854a9-2ed0-4ea4-ae34-b320c105707a"}
+                ]
+            }
+
+        The "teams" field should contain a list of team objects to be linked to the use case.
+        Each team object should have the following fields: "name" (the name of the team), "slack_channel" (the slack channel of the team), and "team_uuid" (the UUID of the team).
+        """
         if request.method == "GET":
             use_case_uuid = request.json.get("use_case_uuid")
             return jsonify(get_teams_by_use_case(use_case_uuid))

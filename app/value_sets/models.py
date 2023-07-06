@@ -1391,25 +1391,48 @@ class ValueSet:
         secondary_use_case=[],
     ):
         """
-        Create a new value_set, its initial version, and associate it with the given use_case UUIDs and is_primary values.
+        Class method to create a new ValueSet entry in the database.
 
-        Parameters:
-        - name (str): The name of the value_set.
-        - title (str): The title of the value_set.
-        - publisher (str): The publisher of the value_set.
-        - contact (str): The contact information for the value_set.
-        - value_set_description (str): The description of the value_set.
-        - immutable (bool): Whether the value_set is immutable or not.
-        - experimental (bool): Whether the value_set is experimental or not.
-        - purpose (str): The purpose of the value_set.
-        - vs_type (str): The type of the value_set.
-        - effective_start (datetime): The effective start date of the value_set.
-        - effective_end (datetime): The effective end date of the value_set.
-        - version_description (str): The description of the value_set version.
-        - use_case_data (list, optional): A list of dictionaries containing use_case UUIDs and is_primary values to associate with the value_set. Defaults to None.
+        This method generates a new UUID, creates an entry in the `value_sets.value_set` table with the provided attributes,
+        commits the transaction, sets up the link between the value set and its use cases, creates a new version of the
+        value set in the `value_sets.value_set_version` table, commits the transaction, and returns the loaded value set.
 
-        Returns:
-        - ValueSet: The created value_set instance.
+        Parameters
+        ----------
+        name : str
+            The name of the ValueSet.
+        title : str
+            The title of the ValueSet.
+        publisher : str
+            The publisher of the ValueSet.
+        contact : str
+            The contact information for the ValueSet.
+        value_set_description : str
+            The description of the ValueSet.
+        immutable : bool
+            Specifies whether the ValueSet is immutable.
+        experimental : bool
+            Specifies whether the ValueSet is experimental.
+        purpose : str
+            The purpose of the ValueSet.
+        vs_type : str
+            The type of the ValueSet.
+        effective_start : datetime
+            The effective start date of the ValueSet version.
+        effective_end : datetime
+            The effective end date of the ValueSet version.
+        version_description : str
+            The description of the ValueSet version.
+        primary_use_case : str, optional
+            The primary use case of the ValueSet.
+        secondary_use_case : list, optional
+            The secondary use cases of the ValueSet.
+
+        Returns
+        -------
+        ValueSet
+            The newly created ValueSet instance loaded from the database.
+
         """
         conn = get_db()
         vs_uuid = uuid.uuid4()
@@ -2761,6 +2784,21 @@ class ValueSetVersion:
             return []
 
     def serialize(self):
+        """
+        Transform the ValueSet instance into a dictionary in a format suitable for serialization.
+
+        This method is primarily used to convert the instance into a format that can be easily serialized into JSON.
+        This includes converting complex data types into simple data types that can be serialized.
+
+        It also applies specific transformations to the data to ensure it meets the RCDM-compliant format,
+        including generating a compliant name for the ValueSet, and transforming use case names into the required format.
+
+        Returns
+        -------
+        dict
+            The dictionary representing the serialized state of the ValueSet instance.
+
+        """
         pattern = r"[A-Z]([A-Za-z0-9_]){0,254}"  # name transformer
         if re.match(pattern, self.value_set.name):  # name follows pattern use name
             rcdm_name = self.value_set.name

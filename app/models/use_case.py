@@ -1,13 +1,35 @@
 from dataclasses import dataclass
 import uuid
-from sqlalchemy import create_engine, text, MetaData, Table, Column, String
+from sqlalchemy import text
 from app.database import get_db
 from typing import List, Optional, Tuple
-from werkzeug.exceptions import BadRequest, NotFound
 
 
 @dataclass
 class UseCase:
+    """
+    A class used to represent the UseCase model.
+
+    ...
+
+    Attributes
+    ----------
+    uuid : uuid.UUID
+        The unique identifier for the use case
+    name : str
+        The name of the use case
+    description : str
+        The description of the use case
+    point_of_contact : str
+        The point of contact for the use case
+    status : str
+        The status of the use case
+    jira_ticket : str
+        The Jira ticket associated with the use case
+    point_of_contact_email : str
+        The email of the point of contact for the use case
+    """
+
     uuid: uuid.UUID
     name: str
     description: str
@@ -18,6 +40,18 @@ class UseCase:
 
     @classmethod
     def load_all_use_cases(cls) -> List["UseCase"]:
+        """
+        Class method to load all use case data from the database.
+
+        This method retrieves all rows from the `project_management.use_case` table, creates
+        UseCase instances from each row, and returns a list of these instances.
+
+        Returns
+        -------
+        List[UseCase]
+            A list of UseCase instances representing all use cases in the database.
+        """
+
         conn = get_db()
         query = conn.execute(
             text(
@@ -45,6 +79,22 @@ class UseCase:
 
     @classmethod
     def load_use_case_by_uuid(cls, use_case_uuid: uuid.UUID) -> Optional["UseCase"]:
+        """
+        Class method to load a specific use case by its UUID from the database.
+
+        This method retrieves a row identified by the provided UUID from the `project_management.use_case` table,
+        creates a UseCase instance from the row if it exists, and returns it.
+
+        Parameters
+        ----------
+        use_case_uuid : uuid.UUID
+            The unique identifier of the use case to load.
+
+        Returns
+        -------
+        Optional[UseCase]
+            A UseCase instance representing the loaded use case if it exists, otherwise None.
+        """
         conn = get_db()
         query = conn.execute(
             text(
@@ -59,7 +109,15 @@ class UseCase:
         use_case_data = query.fetchone()
 
         if use_case_data:
-            return UseCase(*use_case_data)
+            return UseCase(
+                uuid=use_case_data.uuid,
+                name=use_case_data.name,
+                description=use_case_data.description,
+                point_of_contact=use_case_data.point_of_contact,
+                status=use_case_data.status,
+                jira_ticket=use_case_data.jira_ticket,
+                point_of_contact_email=use_case_data.point_of_contact_email,
+            )
         else:
             return None
 
@@ -68,6 +126,21 @@ class UseCase:
         cls,
         use_case: "UseCase",
     ):
+        """
+        Class method to save a UseCase instance to the database.
+
+        This method inserts a new row to the `project_management.use_case` table with the values from the provided
+        UseCase instance.
+
+        Parameters
+        ----------
+        use_case : UseCase
+            The UseCase instance to save.
+
+        Returns
+        -------
+        None
+        """
         conn = get_db()
         query = conn.execute(
             text(
@@ -97,6 +170,24 @@ class UseCase:
         value_set_uuid: uuid.UUID,
         is_primary: Optional[bool] = False,
     ) -> None:
+        """
+        Class method to create a link between a use case and a value set in the database.
+
+        This method inserts a new row to the `value_sets.value_set_use_case_link` table with the provided values.
+
+        Parameters
+        ----------
+        use_case : UseCase
+            The UseCase instance to link.
+        value_set_uuid : uuid.UUID
+            The UUID of the value set to link.
+        is_primary : bool, optional
+            Whether the value set is primary for the use case, by default False.
+
+        Returns
+        -------
+        None
+        """
         conn = get_db()
         query = conn.execute(
             text(
@@ -119,17 +210,22 @@ def load_use_case_by_value_set_uuid(
     value_set_uuid: uuid.UUID,
 ) -> Tuple[UseCase, List[UseCase]]:
     """
-    This function is used to fetch use case data associated with a specific value set based on its universally unique identifier (UUID).
+    Retrieve the primary and secondary use cases associated with a specific value set from the database.
 
-    Args:
-    value_set_uuid (uuid.UUID): The UUID of the value set for which use cases are to be fetched.
+    This function connects to the database, executes two SQL SELECT queries to get the primary and secondary use cases
+    associated with a particular value set, based on the value set UUID. It then creates a new UseCase instance for each use case.
+    It finally returns a dictionary with the primary use case instance and a list of secondary use case instances.
 
-    Returns:
-    Optional[List[UseCase]]: Returns a list of UseCase objects containing the details of each use case linked to the provided value set UUID.
-    If no use cases are found for the provided UUID, returns None.
+    Parameters
+    ----------
+    value_set_uuid : uuid.UUID
+        The unique identifier for the value set.
 
-    Raises:
-    SQLAlchemyError: An error occurred while executing the SQL query.
+    Returns
+    -------
+    dict
+        A dictionary containing the primary use case instance under the "Primary Use Case" key,
+        and a list of UseCase instances representing all secondary use cases under the "Secondary Use Case(s)" key.
     """
     conn = get_db()
     query = conn.execute(
@@ -191,6 +287,18 @@ def load_use_case_by_value_set_uuid(
 
 
 def delete_all_use_cases_for_value_set(value_set_uuid: uuid.UUID) -> None:
+    """
+    Deletes all the use cases associated with a specific value set from the database.
+
+    This function connects to the database and executes a SQL DELETE query to remove all use cases
+    associated with the specified value set, based on the value set UUID. The changes are then committed
+    to the database. This function does not return anything.
+
+    Parameters
+    ----------
+    value_set_uuid : uuid.UUID
+        The unique identifier for the value set whose associated use cases are to be deleted.
+    """
     # Delete all rows associated with the given value_set_uuid from the value_set_use_case_link table
     conn = get_db()
     conn.execute(

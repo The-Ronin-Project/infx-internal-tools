@@ -7,12 +7,45 @@ from app.models.use_case import UseCase
 
 @dataclass
 class Teams:
+    """
+    A class used to represent the Teams model.
+
+    ...
+
+    Attributes
+    ----------
+    name : str
+        The name of the team
+    slack_channel : str
+        The Slack channel associated with the team
+    team_uuid : uuid.UUID
+        The unique identifier for the team
+
+    Methods
+    -------
+    load_all_teams():
+        Class method to load all team data from the database and return a list of Team instances.
+    save():
+        Instance method to save the Team instance to the database.
+    """
+
     name: str
     slack_channel: str
     team_uuid: uuid.UUID
 
     @classmethod
     def load_all_teams(cls):
+        """
+        Load all teams from the database and return a list of Team instances.
+
+        This method connects to the database, executes a SQL query to get all teams, and then
+        creates a new Team instance for each team. It finally returns a list of all these instances.
+
+        Returns
+        -------
+        list
+            A list of Team instances representing all teams in the database.
+        """
         conn = get_db()
         query = conn.execute(
             text(
@@ -35,6 +68,16 @@ class Teams:
         return teams
 
     def save(self):
+        """
+        Save the Team instance into the database.
+
+        This method connects to the database and executes an SQL INSERT query to store the team data.
+        It uses the team's name, Slack channel, and UUID as values for the query parameters.
+
+        Returns
+        -------
+        None
+        """
         conn = get_db()
         query = conn.execute(
             text(
@@ -55,12 +98,21 @@ class Teams:
 
 def get_teams_by_use_case(use_case_uuid):
     """
-    Get all team names associated with a specific use case from the database.
+    Retrieve teams associated with a specific use case from the database.
 
-    @param use_case_uuid: UUID of the use case
-    :type use_case_uuid: str
-    @return: List of team names associated with the use case
-    :rtype: list
+    This function connects to the database, executes a SQL SELECT query to get all teams
+    associated with a particular use case and then creates a new Team instance for each team.
+    It finally returns a list of these instances.
+
+    Parameters
+    ----------
+    use_case_uuid : uuid.UUID
+        The unique identifier for the use case.
+
+    Returns
+    -------
+    list
+        A list of Team instances representing all teams associated with the given use case.
     """
     conn = get_db()
     query = conn.execute(
@@ -90,12 +142,21 @@ def get_teams_by_use_case(use_case_uuid):
 
 def get_use_case_by_team(team_uuid):
     """
-    Get all use case names associated with a specific team from the database.
+    Retrieve use cases associated with a specific team from the database.
 
-    @param team_uuid: UUID of the team
-    :type team_uuid: str
-    @return: List of use case names associated with the team
-    :rtype: list
+    This function connects to the database and executes a SQL SELECT query to get all use cases
+    associated with a particular team. It then loads each use case by its UUID and finally returns
+    a list of these use case instances.
+
+    Parameters
+    ----------
+    team_uuid : uuid.UUID
+        The unique identifier for the team.
+
+    Returns
+    -------
+    list
+        A list of UseCase instances representing all use cases associated with the given team.
     """
     conn = get_db()
     query = conn.execute(
@@ -116,6 +177,23 @@ def get_use_case_by_team(team_uuid):
 
 
 def set_up_use_case_teams_link(use_case_uuid, team_uuid):
+    """
+    Set up a link between a use case and a team in the database.
+
+    This function connects to the database and executes a SQL INSERT query to create a link
+    between a use case and a team.
+
+    Parameters
+    ----------
+    use_case_uuid : uuid.UUID
+        The unique identifier for the use case.
+    team_uuid : uuid.UUID
+        The unique identifier for the team.
+
+    Returns
+    -------
+    None
+    """
     conn = get_db()
     query = conn.execute(
         text(
@@ -131,6 +209,23 @@ def set_up_use_case_teams_link(use_case_uuid, team_uuid):
 
 
 def delete_all_teams_for_a_use_case(use_case_uuid):
+    """
+    Delete all links between teams and a specific use case in the database.
+
+    This function connects to the database and executes a SQL DELETE query to remove all links
+    between teams and a specific use case from the project_management.use_case_teams_link table.
+    After the execution of the DELETE query, it commits the transaction to ensure the changes
+    are saved in the database.
+
+    Parameters
+    ----------
+    use_case_uuid : uuid.UUID
+        The unique identifier for the use case.
+
+    Returns
+    -------
+    None
+    """
     # Delete all rows associated with the given use case from project_management.use_case_teams_link table
     conn = get_db()
     conn.execute(
