@@ -79,6 +79,7 @@ def generate_mock_registry():
 
 @patch("app.models.normalization_error_service.make_get_request")
 def test_incremental_load_integration(mock_request):
+    conn = get_db()
     organization = Organization(id="ronin")
 
     #
@@ -117,6 +118,7 @@ def test_incremental_load_integration(mock_request):
         codes_by_org_and_resource_type = (
             app.models.normalization_error_service.load_concepts_from_errors()
         )
+        conn.commit()
 
     #
     # PART 2: Verify Report Captures New Outstanding Code
