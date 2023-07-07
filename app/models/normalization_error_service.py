@@ -354,6 +354,7 @@ def get_outstanding_errors(
                 )
                 if terminologies_in_value_set_version:
                     source_terminology = terminologies_in_value_set_version[0]
+                    source_terminology = source_terminology.load_latest_version()
 
                     # Grab the first item from the list
 
