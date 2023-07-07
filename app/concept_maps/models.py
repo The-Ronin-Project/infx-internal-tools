@@ -1092,7 +1092,16 @@ class SourceConcept:
         )
 
     def __hash__(self):
-        return hash((self.uuid, self.code, self.display, self.system))
+        return hash((
+            self.uuid,
+            self.code,
+            self.display,
+            self.system,
+            self.depends_on_property,
+            self.depends_on_system,
+            self.depends_on_value,
+            self.depends_on_display)
+        )
 
     @property
     def id(self):
