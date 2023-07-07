@@ -19,6 +19,7 @@ from app.terminologies.models import (
     terminology_version_uuid_lookup,
     load_terminology_version_with_cache,
 )
+from app.models.use_case import load_use_case_by_value_set_uuid
 
 CONCEPT_MAPS_SCHEMA_VERSION = 3
 
@@ -247,6 +248,30 @@ class ConceptMap:
             )
         else:
             self.most_recent_active_version = None
+
+    def get_most_recent_version(self, active_only=False):
+        conn = get_db()
+        if active_only:
+            query = """
+                select * from concept_maps.concept_map_version
+                where concept_map_uuid=:concept_map_uuid
+                and status='active'
+                order by version desc
+                limit 1
+                """
+        else:
+            query = """
+                select * from concept_maps.concept_map_version
+                where concept_map_uuid=:concept_map_uuid
+                order by version desc
+                limit 1
+            """
+
+        version_data = conn.execute(
+            text(query),
+            {"concept_map_uuid": self.uuid},
+        ).first()
+        return ConceptMapVersion(version_data.uuid)
 
     @classmethod
     def concept_map_metadata(cls, cm_uuid):
@@ -611,7 +636,7 @@ class ConceptMapVersion:
                 depends_on_property=item.depends_on_property,
                 depends_on_system=item.depends_on_system,
                 depends_on_value=item.depends_on_value,
-                depends_on_display=item.depends_on_display
+                depends_on_display=item.depends_on_display,
             )
             target_code = Code(
                 item.target_fhir_uri,
@@ -664,20 +689,20 @@ class ConceptMapVersion:
                 {
                     "Source Code": row[1],
                     "Source Display": row[2],
-                    "Relationship": row[29],
-                    "Target Code": row[18],
-                    "Target Display": row[19],
-                    "Review Status": row[15],
+                    "Relationship": row[30],
+                    "Target Code": row[19],
+                    "Target Display": row[20],
+                    "Review Status": row[16],
                     "Map Status": row[6],
-                    "Mapping Comments": row[16],
+                    "Mapping Comments": row[17],
                     "Comments": row[4],
                     "Additional Context": row[5],
                     "No-Map": row[10],
                     "No-Map Reason": row[11],
                     "Mapping Group": row[12],
-                    "Mapper": row[23],
-                    "Reviewer": row[28],
-                    "Review Comment": row[27],
+                    "Mapper": row[24],
+                    "Reviewer": row[29],
+                    "Review Comment": row[28],
                 }
             )
 
@@ -701,6 +726,26 @@ class ConceptMapVersion:
         ]
 
         return data, fieldnames
+
+    def version_set_status_active(self):
+        """
+        This method updates the status of the concept map, identified by its UUID, to 'active'.
+        """
+
+        conn = get_db()
+        conn.execute(
+            text(
+                """
+                    UPDATE concept_maps.concept_map_version
+                    SET status=:status
+                    WHERE uuid=:version_uuid
+                    """
+            ),
+            {
+                "status": "active",
+                "version_uuid": self.uuid,
+            },
+        )
 
     def serialize_mappings(self):
         # Identify all the source terminology / target terminology pairings in the mappings
@@ -770,26 +815,29 @@ class ConceptMapVersion:
                     # Iterate through each mapping for the source and serialize it
                     for mapping in filtered_mappings:
                         target_serialized = {
-                                "id": mapping.id,
-                                "code": mapping.target.code,
-                                "display": mapping.target.display,
-                                "equivalence": mapping.relationship.code,
-                                "comment": None,
-                            }
+                            "id": mapping.id,
+                            "code": mapping.target.code,
+                            "display": mapping.target.display,
+                            "equivalence": mapping.relationship.code,
+                            "comment": None,
+                        }
 
                         # Add dependsOn data
-                        if source_code.depends_on_property or source_code.depends_on_value:
+                        if (
+                            source_code.depends_on_property
+                            or source_code.depends_on_value
+                        ):
                             depends_on = {
                                 "property": source_code.depends_on_property,
-                                "value": source_code.depends_on_value
+                                "value": source_code.depends_on_value,
                             }
                             if source_code.depends_on_system:
-                                depends_on['system'] = source_code.depends_on_system
+                                depends_on["system"] = source_code.depends_on_system
                             if source_code.depends_on_display:
-                                depends_on['display'] = source_code.depends_on_display
-                            target_serialized['dependsOn'] = depends_on
+                                depends_on["display"] = source_code.depends_on_display
+                            target_serialized["dependsOn"] = depends_on
 
-                        new_element['target'].append(target_serialized)
+                        new_element["target"].append(target_serialized)
 
                     elements.append(new_element)
 
@@ -821,6 +869,19 @@ class ConceptMapVersion:
         return None
 
     def serialize(self, include_internal_info=False):
+        pattern = r"[A-Z]([A-Za-z0-9_]){0,254}"  # name transformer
+        if re.match(pattern, self.concept_map.name):  # name follows pattern use name
+            rcdm_name = self.concept_map.name
+        else:
+            index = re.search(
+                r"[a-zA-Z]", self.concept_map.name
+            ).start()  # name does not follow pattern, uppercase 1st letter
+            rcdm_name = (
+                self.concept_map.name[:index]
+                + self.concept_map.name[index].upper()
+                + self.concept_map.name[index + 1 :]
+            )
+
         serial_mappings = self.serialize_mappings()
         for mapped_object in serial_mappings:
             for nested in mapped_object["element"]:
@@ -843,10 +904,8 @@ class ConceptMapVersion:
         serialized = {
             "resourceType": "ConceptMap",
             "title": self.concept_map.title,
-            "id": self.uuid,
-            "name": self.concept_map.name.capitalize()
-            if self.concept_map.name is not None
-            else None,
+            "id": str(self.concept_map.uuid),
+            "name": rcdm_name if self.concept_map.name is not None else None,
             "contact": [{"name": self.concept_map.author}],
             "url": f"http://projectronin.io/fhir/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
@@ -886,6 +945,46 @@ class ConceptMapVersion:
 
     def prepare_for_oci(self):
         serialized = self.serialize()
+        rcdm_id = serialized.get("id")
+        rcdm_url = "http://projectronin.io/ConceptMap/"
+        # id will depend on publisher
+        if self.concept_map.publisher == "Project Ronin":
+            rcdm_id = serialized.get("id")
+            rcdm_url = "http://projectronin.io/fhir/ConceptMap/"
+        elif self.concept_map.publisher == "FHIR":
+            rcdm_id = serialized.get("name")
+            # transform rcdm_id in place
+            rcdm_id = re.sub("([a-z])([A-Z])", r"\1-\2", rcdm_id).lower()
+            rcdm_url = "http://hl7.org/fhir/ConceptMap/"
+
+        if (
+            self.status == "pending"
+        ):  # has a required binding (translate pending to draft)
+            rcdm_status = "draft"
+        else:
+            rcdm_status = self.status
+
+        rcdm_date_now = datetime.datetime.now()
+        rcdm_date = rcdm_date_now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+        oci_serialized = {
+            "id": rcdm_id,
+            "url": f"{rcdm_url}{rcdm_id}",
+            # specific to the overall value set; suffix matching the id field exactly
+            "status": rcdm_status,
+            # has a required binding (translate pending to draft)  (draft, active, retired, unknown)
+            "date": rcdm_date,  # the date the status was set to active
+            "meta": {
+                "profile": [
+                    "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMap"
+                ]
+            },
+        }
+
+        serialized.update(oci_serialized)  # Merge oci_serialized into serialized
+        serialized.pop("contact")
+        serialized.pop("publisher")
+        serialized.pop("title")
         initial_path = f"ConceptMaps/v{CONCEPT_MAPS_SCHEMA_VERSION}/folder/{self.concept_map.uuid}"  # folder is set in oci_helper(determined by api call)
 
         return serialized, initial_path
@@ -1010,10 +1109,7 @@ class SourceConcept:
         Raises:
             AttributeError: If the `code` or `display` attribute is not set for the instance.
         """
-        combined = (
-                self.code.strip()
-                + self.display.strip()
-        ).encode("utf-8")
+        combined = (self.code.strip() + self.display.strip()).encode("utf-8")
         return hashlib.md5(combined).hexdigest()
 
     @classmethod
@@ -1029,7 +1125,7 @@ class SourceConcept:
                 WHERE uuid = :uuid
             """
         )
-        result = conn.execute(query, uuid=str(source_concept_uuid)).fetchone()
+        result = conn.execute(query, {'uuid': str(source_concept_uuid)}).fetchone()
 
         if result:
             return cls(
@@ -1053,7 +1149,6 @@ class SourceConcept:
 
     def update(
         self,
-        conn: Optional = None,
         comments: Optional[str] = None,
         additional_context: Optional[str] = None,
         map_status: Optional[str] = None,
@@ -1064,8 +1159,7 @@ class SourceConcept:
         mapping_group: Optional[str] = None,
         previous_version_context: Optional[str] = None,
     ):
-        if conn is None:
-            conn = get_db()
+        conn = get_db()
         # Create a dictionary to store the column names and their corresponding new values
         updates = {}
 
@@ -1079,10 +1173,10 @@ class SourceConcept:
             updates["map_status"] = map_status
 
         if assigned_mapper is not None:
-            updates["assigned_mapper"] = assigned_mapper
+            updates["assigned_mapper"] = str(assigned_mapper)
 
         if assigned_reviewer is not None:
-            updates["assigned_reviewer"] = assigned_reviewer
+            updates["assigned_reviewer"] = str(assigned_reviewer)
 
         if no_map is not None:
             updates["no_map"] = no_map
@@ -1098,11 +1192,12 @@ class SourceConcept:
 
         # Generate the SQL query
         query = f"UPDATE concept_maps.source_concept SET "
-        query += ", ".join(f"{column} = %s" for column in updates)
-        query += f" WHERE uuid = %s;"
+        query += ", ".join(f"{column} = :{column}" for column in updates)
+        query += f" WHERE uuid = :uuid"
 
         # Execute the SQL query
-        conn.execute(query, (*updates.values(), self.uuid))
+        updates["uuid"] = str(self.uuid)
+        conn.execute(text(query), updates)
 
         # Update the instance attributes
         for column, value in updates.items():
@@ -1227,7 +1322,7 @@ class Mapping:
             self.source.concept_map_version_uuid
         )
         if concept_map_settings.auto_advance_after_mapping:
-            self.source.update(conn=self.conn, map_status="ready for review")
+            self.source.update(map_status="ready for review")
 
     def serialize(self):
         """Prepares a JSON representation of the Mapping instance to return to the API."""

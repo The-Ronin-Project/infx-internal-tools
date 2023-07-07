@@ -1,0 +1,14 @@
+[
+  {
+      "id": "22139011-0c6f-4f3e-8e5c-164a2830b367",
+      "organization_id": "ronin",
+      "resource_type": "Condition",
+      "resource": "Replace w/ Resource JSON",
+      "status": "REPORTED",
+      "severity": "FAILED",
+      "create_dt_tm": "2023-03-16T21:45:10.173667Z",
+      "update_dt_tm": null,
+      "reprocess_dt_tm": null,
+      "reprocessed_by": null
+  }
+]

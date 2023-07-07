@@ -36,6 +36,7 @@ readtime = "*"
 black = "*"
 oci = "*"
 mock = "*"
+celery = "*"
 
 [dev-packages]
 pytest = "*"

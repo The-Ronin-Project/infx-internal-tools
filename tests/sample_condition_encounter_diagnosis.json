@@ -1,0 +1,168 @@
+{
+    "resourceType": "Condition",
+    "id": "1xrekpx5-eM5CWtq15N0WJeuCet5bJlQ3",
+    "meta": {
+        "profile":  [
+            "http://projectronin.io/fhir/StructureDefinition/ronin-conditionEncounterDiagnosis"
+        ],
+        "source": "http://RawEHRDataTransactionID"
+    },
+    "text": {
+        "id": "ConditionEncounterDiagnosisExample1Pass",
+        "status": "generated"
+    },
+    "identifier":  [
+        {
+            "type": {
+                "coding":  [
+                    {
+                        "system": "http://projectronin.com/id/tenantId",
+                        "code": "TID",
+                        "display": "Ronin-specified Tenant Identifier"
+                    }
+                ],
+                "text": "Ronin-specified Tenant Identifier"
+            },
+            "system": "http://projectronin.com/id/tenantId",
+            "value": "1xrekpx5"
+        },
+        {
+            "type": {
+                "coding":  [
+                    {
+                        "system": "http://projectronin.com/id/fhir",
+                        "code": "FHIR ID",
+                        "display": "FHIR Identifier"
+                    }
+                ],
+                "text": "FHIR Identifier"
+            },
+            "system": "http://projectronin.com/id/fhir",
+            "value": "eM5CWtq15N0WJeuCet5bJlQ3"
+        },
+        {
+            "type": {
+                "coding":  [
+                    {
+                        "system": "http://projectronin.com/id/dataAuthorityId",
+                        "code": "DAID",
+                        "display": "Data Authority Identifier"
+                    }
+                ],
+                "text": "Data Authority Identifier"
+            },
+            "system": "http://projectronin.com/id/dataAuthorityId",
+            "value": "EHR Data Authority"
+        }
+    ],
+    "extension":  [
+        {
+            "url": "http://hl7.org/fhir/StructureDefinition/condition-assertedDate",
+            "valueDateTime": "2015-10-31"
+        },
+        {
+            "url": "http://projectronin.io/fhir/StructureDefinition/Extension/tenant-sourceConditionCode",
+            "valueCodeableConcept": {
+                "coding":  [
+                    {
+                        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                        "code": "C64.9",
+                        "display": "Malignant neoplasm of unspecified kidney except renal pelvis"
+                    }
+                ],
+                "text": "Malignant neoplasm of unspecified kidney except renal pelvis"
+            }
+        }
+    ],
+    "clinicalStatus": {
+        "coding":  [
+            {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+                "code": "resolved"
+            }
+        ]
+    },
+    "verificationStatus": {
+        "coding":  [
+            {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+                "code": "confirmed"
+            }
+        ]
+    },
+    "category":  [
+        {
+            "coding":  [
+                {
+                    "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                    "code": "encounter-diagnosis",
+                    "display": "Encounter Diagnosis"
+                }
+            ]
+        }
+    ],
+    "code": {
+        "coding":  [
+            {
+                "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                "code": "C64.9",
+                "display": "Malignant neoplasm of unspecified kidney except renal pelvis"
+            }
+        ],
+        "text": "Malignant neoplasm of unspecified kidney except renal pelvis"
+    },
+    "subject": {
+        "reference": "Patient/1xrekpx5-50000578870",
+        "type": "Patient",
+        "_type": {
+            "extension":  [
+                {
+                    "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-dataAuthorityIdentifier",
+                    "valueIdentifier": {
+                        "type": {
+                            "coding":  [
+                                {
+                                    "system": "http://projectronin.com/id/dataAuthorityId",
+                                    "code": "DAID",
+                                    "display": "Data Authority Identifier"
+                                }
+                            ],
+                            "text": "Data Authority Identifier"
+                        },
+                        "system": "http://projectronin.com/id/dataAuthorityId",
+                        "value": "EHR Data Authority"
+                    }
+                }
+            ]
+        },
+        "display": "Patty Demo"
+    },
+    "encounter": {
+        "reference": "Encounter/1xrekpx5-emqw0jlpbdO21iDTyrmMRYg3",
+        "type": "Encounter",
+        "_type": {
+            "extension":  [
+                {
+                    "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-dataAuthorityIdentifier",
+                    "valueIdentifier": {
+                        "type": {
+                            "coding":  [
+                                {
+                                    "system": "http://projectronin.com/id/dataAuthorityId",
+                                    "code": "DAID",
+                                    "display": "Data Authority Identifier"
+                                }
+                            ],
+                            "text": "Data Authority Identifier"
+                        },
+                        "system": "http://projectronin.com/id/dataAuthorityId",
+                        "value": "EHR Data Authority"
+                    }
+                }
+            ]
+        }
+    },
+    "onsetDateTime": "2015-10-31",
+    "abatementDateTime": "2015-12-01",
+    "recordedDate": "2015-11-01"
+}

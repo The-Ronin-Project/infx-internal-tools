@@ -4,7 +4,7 @@ import dataclasses
 from app.models.codes import *
 from app.terminologies.models import *
 
-terminologies_blueprint = Blueprint('terminologies', __name__)
+terminologies_blueprint = Blueprint("terminologies", __name__)
 
 
 @terminologies_blueprint.route("/terminology/", methods=["POST", "GET"])
@@ -18,12 +18,18 @@ def create_terminology():
         version = request.values.get("version")
 
         if not fhir_uri or not version:
-            return jsonify({"error": "fhir_uri and version parameters are required."}), 400
+            return (
+                jsonify({"error": "fhir_uri and version parameters are required."}),
+                400,
+            )
 
         terminology = Terminology.load_by_fhir_uri_and_version(fhir_uri, version)
 
         if not terminology:
-            return jsonify({"error": "Terminology not found with the given parameters."}), 404
+            return (
+                jsonify({"error": "Terminology not found with the given parameters."}),
+                404,
+            )
 
         return jsonify(terminology.serialize())
 
@@ -55,20 +61,53 @@ def create_code():
     """
     Add one or multiple new codes to a terminology, providing information such as code system, version, code, display,
     and terminology version.
+    Here's a sample json for testing this endpoint:
+    {
+    "code": "test code",
+    "display": "test display",
+    "terminology_version_uuid": "d2ae0de5-0168-4f54-924a-1f79cf658939",
+    "additional_data": {
+        "data": "sweet sweet json"
+        }
+    }
     """
     if request.method == "POST":
         payload = request.json
+        # If the payload is a dictionary, we will make it into a list.
         if isinstance(payload, dict):
             payload = [payload]
-        new_code = Code.add_new_code_to_terminology(payload)
+
+        terminology_version_uuids = [
+            code_data.get("terminology_version_uuid") for code_data in payload
+        ]
+        terminology_version_uuids = list(set(terminology_version_uuids))
+        if len(terminology_version_uuids) > 1:
+            raise BadRequestWithCode(
+                "MultipleTerminologiesNotAllowed",
+                "Cannot load to multiple terminologies at the same time",
+            )
+        else:
+            terminology = Terminology.load(terminology_version_uuids[0])
+
         codes = []
-        for x in new_code:
-            code = Code.serialize(x)
+        for code_data in payload:
+            code = Code(
+                code=code_data.get("code"),
+                display=code_data.get("display"),
+                terminology_version_uuid=code_data.get("terminology_version_uuid"),
+                additional_data=code_data.get("additional_data"),
+                system=None,
+                version=None,
+            )
             codes.append(code)
-        return codes
+
+        terminology.load_new_codes_to_terminology(codes)
+        return "Complete"
 
 
-@terminologies_blueprint.route("/terminology/<terminology_version_uuid>", methods=["GET"])
+@terminologies_blueprint.route(
+    "/terminology/<terminology_version_uuid>", methods=["GET"]
+)
 def get_terminology(terminology_version_uuid):
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 10))
@@ -99,6 +138,7 @@ def get_terminology(terminology_version_uuid):
             },
         }
     )
+
 
 # @app.route("/terminology/new_version/", methods=["POST"])
 # def create_new_term_version():
@@ -131,7 +171,9 @@ def get_terminology(terminology_version_uuid):
 #         return new_term_version
 
 
-@terminologies_blueprint.route("/terminology/new_version_from_previous", methods=["POST"])
+@terminologies_blueprint.route(
+    "/terminology/new_version_from_previous", methods=["POST"]
+)
 def create_new_term_version_from_previous():
     """
     Create a new terminology version from a previous version, preserving its content and metadata while updating

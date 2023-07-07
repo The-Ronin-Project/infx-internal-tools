@@ -1,6 +1,7 @@
 import datetime
 import json
 from dataclasses import dataclass, field
+from typing import List, Dict, Tuple
 import re
 import requests
 import concurrent.futures
@@ -12,12 +13,16 @@ from dateutil import parser
 from collections import defaultdict
 from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
+
+from app.helpers.oci_helper import set_up_object_store
 from app.models.codes import Code
 
 import app.concept_maps.models
+import app.models.data_ingestion_registry
 from app.terminologies.models import Terminology
 from app.database import get_db, get_elasticsearch
 from flask import current_app
+from app.helpers.simplifier_helper import publish_to_simplifier
 
 from app.models.use_case import load_use_case_by_value_set_uuid, UseCase
 
@@ -1700,16 +1705,30 @@ class ValueSet:
 
     @classmethod
     def load_most_recent_active_version(cls, uuid):
+        return cls.load_most_recent_version(uuid, active_only=True)
+
+    @classmethod
+    def load_most_recent_version(cls, uuid, active_only=False):
         conn = get_db()
-        query = text(
-            """
-            select * from value_sets.value_set_version
-            where value_set_uuid = :uuid
-            and status='active'
-            order by version desc
-            limit 1
-            """
-        )
+        if active_only:
+            query = text(
+                """
+                select * from value_sets.value_set_version
+                where value_set_uuid = :uuid
+                and status='active'
+                order by version desc
+                limit 1
+                """
+            )
+        else:
+            query = text(
+                """
+                select * from value_sets.value_set_version
+                where value_set_uuid = :uuid
+                order by version desc
+                limit 1
+                """
+            )
         results = conn.execute(query, {"uuid": uuid})
         recent_version = results.first()
         if recent_version is None:
@@ -2375,10 +2394,13 @@ class ValueSetVersion:
         self.extensional_codes = {}
         self.explicitly_included_codes = []
 
+    def __repr__(self):
+        return f"<ValueSetVersion uuid={self.uuid}, title={self.value_set.title}, version={self.version}>"
+
     @classmethod
     def create(
         cls,
-        efective_start,
+        effective_start,
         effective_end,
         value_set_uuid,
         status,
@@ -2394,14 +2416,14 @@ class ValueSetVersion:
             text(
                 """
                 insert into value_sets.value_set_version
-                (uuid, efective_start, effective_end, value_set_uuid, status, description, created_date, version, comments)
+                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version, comments)
                 values
-                (:uuid, :efective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version, :comments)
+                (:uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version, :comments)
                 """
             ),
             {
                 "uuid": vsv_uuid,
-                "efective_start": efective_start,
+                "effective_start": effective_start,
                 "effective_end": effective_end,
                 "value_set_uuid": value_set_uuid,
                 "status": status,
@@ -2416,6 +2438,8 @@ class ValueSetVersion:
 
     @classmethod
     def load(cls, uuid):
+        if uuid is None:
+            raise Exception("Cannot load a Value Set Version with None as uuid")
         conn = get_db()
         vs_version_data = conn.execute(
             text(
@@ -2443,10 +2467,9 @@ class ValueSetVersion:
         )
         value_set_version.load_rules()
 
-        if current_app.config["MOCK_DB"] != "True":
-            value_set_version.explicitly_included_codes = (
-                ExplicitlyIncludedCode.load_all_for_vs_version(value_set_version)
-            )
+        value_set_version.explicitly_included_codes = (
+            ExplicitlyIncludedCode.load_all_for_vs_version(value_set_version)
+        )
 
         if value_set.type == "extensional":
             extensional_members_data = conn.execute(
@@ -2996,6 +3019,39 @@ class ValueSetVersion:
 
         return serialized, initial_path
 
+    def publish(self, force_new):
+        self.expand(force_new=force_new)
+        value_set_to_json, initial_path = self.prepare_for_oci()
+        value_set_to_json_copy = value_set_to_json.copy()  # Simplifier requires status
+
+        self.version_set_status_active()
+        self.retire_and_obsolete_previous_version()
+        value_set_uuid = self.value_set.uuid
+        set_up_object_store(
+            value_set_to_json, initial_path, folder="published"
+        )  # sending to OCI
+        resource_type = "ValueSet"  # param for Simplifier
+        value_set_to_json_copy["status"] = "active"
+        # Check if the 'expansion' and 'contains' keys are present
+        if (
+            "expansion" in value_set_to_json_copy
+            and "contains" in value_set_to_json_copy["expansion"]
+        ):
+            # Store the original total value
+            original_total = value_set_to_json_copy["expansion"]["total"]
+
+            # Limit the contains list to the top 50 entries
+            value_set_to_json_copy["expansion"]["contains"] = value_set_to_json[
+                "expansion"
+            ]["contains"][:50]
+
+            # Set the 'total' field to the original total
+            value_set_to_json_copy["expansion"]["total"] = original_total
+        publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
+
+        # Publish new version of data normalization registry
+        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
+
     @classmethod
     def load_expansion_report(cls, expansion_uuid):
         conn = get_db()
@@ -3179,6 +3235,92 @@ class ValueSetVersion:
                 return True
 
         return False
+
+    def lookup_terminologies_in_value_set_version(self) -> List[Terminology]:
+        """
+        This method scans through an expansion set and collects unique terminologies that are defined
+        in the set. Terminologies are distinguished by a combination of their system and version.
+
+        The expansion set (self.expansion) should be an iterable collection of codes, where each code
+        has a 'system' and a 'version' attribute.
+
+        Returns:
+            A list of unique Terminology objects found in the expansion set.
+        """
+        if not self.expansion:
+            self.expand()
+
+        terminologies: Dict[Tuple[str, str], Terminology] = dict()
+
+        for code in self.expansion:
+            key = (code.system, code.version)
+            if key not in terminologies:
+                terminologies[key] = Terminology.load_by_fhir_uri_and_version(
+                    fhir_uri=code.system, version=code.version
+                )
+
+        return list(terminologies.values())
+
+    @classmethod
+    def create_new_version_from_specified_previous(
+        cls,
+        version_uuid,
+        new_version_description=None,
+        new_terminology_version_uuid=None,
+    ):
+        # Load the input version of the value set
+        input_version = cls.load(version_uuid)
+
+        # Create a new version of the value set with the same rules as the input version
+        new_version_uuid = uuid.uuid4()
+        new_version_number = input_version.version + 1
+
+        # Save the new version to the database
+        conn = get_db()
+        conn.execute(
+            text(
+                """  
+                INSERT INTO value_sets.value_set_version  
+                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)  
+                VALUES  
+                (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version)  
+                """
+            ),
+            {
+                "new_version_uuid": new_version_uuid,
+                "effective_start": input_version.effective_start,
+                "effective_end": input_version.effective_end,
+                "value_set_uuid": input_version.value_set.uuid,
+                "status": "pending",
+                "description": new_version_description or input_version.description,
+                "created_date": datetime.now(),
+                "version": new_version_number,
+            },
+        )
+
+        # Copy rules from input version to new version
+        conn.execute(
+            text(
+                """  
+                INSERT INTO value_sets.value_set_rule  
+                (position, description, property, operator, value, include, terminology_version, value_set_version, rule_group)  
+                SELECT position, description, property, operator, value, include,  
+                COALESCE(:new_terminology_version_uuid, terminology_version), :new_version_uuid, rule_group  
+                FROM value_sets.value_set_rule  
+                WHERE value_set_version = :input_version_uuid  
+                """
+            ),
+            {
+                "input_version_uuid": version_uuid,
+                "new_version_uuid": new_version_uuid,
+                "new_terminology_version_uuid": new_terminology_version_uuid,
+            },
+        )
+
+        conn.execute(text("commit"))
+
+        # Return the new ValueSetVersion object
+        return cls.load(new_version_uuid)
 
 
 @dataclass
