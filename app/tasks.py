@@ -1,21 +1,15 @@
-import datetime
-
 from celery import Celery
-
 from uuid import UUID
 from app.models.normalization_error_service import (
     load_concepts_from_errors,
     lookup_concept_map_version_for_resource_type,
 )
 from app.value_sets.models import ValueSetVersion, ValueSet
-from app.concept_maps.models import ConceptMap
+from app.concept_maps.models import ConceptMap, ConceptMapVersion
 from app.terminologies.models import Terminology
 from app.concept_maps.versioning_models import ConceptMapVersionCreator
-from app.helpers.oci_helper import set_up_object_store
-from app.helpers.simplifier_helper import publish_to_simplifier
-from app.models.data_ingestion_registry import DataNormalizationRegistry
 from app.models.normalization_error_service import load_concepts_from_errors
-from flask import jsonify
+
 
 celery_app = Celery("infx-tasks")
 celery_app.conf.task_always_eager = True
@@ -89,3 +83,17 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
         require_review_no_maps_not_in_target=require_review_no_maps_not_in_target,
     )
     return version_creator.new_version_uuid
+
+
+
+@celery_app.task
+def back_fill_concept_maps_to_simplifier():
+    active_concept_map_versions_to_push = (
+        ConceptMapVersion.get_active_concept_map_versions()
+    )
+    for concept_map_version in active_concept_map_versions_to_push:
+        concept_map_object = ConceptMapVersion(concept_map_version)
+        concept_map_object.to_simplifier()
+
+    return "Active concept map versions back fill to Simplifier complete."
+

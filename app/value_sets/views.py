@@ -418,7 +418,6 @@ def get_value_set_version_published(version_uuid):
     Raises:
         NotFound: If the ValueSet version with the specified UUID is not found.
     """
-    # object_type = "value_set"
     if request.method == "POST":
         force_new = request.values.get("force_new")
         value_set_version = ValueSetVersion.load(version_uuid)
@@ -469,4 +468,4 @@ def push_value_set_version_to_simplifier(version_uuid):
         # Set the 'total' field to the original total
         value_set_to_json["expansion"]["total"] = original_total
     publish_to_simplifier(resource_type, resource_id, value_set_to_json)
-    return jsonify(value_set_to_json)
+    return "Successfully pushed to simplifier", 200

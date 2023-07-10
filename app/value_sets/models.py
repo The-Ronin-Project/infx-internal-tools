@@ -15,10 +15,12 @@ from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
 
 from app.helpers.oci_helper import set_up_object_store
+
 from app.models.codes import Code
 
 import app.concept_maps.models
 import app.models.data_ingestion_registry
+
 from app.terminologies.models import Terminology
 from app.database import get_db, get_elasticsearch
 from flask import current_app
@@ -3052,7 +3054,9 @@ class ValueSetVersion:
         publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
 
         # Publish new version of data normalization registry
+
         app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
+        
 
     @classmethod
     def load_expansion_report(cls, expansion_uuid):

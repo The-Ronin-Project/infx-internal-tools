@@ -11,14 +11,19 @@ from elasticsearch.helpers import bulk
 from sqlalchemy import text
 from dataclasses import dataclass
 from uuid import UUID
-from typing import Optional
+from typing import Optional, List
 from app.database import get_db, get_elasticsearch
+from app.helpers.oci_helper import set_up_object_store
+from app.helpers.simplifier_helper import publish_to_simplifier
 from app.models.codes import Code
+from app.models.data_ingestion_registry import DataNormalizationRegistry
 from app.terminologies.models import (
     Terminology,
     terminology_version_uuid_lookup,
     load_terminology_version_with_cache,
 )
+from operator import itemgetter
+import itertools
 from app.models.use_case import load_use_case_by_value_set_uuid
 
 CONCEPT_MAPS_SCHEMA_VERSION = 3
@@ -988,6 +993,73 @@ class ConceptMapVersion:
         initial_path = f"ConceptMaps/v{CONCEPT_MAPS_SCHEMA_VERSION}/folder/{self.concept_map.uuid}"  # folder is set in oci_helper(determined by api call)
 
         return serialized, initial_path
+
+    def publish(self):
+        """
+        A method to complete the full publication process including pushing to OCI, Simplifier,
+        Normalization Registry and setting status active.
+        @return: n/a
+        """
+        concept_map_version = self
+        (
+            concept_map_to_json,
+            initial_path,
+        ) = self.prepare_for_oci()  # serialize the metadata
+
+        set_up_object_store(
+            concept_map_to_json, initial_path, folder="published"
+        )  # sends to OCI
+        self.version_set_status_active()
+        self.to_simplifier()
+        # Publish new version of data normalization registry
+        DataNormalizationRegistry.publish_data_normalization_registry()
+
+    def to_simplifier(self):
+        """
+        A method to send a concept map version to
+        @return: n/a
+        """
+        concept_map_to_json, initial_path = self.prepare_for_oci()
+        resource_id = concept_map_to_json["id"]
+        resource_type = concept_map_to_json["resourceType"]  # param for Simplifier
+        concept_map_to_json["status"] = "active"  # Simplifier requires status
+        # Check if the 'group' key is present
+        if "group" in concept_map_to_json and len(concept_map_to_json["group"]) > 0:
+            group = concept_map_to_json["group"][0]
+
+            if "element" in group:
+                group["element"] = group["element"][
+                    :50
+                ]  # Limit the 'element' list to the top 50 entries
+
+                for element in group["element"]:
+                    if "target" in element:
+                        element["target"].sort(
+                            key=itemgetter("id", "code")
+                        )  # Sort list of dicts by 'id' and 'code'
+                        element["target"] = list(
+                            target for target, _ in itertools.groupby(element["target"])
+                        )  # Remove duplicates
+        publish_to_simplifier(resource_type, resource_id, concept_map_to_json)
+
+    @classmethod
+    def get_active_concept_map_versions(cls) -> List["ConceptMapVersion"]:
+        """
+        A class method to query the database for active concept map versions.
+        @return: A list on active concept maps version uuids
+        """
+        conn = get_db()
+        data = conn.execute(
+            text(
+                """  
+                SELECT uuid FROM concept_maps.concept_map_version  
+                WHERE status = 'active'  
+                """
+            )
+        )
+
+        active_concept_map_versions = [cls(row.uuid) for row in data]
+        return active_concept_map_versions
 
 
 @dataclass
