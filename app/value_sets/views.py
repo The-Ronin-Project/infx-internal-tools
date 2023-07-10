@@ -12,6 +12,10 @@ from app.helpers.simplifier_helper import (
 )
 from app.models.data_ingestion_registry import DataNormalizationRegistry
 from app.value_sets.models import *
+from app.models.use_case import (
+    load_use_case_by_value_set_uuid,
+    delete_all_use_cases_for_value_set,
+)
 
 value_sets_blueprint = Blueprint("value_sets", import_name=__name__)
 
@@ -68,6 +72,76 @@ def get_all_value_sets_metadata():
             version_description=version_description,
         )
         return jsonify(new_vs.serialize())
+
+
+@value_sets_blueprint.route(
+    "/ValueSets/<string:value_set_uuid>/linked_use_cases", methods=["GET", "POST"]
+)
+def handle_linked_use_cases(value_set_uuid):
+    """
+    Handle GET and POST requests for the linked use case of a value set.
+
+    This endpoint allows users to fetch or overwrite the use case(s) linked to a specified value set.
+
+    Parameters
+    ----------
+    value_set_uuid : str
+        The UUID of the value set for which to fetch or update linked use cases.
+
+    Returns
+    -------
+    Flask Response
+        If the request method is GET, the response will contain a JSON object representing the linked use case(s) of the value set.
+        If the request method is POST, the response will contain a JSON object with a success message.
+
+    Request Body Example (POST)
+    ---------------------------
+    For a POST request, the request body should be a JSON object with the following structure:
+
+    {
+        "primary_use_case": {
+            "description": "SNOMED CT Diabetes",
+            "jira_ticket": "NFX-1376",
+            "name": "INFX-1376",
+            "point_of_contact": "Kurt",
+            "point_of_contact_email": "Kurt@projectronin.com",
+            "status": "active",
+            "uuid": "b06745a1-76de-4974-b795-2cd6413d7d46"
+        },
+        "secondary_use_case": [
+            {
+                "description": "Value sets for derivation service, used primarily by INFX and DP",
+                "jira_ticket": "INFX-2351",
+                "name": "Derivation",
+                "point_of_contact": "Elise Gatsby",
+                "point_of_contact_email": "elise@projectronin.com",
+                "status": "active",
+                "uuid": "bd87b30f-6417-43af-9897-d804ccbf20de"
+            },
+            {
+                "another secondary use case, add as many as needed"
+            }
+        ]
+    }
+
+    The "primary_use_case" field should contain the UUID of the use case that is to be marked as primary for the value set.
+    The "secondary_use_case" field should contain a list of UUIDs of the use cases that are to be marked as secondary for the value set.
+    Both fields are optional and their absence indicates no primary or secondary use cases should be linked to the value set respectively.
+
+    """
+    if request.method == "GET":
+        return jsonify(load_use_case_by_value_set_uuid(value_set_uuid))
+
+    if request.method == "POST":
+        delete_all_use_cases_for_value_set(value_set_uuid)
+
+        primary_use_case = request.json.get("primary_use_case")
+        secondary_use_case = request.json.get("secondary_use_case")
+
+        ValueSet.value_set_use_case_link_set_up(
+            primary_use_case, secondary_use_case, value_set_uuid
+        )
+        return jsonify({"message": "Use case(s) linked to value set successfully"}), 201
 
 
 @value_sets_blueprint.route(

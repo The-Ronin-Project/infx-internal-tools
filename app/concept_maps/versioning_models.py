@@ -169,13 +169,21 @@ class ConceptMapVersionCreator:
                     cr.relationship_code_uuid AS concept_relationship_relationship_code_uuid,
                     cr.target_concept_system_version_uuid,
                     cr.review_comment AS concept_relationship_review_comment,
-                    cr.reviewed_by AS concept_relationship_reviewed_by
+                    cr.reviewed_by AS concept_relationship_reviewed_by,
+                    ctc.depends_on_property,
+                    ctc.depends_on_system,
+                    ctc.depends_on_value,
+                    ctc.depends_on_display
                 FROM
                     concept_maps.source_concept sc
                 LEFT JOIN
                     concept_maps.concept_relationship cr
                 ON
                     sc.uuid = cr.source_concept_uuid
+                LEFT JOIN
+                    custom_terminologies.code ctc
+                ON
+                    sc.custom_terminology_uuid = ctc.uuid
                 WHERE
                     sc.concept_map_version_uuid = :concept_map_version_uuid
                 """
@@ -213,7 +221,11 @@ class ConceptMapVersionCreator:
                 no_map=row.source_concept_no_map,
                 reason_for_no_map=row.source_concept_reason_for_no_map,
                 mapping_group=row.source_concept_mapping_group,
-                concept_map_version_uuid=row.source_concept_map_version_uuid
+                concept_map_version_uuid=row.source_concept_map_version_uuid,
+                depends_on_system=row.depends_on_system,
+                depends_on_property=row.depends_on_property,
+                depends_on_value=row.depends_on_value,
+                depends_on_display=row.depends_on_display
             )
 
             mapping = None
@@ -254,6 +266,10 @@ class ConceptMapVersionCreator:
                 source_concept.code,
                 source_concept.display,
                 source_concept.system.fhir_uri,
+                source_concept.depends_on_display,
+                source_concept.depends_on_property,
+                source_concept.depends_on_system,
+                source_concept.depends_on_value,
             )
 
             if lookup_key not in response:
@@ -375,6 +391,10 @@ class ConceptMapVersionCreator:
                 new_source_concept.code,
                 new_source_concept.display,
                 new_source_concept.system.fhir_uri,
+                new_source_concept.depends_on_display,
+                new_source_concept.depends_on_property,
+                new_source_concept.depends_on_system,
+                new_source_concept.depends_on_value,
             )
 
             if source_lookup_key not in previous_sources_and_mappings:
@@ -394,8 +414,8 @@ class ConceptMapVersionCreator:
                     comments=previous_source_concept.comments,
                     additional_context=previous_source_concept.additional_context,
                     map_status=previous_source_concept.map_status,
-                    assigned_mapper=str(previous_source_concept.assigned_mapper),
-                    assigned_reviewer=str(previous_source_concept.assigned_reviewer),
+                    assigned_mapper=previous_source_concept.assigned_mapper,
+                    assigned_reviewer=previous_source_concept.assigned_reviewer,
                     no_map=previous_source_concept.no_map,
                     reason_for_no_map=previous_source_concept.reason_for_no_map,
                     mapping_group=previous_source_concept.mapping_group,

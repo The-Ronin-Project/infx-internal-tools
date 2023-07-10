@@ -15,16 +15,18 @@ from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
 
 from app.helpers.oci_helper import set_up_object_store
-from app.helpers.simplifier_helper import publish_to_simplifier
+
 from app.models.codes import Code
 
 import app.concept_maps.models
-from app.models.data_ingestion_registry import DataNormalizationRegistry
+import app.models.data_ingestion_registry
+
 from app.terminologies.models import Terminology
 from app.database import get_db, get_elasticsearch
 from flask import current_app
+from app.helpers.simplifier_helper import publish_to_simplifier
 
-from app.models.use_case import load_use_case_by_value_set_uuid
+from app.models.use_case import load_use_case_by_value_set_uuid, UseCase
 
 VALUE_SET_SCHEMA_VERSION = 2
 
@@ -1341,6 +1343,8 @@ class ValueSet:
         purpose,
         vs_type,
         synonyms={},
+        primary_use_case=None,
+        secondary_use_cases=[],
     ):
         """Initializes the value set with the given attributes.
 
@@ -1372,6 +1376,8 @@ class ValueSet:
         self.purpose = purpose
         self.type = vs_type
         self.synonyms = synonyms
+        self.primary_use_case = primary_use_case
+        self.secondary_use_cases = secondary_use_cases
 
     @classmethod
     def create(
@@ -1388,18 +1394,64 @@ class ValueSet:
         effective_start,
         effective_end,
         version_description,
-        use_case_uuid=None,
+        primary_use_case=None,
+        secondary_use_case=[],
     ):
+        """
+        Class method to create a new ValueSet entry in the database.
+
+        This method generates a new UUID, creates an entry in the `value_sets.value_set` table with the provided attributes,
+        commits the transaction, sets up the link between the value set and its use cases, creates a new version of the
+        value set in the `value_sets.value_set_version` table, commits the transaction, and returns the loaded value set.
+
+        Parameters
+        ----------
+        name : str
+            The name of the ValueSet.
+        title : str
+            The title of the ValueSet.
+        publisher : str
+            The publisher of the ValueSet.
+        contact : str
+            The contact information for the ValueSet.
+        value_set_description : str
+            The description of the ValueSet.
+        immutable : bool
+            Specifies whether the ValueSet is immutable.
+        experimental : bool
+            Specifies whether the ValueSet is experimental.
+        purpose : str
+            The purpose of the ValueSet.
+        vs_type : str
+            The type of the ValueSet.
+        effective_start : datetime
+            The effective start date of the ValueSet version.
+        effective_end : datetime
+            The effective end date of the ValueSet version.
+        version_description : str
+            The description of the ValueSet version.
+        primary_use_case : str, optional
+            The primary use case of the ValueSet.
+        secondary_use_case : list, optional
+            The secondary use cases of the ValueSet.
+
+        Returns
+        -------
+        ValueSet
+            The newly created ValueSet instance loaded from the database.
+
+        """
         conn = get_db()
         vs_uuid = uuid.uuid4()
 
+        # Insert the value_set into the value_sets.value_set table
         conn.execute(
             text(
-                """
-                insert into value_sets.value_set
-                (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type, use_case_uuid)
-                values
-                (:uuid, :name, :title, :publisher, :contact, :value_set_description, :immutable, :experimental, :purpose, :vs_type, :use_case_uuid)
+                """  
+                insert into value_sets.value_set  
+                (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type)  
+                values  
+                (:uuid, :name, :title, :publisher, :contact, :value_set_description, :immutable, :experimental, :purpose, :vs_type)  
                 """
             ),
             {
@@ -1413,18 +1465,24 @@ class ValueSet:
                 "experimental": experimental,
                 "purpose": purpose,
                 "vs_type": vs_type,
-                "use_case_uuid": use_case_uuid,
             },
         )
         conn.execute(text("commit"))
+
+        # Call to insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
+        cls.value_set_use_case_link_set_up(
+            primary_use_case, secondary_use_case, vs_uuid
+        )
+
+        # Insert the value_set_version into the value_sets.value_set_version table
         new_version_uuid = uuid.uuid4()
         conn.execute(
             text(
-                """
-                insert into value_sets.value_set_version
-                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)
-                values
-                (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :version_description, :created_date, :version)
+                """  
+                insert into value_sets.value_set_version  
+                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)  
+                values  
+                (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :version_description, :created_date, :version)  
                 """
             ),
             {
@@ -1439,6 +1497,7 @@ class ValueSet:
             },
         )
         conn.execute(text("commit"))
+
         return cls.load(vs_uuid)
 
     @classmethod
@@ -1465,6 +1524,8 @@ class ValueSet:
         )
         synonyms = {x.context: x.synonym for x in synonym_data}
 
+        primary_use_case, secondary_use_cases = load_use_case_by_value_set_uuid(vs_uuid)
+
         value_set = cls(
             vs_data.uuid,
             vs_data.name,
@@ -1477,10 +1538,15 @@ class ValueSet:
             vs_data.purpose,
             vs_data.type,
             synonyms,
+            primary_use_case,
+            secondary_use_cases,
         )
         return value_set
 
     def serialize(self):
+        use_case_info = load_use_case_by_value_set_uuid(self.uuid)
+        # Extract the names from use_case_info
+        use_case_names = [uc.name for uc in use_case_info] if use_case_info else []
         return {
             "uuid": self.uuid,
             "name": self.name,
@@ -1492,6 +1558,7 @@ class ValueSet:
             "experimental": self.experimental,
             "purpose": self.purpose,
             "type": self.type,
+            "use case names": use_case_names,
         }
 
     def delete(self):
@@ -1506,10 +1573,20 @@ class ValueSet:
             ),
             {"uuid": str(self.uuid)},
         ).first()
-        # reject if has version
+
+        use_case_info = load_use_case_by_value_set_uuid(self.uuid)
+        # Extract the names from use_case_info
+        use_case_names = [uc.name for uc in use_case_info] if use_case_info else []
+
+        # reject request if has version
         if vs_version_data is not None:
             raise BadRequest(
-                "ValueSet version is not eligible for deletion because there is an associated version"
+                "ValueSet is not eligible for deletion because there is an associated version"
+            )
+        # reject request if has use case
+        elif len(use_case_names) > 0:
+            raise BadRequest(
+                "ValueSet is not eligible for deletion because there are associated uses cases"
             )
         else:
             conn.execute(
@@ -1547,8 +1624,13 @@ class ValueSet:
                 """
                 )
             )
+        value_sets_metadata = []
+        for x in results:
+            use_case_info = load_use_case_by_value_set_uuid(x.uuid)
+            # Extract the names from use_case_info
+            use_case_names = [uc.name for uc in use_case_info] if use_case_info else []
 
-        return [
+        value_sets_metadata.append(
             {
                 "uuid": x.uuid,
                 "name": x.name,
@@ -1560,9 +1642,11 @@ class ValueSet:
                 "experimental": x.experimental,
                 "purpose": x.purpose,
                 "type": x.type,
+                "use_case_names": use_case_names,  # Add use_case_names to the dictionary
             }
-            for x in results
-        ]
+        )
+
+        return value_sets_metadata
 
     @classmethod
     def load_all_value_sets_by_status(cls, status):
@@ -1934,6 +2018,21 @@ class ValueSet:
             new_value_set_version.update(status="pending")
             return "pending"
 
+    @staticmethod
+    def value_set_use_case_link_set_up(
+        primary_use_case, secondary_use_cases, value_set_uuid
+    ):
+        # Insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
+        if primary_use_case is not None:
+            UseCase.save_value_set_link(
+                primary_use_case, value_set_uuid, is_primary=True
+            )
+
+        for secondary_use_case in secondary_use_cases:
+            UseCase.save_value_set_link(
+                secondary_use_case, value_set_uuid, is_primary=False
+            )
+
 
 class RuleGroup:
     def __init__(self, vs_version_uuid, rule_group_id):
@@ -2297,10 +2396,13 @@ class ValueSetVersion:
         self.extensional_codes = {}
         self.explicitly_included_codes = []
 
+    def __repr__(self):
+        return f"<ValueSetVersion uuid={self.uuid}, title={self.value_set.title}, version={self.version}>"
+
     @classmethod
     def create(
         cls,
-        efective_start,
+        effective_start,
         effective_end,
         value_set_uuid,
         status,
@@ -2316,14 +2418,14 @@ class ValueSetVersion:
             text(
                 """
                 insert into value_sets.value_set_version
-                (uuid, efective_start, effective_end, value_set_uuid, status, description, created_date, version, comments)
+                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version, comments)
                 values
-                (:uuid, :efective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version, :comments)
+                (:uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version, :comments)
                 """
             ),
             {
                 "uuid": vsv_uuid,
-                "efective_start": efective_start,
+                "effective_start": effective_start,
                 "effective_end": effective_end,
                 "value_set_uuid": value_set_uuid,
                 "status": status,
@@ -2338,6 +2440,8 @@ class ValueSetVersion:
 
     @classmethod
     def load(cls, uuid):
+        if uuid is None:
+            raise Exception("Cannot load a Value Set Version with None as uuid")
         conn = get_db()
         vs_version_data = conn.execute(
             text(
@@ -2705,6 +2809,21 @@ class ValueSetVersion:
             return []
 
     def serialize(self):
+        """
+        Transform the ValueSet instance into a dictionary in a format suitable for serialization.
+
+        This method is primarily used to convert the instance into a format that can be easily serialized into JSON.
+        This includes converting complex data types into simple data types that can be serialized.
+
+        It also applies specific transformations to the data to ensure it meets the RCDM-compliant format,
+        including generating a compliant name for the ValueSet, and transforming use case names into the required format.
+
+        Returns
+        -------
+        dict
+            The dictionary representing the serialized state of the ValueSet instance.
+
+        """
         pattern = r"[A-Z]([A-Za-z0-9_]){0,254}"  # name transformer
         if re.match(pattern, self.value_set.name):  # name follows pattern use name
             rcdm_name = self.value_set.name
@@ -2717,8 +2836,28 @@ class ValueSetVersion:
                 + self.value_set.name[index].upper()
                 + self.value_set.name[index + 1 :]
             )
-        use_case = load_use_case_by_value_set_uuid(self.value_set.uuid)
-        use_case_name = use_case.name if use_case else "unknown"
+
+        # Load the primary and secondary use cases associated with the value set
+        use_cases = load_use_case_by_value_set_uuid(self.value_set.uuid)
+
+        primary_use_case_name = (
+            [use_cases["primary_use_case"].name]
+            if use_cases["primary_use_case"]
+            else []
+        )
+        secondary_use_case_names = [uc.name for uc in use_cases["secondary_use_cases"]]
+        all_use_case_names = primary_use_case_name + secondary_use_case_names
+
+        # Transform the use case names into the RCDM-compliant format
+        use_case_coding = [
+            {
+                "code": use_case_name,  # the value will be the use case name
+            }
+            for use_case_name in all_use_case_names
+        ]
+        if not use_case_coding:
+            use_case_coding = [{"code": "unknown"}]
+
         serialized = {
             "resourceType": "ValueSet",
             "id": str(self.value_set.uuid),
@@ -2750,11 +2889,7 @@ class ValueSetVersion:
                         "display": "Workflow Setting",
                     },
                     "valueCodeableConcept": {
-                        "coding": [
-                            {
-                                "code": use_case_name,  # the value will be the use case name
-                            }
-                        ],
+                        "coding": use_case_coding,
                     },
                 }
             ],
@@ -2919,7 +3054,9 @@ class ValueSetVersion:
         publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
 
         # Publish new version of data normalization registry
-        DataNormalizationRegistry.publish_data_normalization_registry()
+
+        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
+        
 
     @classmethod
     def load_expansion_report(cls, expansion_uuid):
@@ -3116,6 +3253,8 @@ class ValueSetVersion:
         Returns:
             A list of unique Terminology objects found in the expansion set.
         """
+        if not self.expansion:
+            self.expand()
 
         terminologies: Dict[Tuple[str, str], Terminology] = dict()
 
