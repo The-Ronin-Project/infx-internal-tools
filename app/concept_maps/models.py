@@ -16,7 +16,7 @@ from app.database import get_db, get_elasticsearch
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.models.codes import Code
-from app.models.data_ingestion_registry import DataNormalizationRegistry
+import app.models.data_ingestion_registry
 from app.terminologies.models import (
     Terminology,
     terminology_version_uuid_lookup,
@@ -1012,7 +1012,7 @@ class ConceptMapVersion:
         self.version_set_status_active()
         self.to_simplifier()
         # Publish new version of data normalization registry
-        DataNormalizationRegistry.publish_data_normalization_registry()
+        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
 
     def to_simplifier(self):
         """
@@ -1164,15 +1164,17 @@ class SourceConcept:
         )
 
     def __hash__(self):
-        return hash((
-            self.uuid,
-            self.code,
-            self.display,
-            self.system,
-            self.depends_on_property,
-            self.depends_on_system,
-            self.depends_on_value,
-            self.depends_on_display)
+        return hash(
+            (
+                self.uuid,
+                self.code,
+                self.display,
+                self.system,
+                self.depends_on_property,
+                self.depends_on_system,
+                self.depends_on_value,
+                self.depends_on_display,
+            )
         )
 
     @property
@@ -1206,7 +1208,7 @@ class SourceConcept:
                 WHERE uuid = :uuid
             """
         )
-        result = conn.execute(query, {'uuid': str(source_concept_uuid)}).fetchone()
+        result = conn.execute(query, {"uuid": str(source_concept_uuid)}).fetchone()
 
         if result:
             return cls(
