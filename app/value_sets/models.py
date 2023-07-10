@@ -2835,13 +2835,15 @@ class ValueSetVersion:
                 + self.value_set.name[index + 1 :]
             )
 
-        # Load the names of all use cases associated with the value set
+        # Load the primary and secondary use cases associated with the value set
+        use_cases = load_use_case_by_value_set_uuid(self.value_set.uuid)
+
         primary_use_case_name = (
-            [self.value_set.primary_use_case.name]
-            if self.value_set.primary_use_case
+            [use_cases["primary_use_case"].name]
+            if use_cases["primary_use_case"]
             else []
         )
-        secondary_use_case_names = [x.name for x in self.value_set.secondary_use_cases]
+        secondary_use_case_names = [uc.name for uc in use_cases["secondary_use_cases"]]
         all_use_case_names = primary_use_case_name + secondary_use_case_names
 
         # Transform the use case names into the RCDM-compliant format
