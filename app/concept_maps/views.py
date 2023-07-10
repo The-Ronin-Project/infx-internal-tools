@@ -251,6 +251,7 @@ def get_concept_map_version_published(version_uuid):
             )
         )
         concept_map_version.version_set_status_active()
+        concept_map_version.retire_and_obsolete_previous_version()
         resource_type = "ConceptMap"  # param for Simplifier
         concept_map_to_json_copy["status"] = "active"
         publish_to_simplifier(resource_type, concept_map_uuid, concept_map_to_json_copy)

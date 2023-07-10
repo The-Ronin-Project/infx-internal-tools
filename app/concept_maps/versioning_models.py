@@ -213,7 +213,7 @@ class ConceptMapVersionCreator:
                 no_map=row.source_concept_no_map,
                 reason_for_no_map=row.source_concept_reason_for_no_map,
                 mapping_group=row.source_concept_mapping_group,
-                concept_map_version_uuid=row.source_concept_map_version_uuid
+                concept_map_version_uuid=row.source_concept_map_version_uuid,
             )
 
             mapping = None
@@ -233,7 +233,7 @@ class ConceptMapVersionCreator:
                     display=row.target_concept_display,
                     system=None,
                     version=None,
-                    terminology_version=target_system
+                    terminology_version=target_system,
                 )
 
                 mapping = Mapping(
@@ -423,9 +423,11 @@ class ConceptMapVersionCreator:
 
                         if target_lookup_key not in new_targets_lookup:
                             # Append previous context to list in case multiple mappings which need to save it
-                            previous_context_for_row = self.process_inactive_target_mapping(
-                                new_source_concept=new_source_concept,
-                                previous_mapping=previous_mapping,
+                            previous_context_for_row = (
+                                self.process_inactive_target_mapping(
+                                    new_source_concept=new_source_concept,
+                                    previous_mapping=previous_mapping,
+                                )
                             )
                             previous_mapping_context.append(previous_context_for_row)
                         else:
@@ -456,7 +458,7 @@ class ConceptMapVersionCreator:
                             conn=self.conn,
                             previous_version_context=json.dumps(
                                 previous_mapping_context, cls=CustomJSONEncoder
-                            )
+                            ),
                         )
 
         self.conn.execute(text("commit"))
