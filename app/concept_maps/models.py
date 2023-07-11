@@ -734,7 +734,28 @@ class ConceptMapVersion:
 
     def version_set_status_active(self):
         """
-        This method updates the status of the concept map, identified by its UUID, to 'active'.
+        Sets the status of this concept map version to 'active' in the database.
+
+        This method updates the status of this instance of a concept map version in the
+        'concept_maps.concept_map_version' table in the database, setting it to 'active'.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        Any exceptions raised by the database operation will propagate up to the caller.
+
+        Notes
+        -----
+        This method directly modifies the database and does not return a value. The database connection
+        is obtained from the `get_db` function. The 'status' field of the concept map version specified
+        by `self.uuid` is updated.
         """
 
         conn = get_db()
@@ -750,6 +771,60 @@ class ConceptMapVersion:
                 "status": "active",
                 "version_uuid": self.uuid,
             },
+        )
+
+    def retire_and_obsolete_previous_version(self):
+        """
+        Updates the status of previous versions of a concept map in the database.
+
+        This method sets the status of previous 'active' versions of the same concept map to 'retired',
+        and sets the status of 'pending', 'in progress', and 'reviewed' versions to 'obsolete'. This is
+        based on the current instance of the concept map version's UUID and the associated concept map's UUID.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        Any exceptions raised by the database operation will propagate up to the caller.
+
+        Notes
+        -----
+        This method directly modifies the 'concept_maps.concept_map_version' table in the database.
+        It does not return a value. The database connection is obtained from the `get_db` function.
+        The 'status' field of the previous versions of the same concept map, excluding the current
+        version (identified by `self.uuid`), are updated.
+        """
+
+        conn = get_db()
+        conn.execute(
+            text(
+                """
+                update concept_maps.concept_map_version
+                set status = 'retired'
+                where status = 'active'
+                and concept_map_uuid =:concept_map_uuid
+                and uuid !=:version_uuid
+                """
+            ),
+            {"concept_map_uuid": self.concept_map.uuid, "version_uuid": self.uuid},
+        )
+        conn.execute(
+            text(
+                """
+                update concept_maps.concept_map_version
+                set status = 'obsolete'
+                where status in ('pending','in progress','reviewed')
+                and concept_map_uuid =:concept_map_uuid
+                and uuid !=:version_uuid
+                """
+            ),
+            {"concept_map_uuid": self.concept_map.uuid, "version_uuid": self.uuid},
         )
 
     def serialize_mappings(self):
@@ -1010,6 +1085,7 @@ class ConceptMapVersion:
             concept_map_to_json, initial_path, folder="published"
         )  # sends to OCI
         self.version_set_status_active()
+        self.retire_and_obsolete_previous_version()
         self.to_simplifier()
         # Publish new version of data normalization registry
         app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
