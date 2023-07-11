@@ -4,6 +4,8 @@ import json
 from app.database import get_db
 from sqlalchemy import text
 import app.terminologies.models
+from dataclasses import dataclass
+from typing import List
 from app.errors import BadRequestWithCode
 
 
@@ -276,3 +278,9 @@ class Code:
             serialized["system_name"] = self.system_name
 
         return serialized
+
+
+@dataclass
+class CodeableConcept:
+    coding: List[Code]
+    text: str

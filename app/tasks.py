@@ -84,6 +84,10 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
     )
     return version_creator.new_version_uuid
 
+    #todo: Step 10: Automap the new codes
+    # todo: we need a way to identify the brand new sources, likely this will require a diff mechanism on sources
+
+
 
 
 @celery_app.task
