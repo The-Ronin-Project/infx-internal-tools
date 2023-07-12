@@ -21,7 +21,7 @@ jobs:
   application-image:
     if: github.ref == 'refs/heads/master'
     name: Push multiplatform application image to Nexus
-    uses: projectronin/github/.github/workflows/image_push_nexus.yml@main
+    uses: projectronin/github/.github/workflows/image_push_nexus.yml@image_push_nexus/v4
     needs:
       - test
     with:
