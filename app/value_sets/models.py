@@ -1546,7 +1546,17 @@ class ValueSet:
     def serialize(self):
         use_case_info = load_use_case_by_value_set_uuid(self.uuid)
         # Extract the names from use_case_info
-        use_case_names = [uc.name for uc in use_case_info] if use_case_info else []
+        use_case_names = []
+        # Check if primary_use_case exists and if so, add its name to use_case_names
+        primary_use_case = use_case_info.get("primary_use_case")
+        if primary_use_case is not None:
+            use_case_names.append(primary_use_case.name)
+
+        # Check if secondary_use_cases exists and if so, iterate through and add their names to use_case_names
+        secondary_use_cases = use_case_info.get("secondary_use_cases")
+        if secondary_use_cases:
+            for use_case in secondary_use_cases:
+                use_case_names.append(use_case.name)
         return {
             "uuid": self.uuid,
             "name": self.name,
@@ -2032,6 +2042,66 @@ class ValueSet:
             UseCase.save_value_set_link(
                 secondary_use_case, value_set_uuid, is_primary=False
             )
+
+    @staticmethod
+    def get_value_sets_from_use_case(use_case_uuid):
+        """
+        Retrieves all value sets associated with a specific use case.
+
+        This static method retrieves all value set rows from the 'value_sets.value_set' table
+        that are linked to the specified use case via the 'value_sets.value_set_use_case_link' table.
+
+        Parameters
+        ----------
+        use_case_uuid : uuid.UUID
+            The unique identifier of the use case to retrieve associated value sets for.
+
+        Returns
+        -------
+        list of ValueSet
+            A list of ValueSet instances, each representing a value set associated with the specified use case.
+            If the use case is not linked to any value sets, the returned list is empty.
+
+        Raises
+        ------
+        Any exceptions raised by the database operation will propagate up to the caller.
+
+        Notes
+        -----
+        The returned value sets are created as instances of the ValueSet class, with the attributes
+        of each instance populated from the corresponding row in the 'value_sets.value_set' table.
+        The database connection is obtained from the `get_db` function.
+        """
+        conn = get_db()
+        query = conn.execute(
+            text(
+                """
+                    SELECT vs.*
+                    FROM value_sets.value_set AS vs
+                    INNER JOIN value_sets.value_set_use_case_link AS link
+                    ON vs.uuid = link.value_set_uuid
+                    WHERE link.use_case_uuid =:use_case_uuid
+                """
+            ),
+            {"use_case_uuid": use_case_uuid},
+        )
+        value_sets_associated = query.fetchall()
+        value_sets = [
+            ValueSet(
+                uuid=value_set_item.uuid,
+                name=value_set_item.name,
+                title=value_set_item.title,
+                publisher=value_set_item.publisher,
+                contact=value_set_item.contact,
+                description=value_set_item.description,
+                immutable=value_set_item.immutable,
+                experimental=value_set_item.experimental,
+                purpose=value_set_item.purpose,
+                vs_type=value_set_item.type,
+            )
+            for value_set_item in value_sets_associated
+        ]
+        return value_sets
 
 
 class RuleGroup:
@@ -3056,7 +3126,6 @@ class ValueSetVersion:
         # Publish new version of data normalization registry
 
         app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
-        
 
     @classmethod
     def load_expansion_report(cls, expansion_uuid):

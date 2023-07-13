@@ -144,6 +144,15 @@ def handle_linked_use_cases(value_set_uuid):
         return jsonify({"message": "Use case(s) linked to value set successfully"}), 201
 
 
+@value_sets_blueprint.route("/ValueSets/by_use_cases", methods=["GET"])
+def get_value_sets_by_use_case():
+    use_case_uuid = request.args.get("use_case_uuid")
+    value_sets = ValueSet.get_value_sets_from_use_case(use_case_uuid)
+    serialized_value_sets = [item.serialize() for item in value_sets]
+
+    return jsonify(serialized_value_sets)
+
+
 @value_sets_blueprint.route(
     "/ValueSets/<string:identifier>/duplicate", methods=["POST"]
 )
