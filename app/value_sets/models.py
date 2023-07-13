@@ -2045,6 +2045,33 @@ class ValueSet:
 
     @staticmethod
     def get_value_sets_from_use_case(use_case_uuid):
+        """
+        Retrieves all value sets associated with a specific use case.
+
+        This static method retrieves all value set rows from the 'value_sets.value_set' table
+        that are linked to the specified use case via the 'value_sets.value_set_use_case_link' table.
+
+        Parameters
+        ----------
+        use_case_uuid : uuid.UUID
+            The unique identifier of the use case to retrieve associated value sets for.
+
+        Returns
+        -------
+        list of ValueSet
+            A list of ValueSet instances, each representing a value set associated with the specified use case.
+            If the use case is not linked to any value sets, the returned list is empty.
+
+        Raises
+        ------
+        Any exceptions raised by the database operation will propagate up to the caller.
+
+        Notes
+        -----
+        The returned value sets are created as instances of the ValueSet class, with the attributes
+        of each instance populated from the corresponding row in the 'value_sets.value_set' table.
+        The database connection is obtained from the `get_db` function.
+        """
         conn = get_db()
         query = conn.execute(
             text(
