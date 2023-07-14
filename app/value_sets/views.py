@@ -144,6 +144,13 @@ def handle_linked_use_cases(value_set_uuid):
         return jsonify({"message": "Use case(s) linked to value set successfully"}), 201
 
 
+@value_sets_blueprint.route("/ValueSets/clear/linked_use_cases", methods=["DELETE"])
+def clear_and_leave_blank():
+    value_set_uuid = request.args.get("value_set_uuid")
+    delete_all_use_cases_for_value_set(value_set_uuid)
+    return "Links cleared"
+
+
 @value_sets_blueprint.route("/ValueSets/by_use_cases", methods=["GET"])
 def get_value_sets_by_use_case():
     use_case_uuid = request.args.get("use_case_uuid")
