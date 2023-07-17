@@ -286,6 +286,80 @@ def load_use_case_by_value_set_uuid(
     }
 
 
+def update_primary_use_case(value_set_uuid, new_primary_use_case_uuid):
+    """
+    Update the primary use case associated with a specific value set in the database.
+
+    This function connects to the database and executes two SQL UPDATE queries:
+    1. The first query sets the `is_primary` field of the current primary use case to False.
+    2. The second query sets the `is_primary` field of the new primary use case to True.
+
+    Both updates are performed in the context of a specific value set, identified by `value_set_uuid`.
+
+    Parameters
+    ----------
+    value_set_uuid : str
+        The unique identifier for the value set.
+
+    new_primary_use_case_uuid : str
+        The unique identifier for the use case that is to be set as the new primary.
+
+    Returns
+    -------
+    None
+    """
+    conn = get_db()
+
+    # Query to get the current primary use case
+    get_current_primary_query = conn.execute(
+        text(
+            """
+            SELECT use_case_uuid
+            FROM value_sets.value_set_use_case_link
+            WHERE value_set_uuid = :value_set_uuid
+            AND is_primary = True
+            """
+        ),
+        {"value_set_uuid": value_set_uuid},
+    )
+
+    old_primary_result = get_current_primary_query.first()
+
+    # Query to set old primary use case is_primary to False
+    if old_primary_result is not None:
+        old_primary_use_case_uuid = old_primary_result[0]
+        set_old_query = conn.execute(
+            text(
+                """
+                UPDATE value_sets.value_set_use_case_link
+                SET is_primary = False
+                WHERE use_case_uuid = :old_primary_use_case_uuid
+                AND value_set_uuid = :value_set_uuid
+                """
+            ),
+            {
+                "value_set_uuid": value_set_uuid,
+                "old_primary_use_case_uuid": old_primary_use_case_uuid,
+            },
+        )
+
+    # Query to set new primary use case is_primary to True
+    set_new_query = conn.execute(
+        text(
+            """
+            UPDATE value_sets.value_set_use_case_link
+            SET is_primary = True
+            WHERE use_case_uuid = :new_primary_use_case_uuid
+            AND value_set_uuid = :value_set_uuid
+            """
+        ),
+        {
+            "value_set_uuid": value_set_uuid,
+            "new_primary_use_case_uuid": new_primary_use_case_uuid,
+        },
+    )
+
+
 def delete_all_use_cases_for_value_set(value_set_uuid: uuid.UUID) -> None:
     """
     Deletes all the use cases associated with a specific value set from the database.

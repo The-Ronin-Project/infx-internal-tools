@@ -94,6 +94,34 @@ def create_app(script_info=None):
             all_cases = UseCase.load_all_use_cases()
             return jsonify(all_cases)
 
+    @app.route("/usecase/update_primary", methods=["POST"])
+    def update_primary_route():
+        """
+        Flask route to update the primary use case association for a given value set.
+
+        This route receives a JSON payload with the UUIDs of the value set,
+        the old primary use case, and the new primary use case. It then calls the
+        `update_primary_use_case` function with these UUIDs to perform the update in the database.
+
+        After the update, it returns a JSON response with a success message.
+
+        JSON Payload:
+        {
+            "value_set_uuid": "<UUID of the value set>",
+            "new_primary_use_case_uuid": "<UUID of the use case that is to be set as primary>"
+        }
+
+        Returns:
+        {
+            "message": "Primary updated successfully"
+        }, HTTP status code 200
+        """
+        data = request.json
+        update_primary_use_case(
+            data.get("value_set_uuid"), data.get("new_primary_use_case_uuid")
+        )
+        return jsonify({"message": "Primary updated successfully"}), 200
+
     # Teams Endpoints
     @app.route("/teams/", methods=["GET"])
     def teams_registry():
