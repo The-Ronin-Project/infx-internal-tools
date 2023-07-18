@@ -95,7 +95,7 @@ def create_app(script_info=None):
             return jsonify(all_cases)
 
     @app.route("/usecase/update_primary", methods=["POST"])
-    def update_primary_route():
+    def update_is_primary():
         """
         Flask route to update the primary use case association for a given value set.
 
