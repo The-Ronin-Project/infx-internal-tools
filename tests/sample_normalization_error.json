@@ -10,5 +10,17 @@
       "update_dt_tm": null,
       "reprocess_dt_tm": null,
       "reprocessed_by": null
+  },
+    {
+      "id": "d4e05c77-6cdf-4313-b35a-b942630c3b2c",
+      "organization_id": "ronin",
+      "resource_type": "Observation",
+      "resource": "Replace w/ Resource JSON",
+      "status": "REPORTED",
+      "severity": "FAILED",
+      "create_dt_tm": "2023-07-18T21:45:10.173667Z",
+      "update_dt_tm": null,
+      "reprocess_dt_tm": null,
+      "reprocessed_by": null
   }
 ]

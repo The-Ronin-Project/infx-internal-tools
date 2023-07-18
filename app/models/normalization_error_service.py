@@ -218,9 +218,12 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
         if error_service_resource.resource_type == ResourceType.CONDITION:
             raw_resource = json.loads(error_service_resource.resource)
             raw_coding = raw_resource["code"]
+        elif error_service_resource.resource_type == ResourceType.OBSERVATION:
+            raw_resource = json.loads(error_service_resource.resource)
+            raw_coding = raw_resource["code"]
         else:
             raise NotImplementedError(
-                "Only support for Conditions has been implemented"
+                "Support for the given resource type has not been implemented"
             )
 
         # Lookup the concept map version used to normalize this type of resource

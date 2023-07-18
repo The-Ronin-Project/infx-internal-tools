@@ -32,16 +32,32 @@ from app.database import get_db
 #     return [concept1, concept2]
 
 
-def generate_mock_error_resources():
+def generate_mock_error_resources(resource_type):
     # Load the error template
     with open("sample_normalization_error.json") as sample_normalization_error_file:
         sample_normalization_error = sample_normalization_error_file.read()
         sample_normalization_error_json = json.loads(sample_normalization_error)
 
-    # Generate mock condition
-    with open("sample_condition_encounter_diagnosis.json") as sample_condition_file:
-        sample_condition = sample_condition_file.read()
-        sample_condition_json = json.loads(sample_condition)
+        # Generate mock resource
+    if resource_type == app.models.normalization_error_service.ResourceType.CONDITION:
+        with open("sample_condition_encounter_diagnosis.json") as sample_resource_file:
+            sample_resource = sample_resource_file.read()
+    elif (
+        resource_type == app.models.normalization_error_service.ResourceType.OBSERVATION
+    ):
+        with open(
+            "sample_observation.json"
+        ) as sample_resource_file:  # Replace with your actual observation sample file
+            sample_resource = sample_resource_file.read()
+    else:
+        raise NotImplementedError(
+            "Support for the given resource type has not been implemented"
+        )
+
+    sample_resource_json = json.loads(sample_resource)
+
+    # Replace the resource type
+    sample_resource_json["resourceType"] = resource_type.value
 
     # Replace the coding array w/ our new failing codes
     new_coding_array = {
@@ -55,8 +71,8 @@ def generate_mock_error_resources():
         ],
         "text": f"Test Concept {datetime.datetime.now()}",
     }
-    sample_condition_json["code"] = new_coding_array
-    serialized_sample_condition = json.dumps(sample_condition_json)
+    sample_resource_json["code"] = new_coding_array
+    serialized_sample_condition = json.dumps(sample_resource_json)
 
     # Put the mock condition inside the error template
     sample_normalization_error_json[0]["resource"] = serialized_sample_condition
@@ -82,19 +98,21 @@ def test_incremental_load_integration(mock_request):
     conn = get_db()
     organization = Organization(id="ronin")
 
-    #
-    # PART 1: Loading from Errors to Custom Terminology
-    #
+    # Loop through both Condition and Observation resource types
+    for resource_type in (
+        app.models.normalization_error_service.ResourceType.CONDITION,
+        app.models.normalization_error_service.ResourceType.OBSERVATION,
+    ):
+        #
+        # PART 1: Loading from Errors to Custom Terminology
+        #
 
-    # Set up the mock error response
-    # Specifying the resource type as CONDITION
-    resource_type = app.models.normalization_error_service.ResourceType.CONDITION
+        # Generate our mock response for Get Resources API call from Error Service
+        mock_resources = generate_mock_error_resources(resource_type)
+        mock_issues = generate_mock_error_issues()
 
-    # Generate our mock response for Get Resources API call from Error Service
-    mock_resources = generate_mock_error_resources()
-    mock_issues = generate_mock_error_issues()
+        # Setup our mock responses
 
-    # Setup our mock responses
     def side_effect(token, base_url, api_url, params):
         if api_url == "/resources":
             return mock_resources
