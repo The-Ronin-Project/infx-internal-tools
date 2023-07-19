@@ -94,7 +94,16 @@ def create_app(script_info=None):
             all_cases = UseCase.load_all_use_cases()
             return jsonify(all_cases)
 
-    # Teams Endpoints
+    @app.route("/usecases_from_team/", methods=["GET"])
+    def get_use_cases_from_team():
+        if request.method == "GET":
+            team_uuid_str = request.values.get("team_uuid")
+            team_uuid = uuid.UUID(team_uuid_str)
+            associated_use_cases = get_use_case_by_team(team_uuid)
+            return jsonify(associated_use_cases)
+
+            # Teams Endpoints
+
     @app.route("/teams/", methods=["GET"])
     def teams_registry():
         if request.method == "GET":
