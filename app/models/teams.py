@@ -169,9 +169,9 @@ def get_use_case_by_team(team_uuid: uuid.UUID):
         ),
         {"team_uuid": team_uuid},
     )
-    use_case_uuid_results = [query.fetchall()]
+    use_case_uuid_results = query.fetchall()
     use_case_list = []
-    for use_case_uuid in use_case_uuid_results:
+    for (use_case_uuid,) in use_case_uuid_results:
         use_case_list.append(UseCase.load_use_case_by_uuid(use_case_uuid))
     return use_case_list
 
