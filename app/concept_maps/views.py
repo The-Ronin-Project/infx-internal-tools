@@ -126,7 +126,7 @@ def create_initial_concept_map_and_version_one():
             source_value_set_version_uuid=source_value_set_version_uuid,
             target_value_set_version_uuid=target_value_set_version_uuid,
         )
-        return jsonify(ConceptMap.serialize(new_cm))
+        return jsonify(new_cm.serialize())
     elif request.method == "GET":
         concept_map_uuid = request.values.get("concept_map_uuid")
         version = request.values.get("version")
