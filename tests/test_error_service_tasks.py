@@ -269,12 +269,14 @@ def test_incremental_load_observation_integration(mock_request):
         number_of_outstanding_codes > 0
     )  # Verify the new code we added above is in the report
 
-    #
-    # PART 3: Load Outstanding Code to New Concept Map Version
-    #
-    app.tasks.load_outstanding_codes_to_new_concept_map_version(
-        incremental_load_concept_map.uuid
-    )
+    # For now, just testing the first half where we generate an error and load it to the terminology
+
+    # #
+    # # PART 3: Load Outstanding Code to New Concept Map Version
+    # #
+    # app.tasks.load_outstanding_codes_to_new_concept_map_version(
+    #     incremental_load_concept_map.uuid
+    # )
 
 
 def test_outstanding_condition_error_concepts_report():

@@ -216,8 +216,8 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
 
         # For a given resource type, identify the actual coding which needs to make it into the concept map
         if error_service_resource.resource_type in (
-            "ResourceType.CONDITION",
-            "ResourceType.OBSERVATION",
+            ResourceType.CONDITION,
+            ResourceType.OBSERVATION,
         ):
             raw_resource = json.loads(error_service_resource.resource)
             raw_coding = raw_resource["code"]
