@@ -9,6 +9,7 @@ from app.concept_maps.models import ConceptMap, ConceptMapVersion
 from app.terminologies.models import Terminology
 from app.concept_maps.versioning_models import ConceptMapVersionCreator
 from app.models.normalization_error_service import load_concepts_from_errors
+from database import get_db
 
 
 celery_app = Celery("infx-tasks")
@@ -17,11 +18,17 @@ celery_app.conf.task_always_eager = True
 
 def load_outstanding_errors_to_custom_terminologies():
     """ """
+    conn = get_db()
+
     load_concepts_from_errors()
+
+    conn.commit()
+    conn.close()
 
 
 @celery_app.task
 def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
+    conn = get_db()
 
     # Step 6: look up source and target value set
     concept_map = ConceptMap(concept_map_uuid)  # instantiate object
@@ -82,6 +89,8 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
         require_review_for_non_equivalent_relationships=require_review_for_non_equivalent_relationships,
         require_review_no_maps_not_in_target=require_review_no_maps_not_in_target,
     )
+    conn.commit()
+    conn.close()
     return version_creator.new_version_uuid
 
 
