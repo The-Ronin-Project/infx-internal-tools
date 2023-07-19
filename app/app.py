@@ -94,6 +94,23 @@ def create_app(script_info=None):
             all_cases = UseCase.load_all_use_cases()
             return jsonify(all_cases)
 
+    @app.route("/usecase/create/", methods=["POST"])
+    def create_use_case():
+        data = request.get_json()
+
+        use_case = UseCase(
+            uuid=data["uuid"],
+            name=data["name"],
+            description=data["description"],
+            point_of_contact=data["point_of_contact"],
+            status=data["status"],
+            jira_ticket=data["jira_ticket"],
+            point_of_contact_email=data["point_of_contact_email"],
+        )
+
+        use_case.save(use_case)
+        return jsonify({"message": "UseCase saved successfully"}), 201
+
     @app.route("/usecases_from_team/", methods=["GET"])
     def get_use_cases_from_team():
         if request.method == "GET":
