@@ -51,7 +51,6 @@ def get_all_value_sets_metadata():
         experimental = request.json.get("experimental")
         purpose = request.json.get("purpose")
         vs_type = request.json.get("type")
-        use_case_uuid = request.json.get("use_case_uuid")
         effective_start = request.json.get("effective_start")
         effective_end = request.json.get("effective_end")
         version_description = request.json.get("version_description")
@@ -66,7 +65,6 @@ def get_all_value_sets_metadata():
             experimental=experimental,
             purpose=purpose,
             vs_type=vs_type,
-            use_case_uuid=use_case_uuid,
             effective_start=effective_start,
             effective_end=effective_end,
             version_description=version_description,
