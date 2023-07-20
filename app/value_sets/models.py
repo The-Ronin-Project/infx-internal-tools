@@ -1401,8 +1401,8 @@ class ValueSet:
         Class method to create a new ValueSet entry in the database.
 
         This method generates a new UUID, creates an entry in the `value_sets.value_set` table with the provided attributes,
-        commits the transaction, sets up the link between the value set and its use cases, creates a new version of the
-        value set in the `value_sets.value_set_version` table, commits the transaction, and returns the loaded value set.
+        sets up the link between the value set and its use cases, creates a new version of the
+        value set in the `value_sets.value_set_version` table, and returns the loaded value set.
 
         Parameters
         ----------
@@ -1467,7 +1467,6 @@ class ValueSet:
                 "vs_type": vs_type,
             },
         )
-        conn.execute(text("commit"))
 
         # Call to insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
         cls.value_set_use_case_link_set_up(
@@ -1496,7 +1495,6 @@ class ValueSet:
                 "version": 1,
             },
         )
-        conn.execute(text("commit"))
 
         return cls.load(vs_uuid)
 
@@ -2505,7 +2503,6 @@ class ValueSetVersion:
                 "comments": comments,
             },
         )
-        conn.execute(text("commit"))
         return cls.load(vsv_uuid)
 
     @classmethod
@@ -3391,8 +3388,6 @@ class ValueSetVersion:
                 "new_terminology_version_uuid": new_terminology_version_uuid,
             },
         )
-
-        conn.execute(text("commit"))
 
         # Return the new ValueSetVersion object
         return cls.load(new_version_uuid)

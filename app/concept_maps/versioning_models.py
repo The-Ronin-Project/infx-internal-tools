@@ -482,8 +482,6 @@ class ConceptMapVersionCreator:
                             )
                         )
 
-        self.conn.execute(text("commit"))
-
     def process_no_map(
         self,
         previous_source_concept: SourceConcept,

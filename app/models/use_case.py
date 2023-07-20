@@ -161,7 +161,6 @@ class UseCase:
                 "point_of_contact_email": use_case.point_of_contact_email,
             },
         )
-        conn.commit()
 
     @classmethod
     def save_value_set_link(
