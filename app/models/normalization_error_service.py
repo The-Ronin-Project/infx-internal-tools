@@ -166,7 +166,11 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
         token=token,
         base_url=f"{DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}",
         api_url="/resources",
-        params={"order": "ASC", "limit": 25, "issue_type": "NOV_CONMAP_LOOKUP"},
+        params={
+            "order": "ASC",
+            "limit": 25,
+            "issue_type": "NOV_CONMAP_LOOKUP",
+        },
     )
 
     resources = []
@@ -200,6 +204,7 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
         )
         resource.load_issues()
         resources.append(resource)
+        print(resources)
 
     # For some resource types (ex. Location, Appointment), we need to read the issue to know where in the
     # resource the failure occured. However, as we are initially implementing for Condition, where the failure
@@ -316,14 +321,18 @@ def lookup_concept_map_version_for_resource_type(
             0
         ].concept_map.most_recent_active_version
 
-    # Falling back to check for tenant agnostic entry
-    tenant_agnostic = [
-        registry_entry
-        for registry_entry in filtered_registry
-        if registry_entry.tenant_id is None
-    ]
-    if len(tenant_agnostic) > 0:
-        concept_map_version = tenant_agnostic[0].concept_map.most_recent_active_version
+    # if concept_map_version is no longer none then we can skip the tenant_agnostic portion
+    if concept_map_version is None:
+        # Falling back to check for tenant agnostic entry
+        tenant_agnostic = [
+            registry_entry
+            for registry_entry in filtered_registry
+            if registry_entry.tenant_id is None
+        ]
+        if len(tenant_agnostic) > 0:
+            concept_map_version = tenant_agnostic[
+                0
+            ].concept_map.most_recent_active_version
 
     # If nothing is found, raise an appropriate error
     if concept_map_version is None:
