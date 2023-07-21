@@ -4,6 +4,7 @@ from uuid import UUID
 from typing import Dict, Tuple, List, Optional
 from enum import Enum
 from dataclasses import dataclass
+import warnings
 
 from decouple import config
 import requests
@@ -111,6 +112,7 @@ class ErrorServiceResource:
         for issue in self.issues:
             if issue.type == issue_type:
                 filtered_issues.append(issue)
+        return filtered_issues
 
 
 @dataclass
@@ -233,9 +235,23 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
 
         # Lookup the concept map version used to normalize this type of resource
         # So that we can then identify the correct terminology to load the new coding to
+
+        # The data element where validation is failed is stored in the 'location' on the issue
+        # We need to filter the issues to just the NOV_CONMAP_LOOKUP issues and get the location
+        nov_conmap_issues = error_service_resource.filter_issues_by_type('NOV_CONMAP_LOOKUP')
+        locations = [issue.location for issue in nov_conmap_issues]
+        locations = list(set(locations))
+        if len(locations) > 1:
+            warnings.warn("Resource has more than one issue of type NOV_CONMAP_LOOKUP; cannot extract just one location")
+            continue # Skip the rest of this one and move on
+        if not locations:
+            warnings.warn("Resource has no locations")
+            continue
+        data_element = locations[0]
+
         concept_map_version_for_normalization = (
-            lookup_concept_map_version_for_resource_type(
-                resource_type=error_service_resource.resource_type,
+            lookup_concept_map_version_for_data_element(
+                data_element=data_element,
                 organization=error_service_resource.organization,
             )
         )
