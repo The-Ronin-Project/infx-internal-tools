@@ -205,7 +205,6 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
         )
         resource.load_issues()
         resources.append(resource)
-        print(resources)
 
     # For some resource types (ex. Location, Appointment), we need to read the issue to know where in the
     # resource the failure occured. However, as we are initially implementing for Condition, where the failure
