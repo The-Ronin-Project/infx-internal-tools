@@ -35,8 +35,8 @@ class UseCase:
     description: str
     point_of_contact: str
     status: str
-    jira_ticket: str
-    point_of_contact_email: str
+    jira_ticket: Optional[str] = None
+    point_of_contact_email: Optional[str] = None
 
     @classmethod
     def load_all_use_cases(cls) -> List["UseCase"]:
