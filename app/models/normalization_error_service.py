@@ -70,13 +70,45 @@ class ErrorServiceResource:
     status: str
     severity: str
     create_dt_tm: datetime.datetime
-    update_dt_tm: datetime.datetime
-    reprocess_dt_tm: datetime.datetime
-    reprocessed_by: str
-    token: str
+    update_dt_tm: Optional[datetime.datetime]
+    reprocess_dt_tm: Optional[datetime.datetime]
+    reprocessed_by: Optional[str]
+    token: Optional[str]
 
     def __post_init__(self):
         self.issues = []
+        if self.token is None:
+            self.token = get_token()
+
+    @classmethod
+    def deserialize(cls, resource_data, token=None):
+        organization = Organization(resource_data.get("organization_id"))
+
+        resource_type = None
+        for resource_type_option in ResourceType:
+            if resource_type_option.value == resource_data.get("resource_type"):
+                resource_type = resource_type_option
+                break
+
+        return cls(
+            id=UUID(resource_data.get("id")),
+            organization=organization,
+            resource_type=resource_type,
+            resource=resource_data.get("resource"),
+            status=resource_data.get("status"),
+            severity=resource_data.get("severity"),
+            create_dt_tm=convert_string_to_datetime_or_none(
+                resource_data.get("create_dt_tm")
+            ),
+            update_dt_tm=convert_string_to_datetime_or_none(
+                resource_data.get("update_dt_tm")
+            ),
+            reprocess_dt_tm=convert_string_to_datetime_or_none(
+                resource_data.get("reprocess_dt_tm")
+            ),
+            reprocessed_by=resource_data.get("reprocessed_by"),
+            token=token,
+        )
 
     def load_issues(self):
         # Call the endpoint
@@ -88,23 +120,8 @@ class ErrorServiceResource:
         )
 
         # Instantiate ErrorServiceIssue
-
         for issue_data in get_issues_for_resource:
-            issue = ErrorServiceIssue(
-                id=UUID(issue_data.get("id")),
-                severity=issue_data.get("severity"),
-                type=issue_data.get("type"),
-                description=issue_data.get("description"),
-                status=issue_data.get("status"),
-                create_dt_tm=convert_string_to_datetime_or_none(
-                    issue_data.get("create_dt_tm")
-                ),
-                location=issue_data.get("location"),
-                update_dt_tm=convert_string_to_datetime_or_none(
-                    issue_data.get("update_dt_tm")
-                ),
-                metadata=issue_data.get("metadata"),
-            )
+            issue = ErrorServiceIssue.deserialize(issue_data)
             self.issues.append(issue)
 
     def filter_issues_by_type(self, issue_type="NOV_CONMAP_LOOKUP"):
@@ -128,8 +145,26 @@ class ErrorServiceIssue:
     status: str
     create_dt_tm: datetime.datetime
     location: str
-    update_dt_tm: datetime.datetime
-    metadata: str
+    update_dt_tm: Optional[datetime.datetime]
+    metadata: Optional[str]
+
+    @classmethod
+    def deserialize(cls, issue_data):
+        return cls(
+            id=UUID(issue_data.get("id")),
+            severity=issue_data.get("severity"),
+            type=issue_data.get("type"),
+            description=issue_data.get("description"),
+            status=issue_data.get("status"),
+            create_dt_tm=convert_string_to_datetime_or_none(
+                issue_data.get("create_dt_tm")
+            ),
+            location=issue_data.get("location"),
+            update_dt_tm=convert_string_to_datetime_or_none(
+                issue_data.get("update_dt_tm")
+            ),
+            metadata=issue_data.get("metadata"),
+        )
 
 
 def get_token():
@@ -178,33 +213,34 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
 
     resources = []
     for resource_data in all_resources_with_errors_response:
-        organization = Organization(resource_data.get("organization_id"))
+        # organization = Organization(resource_data.get("organization_id"))
+        #
+        # resource_type = None
+        # for resource_type_option in ResourceType:
+        #     if resource_type_option.value == resource_data.get("resource_type"):
+        #         resource_type = resource_type_option
+        #         break
 
-        resource_type = None
-        for resource_type_option in ResourceType:
-            if resource_type_option.value == resource_data.get("resource_type"):
-                resource_type = resource_type_option
-                break
-
-        resource = ErrorServiceResource(
-            id=UUID(resource_data.get("id")),
-            organization=organization,
-            resource_type=resource_type,
-            resource=resource_data.get("resource"),
-            status=resource_data.get("status"),
-            severity=resource_data.get("severity"),
-            create_dt_tm=convert_string_to_datetime_or_none(
-                resource_data.get("create_dt_tm")
-            ),
-            update_dt_tm=convert_string_to_datetime_or_none(
-                resource_data.get("update_dt_tm")
-            ),
-            reprocess_dt_tm=convert_string_to_datetime_or_none(
-                resource_data.get("reprocess_dt_tm")
-            ),
-            reprocessed_by=resource_data.get("reprocessed_by"),
-            token=token,
-        )
+        resource = ErrorServiceResource.deserialize(resource_data, token=token)
+        # resource = ErrorServiceResource(
+        #     id=UUID(resource_data.get("id")),
+        #     organization=organization,
+        #     resource_type=resource_type,
+        #     resource=resource_data.get("resource"),
+        #     status=resource_data.get("status"),
+        #     severity=resource_data.get("severity"),
+        #     create_dt_tm=convert_string_to_datetime_or_none(
+        #         resource_data.get("create_dt_tm")
+        #     ),
+        #     update_dt_tm=convert_string_to_datetime_or_none(
+        #         resource_data.get("update_dt_tm")
+        #     ),
+        #     reprocess_dt_tm=convert_string_to_datetime_or_none(
+        #         resource_data.get("reprocess_dt_tm")
+        #     ),
+        #     reprocessed_by=resource_data.get("reprocessed_by"),
+        #     token=token,
+        # )
         resource.load_issues()
         resources.append(resource)
 
