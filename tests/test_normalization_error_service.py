@@ -1,11 +1,13 @@
 import unittest
+import uuid
+
 from app.database import get_db
 
 import app.models.normalization_error_service
 import app.models.models
 
 
-class NormalizationErrorServiceTests(unittest.TestCase):
+class NormalizationErrorServiceIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.conn = get_db()
 
@@ -40,3 +42,57 @@ class NormalizationErrorServiceTests(unittest.TestCase):
         )
         print(concept_map)
         assert 1 == 0
+
+
+class NormalizationErrorServiceUnitTests(unittest.TestCase):
+    def test_filter_issues_by_type(self):
+        cerner_sandbox_organization = app.models.models.Organization(id="ejh3j95h")
+
+        resource = app.models.normalization_error_service.ErrorServiceResource(
+            id=uuid.UUID("22139011-0c6f-4f3e-8e5c-164a2830b367"),
+            organization=cerner_sandbox_organization,
+            resource_type=app.models.normalization_error_service.ResourceType.CONDITION,
+            resource="N/A",
+            status="REPORTED",
+            severity="FAILED",
+            create_dt_tm=app.models.normalization_error_service.convert_string_to_datetime_or_none("2023-03-16T21:45:10.173667Z"),
+            update_dt_tm=None,
+            reprocess_dt_tm=None,
+            reprocessed_by=None,
+            token=None
+        )
+
+        issue_1 = app.models.normalization_error_service.ErrorServiceIssue(
+            id=uuid.UUID("9e15647a-7a5c-4cb0-989d-e2b3809ca3f0"),
+            severity="FAILED",
+            type="NOV_CONMAP_LOOKUP",
+            description="Sample description",
+            status="REPORTED",
+            create_dt_tm=app.models.normalization_error_service.convert_string_to_datetime_or_none(
+                "2023-03-16T21:45:10.316956Z"
+            ),
+            location="Condition.code",
+            update_dt_tm=None,
+            metadata=None
+        )
+        resource.issues.append(issue_1)
+
+        issue_2 = app.models.normalization_error_service.ErrorServiceIssue(
+            id=uuid.UUID("a8469e52-a0e9-4864-b2e8-c5b0caecbc10"),
+            severity="FAILED",
+            type="SAMPLE_ERROR_TYPE",
+            description="Sample description",
+            status="REPORTED",
+            create_dt_tm=app.models.normalization_error_service.convert_string_to_datetime_or_none(
+                "2023-07-18T21:45:10.316956Z"
+            ),
+            location="Condition.code",
+            update_dt_tm=None,
+            metadata=None
+        )
+        resource.issues.append(issue_2)
+
+        filtered_issues = resource.filter_issues_by_type("NOV_CONMAP_LOOKUP")
+        self.assertEqual(1, len(filtered_issues))
+
+
