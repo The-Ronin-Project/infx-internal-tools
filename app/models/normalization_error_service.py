@@ -147,6 +147,7 @@ def get_token():
 def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[Code]]:
     """
     Loads and processes a list of errors to extract specific concepts from them.
+    Save these new concepts back to the correct custom terminology.
 
     This function parses each error and identifies the relevant concepts. These concepts are
     then grouped by the originating organization and the type of resource they belong to. The
@@ -227,8 +228,8 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
             raw_resource = json.loads(error_service_resource.resource)
             raw_coding = raw_resource["code"]
         else:
-            raise NotImplementedError(
-                "Support for the given resource type has not been implemented"
+            warnings.warn(
+                f"Support for the {error_service_resource.resource_type} resource type has not been implemented"
             )
 
         # Lookup the concept map version used to normalize this type of resource
@@ -287,12 +288,12 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
         terminology.load_new_codes_to_terminology(code_list)
 
 
-def lookup_concept_map_version_for_resource_type(
-    resource_type: ResourceType, organization: Organization
+def lookup_concept_map_version_for_data_element(
+    data_element: str, organization: Organization
 ) -> "ConceptMapVersion":
     """
     Returns the specific ConceptMapVersion currently in use for normalizing data with the specified resource_type and organization
-    :param resource_type:
+    :param data_element:
     :param organization:
     :return:
     """
@@ -304,7 +305,7 @@ def lookup_concept_map_version_for_resource_type(
     filtered_registry = [
         registry_entry
         for registry_entry in registry.entries
-        if registry_entry.data_element == resource_type.value
+        if registry_entry.data_element == data_element
     ]
 
     # First, we will check to see if there's an organization-specific entry to use
