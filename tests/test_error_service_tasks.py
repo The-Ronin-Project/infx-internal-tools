@@ -228,7 +228,7 @@ def test_incremental_load_observation_integration(mock_request):
     )
 
     with patch(
-        "app.models.normalization_error_service.lookup_concept_map_version_for_resource_type"
+        "app.models.normalization_error_service.lookup_concept_map_version_for_data_element"
     ) as mock_lookup_concept_map:
         mock_lookup_concept_map.return_value = test_incremental_load_concept_map_version
 
@@ -271,12 +271,12 @@ def test_incremental_load_observation_integration(mock_request):
 
     # For now, just testing the first half where we generate an error and load it to the terminology
 
-    # #
-    # # PART 3: Load Outstanding Code to New Concept Map Version
-    # #
-    # app.tasks.load_outstanding_codes_to_new_concept_map_version(
-    #     incremental_load_concept_map.uuid
-    # )
+    #
+    # PART 3: Load Outstanding Code to New Concept Map Version
+    #
+    app.tasks.load_outstanding_codes_to_new_concept_map_version(
+        incremental_load_concept_map.uuid
+    )
 
 
 def test_outstanding_condition_error_concepts_report():

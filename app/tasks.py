@@ -2,7 +2,7 @@ from celery import Celery
 from uuid import UUID
 from app.models.normalization_error_service import (
     load_concepts_from_errors,
-    lookup_concept_map_version_for_resource_type,
+    lookup_concept_map_version_for_data_element,
 )
 from app.value_sets.models import ValueSetVersion, ValueSet
 from app.concept_maps.models import ConceptMap, ConceptMapVersion
@@ -85,7 +85,6 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
     return version_creator.new_version_uuid
 
 
-
 @celery_app.task
 def back_fill_concept_maps_to_simplifier():
     active_concept_map_versions_to_push = (
@@ -96,4 +95,3 @@ def back_fill_concept_maps_to_simplifier():
         concept_map_object.to_simplifier()
 
     return "Active concept map versions back fill to Simplifier complete."
-
