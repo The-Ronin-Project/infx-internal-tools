@@ -40,8 +40,9 @@ def convert_string_to_datetime_or_none(input_string):
 
 
 # Function to use the token to access the API
-def make_get_request(token, base_url, api_url, params={}):
+def make_get_request(token, base_url, api_url, params={}, page=1):
     headers = {"Authorization": f"Bearer {token}", "content-type": "application/json"}
+    params["page"] = page
     response = requests.get(base_url + api_url, headers=headers, params=params)
     return response.json()
 
@@ -157,64 +158,40 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
         Dict[Tuple[Organization, ResourceType], List[Code]]: A dictionary mapping tuples of
         organization and resource type to lists of concepts extracted from the errors.
     """
-    # {{validation_url}}/resources?order=ASC&limit=25&issue_type=NOV_CONMAP_LOOKUP
-    # 1. query to get all resources that have failed
     token = get_token()
 
-    # todo: enable pagination so we can retrieve more than 25
-    all_resources_with_errors_response = make_get_request(
-        token=token,
-        base_url=f"{DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}",
-        api_url="/resources",
-        params={"order": "ASC", "limit": 25, "issue_type": "NOV_CONMAP_LOOKUP"},
-    )
+    # Initialize variables for pagination
+    page = 1
+    has_more = True
 
     resources = []
-    for resource_data in all_resources_with_errors_response:
-        organization = Organization(resource_data.get("organization_id"))
-
-        resource_type = None
-        for resource_type_option in ResourceType:
-            if resource_type_option.value == resource_data.get("resource_type"):
-                resource_type = resource_type_option
-                break
-
-        resource = ErrorServiceResource(
-            id=UUID(resource_data.get("id")),
-            organization=organization,
-            resource_type=resource_type,
-            resource=resource_data.get("resource"),
-            status=resource_data.get("status"),
-            severity=resource_data.get("severity"),
-            create_dt_tm=convert_string_to_datetime_or_none(
-                resource_data.get("create_dt_tm")
-            ),
-            update_dt_tm=convert_string_to_datetime_or_none(
-                resource_data.get("update_dt_tm")
-            ),
-            reprocess_dt_tm=convert_string_to_datetime_or_none(
-                resource_data.get("reprocess_dt_tm")
-            ),
-            reprocessed_by=resource_data.get("reprocessed_by"),
+    while has_more:
+        all_resources_with_errors_response = make_get_request(
             token=token,
+            base_url=f"{DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}",
+            api_url="/resources",
+            params={
+                "order": "ASC",
+                "limit": 25,
+                "issue_type": "NOV_CONMAP_LOOKUP",
+            },
+            page=page,
         )
-        resource.load_issues()
-        resources.append(resource)
 
-    # For some resource types (ex. Location, Appointment), we need to read the issue to know where in the
-    # resource the failure occured. However, as we are initially implementing for Condition, where the failure
-    # will be in coding.code, we can skip this step
+        # If the response is empty, set has_more to False, otherwise increase the page number
+        if not all_resources_with_errors_response:
+            has_more = False
+        else:
+            page += 1
 
-    # 3. Lookup where in the resource the failure is (skipping for now) todo: do this
+        for resource_data in all_resources_with_errors_response:
+            resource = ErrorServiceResource.deserialize(resource_data, token=token)
+            resource.load_issues()
+            resources.append(resource)
 
-    # 4. look inside the raw resource json and pull out the relevant codes that need to be mapped
-
-    # Key: terminology_version_uuid, Value: list containing the codes to load to that terminology
     new_codes_to_load_by_terminology = {}
 
     for error_service_resource in resources:
-
-        # For a given resource type, identify the actual coding which needs to make it into the concept map
         if error_service_resource.resource_type == ResourceType.CONDITION:
             raw_resource = json.loads(error_service_resource.resource)
             raw_coding = raw_resource["code"]
@@ -223,8 +200,6 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
                 "Only support for Conditions has been implemented"
             )
 
-        # Lookup the concept map version used to normalize this type of resource
-        # So that we can then identify the correct terminology to load the new coding to
         concept_map_version_for_normalization = (
             lookup_concept_map_version_for_resource_type(
                 resource_type=error_service_resource.resource_type,
@@ -232,7 +207,6 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
             )
         )
 
-        # Inside the concept map version, we'll extract the source value set
         source_value_set_uuid = (
             concept_map_version_for_normalization.concept_map.source_value_set_uuid
         )
@@ -241,7 +215,6 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
         )
         most_recent_active_source_value_set_version.expand()
 
-        # Identify the terminology inside the source value set
         terminologies_in_source_value_set = (
             most_recent_active_source_value_set_version.lookup_terminologies_in_value_set_version()
         )
@@ -253,7 +226,6 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
 
         current_terminology_version = terminologies_in_source_value_set[0]
 
-        # The custom terminology may have already passed its effective end date, so we might need to create a new version
         terminology_to_load_to = (
             current_terminology_version.version_to_load_new_content_to()
         )
