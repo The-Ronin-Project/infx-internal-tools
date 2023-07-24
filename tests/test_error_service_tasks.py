@@ -111,7 +111,7 @@ def test_incremental_load_integration(mock_request):
     )
 
     with patch(
-        "app.models.normalization_error_service.lookup_concept_map_version_for_resource_type"
+        "app.models.normalization_error_service.lookup_concept_map_version_for_data_element"
     ) as mock_lookup_concept_map:
         mock_lookup_concept_map.return_value = test_incremental_load_concept_map_version
 
