@@ -36,7 +36,10 @@ def convert_string_to_datetime_or_none(input_string):
     if input_string is None:
         return None
     else:
-        return datetime.datetime.strptime(input_string, "%Y-%m-%dT%H:%M:%S.%fZ")
+        try:
+            return datetime.datetime.strptime(input_string, "%Y-%m-%dT%H:%M:%S.%fZ")
+        except ValueError:
+            return datetime.datetime.strptime(input_string, "%Y-%m-%dT%H:%M:%SZ")
 
 
 # Function to use the token to access the API
@@ -161,16 +164,35 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
     # 1. query to get all resources that have failed
     token = get_token()
 
-    # todo: enable pagination so we can retrieve more than 25
-    all_resources_with_errors_response = make_get_request(
-        token=token,
-        base_url=f"{DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}",
-        api_url="/resources",
-        params={"order": "ASC", "limit": 25, "issue_type": "NOV_CONMAP_LOOKUP"},
-    )
+    # Loop through all available errors and retrieve a complete set
+    resources_with_errors = []
+    PAGE_SIZE = 250
+    rest_api_params = {
+        "order": "ASC",
+        "limit": PAGE_SIZE,
+        "issue_type": "NOV_CONMAP_LOOKUP",
+    }
+    while True:
+        response = make_get_request(
+            token=token,
+            base_url=DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL,
+            api_url="/resources",
+            params=rest_api_params,
+        )
+        resources_with_errors.extend(response)
+
+        length_of_response = len(response)
+        # print(length_of_response)
+
+        if length_of_response < PAGE_SIZE:
+            break
+
+        else:
+            last_uuid = response[-1].get("id")
+            rest_api_params["after"] = last_uuid
 
     resources = []
-    for resource_data in all_resources_with_errors_response:
+    for resource_data in resources_with_errors:
         organization = Organization(resource_data.get("organization_id"))
 
         resource_type = None
