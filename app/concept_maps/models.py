@@ -948,6 +948,45 @@ class ConceptMapVersion:
             return result.description
         return None
 
+    def check_formatting(self, concept_map):
+        """Checking the formatting for errors before exporting to OCI, we need to make sure the concept map doesn't have
+        any errors, so it will work for the DP concept map UDF, as well as for InterOps"""
+
+        errors = []  # list to hold error messages
+
+        # Iterate over each dictionary in the 'group' list
+        for group in concept_map.get('group', []):
+            # Iterate over each dictionary in the 'element' list, with enumerate to keep track of the index
+            for index, element in enumerate(group.get('element', [])):
+                # Integrity Check 1: Check that all data in the code field is a JSON string
+                code = element.get('code')
+                if code is not None:
+                    try:
+                        # if the 'code' field is not a valid json string, this will raise a ValueError
+                        json.loads(code)
+                    except ValueError:
+                        errors.append(f"Invalid JSON string in the code field at element index {index}: {code}")
+                else:
+                    errors.append(f"'code' key is missing in the element at index {index}")
+
+                # Integrity Check 2: Make sure there are no duplicate targets
+                target_values = set()
+                targets = element.get('target', [])
+                if targets:
+                    for target in targets:
+                        target_code = target.get('code')
+                        if target_code:
+                            if target_code in target_values:
+                                errors.append(f"Duplicate target found at element index {index}: {target_code}")
+                            target_values.add(target_code)
+                        else:
+                            errors.append(f"'code' key is missing in the target at element index {index}")
+                else:
+                    errors.append(f"'target' key is missing in the element at index {index}")
+
+        if errors:
+            raise ValueError("Errors found in Concept Map:\n" + "\n".join(errors))
+
     def serialize(self, include_internal_info=False):
         pattern = r"[A-Z]([A-Za-z0-9_]){0,254}"  # name transformer
         if re.match(pattern, self.concept_map.name):  # name follows pattern use name
@@ -1025,6 +1064,7 @@ class ConceptMapVersion:
 
     def prepare_for_oci(self):
         serialized = self.serialize()
+        self.check_formatting(serialized)
         rcdm_id = serialized.get("id")
         rcdm_url = "http://projectronin.io/ConceptMap/"
         # id will depend on publisher
