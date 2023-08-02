@@ -10,7 +10,7 @@ from app.helpers.oci_helper import (
 )
 from app.concept_maps.models import *
 from app.concept_maps.versioning_models import *
-from app.tasks import back_fill_concept_maps_to_simplifier
+
 import app.tasks as tasks
 
 concept_maps_blueprint = Blueprint("concept_maps", __name__)
