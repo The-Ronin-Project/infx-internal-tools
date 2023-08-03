@@ -32,10 +32,12 @@ class DatabaseManager:
                 max_overflow=0,
             )
             self.connection = self.engine.connect()
+            self.connection.begin()
 
         def get_connection(self):
             if self.connection.closed is True:
                 self.connection = self.engine.connect()
+                self.connection.begin()
             return self.connection
 
     def __new__(cls, connection_string=None):
@@ -75,6 +77,7 @@ def get_db():
                 )
             else:
                 g.db = SQL_ALCHEMY_ENGINE.connect()
+                g.db.begin()
         return g.db
     else:
         db = DatabaseManager()

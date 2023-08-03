@@ -214,8 +214,6 @@ def delete_all_teams_for_a_use_case(use_case_uuid: uuid.UUID):
 
     This function connects to the database and executes a SQL DELETE query to remove all links
     between teams and a specific use case from the project_management.use_case_teams_link table.
-    After the execution of the DELETE query, it commits the transaction to ensure the changes
-    are saved in the database.
 
     Parameters
     ----------
@@ -237,5 +235,3 @@ def delete_all_teams_for_a_use_case(use_case_uuid: uuid.UUID):
         ),
         {"use_case_uuid": use_case_uuid},
     )
-
-    conn.execute(text("commit"))
