@@ -85,7 +85,6 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
     return version_creator.new_version_uuid
 
 
-
 @celery_app.task
 def back_fill_concept_maps_to_simplifier():
     active_concept_map_versions_to_push = (
@@ -97,3 +96,7 @@ def back_fill_concept_maps_to_simplifier():
 
     return "Active concept map versions back fill to Simplifier complete."
 
+
+@celery_app.task
+def hello_world():
+    return "Hello, World!"

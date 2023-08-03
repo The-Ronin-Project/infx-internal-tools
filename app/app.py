@@ -42,6 +42,7 @@ from app.helpers.oci_helper import (
     get_json_from_oci,
 )
 
+
 # Configure the logger when the application is imported. This ensures that
 # everything below uses the same configured logger.
 config_structlog()
