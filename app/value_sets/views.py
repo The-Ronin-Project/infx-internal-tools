@@ -145,7 +145,7 @@ def handle_linked_use_cases(value_set_uuid):
 @value_sets_blueprint.route("/ValueSets/clear/linked_use_cases", methods=["DELETE"])
 def clear_and_leave_blank():
     value_set_uuid = request.args.get("value_set_uuid")
-    delete_all_use_cases_for_value_set(value_set_uuid)
+    delete_all_use_cases_for_value_set(uuid.UUID(value_set_uuid))
     return "Links cleared"
 
 
