@@ -21,7 +21,7 @@ services:
   celery_worker:
     build:
       context: .
-      dockerfile: ./compose/local/flask/Dockerfile
+      dockerfile: Dockerfile
     image: flask_celery_worker
     command: /start-celeryworker
     volumes:
@@ -35,7 +35,7 @@ services:
   celery_beat:
       build:
         context: .
-        dockerfile: ./compose/local/flask/Dockerfile
+        dockerfile: Dockerfile
       image: flask_celery_beat
       command: /start-celerybeat
       volumes:
@@ -46,18 +46,18 @@ services:
         - FLASK_APP=app
 
 
-  flower:
-      build:
-        context: .
-        dockerfile: ./compose/local/flask/Dockerfile
-      image: flask_celery_flower
-      command: /start-flower
-      volumes:
-        - .:/app
-      env_file:
-        - .env
-      environment:
-        - FLASK_APP=app
-      ports:
-        - 8000:8000
+#  flower:
+#      build:
+#        context: .
+#        dockerfile: Dockerfile
+#      image: flask_celery_flower
+#      command: /start-flower
+#      volumes:
+#        - .:/app
+#      env_file:
+#        - .env
+#      environment:
+#        - FLASK_APP=app
+#      ports:
+#        - 8001:8000
 

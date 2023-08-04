@@ -18,6 +18,7 @@ CMD [ "python", "-m", "project" ]
 ENV PYTHONUNBUFFERED 1
 ENV PYTHONDONTWRITEBYTECODE 1
 
+USER root
 RUN apt-get update \
   # dependencies for building Python packages
   && apt-get install -y build-essential \
@@ -29,9 +30,9 @@ RUN apt-get update \
   && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
   && rm -rf /var/lib/apt/lists/*
 
-COPY ./compose/local/flask/entrypoint /entrypoint
-RUN sed -i 's/\r$//g' /entrypoint
-RUN chmod +x /entrypoint
+# COPY ./compose/local/flask/entrypoint /entrypoint
+# RUN sed -i 's/\r$//g' /entrypoint
+# RUN chmod +x /entrypoint
 
 COPY ./compose/local/flask/start /start
 RUN sed -i 's/\r$//g' /start
@@ -45,11 +46,11 @@ COPY ./compose/local/flask/celery/beat/start /start-celerybeat
 RUN sed -i 's/\r$//g' /start-celerybeat
 RUN chmod +x /start-celerybeat
 
-COPY ./compose/local/flask/celery/flower/start /start-flower
-RUN sed -i 's/\r$//g' /start-flower
-RUN chmod +x /start-flower
+#COPY ./compose/local/flask/celery/flower/start /start-flower
+#RUN sed -i 's/\r$//g' /start-flower
+#RUN chmod +x /start-flower
 
 WORKDIR /app
 
-ENTRYPOINT ["/entrypoint"]
+#ENTRYPOINT ["/entrypoint"]
 
