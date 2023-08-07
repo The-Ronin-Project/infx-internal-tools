@@ -1,50 +1,57 @@
 version: "3.8"
 
 services:
+  db:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: password
+
   app:
     image: app
     build:
-      context: ./
-      dockerfile: Dockerfile
-    env_file:
-      - .env
-    volumes:
-      - './app:/app/app:z'
-    command:
-      - "python"
-      - "-m"
-      - "app"
-      - "--reload"
-    ports:
-      - 8000:8000
-
-  celery_worker:
-    build:
       context: .
       dockerfile: Dockerfile
-    image: flask_celery_worker
-    command: /start-celeryworker
-    volumes:
-      - .:/app
     env_file:
       - .env
     environment:
-      - FLASK_APP=app
+      DATABASE_NAME: postgres
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: password
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+    volumes:
+      - './app:/app/app:z'
+    ports:
+      - 8000:8000
+    depends_on:
+      - db
 
-
-  celery_beat:
-      build:
-        context: .
-        dockerfile: Dockerfile
-      image: flask_celery_beat
-      command: /start-celerybeat
-      volumes:
-        - .:/app
-      env_file:
-        - .env
-      environment:
-        - FLASK_APP=app
-
+#  celery_worker:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#    image: flask_celery_worker
+#    command: /start-celeryworker
+#    volumes:
+#      - .:/app
+#    env_file:
+#      - .env
+#    environment:
+#      - FLASK_APP=app
+#
+#
+#  celery_beat:
+#      build:
+#        context: .
+#        dockerfile: Dockerfile
+#      image: flask_celery_beat
+#      command: /start-celerybeat
+#      volumes:
+#        - .:/app
+#      env_file:
+#        - .env
+#      environment:
+#        - FLASK_APP=app
 
 #  flower:
 #      build:
