@@ -1,23 +1,11 @@
 FROM docker-proxy.devops.projectronin.io/ronin/python-builder:latest as builder
 
-COPY --chown=ronin:ronin Pipfile ./
-COPY --chown=ronin:ronin Pipfile.lock ./
+ARG USER_NAME=ronin
 
-RUN pipenv install --system --deploy
+COPY --chown=${USER_NAME}:${USER_NAME} Pipfile ./
+COPY --chown=${USER_NAME}:${USER_NAME} Pipfile.lock ./
 
-FROM docker-proxy.devops.projectronin.io/ronin/base/python-base:latest as runtime
-RUN mkdir ./.oci
-COPY --from=builder --chown=ronin:ronin /app/.local/ /app/.local
-COPY --chown=ronin:ronin app ./app
-
-EXPOSE 8000
-USER ronin
-ENTRYPOINT [ "./entrypoint.sh" ]
-CMD [ "python", "-m", "project" ]
-
-ENV PYTHONUNBUFFERED 1
-ENV PYTHONDONTWRITEBYTECODE 1
-
+USER root
 RUN apt-get update \
   # dependencies for building Python packages
   && apt-get install -y build-essential \
@@ -29,27 +17,36 @@ RUN apt-get update \
   && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
   && rm -rf /var/lib/apt/lists/*
 
-COPY ./compose/local/flask/entrypoint /entrypoint
-RUN sed -i 's/\r$//g' /entrypoint
-RUN chmod +x /entrypoint
+USER ${USER_NAME}:${USER_NAME}
+RUN pipenv install --system --deploy
 
-COPY ./compose/local/flask/start /start
-RUN sed -i 's/\r$//g' /start
-RUN chmod +x /start
+FROM docker-proxy.devops.projectronin.io/ronin/base/python-base:latest as runtime
 
-COPY ./compose/local/flask/celery/worker/start /start-celeryworker
-RUN sed -i 's/\r$//g' /start-celeryworker
-RUN chmod +x /start-celeryworker
+ARG USER_NAME=ronin
 
-COPY ./compose/local/flask/celery/beat/start /start-celerybeat
-RUN sed -i 's/\r$//g' /start-celerybeat
-RUN chmod +x /start-celerybeat
+RUN mkdir ./.oci
+COPY --from=builder --chown=${USER_NAME}:${USER_NAME} /app/.local/ /app/.local
+COPY --chown=${USER_NAME}:${USER_NAME} app ./app
 
-COPY ./compose/local/flask/celery/flower/start /start-flower
-RUN sed -i 's/\r$//g' /start-flower
-RUN chmod +x /start-flower
+EXPOSE 8000
+USER ${USER_NAME}
 
-WORKDIR /app
+RUN pip install \
+    cryptography \
+    ddtrace \
+    lxml \
+    numpy \
+    pandas \
+    psycopg2-binary
 
-ENTRYPOINT ["/entrypoint"]
+ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE 1
 
+#COPY --chown=${USER_NAME}:${USER_NAME} ./compose/local/flask/entrypoint.sh ./
+COPY --chown=${USER_NAME}:${USER_NAME} ./compose/local/flask/start.sh ./
+COPY --chown=${USER_NAME}:${USER_NAME} compose/local/celery/worker/start.sh ./start-celeryworker.sh
+COPY --chown=${USER_NAME}:${USER_NAME} compose/local/celery/beat/start.sh ./start-celerybeat.sh
+COPY --chown=${USER_NAME}:${USER_NAME} compose/local/celery/flower/start.sh /start-flower.sh
+
+#ENTRYPOINT [ "./entrypoint.sh" ]
+CMD [ "python", "-m", "app", "--reload" ]

@@ -232,30 +232,34 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
 
     resources = []
     for resource_data in resources_with_errors:
-        # organization = Organization(resource_data.get("organization_id"))
+        organization = Organization(resource_data.get("organization_id"))
 
-        resource = ErrorServiceResource.deserialize(resource_data, token=token)
-        # resource = ErrorServiceResource(
-        #     id=UUID(resource_data.get("id")),
-        #     organization=organization,
-        #     resource_type=resource_type,
-        #     resource=resource_data.get("resource"),
-        #     status=resource_data.get("status"),
-        #     severity=resource_data.get("severity"),
-        #     create_dt_tm=convert_string_to_datetime_or_none(
-        #         resource_data.get("create_dt_tm")
-        #     ),
-        #     update_dt_tm=convert_string_to_datetime_or_none(
-        #         resource_data.get("update_dt_tm")
-        #     ),
-        #     reprocess_dt_tm=convert_string_to_datetime_or_none(
-        #         resource_data.get("reprocess_dt_tm")
-        #     ),
-        #     reprocessed_by=resource_data.get("reprocessed_by"),
-        #     token=token,
-        # )
+        resource_type = None
+        for resource_type_option in ResourceType:
+            if resource_type_option.value == resource_data.get("resource_type"):
+                resource_type = resource_type_option
+                break
 
-        # resource.load_issues()
+        resource = ErrorServiceResource(
+            id=UUID(resource_data.get("id")),
+            organization=organization,
+            resource_type=resource_type,
+            resource=resource_data.get("resource"),
+            status=resource_data.get("status"),
+            severity=resource_data.get("severity"),
+            create_dt_tm=convert_string_to_datetime_or_none(
+                resource_data.get("create_dt_tm")
+            ),
+            update_dt_tm=convert_string_to_datetime_or_none(
+                resource_data.get("update_dt_tm")
+            ),
+            reprocess_dt_tm=convert_string_to_datetime_or_none(
+                resource_data.get("reprocess_dt_tm")
+            ),
+            reprocessed_by=resource_data.get("reprocessed_by"),
+            token=token,
+        )
+        resource.load_issues()
         resources.append(resource)
 
     # For some resource types (ex. Location, Appointment), we need to read the issue to know where in the

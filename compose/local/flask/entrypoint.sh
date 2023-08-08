@@ -15,12 +15,11 @@ import psycopg2
 import urllib.parse as urlparse
 import os
 
-url = urlparse.urlparse(os.environ['DATABASE_URL'])
-dbname = url.path[1:]
-user = url.username
-password = url.password
-host = url.hostname
-port = url.port
+dbname = os.environ['DATABASE_NAME']
+user = os.environ['DATABASE_USER']
+password = os.environ['DATABASE_PASSWORD']
+host = os.environ['DATABASE_HOST']
+port = os.environ['DATABASE_PORT']
 
 try:
     psycopg2.connect(
