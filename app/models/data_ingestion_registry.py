@@ -101,7 +101,7 @@ class DataNormalizationRegistry:
                         profile_url=item.profile_url,
                         registry_entry_type=item.type,
                         concept_map=app.concept_maps.models.ConceptMap(
-                            item.concept_map_uuid
+                            item.concept_map_uuid, load_mappings_for_most_recent_active=False
                         ),
                     )
                 )
