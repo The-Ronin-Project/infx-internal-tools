@@ -9,5 +9,16 @@
     "location": "coding.code",
     "update_dt_tm": null,
     "metadata": null
+  },
+  {
+    "id": "a8469e52-a0e9-4864-b2e8-c5b0caecbc10",
+    "severity": "FAILED",
+    "type": "NOV_CONMAP_LOOKUP",
+    "description": "Sample description",
+    "status": "REPORTED",
+    "create_dt_tm": "2023-07-18T21:45:10.316956Z",
+    "location": "coding.code",
+    "update_dt_tm": null,
+    "metadata": null
   }
 ]

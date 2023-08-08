@@ -325,7 +325,10 @@ class Terminology:
         # We need to create a new version
         current_version = most_recent_terminology.version
         try:
-            new_version_string = str(int(current_version) + 1)
+            if current_version.isdigit():
+                new_version_string = str(int(current_version) + 1)
+            else:
+                new_version_string = str(int(float(current_version) + 1))
         except TypeError:
             raise Exception(
                 f"Could not automatically increment version number {current_version}"
@@ -403,8 +406,8 @@ class Terminology:
         conn.execute(
             text(
                 """
-                Insert into custom_terminologies.code(code, display, terminology_version_uuid, additional_data)
-                select code, display, :version_uuid, additional_data
+                Insert into custom_terminologies.code(code, display, terminology_version_uuid, additional_data, depends_on_value, depends_on_display, depends_on_property, depends_on_system)
+                select code, display, :version_uuid, additional_data, depends_on_value, depends_on_display, depends_on_property, depends_on_system
                 from custom_terminologies.code
                 where terminology_version_uuid = :previous_version_uuid
                 """
@@ -423,7 +426,6 @@ class Terminology:
             ),
             {"version_uuid": version_uuid},
         ).first()
-        conn.execute(text("commit"))
         return new_term_version
 
     def able_to_load_new_codes(self):

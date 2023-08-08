@@ -4,6 +4,8 @@ from uuid import UUID
 from typing import Dict, Tuple, List, Optional
 from enum import Enum
 from dataclasses import dataclass
+from functools import lru_cache
+import warnings
 
 from decouple import config
 import requests
@@ -72,13 +74,45 @@ class ErrorServiceResource:
     status: str
     severity: str
     create_dt_tm: datetime.datetime
-    update_dt_tm: datetime.datetime
-    reprocess_dt_tm: datetime.datetime
-    reprocessed_by: str
-    token: str
+    update_dt_tm: Optional[datetime.datetime]
+    reprocess_dt_tm: Optional[datetime.datetime]
+    reprocessed_by: Optional[str]
+    token: Optional[str]
 
     def __post_init__(self):
         self.issues = []
+        if self.token is None:
+            self.token = get_token()
+
+    @classmethod
+    def deserialize(cls, resource_data, token=None):
+        organization = Organization(resource_data.get("organization_id"))
+
+        resource_type = None
+        for resource_type_option in ResourceType:
+            if resource_type_option.value == resource_data.get("resource_type"):
+                resource_type = resource_type_option
+                break
+
+        return cls(
+            id=UUID(resource_data.get("id")),
+            organization=organization,
+            resource_type=resource_type,
+            resource=resource_data.get("resource"),
+            status=resource_data.get("status"),
+            severity=resource_data.get("severity"),
+            create_dt_tm=convert_string_to_datetime_or_none(
+                resource_data.get("create_dt_tm")
+            ),
+            update_dt_tm=convert_string_to_datetime_or_none(
+                resource_data.get("update_dt_tm")
+            ),
+            reprocess_dt_tm=convert_string_to_datetime_or_none(
+                resource_data.get("reprocess_dt_tm")
+            ),
+            reprocessed_by=resource_data.get("reprocessed_by"),
+            token=token,
+        )
 
     def load_issues(self):
         # Call the endpoint
@@ -90,23 +124,8 @@ class ErrorServiceResource:
         )
 
         # Instantiate ErrorServiceIssue
-
         for issue_data in get_issues_for_resource:
-            issue = ErrorServiceIssue(
-                id=UUID(issue_data.get("id")),
-                severity=issue_data.get("severity"),
-                type=issue_data.get("type"),
-                description=issue_data.get("description"),
-                status=issue_data.get("status"),
-                create_dt_tm=convert_string_to_datetime_or_none(
-                    issue_data.get("create_dt_tm")
-                ),
-                location=issue_data.get("location"),
-                update_dt_tm=convert_string_to_datetime_or_none(
-                    issue_data.get("update_dt_tm")
-                ),
-                metadata=issue_data.get("metadata"),
-            )
+            issue = ErrorServiceIssue.deserialize(issue_data)
             self.issues.append(issue)
 
     def filter_issues_by_type(self, issue_type="NOV_CONMAP_LOOKUP"):
@@ -114,6 +133,7 @@ class ErrorServiceResource:
         for issue in self.issues:
             if issue.type == issue_type:
                 filtered_issues.append(issue)
+        return filtered_issues
 
 
 @dataclass
@@ -129,8 +149,26 @@ class ErrorServiceIssue:
     status: str
     create_dt_tm: datetime.datetime
     location: str
-    update_dt_tm: datetime.datetime
-    metadata: str
+    update_dt_tm: Optional[datetime.datetime]
+    metadata: Optional[str]
+
+    @classmethod
+    def deserialize(cls, issue_data):
+        return cls(
+            id=UUID(issue_data.get("id")),
+            severity=issue_data.get("severity"),
+            type=issue_data.get("type"),
+            description=issue_data.get("description"),
+            status=issue_data.get("status"),
+            create_dt_tm=convert_string_to_datetime_or_none(
+                issue_data.get("create_dt_tm")
+            ),
+            location=issue_data.get("location"),
+            update_dt_tm=convert_string_to_datetime_or_none(
+                issue_data.get("update_dt_tm")
+            ),
+            metadata=issue_data.get("metadata"),
+        )
 
 
 def get_token():
@@ -150,6 +188,7 @@ def get_token():
 def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[Code]]:
     """
     Loads and processes a list of errors to extract specific concepts from them.
+    Save these new concepts back to the correct custom terminology.
 
     This function parses each error and identifies the relevant concepts. These concepts are
     then grouped by the originating organization and the type of resource they belong to. The
@@ -193,34 +232,30 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
 
     resources = []
     for resource_data in resources_with_errors:
-        organization = Organization(resource_data.get("organization_id"))
+        # organization = Organization(resource_data.get("organization_id"))
 
-        resource_type = None
-        for resource_type_option in ResourceType:
-            if resource_type_option.value == resource_data.get("resource_type"):
-                resource_type = resource_type_option
-                break
+        resource = ErrorServiceResource.deserialize(resource_data, token=token)
+        # resource = ErrorServiceResource(
+        #     id=UUID(resource_data.get("id")),
+        #     organization=organization,
+        #     resource_type=resource_type,
+        #     resource=resource_data.get("resource"),
+        #     status=resource_data.get("status"),
+        #     severity=resource_data.get("severity"),
+        #     create_dt_tm=convert_string_to_datetime_or_none(
+        #         resource_data.get("create_dt_tm")
+        #     ),
+        #     update_dt_tm=convert_string_to_datetime_or_none(
+        #         resource_data.get("update_dt_tm")
+        #     ),
+        #     reprocess_dt_tm=convert_string_to_datetime_or_none(
+        #         resource_data.get("reprocess_dt_tm")
+        #     ),
+        #     reprocessed_by=resource_data.get("reprocessed_by"),
+        #     token=token,
+        # )
 
-        resource = ErrorServiceResource(
-            id=UUID(resource_data.get("id")),
-            organization=organization,
-            resource_type=resource_type,
-            resource=resource_data.get("resource"),
-            status=resource_data.get("status"),
-            severity=resource_data.get("severity"),
-            create_dt_tm=convert_string_to_datetime_or_none(
-                resource_data.get("create_dt_tm")
-            ),
-            update_dt_tm=convert_string_to_datetime_or_none(
-                resource_data.get("update_dt_tm")
-            ),
-            reprocess_dt_tm=convert_string_to_datetime_or_none(
-                resource_data.get("reprocess_dt_tm")
-            ),
-            reprocessed_by=resource_data.get("reprocessed_by"),
-            token=token,
-        )
-        resource.load_issues()
+        # resource.load_issues()
         resources.append(resource)
 
     # For some resource types (ex. Location, Appointment), we need to read the issue to know where in the
@@ -237,19 +272,38 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
     for error_service_resource in resources:
 
         # For a given resource type, identify the actual coding which needs to make it into the concept map
-        if error_service_resource.resource_type == ResourceType.CONDITION:
+        if error_service_resource.resource_type in (
+            ResourceType.CONDITION,
+            ResourceType.OBSERVATION,
+        ):
             raw_resource = json.loads(error_service_resource.resource)
             raw_coding = raw_resource["code"]
+            error_service_resource.load_issues()
         else:
-            raise NotImplementedError(
-                "Only support for Conditions has been implemented"
+            warnings.warn(
+                f"Support for the {error_service_resource.resource_type} resource type has not been implemented"
             )
+            continue
 
         # Lookup the concept map version used to normalize this type of resource
         # So that we can then identify the correct terminology to load the new coding to
+
+        # The data element where validation is failed is stored in the 'location' on the issue
+        # We need to filter the issues to just the NOV_CONMAP_LOOKUP issues and get the location
+        nov_conmap_issues = error_service_resource.filter_issues_by_type('NOV_CONMAP_LOOKUP')
+        locations = [issue.location for issue in nov_conmap_issues]
+        locations = list(set(locations))
+        if len(locations) > 1:
+            warnings.warn("Resource has more than one issue of type NOV_CONMAP_LOOKUP; cannot extract just one location")
+            continue # Skip the rest of this one and move on
+        if not locations:
+            warnings.warn("Resource has no locations")
+            continue
+        data_element = locations[0]
+
         concept_map_version_for_normalization = (
-            lookup_concept_map_version_for_resource_type(
-                resource_type=error_service_resource.resource_type,
+            lookup_concept_map_version_for_data_element(
+                data_element=data_element,
                 organization=error_service_resource.organization,
             )
         )
@@ -295,18 +349,21 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
         else:
             new_codes_to_load_by_terminology[terminology_to_load_to.uuid] = [new_code]
 
-    # Unpack the data structure we created earlier and load the codes to their respective terminologies
-    for terminology_version_uuid, code_list in new_codes_to_load_by_terminology.items():
-        terminology = Terminology.load(terminology_version_uuid)
-        terminology.load_new_codes_to_terminology(code_list)
+    print(new_codes_to_load_by_terminology)
+
+    # # Unpack the data structure we created earlier and load the codes to their respective terminologies
+    # for terminology_version_uuid, code_list in new_codes_to_load_by_terminology.items():
+    #     terminology = Terminology.load(terminology_version_uuid)
+    #     terminology.load_new_codes_to_terminology(code_list)
 
 
-def lookup_concept_map_version_for_resource_type(
-    resource_type: ResourceType, organization: Organization
+@lru_cache
+def lookup_concept_map_version_for_data_element(
+    data_element: str, organization: Organization
 ) -> "ConceptMapVersion":
     """
     Returns the specific ConceptMapVersion currently in use for normalizing data with the specified resource_type and organization
-    :param resource_type:
+    :param data_element:
     :param organization:
     :return:
     """
@@ -318,7 +375,7 @@ def lookup_concept_map_version_for_resource_type(
     filtered_registry = [
         registry_entry
         for registry_entry in registry.entries
-        if registry_entry.data_element == resource_type.value
+        if registry_entry.data_element == data_element
     ]
 
     # First, we will check to see if there's an organization-specific entry to use
@@ -335,14 +392,18 @@ def lookup_concept_map_version_for_resource_type(
             0
         ].concept_map.most_recent_active_version
 
-    # Falling back to check for tenant agnostic entry
-    tenant_agnostic = [
-        registry_entry
-        for registry_entry in filtered_registry
-        if registry_entry.tenant_id is None
-    ]
-    if len(tenant_agnostic) > 0:
-        concept_map_version = tenant_agnostic[0].concept_map.most_recent_active_version
+    # if concept_map_version is no longer none then we can skip the tenant_agnostic portion
+    if concept_map_version is None:
+        # Falling back to check for tenant agnostic entry
+        tenant_agnostic = [
+            registry_entry
+            for registry_entry in filtered_registry
+            if registry_entry.tenant_id is None
+        ]
+        if len(tenant_agnostic) > 0:
+            concept_map_version = tenant_agnostic[
+                0
+            ].concept_map.most_recent_active_version
 
     # If nothing is found, raise an appropriate error
     if concept_map_version is None:
