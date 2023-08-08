@@ -28,7 +28,16 @@ from app.models.use_case import load_use_case_by_value_set_uuid
 
 CONCEPT_MAPS_SCHEMA_VERSION = 3
 
-# This is from when we used `scrappyMaps`. It's used for mapping inclusions and can be removed as soon as that has been ported to the new maps.
+
+# Function for checking if we have a coding array string that used to be JSON
+def is_coding_array(source_code_string):
+    return source_code_string.strip().startswith(
+        "[{"
+    ) or source_code_string.strip().startswith("{[{")
+
+
+# This is from when we used `scrappyMaps`. It's used for mapping inclusions and
+# can be removed as soon as that has been ported to the new maps.
 # TODO remove this after Alex and Ben have updated the ED model to use concept mapps for ED utilization
 # Todo: wait until we've updated (or deprecated) mapping inclusions in value sets to disable this
 class DeprecatedConceptMap:
@@ -381,7 +390,7 @@ class ConceptMap:
             cm_version_uuid, source_value_set_version_uuid
         )
         cls.index_targets(cm_version_uuid, target_value_set_version_uuid)
-        return cls.concept_map_metadata(cm_uuid)
+        return cls(cm_uuid)
 
     @classmethod
     def insert_source_concepts_for_mapping(
@@ -843,12 +852,6 @@ class ConceptMapVersion:
 
         groups = []
 
-        # Function for checking if we have a coding array string that used to be JSON
-        def is_coding_array(source_code_string):
-            return source_code_string.strip().startswith(
-                "[{"
-            ) or source_code_string.strip().startswith("{[{")
-
         # Serialize the mappings
         for (
             source_uri,
@@ -907,9 +910,12 @@ class ConceptMapVersion:
                             source_code.depends_on_property
                             or source_code.depends_on_value
                         ):
+                            depends_on_value = source_code.depends_on_value
+                            if is_coding_array(depends_on_value):
+                                depends_on_value = transform_struct_string_to_json(depends_on_value)
                             depends_on = {
                                 "property": source_code.depends_on_property,
-                                "value": source_code.depends_on_value,
+                                "value": depends_on_value,
                             }
                             if source_code.depends_on_system:
                                 depends_on["system"] = source_code.depends_on_system
