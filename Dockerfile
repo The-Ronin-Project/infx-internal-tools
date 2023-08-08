@@ -16,6 +16,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 USER ronin
+RUN pip install psycopg2-binary
 RUN pipenv install --system --deploy
 
 FROM docker-proxy.devops.projectronin.io/ronin/base/python-base:latest as runtime
