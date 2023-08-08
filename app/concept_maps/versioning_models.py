@@ -48,6 +48,9 @@ class ConceptMapVersionCreator:
         self.new_source_value_set_version_uuid = None
         self.new_target_value_set_version_uuid = None
 
+        # These are sources that are present for the first time in the new version
+        self.novel_sources = []
+
     def register_new_concept_map_version(self, new_version_description):
         """
         Registers the new ConceptMapVersion in the database.
@@ -399,7 +402,7 @@ class ConceptMapVersionCreator:
 
             if source_lookup_key not in previous_sources_and_mappings:
                 # Handle the case of a new source w/ no related previous one
-                pass
+                self.novel_sources.append(new_source_concept)
 
             else:
                 previous_source_concept = previous_sources_and_mappings[
@@ -478,8 +481,6 @@ class ConceptMapVersionCreator:
                                 previous_mapping_context, cls=CustomJSONEncoder
                             )
                         )
-
-        self.conn.execute(text("commit"))
 
     def process_no_map(
         self,

@@ -51,7 +51,6 @@ def get_all_value_sets_metadata():
         experimental = request.json.get("experimental")
         purpose = request.json.get("purpose")
         vs_type = request.json.get("type")
-        use_case_uuid = request.json.get("use_case_uuid")
         effective_start = request.json.get("effective_start")
         effective_end = request.json.get("effective_end")
         version_description = request.json.get("version_description")
@@ -66,7 +65,6 @@ def get_all_value_sets_metadata():
             experimental=experimental,
             purpose=purpose,
             vs_type=vs_type,
-            use_case_uuid=use_case_uuid,
             effective_start=effective_start,
             effective_end=effective_end,
             version_description=version_description,
@@ -142,6 +140,22 @@ def handle_linked_use_cases(value_set_uuid):
             primary_use_case, secondary_use_case, value_set_uuid
         )
         return jsonify({"message": "Use case(s) linked to value set successfully"}), 201
+
+
+@value_sets_blueprint.route("/ValueSets/clear/linked_use_cases", methods=["DELETE"])
+def clear_and_leave_blank():
+    value_set_uuid = request.args.get("value_set_uuid")
+    delete_all_use_cases_for_value_set(uuid.UUID(value_set_uuid))
+    return "Links cleared"
+
+
+@value_sets_blueprint.route("/ValueSets/by_use_cases", methods=["GET"])
+def get_value_sets_by_use_case():
+    use_case_uuid = request.args.get("use_case_uuid")
+    value_sets = ValueSet.get_value_sets_from_use_case(use_case_uuid)
+    serialized_value_sets = [item.serialize() for item in value_sets]
+
+    return jsonify(serialized_value_sets)
 
 
 @value_sets_blueprint.route(
