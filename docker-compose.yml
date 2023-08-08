@@ -33,6 +33,8 @@ services:
     command: ./start-celeryworker.sh
     env_file:
       - .env
+    volumes:
+      - './app:/app/app:z'
     environment:
       - FLASK_APP=app
 
