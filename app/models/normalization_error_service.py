@@ -440,4 +440,4 @@ def get_outstanding_errors(
 
 
 if __name__ == "__main__":
-    load_concepts_from_errors()
+    get_outstanding_errors()

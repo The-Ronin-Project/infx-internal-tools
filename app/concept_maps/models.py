@@ -193,7 +193,7 @@ class ConceptMap:
         most_recent_active_version (str): The UUID of the most recent active version of the concept map.
     """
 
-    def __init__(self, uuid):
+    def __init__(self, uuid, load_mappings_for_most_recent_active: bool = True):
         self.uuid = uuid
         self.name = None
         self.title = None
@@ -210,9 +210,9 @@ class ConceptMap:
         self.most_recent_active_version = None
         self.settings = None
 
-        self.load_data()
+        self.load_data(load_mappings_for_most_recent_active=load_mappings_for_most_recent_active)
 
-    def load_data(self):
+    def load_data(self, load_mappings_for_most_recent_active: bool = True):
         """
         runs sql query to get all information related to the concept map
         """
@@ -258,7 +258,7 @@ class ConceptMap:
         ).first()
         if version is not None:
             self.most_recent_active_version = ConceptMapVersion(
-                version.uuid, concept_map=self
+                version.uuid, concept_map=self, load_mappings=load_mappings_for_most_recent_active
             )
         else:
             self.most_recent_active_version = None
@@ -482,7 +482,7 @@ class ConceptMap:
 
 
 class ConceptMapVersion:
-    def __init__(self, uuid, concept_map=None):
+    def __init__(self, uuid, concept_map=None, load_mappings: bool = True):
         self.uuid = uuid
         self.concept_map = None
         self.description = None
@@ -497,9 +497,9 @@ class ConceptMapVersion:
         self.source_value_set_version_uuid = None
         self.target_value_set_version_uuid = None
 
-        self.load_data(concept_map=concept_map)
+        self.load_data(concept_map=concept_map, load_mappings=load_mappings)
 
-    def load_data(self, concept_map: ConceptMap = None):
+    def load_data(self, concept_map: ConceptMap = None, load_mappings: bool = True):
         """
         runs sql query to return all information related to specified concept map version, data returned is used to
         set class attributes
@@ -530,7 +530,8 @@ class ConceptMapVersion:
         self.source_value_set_version_uuid = data.source_value_set_version_uuid
         self.target_value_set_version_uuid = data.target_value_set_version_uuid
         self.load_allowed_target_terminologies()
-        self.load_mappings()
+        if load_mappings:
+            self.load_mappings()
         # self.generate_self_mappings()
 
     @classmethod
