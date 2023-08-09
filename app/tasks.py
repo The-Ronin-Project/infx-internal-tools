@@ -12,6 +12,7 @@ from app.concept_maps.versioning_models import ConceptMapVersionCreator
 from app.models.normalization_error_service import load_concepts_from_errors
 from app.database import get_db
 
+
 BROKER_HOST = config('CELERY_BROKER_HOST', 'localhost')
 BROKER_PORT = config('CELERY_BROKER_PORT', '5672')
 BROKER_URL = f'redis://{BROKER_HOST}:{BROKER_PORT}//'

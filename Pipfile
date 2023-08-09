@@ -38,6 +38,7 @@ oci = "*"
 mock = "*"
 celery = "*"
 redis = "*"
+flower = "*"
 
 [dev-packages]
 pytest = "*"
