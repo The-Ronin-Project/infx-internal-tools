@@ -30,37 +30,28 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: flask_celery_worker
-    command: /start-celeryworker
-    volumes:
-      - .:/app
+    command: ./start-celeryworker.sh
     env_file:
       - .env
     environment:
       - FLASK_APP=app
 
-#
-#  celery_beat:
-#      build:
-#        context: .
-#        dockerfile: Dockerfile
-#      image: flask_celery_beat
-#      command: /start-celerybeat
-#      volumes:
-#        - .:/app
-#      env_file:
-#        - .env
-#      environment:
-#        - FLASK_APP=app
+
+  celery_beat:
+      build:
+        context: .
+        dockerfile: Dockerfile
+      command: ./start-celerybeat.sh
+      env_file:
+        - .env
+      environment:
+        - FLASK_APP=app
 
 #  flower:
 #      build:
 #        context: .
 #        dockerfile: Dockerfile
-#      image: flask_celery_flower
-#      command: /start-flower
-#      volumes:
-#        - .:/app
+#      command: ./start-flower.sh
 #      env_file:
 #        - .env
 #      environment:
