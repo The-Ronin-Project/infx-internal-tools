@@ -37,6 +37,7 @@ black = "*"
 oci = "*"
 mock = "*"
 celery = "*"
+redis = "*"
 
 [dev-packages]
 pytest = "*"

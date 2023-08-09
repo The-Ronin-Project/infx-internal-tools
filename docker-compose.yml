@@ -31,10 +31,10 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ./start-celeryworker.sh
-    env_file:
-      - .env
     environment:
       - FLASK_APP=app
+      - CELERY_BROKER_HOST=host.docker.internal
+      - CELERY_BROKER_PORT=17110
 
 
   celery_beat:
