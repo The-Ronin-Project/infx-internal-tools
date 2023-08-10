@@ -13,42 +13,64 @@ services:
       - CELERY_BROKER_HOST=host.docker.internal
       - CELERY_BROKER_PORT=17110
     volumes:
-      - './app:/app/app:z'
+      - './app:/app/app:rw'
     ports:
       - 8000:8000
+  
+  redis:
+    image: redis
 
   celery_worker:
+    image: app
     build:
       context: .
       dockerfile: Dockerfile
-    command: ./start-celeryworker.sh
+    command:
+      - python
+      - -m
+      - app
+      - --worker
+    depends_on:
+      - redis
     environment:
       - FLASK_APP=app
-      - CELERY_BROKER_HOST=host.docker.internal
-      - CELERY_BROKER_PORT=17110
-
+      - CELERY_BROKER_HOST=redis
+      - CELERY_BROKER_PORT=6379
+    
 
   celery_beat:
-      build:
-        context: .
-        dockerfile: Dockerfile
-      command: ./start-celerybeat.sh
-      env_file:
-        - .env
-      environment:
-        - FLASK_APP=app
+    image: app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      - python
+      - -m
+      - app
+      - --beat
+    env_file:
+      - .env
+    environment:
+      - FLASK_APP=app
+    depends_on:
+      - redis
 
   flower:
-      build:
-        context: .
-        dockerfile: Dockerfile
-      command: ./start-flower.sh
-      env_file:
-        - .env
-      environment:
-        - FLASK_APP=app
-        - CELERY_BROKER_HOST=host.docker.internal
-        - CELERY_BROKER_PORT=17110
-      ports:
-        - 8001:8000
+    image: app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      - python
+      - -m
+      - app
+      - --flower
+    env_file:
+      - .env
+    environment:
+      - FLASK_APP=app
+      - CELERY_BROKER_HOST=redis
+      - CELERY_BROKER_PORT=6379
+    ports:
+      - 5555:5555
 

@@ -42,11 +42,6 @@ RUN pip install \
 ENV PYTHONUNBUFFERED 1
 ENV PYTHONDONTWRITEBYTECODE 1
 
-#COPY --chown=${USER_NAME}:${USER_NAME} ./compose/local/flask/entrypoint.sh ./
-COPY --chown=${USER_NAME}:${USER_NAME} ./compose/local/flask/start.sh ./
-COPY --chown=${USER_NAME}:${USER_NAME} compose/local/celery/worker/start.sh ./start-celeryworker.sh
-COPY --chown=${USER_NAME}:${USER_NAME} compose/local/celery/beat/start.sh ./start-celerybeat.sh
-COPY --chown=${USER_NAME}:${USER_NAME} compose/local/celery/flower/start.sh ./start-flower.sh
 
-#ENTRYPOINT [ "./entrypoint.sh" ]
-CMD [ "python", "-m", "app", "--reload" ]
+ENTRYPOINT [ "./entrypoint.sh" ]
+CMD [ "python", "-m", "app" ]
