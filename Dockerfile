@@ -43,5 +43,5 @@ ENV PYTHONUNBUFFERED 1
 ENV PYTHONDONTWRITEBYTECODE 1
 
 
-ENTRYPOINT [ "./entrypoint.sh" ]
+# ENTRYPOINT [ "./entrypoint.sh" ]
 CMD [ "python", "-m", "app" ]
