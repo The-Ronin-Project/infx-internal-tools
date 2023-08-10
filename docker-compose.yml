@@ -1,19 +1,54 @@
 version: "3.8"
 
 services:
+
   app:
     image: app
     build:
-      context: ./
+      context: .
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      - CELERY_BROKER_HOST=host.docker.internal
+      - CELERY_BROKER_PORT=17110
     volumes:
       - './app:/app/app:z'
-    command:
-      - "python"
-      - "-m"
-      - "app"
-      - "--reload"
     ports:
       - 8000:8000
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ./start-celeryworker.sh
+    environment:
+      - FLASK_APP=app
+      - CELERY_BROKER_HOST=host.docker.internal
+      - CELERY_BROKER_PORT=17110
+
+
+  celery_beat:
+      build:
+        context: .
+        dockerfile: Dockerfile
+      command: ./start-celerybeat.sh
+      env_file:
+        - .env
+      environment:
+        - FLASK_APP=app
+
+  flower:
+      build:
+        context: .
+        dockerfile: Dockerfile
+      command: ./start-flower.sh
+      env_file:
+        - .env
+      environment:
+        - FLASK_APP=app
+        - CELERY_BROKER_HOST=host.docker.internal
+        - CELERY_BROKER_PORT=17110
+      ports:
+        - 8001:8000
+

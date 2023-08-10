@@ -42,6 +42,7 @@ from app.helpers.oci_helper import (
     get_json_from_oci,
 )
 
+
 # Configure the logger when the application is imported. This ensures that
 # everything below uses the same configured logger.
 config_structlog()
@@ -351,6 +352,11 @@ def create_app(script_info=None):
         )
 
         return jsonify(result)
+
+    @app.route("/CeleryTask/Demo", methods=["GET"])
+    def celery_task_demo():
+        result = tasks.hello_world.delay()
+        return "Task Created"
 
     return app
 

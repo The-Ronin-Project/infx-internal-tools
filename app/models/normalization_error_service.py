@@ -4,6 +4,7 @@ from uuid import UUID
 from typing import Dict, Tuple, List, Optional
 from enum import Enum
 from dataclasses import dataclass
+from functools import lru_cache
 import warnings
 
 from decouple import config
@@ -37,7 +38,10 @@ def convert_string_to_datetime_or_none(input_string):
     if input_string is None:
         return None
     else:
-        return datetime.datetime.strptime(input_string, "%Y-%m-%dT%H:%M:%S.%fZ")
+        try:
+            return datetime.datetime.strptime(input_string, "%Y-%m-%dT%H:%M:%S.%fZ")
+        except ValueError:
+            return datetime.datetime.strptime(input_string, "%Y-%m-%dT%H:%M:%SZ")
 
 
 # Function to use the token to access the API
@@ -199,48 +203,62 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
     # 1. query to get all resources that have failed
     token = get_token()
 
-    # todo: enable pagination so we can retrieve more than 25
-    all_resources_with_errors_response = make_get_request(
-        token=token,
-        base_url=f"{DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}",
-        api_url="/resources",
-        params={
-            "order": "ASC",
-            "limit": 25,
-            "issue_type": "NOV_CONMAP_LOOKUP",
-        },
-    )
+    # Loop through all available errors and retrieve a complete set
+    resources_with_errors = []
+    PAGE_SIZE = 250
+    rest_api_params = {
+        "order": "ASC",
+        "limit": PAGE_SIZE,
+        "issue_type": "NOV_CONMAP_LOOKUP",
+    }
+    while True:
+        response = make_get_request(
+            token=token,
+            base_url=DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL,
+            api_url="/resources",
+            params=rest_api_params,
+        )
+        resources_with_errors.extend(response)
+
+        length_of_response = len(response)
+        # print(length_of_response)
+
+        if length_of_response < PAGE_SIZE:
+            break
+
+        else:
+            last_uuid = response[-1].get("id")
+            rest_api_params["after"] = last_uuid
 
     resources = []
-    for resource_data in all_resources_with_errors_response:
-        # organization = Organization(resource_data.get("organization_id"))
-        #
-        # resource_type = None
-        # for resource_type_option in ResourceType:
-        #     if resource_type_option.value == resource_data.get("resource_type"):
-        #         resource_type = resource_type_option
-        #         break
+    for resource_data in resources_with_errors:
+        organization = Organization(resource_data.get("organization_id"))
 
-        resource = ErrorServiceResource.deserialize(resource_data, token=token)
-        # resource = ErrorServiceResource(
-        #     id=UUID(resource_data.get("id")),
-        #     organization=organization,
-        #     resource_type=resource_type,
-        #     resource=resource_data.get("resource"),
-        #     status=resource_data.get("status"),
-        #     severity=resource_data.get("severity"),
-        #     create_dt_tm=convert_string_to_datetime_or_none(
-        #         resource_data.get("create_dt_tm")
-        #     ),
-        #     update_dt_tm=convert_string_to_datetime_or_none(
-        #         resource_data.get("update_dt_tm")
-        #     ),
-        #     reprocess_dt_tm=convert_string_to_datetime_or_none(
-        #         resource_data.get("reprocess_dt_tm")
-        #     ),
-        #     reprocessed_by=resource_data.get("reprocessed_by"),
-        #     token=token,
-        # )
+        resource_type = None
+        for resource_type_option in ResourceType:
+            if resource_type_option.value == resource_data.get("resource_type"):
+                resource_type = resource_type_option
+                break
+
+        resource = ErrorServiceResource(
+            id=UUID(resource_data.get("id")),
+            organization=organization,
+            resource_type=resource_type,
+            resource=resource_data.get("resource"),
+            status=resource_data.get("status"),
+            severity=resource_data.get("severity"),
+            create_dt_tm=convert_string_to_datetime_or_none(
+                resource_data.get("create_dt_tm")
+            ),
+            update_dt_tm=convert_string_to_datetime_or_none(
+                resource_data.get("update_dt_tm")
+            ),
+            reprocess_dt_tm=convert_string_to_datetime_or_none(
+                resource_data.get("reprocess_dt_tm")
+            ),
+            reprocessed_by=resource_data.get("reprocessed_by"),
+            token=token,
+        )
         resource.load_issues()
         resources.append(resource)
 
@@ -264,10 +282,12 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
         ):
             raw_resource = json.loads(error_service_resource.resource)
             raw_coding = raw_resource["code"]
+            error_service_resource.load_issues()
         else:
             warnings.warn(
                 f"Support for the {error_service_resource.resource_type} resource type has not been implemented"
             )
+            continue
 
         # Lookup the concept map version used to normalize this type of resource
         # So that we can then identify the correct terminology to load the new coding to
@@ -333,12 +353,15 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
         else:
             new_codes_to_load_by_terminology[terminology_to_load_to.uuid] = [new_code]
 
-    # Unpack the data structure we created earlier and load the codes to their respective terminologies
-    for terminology_version_uuid, code_list in new_codes_to_load_by_terminology.items():
-        terminology = Terminology.load(terminology_version_uuid)
-        terminology.load_new_codes_to_terminology(code_list)
+    print(new_codes_to_load_by_terminology)
+
+    # # Unpack the data structure we created earlier and load the codes to their respective terminologies
+    # for terminology_version_uuid, code_list in new_codes_to_load_by_terminology.items():
+    #     terminology = Terminology.load(terminology_version_uuid)
+    #     terminology.load_new_codes_to_terminology(code_list)
 
 
+@lru_cache
 def lookup_concept_map_version_for_data_element(
     data_element: str, organization: Organization
 ) -> "ConceptMapVersion":

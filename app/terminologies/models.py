@@ -325,7 +325,10 @@ class Terminology:
         # We need to create a new version
         current_version = most_recent_terminology.version
         try:
-            new_version_string = str(int(current_version) + 1)
+            if current_version.isdigit():
+                new_version_string = str(int(current_version) + 1)
+            else:
+                new_version_string = str(int(float(current_version) + 1))
         except TypeError:
             raise Exception(
                 f"Could not automatically increment version number {current_version}"

@@ -1,5 +1,6 @@
 from celery import Celery
 from uuid import UUID
+from decouple import config
 from app.models.normalization_error_service import (
     load_concepts_from_errors,
     lookup_concept_map_version_for_data_element,
@@ -11,8 +12,14 @@ from app.concept_maps.versioning_models import ConceptMapVersionCreator
 from app.models.normalization_error_service import load_concepts_from_errors
 from app.database import get_db
 
-celery_app = Celery("infx-tasks")
-celery_app.conf.task_always_eager = True
+
+BROKER_HOST = config('CELERY_BROKER_HOST', 'localhost')
+BROKER_PORT = config('CELERY_BROKER_PORT', '5672')
+BROKER_URL = f'redis://{BROKER_HOST}:{BROKER_PORT}//'
+
+celery_app = Celery("infx-tasks", broker=BROKER_URL)
+# celery_app.conf.task_always_eager = True
+# celery_app.conf.broker_url = config('CELERY_BROKER_URL')
 
 
 def load_outstanding_errors_to_custom_terminologies():
@@ -103,3 +110,9 @@ def back_fill_concept_maps_to_simplifier():
         concept_map_object.to_simplifier()
 
     return "Active concept map versions back fill to Simplifier complete."
+
+
+@celery_app.task
+def hello_world():
+    print("Hello, World!")
+    return "Hello, World!"
