@@ -10,8 +10,8 @@ services:
     env_file:
       - .env
     environment:
-      - CELERY_BROKER_HOST=host.docker.internal
-      - CELERY_BROKER_PORT=17110
+      - CELERY_BROKER_HOST=redis
+      - CELERY_BROKER_PORT=6379
     volumes:
       - './app:/app/app:rw'
     ports:
