@@ -18,7 +18,7 @@ BROKER_PORT = config('CELERY_BROKER_PORT', '5672')
 BROKER_URL = f'redis://{BROKER_HOST}:{BROKER_PORT}//'
 
 celery_app = Celery("infx-tasks", broker=BROKER_URL)
-celery_app.conf.task_always_eager = True
+# celery_app.conf.task_always_eager = True
 # celery_app.conf.broker_url = config('CELERY_BROKER_URL')
 
 
@@ -114,4 +114,5 @@ def back_fill_concept_maps_to_simplifier():
 
 @celery_app.task
 def hello_world():
+    print("Hello, World!")
     return "Hello, World!"

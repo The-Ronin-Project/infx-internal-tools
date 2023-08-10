@@ -356,7 +356,7 @@ def create_app(script_info=None):
     @app.route("/CeleryTask/Demo", methods=["GET"])
     def celery_task_demo():
         result = tasks.hello_world.delay()
-        return result
+        return "Task Created"
 
     return app
 

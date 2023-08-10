@@ -9,6 +9,9 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      - CELERY_BROKER_HOST=host.docker.internal
+      - CELERY_BROKER_PORT=17110
     volumes:
       - './app:/app/app:z'
     ports:
