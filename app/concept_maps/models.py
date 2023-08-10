@@ -210,7 +210,9 @@ class ConceptMap:
         self.most_recent_active_version = None
         self.settings = None
 
-        self.load_data(load_mappings_for_most_recent_active=load_mappings_for_most_recent_active)
+        self.load_data(
+            load_mappings_for_most_recent_active=load_mappings_for_most_recent_active
+        )
 
     def load_data(self, load_mappings_for_most_recent_active: bool = True):
         """
@@ -258,7 +260,9 @@ class ConceptMap:
         ).first()
         if version is not None:
             self.most_recent_active_version = ConceptMapVersion(
-                version.uuid, concept_map=self, load_mappings=load_mappings_for_most_recent_active
+                version.uuid,
+                concept_map=self,
+                load_mappings=load_mappings_for_most_recent_active,
             )
         else:
             self.most_recent_active_version = None
@@ -773,12 +777,13 @@ class ConceptMapVersion:
             text(
                 """
                     UPDATE concept_maps.concept_map_version
-                    SET status=:status
+                    SET status=:status, published_date=:publshed_date
                     WHERE uuid=:version_uuid
                     """
             ),
             {
                 "status": "active",
+                "published_date": datetime.datetime.now(),
                 "version_uuid": self.uuid,
             },
         )
@@ -913,7 +918,9 @@ class ConceptMapVersion:
                         ):
                             depends_on_value = source_code.depends_on_value
                             if is_coding_array(depends_on_value):
-                                depends_on_value = transform_struct_string_to_json(depends_on_value)
+                                depends_on_value = transform_struct_string_to_json(
+                                    depends_on_value
+                                )
                             depends_on = {
                                 "property": source_code.depends_on_property,
                                 "value": depends_on_value,

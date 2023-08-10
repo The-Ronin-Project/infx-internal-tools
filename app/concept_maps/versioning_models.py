@@ -228,7 +228,7 @@ class ConceptMapVersionCreator:
                 depends_on_system=row.depends_on_system,
                 depends_on_property=row.depends_on_property,
                 depends_on_value=row.depends_on_value,
-                depends_on_display=row.depends_on_display
+                depends_on_display=row.depends_on_display,
             )
 
             mapping = None
@@ -248,7 +248,7 @@ class ConceptMapVersionCreator:
                     display=row.target_concept_display,
                     system=None,
                     version=None,
-                    terminology_version=target_system
+                    terminology_version=target_system,
                 )
 
                 mapping = Mapping(
@@ -446,9 +446,11 @@ class ConceptMapVersionCreator:
 
                         if target_lookup_key not in new_targets_lookup:
                             # Append previous context to list in case multiple mappings which need to save it
-                            previous_context_for_row = self.process_inactive_target_mapping(
-                                new_source_concept=new_source_concept,
-                                previous_mapping=previous_mapping,
+                            previous_context_for_row = (
+                                self.process_inactive_target_mapping(
+                                    new_source_concept=new_source_concept,
+                                    previous_mapping=previous_mapping,
+                                )
                             )
                             previous_mapping_context.append(previous_context_for_row)
                         else:
@@ -479,7 +481,7 @@ class ConceptMapVersionCreator:
                             conn=self.conn,
                             previous_version_context=json.dumps(
                                 previous_mapping_context, cls=CustomJSONEncoder
-                            )
+                            ),
                         )
 
     def process_no_map(
@@ -638,7 +640,7 @@ class ConceptMapVersionCreator:
 
         # Explicitly over-write the review status to set it back to needing review
         new_mapping = Mapping(
-            source=source_code,
+            source=new_source_concept,
             relationship=relationship,
             target=target_code,
             mapping_comments=previous_mapping.mapping_comments,
