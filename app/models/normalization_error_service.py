@@ -33,6 +33,10 @@ DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL = config(
     "DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default=""
 )
 
+DEFAULT_TERMINOLOGY_WHITELIST_FOR_INCREMENTAL_LOAD = [
+    'http://projectronin.io/fhir/CodeSystem/ejh3j95h/Observations'  # Cerner Sandbox Observations
+]
+
 
 def convert_string_to_datetime_or_none(input_string):
     if input_string is None:
@@ -185,7 +189,7 @@ def get_token():
     return token["access_token"]
 
 
-def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[Code]]:
+def load_concepts_from_errors(terminology_whitelist=DEFAULT_TERMINOLOGY_WHITELIST_FOR_INCREMENTAL_LOAD):
     """
     Loads and processes a list of errors to extract specific concepts from them.
     Save these new concepts back to the correct custom terminology.
@@ -195,11 +199,14 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
     results are returned as a dictionary, where each key is a tuple of an organization and a
     resource type, and each value is a list of concepts associated with that key.
 
+    The input `terminology_whitelist` provides a list of URIs (fhir_uri) specifying which terminologies
+    data can be loaded to through this process.
+
     Returns:
         Dict[Tuple[Organization, ResourceType], List[Code]]: A dictionary mapping tuples of
         organization and resource type to lists of concepts extracted from the errors.
     """
-    # {{validation_url}}/resources?order=ASC&limit=25&issue_type=NOV_CONMAP_LOOKUP
+
     # 1. query to get all resources that have failed
     token = get_token()
 
@@ -259,7 +266,7 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
             reprocessed_by=resource_data.get("reprocessed_by"),
             token=token,
         )
-        resource.load_issues()
+        # resource.load_issues()
         resources.append(resource)
 
     # For some resource types (ex. Location, Appointment), we need to read the issue to know where in the
@@ -271,7 +278,7 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
     # 4. look inside the raw resource json and pull out the relevant codes that need to be mapped
 
     # Key: terminology_version_uuid, Value: list containing the codes to load to that terminology
-    new_codes_to_load_by_terminology = {}
+    new_codes_to_deduplicate_by_terminology = {}
 
     for error_service_resource in resources:
 
@@ -282,6 +289,9 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
         ):
             raw_resource = json.loads(error_service_resource.resource)
             raw_coding = raw_resource["code"]
+            raw_coding_as_value_codeable_concept = {
+                "valueCodeableConcept": raw_coding
+            }
             error_service_resource.load_issues()
         else:
             warnings.warn(
@@ -319,11 +329,11 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
         most_recent_active_source_value_set_version = (
             ValueSet.load_most_recent_active_version(source_value_set_uuid)
         )
-        most_recent_active_source_value_set_version.expand()
+        most_recent_active_source_value_set_version.expand() # todo: prevent this from re-running for the same value set
 
         # Identify the terminology inside the source value set
         terminologies_in_source_value_set = (
-            most_recent_active_source_value_set_version.lookup_terminologies_in_value_set_version()
+            most_recent_active_source_value_set_version.lookup_terminologies_in_value_set_version() # todo: can this also use a cache?
         )
 
         if len(terminologies_in_source_value_set) > 1:
@@ -335,30 +345,85 @@ def load_concepts_from_errors() -> Dict[Tuple[Organization, ResourceType], List[
 
         # The custom terminology may have already passed its effective end date, so we might need to create a new version
         terminology_to_load_to = (
-            current_terminology_version.version_to_load_new_content_to()
+            current_terminology_version.version_to_load_new_content_to() # todo: can this also use a cache?
         )
 
         new_code = Code(
-            code=raw_coding,
+            code=raw_coding_as_value_codeable_concept,
             display=raw_coding.get("text"),
             system=None,
             version=None,
             terminology_version_uuid=terminology_to_load_to.uuid,
         )
 
-        if terminology_to_load_to.uuid in new_codes_to_load_by_terminology:
-            new_codes_to_load_by_terminology[terminology_to_load_to.uuid].append(
+        # Assemble additionalData from the raw resource.
+        # This is where we'll extract unit, value, valueQuantity, and referenceRange if available
+        resource_json = json.loads(error_service_resource.resource)
+        unit = resource_json.get('unit')
+        value = resource_json.get('value')
+        value_quantity = resource_json.get('valueQuantity')
+        reference_range = resource_json.get('referenceRange')
+
+        new_code.add_examples_to_additional_data(
+            unit=unit,
+            value=value,
+            value_quantity=value_quantity,
+            reference_range=reference_range
+        )
+
+        if terminology_to_load_to.uuid in new_codes_to_deduplicate_by_terminology:
+            new_codes_to_deduplicate_by_terminology[terminology_to_load_to.uuid].append(
                 new_code
             )
         else:
-            new_codes_to_load_by_terminology[terminology_to_load_to.uuid] = [new_code]
+            new_codes_to_deduplicate_by_terminology[terminology_to_load_to.uuid] = [new_code]
 
-    print(new_codes_to_load_by_terminology)
+    # DEDUPLICATE THE CODES
+    # We need to de-duplicate the codes, and then merge the examples in their additionalData
+    #
+    deduped_codes_by_terminology = {}
+    for terminology_uuid, new_codes_to_deduplicate in new_codes_to_deduplicate_by_terminology.items():
+
+        # Store duplicates in a dictionary with lists
+        dedup_dict = {}
+        for code in new_codes_to_deduplicate:
+            if code in dedup_dict:
+                dedup_dict[code].append(code)
+            else:
+                dedup_dict[code] = [code]
+
+        # Merge duplicates
+        deduped_codes = []
+        for duplicates in dedup_dict.values():
+            if len(duplicates) > 1:
+                merged_code = duplicates[0]
+                for i in range(1, len(duplicates)):
+                    current_duplicate = duplicates[i]
+                    # Merge in duplicates
+                    if merged_code.additional_data:
+                        merged_code.add_examples_to_additional_data(
+                            unit=current_duplicate.additional_data.get('example_unit'),
+                            value=current_duplicate.additional_data.get('example_value'),
+                            value_quantity=current_duplicate.additional_data.get('example_value_quantity'),
+                            reference_range=current_duplicate.additional_data.get('example_reference_range')
+                        )
+                deduped_codes.append(merged_code)
+            else:
+                deduped_codes.append(duplicates[0])
+
+        deduped_codes_by_terminology[terminology_uuid] = deduped_codes
 
     # # Unpack the data structure we created earlier and load the codes to their respective terminologies
-    # for terminology_version_uuid, code_list in new_codes_to_load_by_terminology.items():
-    #     terminology = Terminology.load(terminology_version_uuid)
-    #     terminology.load_new_codes_to_terminology(code_list)
+    for terminology_version_uuid, code_list in deduped_codes_by_terminology.items():
+        terminology = Terminology.load(terminology_version_uuid)
+
+        if terminology_whitelist is not None:
+            if terminology.fhir_uri not in terminology_whitelist:
+                continue
+
+        print(terminology_version_uuid, len(code_list), code_list)
+
+        # terminology.load_new_codes_to_terminology(code_list, on_conflict_do_nothing=True)
 
 
 @lru_cache
@@ -463,4 +528,13 @@ def get_outstanding_errors(
 
 
 if __name__ == "__main__":
-    get_outstanding_errors()
+    import pickle
+
+    resources = load_concepts_from_errors()
+    # with open('data.pkl', 'wb') as file:
+    #     pickle.dump(resources, file)
+    # conn.rollback()
+    # # conn.commit()
+    # conn.close()
+
+

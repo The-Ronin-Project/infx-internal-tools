@@ -442,7 +442,7 @@ class Terminology:
             )
         return True, None
 
-    def load_new_codes_to_terminology(self, codes: List["app.models.codes.Code"]):
+    def load_new_codes_to_terminology(self, codes: List["app.models.codes.Code"], on_conflict_do_nothing=False):
         """
         This method loads new codes into the terminology.
 
@@ -482,13 +482,18 @@ class Terminology:
             serialized_code = code.code
             if type(serialized_code) == dict:
                 serialized_code = json.dumps(serialized_code)
+
             # Insert new code into the database
-            conn.execute(
-                text(
-                    """
+            query_text = """
                     INSERT INTO custom_terminologies.code (uuid, code, display, additional_data, terminology_version_uuid, depends_on_value, depends_on_display, depends_on_property, depends_on_system)
                     VALUES (:uuid, :code, :display, :additional_data, :terminology_version_uuid, :depends_on_value, :depends_on_display, :depends_on_property, :depends_on_system)
                 """
+            if on_conflict_do_nothing:
+                query_text += """ on conflict do nothing
+                """
+            conn.execute(
+                text(
+                    query_text
                 ),
                 {
                     "uuid": uuid.uuid4(),
