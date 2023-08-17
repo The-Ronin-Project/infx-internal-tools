@@ -191,26 +191,28 @@ def get_token():
 
 def load_concepts_from_errors(terminology_whitelist=DEFAULT_TERMINOLOGY_WHITELIST_FOR_INCREMENTAL_LOAD):
     """
-    Loads and processes a list of errors to extract specific concepts from them.
-    Save these new concepts back to the correct custom terminology.
+        Extracts specific concepts from a list of errors and saves them to a custom terminology.
 
-    This function parses each error and identifies the relevant concepts. These concepts are
-    then grouped by the originating organization and the type of resource they belong to. The
-    results are returned as a dictionary, where each key is a tuple of an organization and a
-    resource type, and each value is a list of concepts associated with that key.
+        This function processes errors to identify and extract relevant concepts. It then organizes
+        these concepts by the originating organization and type of resource they pertain to. The
+        results are saved back to the appropriate custom terminology.
 
-    The input `terminology_whitelist` provides a list of URIs (fhir_uri) specifying which terminologies
-    data can be loaded to through this process.
+        Parameters:
+            terminology_whitelist (list, optional): A list of URIs (fhir_uri) specifying the terminologies
+                to which data can be loaded. If not provided, uses a default whitelist.
 
-    Returns:
-        Dict[Tuple[Organization, ResourceType], List[Code]]: A dictionary mapping tuples of
-        organization and resource type to lists of concepts extracted from the errors.
-    """
+        Procedure:
+            1. Fetch resources that have encountered errors.
+            2. Process these resources to identify the source of the error.
+            3. Extract relevant codes from the resource.
+            4. Deduplicate the codes to avoid redundancy.
+            5. Load the unique codes into their respective terminologies.
+        """
 
-    # 1. query to get all resources that have failed
+    # Step 1: Fetch resources that have encountered errors.
     token = get_token()
 
-    # Loop through all available errors and retrieve a complete set
+    # Collecting all resources with errors through paginated API calls.
     resources_with_errors = []
     PAGE_SIZE = 250
     rest_api_params = {
@@ -218,6 +220,8 @@ def load_concepts_from_errors(terminology_whitelist=DEFAULT_TERMINOLOGY_WHITELIS
         "limit": PAGE_SIZE,
         "issue_type": "NOV_CONMAP_LOOKUP",
     }
+
+    # Continuously fetch resources until all pages have been retrieved.
     while True:
         response = make_get_request(
             token=token,
@@ -228,7 +232,6 @@ def load_concepts_from_errors(terminology_whitelist=DEFAULT_TERMINOLOGY_WHITELIS
         resources_with_errors.extend(response)
 
         length_of_response = len(response)
-        # print(length_of_response)
 
         if length_of_response < PAGE_SIZE:
             break
@@ -237,6 +240,7 @@ def load_concepts_from_errors(terminology_whitelist=DEFAULT_TERMINOLOGY_WHITELIS
             last_uuid = response[-1].get("id")
             rest_api_params["after"] = last_uuid
 
+    # Convert API response data to ErrorServiceResource objects.
     resources = []
     for resource_data in resources_with_errors:
         organization = Organization(resource_data.get("organization_id"))
@@ -269,14 +273,13 @@ def load_concepts_from_errors(terminology_whitelist=DEFAULT_TERMINOLOGY_WHITELIS
         # resource.load_issues()
         resources.append(resource)
 
-    # For some resource types (ex. Location, Appointment), we need to read the issue to know where in the
-    # resource the failure occured. However, as we are initially implementing for Condition, where the failure
-    # will be in coding.code, we can skip this step
+    # Step 2: For specific resource types, we may need to read the issue to
+    # determine where in the resource the failure occurred.
+    # However, this is initially implemented for Condition and Observation only.
 
-    # 3. Lookup where in the resource the failure is (skipping for now) todo: do this
+    # Step 3: Extract relevant codes from the resource.
 
-    # 4. look inside the raw resource json and pull out the relevant codes that need to be mapped
-
+    # Initialize a dictionary to hold codes that need deduplication, grouped by terminology.
     # Key: terminology_version_uuid, Value: list containing the codes to load to that terminology
     new_codes_to_deduplicate_by_terminology = {}
 
@@ -327,13 +330,13 @@ def load_concepts_from_errors(terminology_whitelist=DEFAULT_TERMINOLOGY_WHITELIS
             concept_map_version_for_normalization.concept_map.source_value_set_uuid
         )
         most_recent_active_source_value_set_version = (
-            ValueSet.load_most_recent_active_version(source_value_set_uuid)
+            ValueSet.load_most_recent_active_version_with_cache(source_value_set_uuid)
         )
-        most_recent_active_source_value_set_version.expand() # todo: prevent this from re-running for the same value set
+        most_recent_active_source_value_set_version.expand(no_repeat=True)
 
         # Identify the terminology inside the source value set
         terminologies_in_source_value_set = (
-            most_recent_active_source_value_set_version.lookup_terminologies_in_value_set_version() # todo: can this also use a cache?
+            most_recent_active_source_value_set_version.lookup_terminologies_in_value_set_version()
         )
 
         if len(terminologies_in_source_value_set) > 1:
@@ -345,7 +348,7 @@ def load_concepts_from_errors(terminology_whitelist=DEFAULT_TERMINOLOGY_WHITELIS
 
         # The custom terminology may have already passed its effective end date, so we might need to create a new version
         terminology_to_load_to = (
-            current_terminology_version.version_to_load_new_content_to() # todo: can this also use a cache?
+            current_terminology_version.version_to_load_new_content_to()
         )
 
         new_code = Code(
@@ -378,10 +381,10 @@ def load_concepts_from_errors(terminology_whitelist=DEFAULT_TERMINOLOGY_WHITELIS
         else:
             new_codes_to_deduplicate_by_terminology[terminology_to_load_to.uuid] = [new_code]
 
-    # DEDUPLICATE THE CODES
-    # We need to de-duplicate the codes, and then merge the examples in their additionalData
-    #
+    # Step 4: Deduplicate the codes to avoid redundant data.
     deduped_codes_by_terminology = {}
+
+    # Loop through codes, identify duplicates, and merge them.
     for terminology_uuid, new_codes_to_deduplicate in new_codes_to_deduplicate_by_terminology.items():
 
         # Store duplicates in a dictionary with lists
@@ -413,17 +416,18 @@ def load_concepts_from_errors(terminology_whitelist=DEFAULT_TERMINOLOGY_WHITELIS
 
         deduped_codes_by_terminology[terminology_uuid] = deduped_codes
 
-    # # Unpack the data structure we created earlier and load the codes to their respective terminologies
+    # Step 5: Load the deduplicated codes into their respective terminologies.
     for terminology_version_uuid, code_list in deduped_codes_by_terminology.items():
         terminology = Terminology.load(terminology_version_uuid)
 
+        # Verify if the terminology is in the whitelist before loading.
         if terminology_whitelist is not None:
             if terminology.fhir_uri not in terminology_whitelist:
                 continue
 
-        print(terminology_version_uuid, len(code_list), code_list)
+        # print(terminology_version_uuid, len(code_list), code_list)
 
-        # terminology.load_new_codes_to_terminology(code_list, on_conflict_do_nothing=True)
+        terminology.load_new_codes_to_terminology(code_list, on_conflict_do_nothing=True)
 
 
 @lru_cache
