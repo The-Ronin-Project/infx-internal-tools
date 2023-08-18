@@ -19,7 +19,7 @@ BROKER_TLS_ENFORCED = bool(config('CELERY_BROKER_TLS_ENFORCED', False))
 broker_protocol = "rediss" if BROKER_TLS_ENFORCED else "redis"
 BROKER_URL = f'{broker_protocol}://{BROKER_HOST}:{BROKER_PORT}//'
 if BROKER_TLS_ENFORCED:
-    BROKER_HOST += "?ssl_cert_reqs=required"
+    BROKER_URL += "?ssl_cert_reqs=required"
 
 celery_app = Celery("infx-tasks", broker=BROKER_URL)
 # celery_app.conf.task_always_eager = True

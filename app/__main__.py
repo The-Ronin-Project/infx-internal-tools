@@ -1,4 +1,5 @@
 import argparse
+import socket
 import sys
 
 import hupper
@@ -15,6 +16,7 @@ parser.add_argument("--reload", action="store_true", default=False)
 parser.add_argument("--worker", action="store_true", default=False)
 parser.add_argument("--beat", action="store_true", default=False)
 parser.add_argument("--flower", action="store_true", default=False)
+parser.add_argument("--ping", action="store_true", default=False)
 parser.add_argument("--log-level", default="info")
 args: argparse.Namespace = parser.parse_args()
 
@@ -22,6 +24,8 @@ args: argparse.Namespace = parser.parse_args()
 def main():
     app = create_app()
     log_level = f"--loglevel={args.log_level}"
+    if args.ping:
+        return celery_app.start(["inspect", "ping", "-d", f"celery@{socket.gethostname()}"])
     if args.worker:
         return celery_app.start(["worker", log_level])
     if args.beat:
