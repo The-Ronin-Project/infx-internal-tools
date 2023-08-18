@@ -1,10 +1,10 @@
 from flask import Blueprint, request, jsonify
 import dataclasses
-from app.registries.models import GroupMember
+from app.registries.models import GroupMember, Group, Registry, LabGroupMember
 from app.models.codes import *
 from app.terminologies.models import *
 
-registries_blueprint = Blueprint("registries", __name__)
+registries_blueprint = Blueprint("registries", __name__, url_prefix='/registries')
 
 
 @registries_blueprint.route("/", methods=["POST", "GET"])
@@ -27,13 +27,22 @@ def get_specific_registry():
         pass
 
 
-@registries_blueprint.route("/<registry_id>/groups/", methods=["POST"])
-def create_group():
-    # Implement create group logic
-    pass
+@registries_blueprint.route("/<string:registry_uuid>", methods=["POST"])
+def create_group(registry_uuid):
+    if request.method == "POST":
+        registry_uuid = registry_uuid
+        product_group_title = request.json.get("product_group_title")
+
+        # Create new group
+        new_group = Group.create(
+            registry_uuid=registry_uuid,
+            product_group_title=product_group_title
+        )
+
+        return jsonify(new_group.serialize())
 
 
-@registries_blueprint.route("/<registry_id>/groups/<group_uuid>", methods=["PUT", "DELETE"])
+@registries_blueprint.route("/<string:registry_uuid>/groups/<group_uuid>", methods=["PUT", "DELETE"])
 def update_group():
     if request.method == 'PUT':
         # Implement update logic
@@ -43,27 +52,26 @@ def update_group():
         pass
 
 
-@registries_blueprint.route("/<registry_id>/groups/<group_uuid>/", methods=["POST"])
-def create_group_member():
+@registries_blueprint.route("/<string:registry_uuid>/groups/<string:group_uuid>/", methods=["POST"])
+def create_group_member(registry_uuid, group_uuid):
     if request.method == "POST":
-        group_uuid = request.json.get("group_uuid")
-        group_member_type = request.json.get("group_member_type")
+        registry = Registry.load(registry_uuid)
+
+        group_uuid = group_uuid
         product_title = request.json.get("product_title")
-        sequence = request.json.get("sequence")
         value_set_uuid = request.json.get("value_set_uuid")
-        value_set_version_uuid = request.json.get("value_set_version_uuid")
 
-        # You may want to add checks to ensure that the data is valid or present
-
-        new_group_member = GroupMember.create(
-            group_uuid=group_uuid,
-            # group_member_type=group_member_type,
-            product_element_type_label=product_title,  # change in pgAdmin
-            sequence=sequence,
-            # value_set_uuid=value_set_uuid,
-            # value_set_version_uuid=value_set_version_uuid
-
-        )
+        if registry.data_type == 'lab':
+            pass
+        elif registry.data_type == 'vital':
+            pass
+        else:
+            # Creat new group member
+            new_group_member = GroupMember.create(
+                group_uuid=group_uuid,
+                product_title=product_title,
+                value_set_uuid=value_set_uuid,
+            )
 
         return jsonify(new_group_member.serialize())
     pass
