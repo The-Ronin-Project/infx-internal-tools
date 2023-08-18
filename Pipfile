@@ -1,7 +1,7 @@
 [[source]]
-url = "https://pypi.org/simple"
+url = "https://repo.devops.projectronin.io/repository/pypi/simple"
 verify_ssl = true
-name = "pypi"
+name = "ronin"
 
 [packages]
 attrs = "*"
@@ -39,6 +39,7 @@ mock = "*"
 celery = "*"
 redis = "*"
 flower = "*"
+lxml = "*"
 
 [dev-packages]
 pytest = "*"
