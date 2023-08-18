@@ -210,7 +210,9 @@ class ConceptMap:
         self.most_recent_active_version = None
         self.settings = None
 
-        self.load_data(load_mappings_for_most_recent_active=load_mappings_for_most_recent_active)
+        self.load_data(
+            load_mappings_for_most_recent_active=load_mappings_for_most_recent_active
+        )
 
     def load_data(self, load_mappings_for_most_recent_active: bool = True):
         """
@@ -258,7 +260,9 @@ class ConceptMap:
         ).first()
         if version is not None:
             self.most_recent_active_version = ConceptMapVersion(
-                version.uuid, concept_map=self, load_mappings=load_mappings_for_most_recent_active
+                version.uuid,
+                concept_map=self,
+                load_mappings=load_mappings_for_most_recent_active,
             )
         else:
             self.most_recent_active_version = None
@@ -913,7 +917,9 @@ class ConceptMapVersion:
                         ):
                             depends_on_value = source_code.depends_on_value
                             if is_coding_array(depends_on_value):
-                                depends_on_value = transform_struct_string_to_json(depends_on_value)
+                                depends_on_value = transform_struct_string_to_json(
+                                    depends_on_value
+                                )
                             depends_on = {
                                 "property": source_code.depends_on_property,
                                 "value": depends_on_value,
@@ -1597,7 +1603,9 @@ def transform_struct_string_to_json(struct_string):
         items = match.split(", ")
         d = {
             "code": items[0],
-            "display": None if items[1] == "null" else ", ".join(items[1:-1]),
+            "display": None
+            if len(items) < 2 or items[1] == "null"
+            else ", ".join(items[1:-1]),
             "system": items[-1],
         }
         coding_array.append(d)
