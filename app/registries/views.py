@@ -11,14 +11,17 @@ registries_blueprint = Blueprint("registries", __name__, url_prefix='/registries
 def create_or_get_registry():
     if request.method == "POST":
         # create registry
+        # todo: load API data from JSON and call Registry.create
         pass
     elif request.method == "GET":
         # get all registries (for main page with list of registries)
+        # skip this implementation for now, we'll come back to it later in the week...
         pass
 
 @registries_blueprint.route("/<string:registry_uuid>", methods=["PUT"])
 def update_registry_metadata(registry_uuid):
     # Update the metadata of a specific registry
+    # todo: allow user to edit title, registry_type, and sorting_enabled by implementing Registry.update
     pass
 
 
@@ -41,9 +44,12 @@ def create_group(registry_uuid):
 def update_group():
     if request.method == 'PUT':
         # Implement update logic
+        # todo: implement updating the title in Group.update method
+        # todo: let's have a separate conversation on how to update sequence appropriately
         pass
     elif request.method == "DELETE":
         # Implement delete logic
+        # todo: implement Group.delete method
         pass
 
 

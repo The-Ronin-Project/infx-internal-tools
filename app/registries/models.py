@@ -43,6 +43,13 @@ class Registry:
             registry_type=result.registry_type
         )
 
+    @classmethod
+    def create(cls, title: str, registry_type: str, sorting_enabled: bool):
+        pass
+
+    def update(self, title=None, sorting_enabled=None, registry_type=None):
+        pass
+
 
 @dataclass
 class Group:
@@ -104,6 +111,12 @@ class Group:
             sequence=result.sequence,
             registry=registry
         )
+
+    def update(self, title):
+        pass
+
+    def delete(self):
+        pass
 
     def serialize(self):
         return {
