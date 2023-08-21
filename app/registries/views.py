@@ -7,20 +7,13 @@ from app.terminologies.models import *
 registries_blueprint = Blueprint("registries", __name__, url_prefix='/registries')
 
 
-@registries_blueprint.route("/", methods=["POST", "GET"])
+@registries_blueprint.route("/", methods=["POST", "GET", "PUT"])
 def create_or_get_registry():
     if request.method == "POST":
         # create registry
         pass
     elif request.method == "GET":
         # get all registries (for main page with list of registries)
-        pass
-
-
-@registries_blueprint.route("/<registry_id>", methods=["GET", "PUT"])
-def get_specific_registry():
-    if request.method == "GET":
-        # return registry, including the groups so they can be displayed
         pass
     elif request.method == "PUT":
         # Update title, or other registry-level metadata
@@ -31,12 +24,12 @@ def get_specific_registry():
 def create_group(registry_uuid):
     if request.method == "POST":
         registry_uuid = registry_uuid
-        product_group_title = request.json.get("product_group_title")
+        title = request.json.get("title")
 
         # Create new group
         new_group = Group.create(
             registry_uuid=registry_uuid,
-            product_group_title=product_group_title
+            title=title
         )
 
         return jsonify(new_group.serialize())
@@ -58,7 +51,7 @@ def create_group_member(registry_uuid, group_uuid):
         registry = Registry.load(registry_uuid)
 
         group_uuid = group_uuid
-        product_title = request.json.get("product_title")
+        title = request.json.get("title")
         value_set_uuid = request.json.get("value_set_uuid")
 
         if registry.data_type == 'lab':
@@ -69,7 +62,7 @@ def create_group_member(registry_uuid, group_uuid):
             # Creat new group member
             new_group_member = GroupMember.create(
                 group_uuid=group_uuid,
-                product_title=product_title,
+                title=title,
                 value_set_uuid=value_set_uuid,
             )
 

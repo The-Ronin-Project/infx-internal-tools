@@ -49,13 +49,13 @@ class Group:
     uuid: uuid.UUID
     registry: Registry
     title: str
-    sequence_num: int
+    sequence: int
 
     @classmethod
     def create(
             cls,
             registry_uuid,
-            product_group_title,
+            title,
                ):
         conn = get_db()
         group_uuid = uuid.uuid4()
@@ -64,9 +64,9 @@ class Group:
             text(
                 """
                 INSERT INTO flexible_registry."group"
-                ("uuid", "registry_uuid", "product_group_title", "sequence")
+                ("uuid", "registry_uuid", "title", "sequence")
                 VALUES
-                (:uuid, :registry_uuid, :product_group_title, (
+                (:uuid, :registry_uuid, :title, (
                         SELECT COALESCE(MAX(sequence), 0) + 1
                         FROM flexible_registry.group
                         WHERE registry_uuid = :registry_uuid
@@ -77,7 +77,7 @@ class Group:
             {
                 "uuid": group_uuid,
                 "registry_uuid": registry_uuid,
-                "product_group_title": product_group_title,
+                "title": title,
             },
         )
 
@@ -100,8 +100,8 @@ class Group:
 
         return cls(
             uuid=result.uuid,
-            title=result.product_group_title,
-            sequence_num=result.sequence,
+            title=result.title,
+            sequence=result.sequence,
             registry=registry
         )
 
@@ -109,8 +109,8 @@ class Group:
         return {
             "uuid": self.uuid,
             "registry_uuid": self.registry.uuid,
-            "product_group_title": self.title,
-            "sequence": self.sequence_num,
+            "title": self.title,
+            "sequence": self.sequence,
         }
 
 
@@ -119,14 +119,14 @@ class GroupMember:
     uuid: uuid.UUID
     group: Group
     title: str
-    sequence_num: int
+    sequence: int
     value_set: ValueSet
 
     @classmethod
     def create(
         cls,
         group_uuid,
-        product_title,
+        title,
         value_set_uuid,
         **kwargs
     ):
@@ -137,9 +137,9 @@ class GroupMember:
             text(
                 """
                 INSERT INTO flexible_registry."group_member"
-                ("uuid", "group_uuid", "product_title", "value_set_uuid", "sequence")
+                ("uuid", "group_uuid", "title", "value_set_uuid", "sequence")
                 VALUES
-                (:uuid, :group_uuid, :product_title, :value_set_uuid, (
+                (:uuid, :group_uuid, :title, :value_set_uuid, (
                         SELECT COALESCE(MAX(sequence), 0) + 1
                         FROM flexible_registry.group_member
                         WHERE group_uuid = :group_uuid
@@ -150,7 +150,7 @@ class GroupMember:
             {
                 "uuid": gm_uuid,
                 "group_uuid": group_uuid,
-                "product_title": product_title,
+                "title": title,
                 "value_set_uuid": value_set_uuid
             },
         )
@@ -188,8 +188,8 @@ class GroupMember:
             return {
                 "uuid": result.uuid,
                 "group": Group.load(result.group_uuid),
-                "title": result.product_title,
-                "sequence_num": result.sequence,
+                "title": result.title,
+                "sequence": result.sequence,
                 "value_set": ValueSet.load(result.value_set_uuid),
             }
         return None
@@ -200,7 +200,7 @@ class GroupMember:
             uuid=data["uuid"],
             group=data["group"],
             title=data["title"],
-            sequence_num=data["sequence_num"],
+            sequence=data["sequence"],
             value_set=data["value_set"],
         )
 
@@ -208,8 +208,8 @@ class GroupMember:
         return {
             "uuid": self.uuid,
             "group_uuid": self.group.uuid,
-            "product_title": self.title,
-            "sequence": self.sequence_num,
+            "title": self.title,
+            "sequence": self.sequence,
             "value_set_uuid": self.value_set.uuid,
         }
 
@@ -222,14 +222,14 @@ class LabGroupMember(GroupMember):
     def create(
         cls,
         group_uuid,
-        product_title,
+        title,
         value_set_uuid,
         **kwargs
     ):
         if 'minimum_panel_members' not in kwargs:
             raise BadRequestWithCode('missing-required-param', "minimum_panel_members is required to add lab to panel")
 
-        super().create(group_uuid, product_title, value_set_uuid)
+        super().create(group_uuid, title, value_set_uuid)
 
     @classmethod
     def post_create_hook(cls, gm_uuid, **kwargs):
@@ -280,7 +280,7 @@ class LabGroupMember(GroupMember):
             uuid=data["uuid"],
             group=data["group"],
             title=data["title"],
-            sequence_num=data["sequence_num"],
+            sequence=data["sequence"],
             value_set=data["value_set"],
             minimum_panel_members=data["minimum_panel_members"]
         )
