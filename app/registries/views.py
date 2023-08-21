@@ -20,7 +20,7 @@ def create_or_get_registry():
         pass
 
 
-@registries_blueprint.route("/<string:registry_uuid>", methods=["POST"])
+@registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST"])
 def create_group(registry_uuid):
     if request.method == "POST":
         registry_uuid = registry_uuid
@@ -59,7 +59,7 @@ def create_group_member(registry_uuid, group_uuid):
         elif registry.data_type == 'vital':
             pass
         else:
-            # Creat new group member
+            # Create new group member
             new_group_member = GroupMember.create(
                 group_uuid=group_uuid,
                 title=title,
