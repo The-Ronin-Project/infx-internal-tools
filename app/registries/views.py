@@ -45,7 +45,7 @@ def update_group():
         pass
 
 
-@registries_blueprint.route("/<string:registry_uuid>/groups/<string:group_uuid>/", methods=["POST"])
+@registries_blueprint.route("/<string:registry_uuid>/groups/<string:group_uuid>/members/", methods=["POST"])
 def create_group_member(registry_uuid, group_uuid):
     if request.method == "POST":
         registry = Registry.load(registry_uuid)
