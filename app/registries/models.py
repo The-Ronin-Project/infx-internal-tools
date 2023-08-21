@@ -215,6 +215,41 @@ class GroupMember:
 
 
 @dataclass
+class VitalsGroupMember(GroupMember):
+    # todo: extra data declarations go here
+
+    @classmethod
+    def create(
+        cls,
+        group_uuid,
+        title,
+        value_set_uuid,
+        **kwargs
+    ):
+        # todo: alidate any additional data required for vitals here
+
+        super().create(group_uuid, title, value_set_uuid)
+
+    @classmethod
+    def post_create_hook(cls, gm_uuid, **kwargs):
+        # todo: save additional data for vitals to appropriate table
+        pass
+
+    @classmethod
+    def fetch_data(cls, uuid):
+        # todo: implement
+        pass
+
+    @classmethod
+    def create_instance_from_data(cls, **data):
+        # todo: implement
+        pass
+
+    def serialize(self):
+        # todo: implement
+        pass
+
+@dataclass
 class LabGroupMember(GroupMember):
     minimum_panel_members: int
 
