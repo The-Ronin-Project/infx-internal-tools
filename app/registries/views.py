@@ -7,7 +7,7 @@ from app.terminologies.models import *
 registries_blueprint = Blueprint("registries", __name__, url_prefix='/registries')
 
 
-@registries_blueprint.route("/", methods=["POST", "GET", "PUT"])
+@registries_blueprint.route("/", methods=["POST", "GET"])
 def create_or_get_registry():
     if request.method == "POST":
         # create registry
@@ -15,9 +15,11 @@ def create_or_get_registry():
     elif request.method == "GET":
         # get all registries (for main page with list of registries)
         pass
-    elif request.method == "PUT":
-        # Update title, or other registry-level metadata
-        pass
+
+@registries_blueprint.route("/<string:registry_uuid>", methods=["PUT"])
+def update_registry_metadata(registry_uuid):
+    # Update the metadata of a specific registry
+    pass
 
 
 @registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST"])
