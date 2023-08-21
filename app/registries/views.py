@@ -78,8 +78,8 @@ def create_group_member(registry_uuid, group_uuid):
     pass
 
 
-@registries_blueprint.route("/<registry_id>/groups/<group_id>/members/<member_id>", methods=["PUT", "DELETE"])
-def update_group_member():
+@registries_blueprint.route("/<string:registry_uuid>/groups/<string:group_uuid>/members/<string:member_uuid>", methods=["PUT", "DELETE"])
+def update_group_member(registry_uuid, group_uuid, member_uuid):
     if request.method == 'PUT':
         # Implement update logic
         pass
