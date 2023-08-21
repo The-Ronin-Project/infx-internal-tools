@@ -30,6 +30,7 @@ import app.value_sets.views as value_set_views
 import app.concept_maps.views as concept_map_views
 import app.concept_maps.models as concept_maps_models
 import app.terminologies.views as terminology_views
+import app.registries.views as registry_views
 import app.tasks as tasks
 
 import app.models.rxnorm as rxnorm
@@ -71,6 +72,7 @@ def create_app(script_info=None):
     app.register_blueprint(value_set_views.value_sets_blueprint)
     app.register_blueprint(concept_map_views.concept_maps_blueprint)
     app.register_blueprint(terminology_views.terminologies_blueprint)
+    app.register_blueprint(registry_views.registries_blueprint)
 
     @app.route("/ping")
     def ping():
