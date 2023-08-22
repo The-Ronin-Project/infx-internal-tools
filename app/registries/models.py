@@ -17,8 +17,29 @@ from app.value_sets.models import ValueSet, ValueSetVersion
 class Registry:
     uuid: uuid.UUID
     title: str
-    registry_type: str  # todo: likely this should be an enum
+    registry_type: str  # not an enum so users can create new types of registries w/o code change
     sorting_enabled: bool
+
+    @classmethod
+    def create(cls, title:str, registry_type:str, sorting_enabled:bool):
+        conn = get_db()
+        registry_uuid = uuid.uuid4()
+        conn.execute(
+            text(
+                """
+                insert into flexible_registry.registry
+                (uuid, title, registry_type, sorting_enabled)
+                values
+                (:uuid, :title, :registry_type, :sorting_enabled)
+                """
+            ), {
+                "uuid": registry_uuid,
+                "title": title,
+                "registry_type": registry_type,
+                "sorting_enabled": sorting_enabled
+            }
+        )
+        return cls.load(registry_uuid)
 
     @classmethod
     def load(cls, registry_uuid):

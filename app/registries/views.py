@@ -11,8 +11,21 @@ registries_blueprint = Blueprint("registries", __name__, url_prefix="/registries
 def create_or_get_registry():
     if request.method == "POST":
         # create registry
-        # todo: load API data from JSON and call Registry.create
-        pass
+        title = request.json.get('title')
+        registry_type = request.json.get('registry_type')
+        sorting_enabled = request.json.get('sorting_enabled')
+
+        if sorting_enabled is not None:
+            if type(sorting_enabled) != bool:
+                raise BadRequestWithCode('bad-request', "sorting_enabled must be boolean")
+
+        new_registry = Registry.create(
+            title=title,
+            registry_type=registry_type,
+            sorting_enabled=sorting_enabled
+        )
+        return jsonify(new_registry.serialize())
+
     elif request.method == "GET":
         # get all registries (for main page with list of registries)
         # skip this implementation for now, we'll come back to it later in the week...
