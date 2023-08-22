@@ -11,18 +11,18 @@ registries_blueprint = Blueprint("registries", __name__, url_prefix="/registries
 def create_or_get_registry():
     if request.method == "POST":
         # create registry
-        title = request.json.get('title')
-        registry_type = request.json.get('registry_type')
-        sorting_enabled = request.json.get('sorting_enabled')
+        title = request.json.get("title")
+        registry_type = request.json.get("registry_type")
+        sorting_enabled = request.json.get("sorting_enabled")
 
         if sorting_enabled is not None:
             if type(sorting_enabled) != bool:
-                raise BadRequestWithCode('bad-request', "sorting_enabled must be boolean")
+                raise BadRequestWithCode(
+                    "bad-request", "sorting_enabled must be boolean"
+                )
 
         new_registry = Registry.create(
-            title=title,
-            registry_type=registry_type,
-            sorting_enabled=sorting_enabled
+            title=title, registry_type=registry_type, sorting_enabled=sorting_enabled
         )
         return jsonify(new_registry.serialize())
 
@@ -30,6 +30,7 @@ def create_or_get_registry():
         # get all registries (for main page with list of registries)
         registries = Registry.load_all_registries()
         return jsonify([registry.serialize() for registry in registries])
+
 
 @registries_blueprint.route("/<string:registry_uuid>", methods=["PATCH"])
 def update_registry_metadata(registry_uuid):
@@ -64,16 +65,21 @@ def create_group(registry_uuid):
 @registries_blueprint.route(
     "/<string:registry_uuid>/groups/<group_uuid>", methods=["PUT", "DELETE"]
 )
-def update_group():
+def update_group(registry_uuid, group_uuid):
+    group = Group.load(group_uuid)
+    if not group:
+        return jsonify({"error": "Group not found"}), 404
+
     if request.method == "PUT":
         # Implement update logic
-        # todo: implement updating the title in Group.update method
+        title = request.json.get("title")
+        group.update(title)
+        return jsonify(group.serialize())
         # todo: let's have a separate conversation on how to update sequence appropriately
-        pass
+
     elif request.method == "DELETE":
-        # Implement delete logic
-        # todo: implement Group.delete method
-        pass
+        group.delete()
+        return jsonify({"success": "Group deleted"})
 
 
 @registries_blueprint.route(

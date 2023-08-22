@@ -21,7 +21,7 @@ class Registry:
     sorting_enabled: bool
 
     @classmethod
-    def create(cls, title:str, registry_type:str, sorting_enabled:bool):
+    def create(cls, title: str, registry_type: str, sorting_enabled: bool):
         conn = get_db()
         registry_uuid = uuid.uuid4()
         conn.execute(
@@ -32,12 +32,13 @@ class Registry:
                 values
                 (:uuid, :title, :registry_type, :sorting_enabled)
                 """
-            ), {
+            ),
+            {
                 "uuid": registry_uuid,
                 "title": title,
                 "registry_type": registry_type,
-                "sorting_enabled": sorting_enabled
-            }
+                "sorting_enabled": sorting_enabled,
+            },
         )
         return cls.load(registry_uuid)
 
@@ -77,8 +78,10 @@ class Registry:
                 uuid=result.uuid,
                 title=result.title,
                 registry_type=result.registry_type,
-                sorting_enabled=result.sorting_enabled
-            ) for result in results]
+                sorting_enabled=result.sorting_enabled,
+            )
+            for result in results
+        ]
 
     def update(self, title=None, sorting_enabled=None, registry_type=None):
         conn = get_db()
@@ -127,7 +130,7 @@ class Registry:
             "uuid": self.uuid,
             "title": self.title,
             "registry_type": self.registry_type,
-            "sorting_enabled": self.sorting_enabled
+            "sorting_enabled": self.sorting_enabled,
         }
 
 
@@ -193,18 +196,40 @@ class Group:
         )
 
     def update(self, title):
-        pass
+        conn = get_db()
+        if title is not None:
+            conn.execute(
+                text(
+                    """    
+                    UPDATE flexible_registry."group"    
+                    SET title=:title    
+                    WHERE "uuid"=:group_uuid    
+                    """
+                ),
+                {"title": title, "group_uuid": self.uuid},
+            )
+            self.title = title
 
     def delete(self):
-        pass
+        conn = get_db()
+        conn.execute(
+            text(
+                """  
+                DELETE FROM flexible_registry."group"  
+                WHERE "uuid" = :group_uuid  
+                """
+            ),
+            {"group_uuid": self.uuid},
+        )
 
-    def serialize(self):
-        return {
-            "uuid": self.uuid,
-            "registry_uuid": self.registry.uuid,
-            "title": self.title,
-            "sequence": self.sequence,
-        }
+
+def serialize(self):
+    return {
+        "uuid": self.uuid,
+        "registry_uuid": self.registry.uuid,
+        "title": self.title,
+        "sequence": self.sequence,
+    }
 
 
 @dataclass
