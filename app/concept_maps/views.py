@@ -10,7 +10,12 @@ from app.helpers.oci_helper import (
 )
 from app.concept_maps.models import *
 from app.concept_maps.versioning_models import *
-
+from app.concept_maps.constants import (
+    RELATIONSHIP_CODE_UUID,
+    TARGET_CONCEPT_CODE,
+    TARGET_CONCEPT_DISPLAY,
+    TARGET_CONCEPT_TERMINOLOGY_VERSION_UUID,
+)
 import app.tasks as tasks
 
 concept_maps_blueprint = Blueprint("concept_maps", __name__)
@@ -327,6 +332,57 @@ def create_mappings():
         target_concept_display = request.json.get("target_concept_display")
         target_concept_terminology_version_uuid = request.json.get(
             "target_concept_terminology_version_uuid"
+        )
+        mapping_comments = request.json.get("mapping_comments")
+        author = request.json.get("author")
+        review_status = request.json.get("review_status")
+
+        relationship = MappingRelationship.load(relationship_code_uuid)
+
+        target_code = Code(
+            code=target_concept_code,
+            display=target_concept_display,
+            system=None,
+            version=None,
+            terminology_version_uuid=target_concept_terminology_version_uuid,
+        )
+
+        new_mappings = []
+        for source_concept_uuid in source_concept_uuids:
+            make_author_assigned_mapper(source_concept_uuid, author)
+            source_code = SourceConcept.load(source_concept_uuid)
+            new_mapping = Mapping(
+                source=source_code,
+                relationship=relationship,
+                target=target_code,
+                mapping_comments=mapping_comments,
+                author=author,
+                review_status=review_status,
+            )
+            new_mapping.save()
+            new_mappings.append(new_mapping.serialize())
+
+        return jsonify(new_mappings)
+
+
+@concept_maps_blueprint.route("/mappings/no_map", methods=["POST"])
+def create_mappings():
+    """
+    Create a no map mapping with the provided source concept UUID(s),  hard coded relationship code UUID ,
+    hard coded target concept code, hard coded target concept display, hard coded target concept terminology version UUID,
+    mapping comments, no_map_reason, author, and review status.
+    """
+
+    if request.method == "POST":
+        source_concept_uuids = request.json.get("source_concept_uuids")
+        if not isinstance(source_concept_uuids, list):
+            source_concept_uuids = [source_concept_uuids]
+
+        relationship_code_uuid = RELATIONSHIP_CODE_UUID
+        target_concept_code = TARGET_CONCEPT_CODE
+        target_concept_display = TARGET_CONCEPT_DISPLAY
+        target_concept_terminology_version_uuid = (
+            TARGET_CONCEPT_TERMINOLOGY_VERSION_UUID
         )
         mapping_comments = request.json.get("mapping_comments")
         author = request.json.get("author")
