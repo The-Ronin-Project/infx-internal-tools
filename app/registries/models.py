@@ -19,6 +19,7 @@ class Registry:
     title: str
     registry_type: str  # todo: likely this should be an enum
     sorting_enabled: bool
+
     @classmethod
     def load(cls, registry_uuid):
         conn = get_db()
@@ -69,25 +70,17 @@ class Registry:
             self.sorting_enabled = sorting_enabled
 
         if registry_type is not None:
-                conn.execute(
-                    text(
-                        """  
+            conn.execute(
+                text(
+                    """  
                         UPDATE flexible_registry.registry  
                         SET registry_type=:registry_type  
                         WHERE uuid=:registry_uuid  
                         """
-                    ),
-                    {
-                        "registry_type": registry_type,
-                        "registry_uuid": self.uuid
-                    }
-                )
-                self.registry_type = registry_type
-
-
-@classmethod
-    def create(cls, title: str, registry_type: str, sorting_enabled: bool):
-        pass
+                ),
+                {"registry_type": registry_type, "registry_uuid": self.uuid},
+            )
+            self.registry_type = registry_type
 
     def update(self, title=None, sorting_enabled=None, registry_type=None):
         pass
@@ -242,6 +235,39 @@ class GroupMember:
                 "value_set": ValueSet.load(result.value_set_uuid),
             }
         return None
+
+    def update(self, title=None, value_set_uuid=None):
+        conn = get_db()
+
+        if title is not None:
+            conn.execute(
+                text(
+                    """  
+                    UPDATE flexible_registry.group_member  
+                    SET title=:title  
+                    WHERE uuid=:member_uuid  
+                    """
+                ),
+                {"title": title, "member_uuid": self.uuid},
+            )
+            self.title = title
+
+        if value_set_uuid is not None:
+            # Load the new ValueSet instance using the provided value_set_uuid
+            new_value_set = ValueSet.load(value_set_uuid)
+            if new_value_set is None:
+                raise ValueError(f"ValueSet with UUID {value_set_uuid} not found")
+            conn.execute(
+                text(
+                    """  
+                    UPDATE flexible_registry.group_member  
+                    SET value_set_uuid=:value_set_uuid  
+                    WHERE uuid=:member_uuid  
+                    """
+                ),
+                {"value_set_uuid": value_set_uuid, "member_uuid": self.uuid},
+            )
+            self.value_set = new_value_set
 
     @classmethod
     def create_instance_from_data(cls, **data):

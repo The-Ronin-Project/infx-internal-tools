@@ -19,11 +19,22 @@ def create_or_get_registry():
         pass
 
 
-@registries_blueprint.route("/<string:registry_uuid>", methods=["PUT"])
+@registries_blueprint.route("/<string:registry_uuid>", methods=["PATCH"])
 def update_registry_metadata(registry_uuid):
     # Update the metadata of a specific registry
-    # todo: allow user to edit title, registry_type, and sorting_enabled by implementing Registry.update
-    pass
+    title = request.json.get("title")
+    sorting_enabled = request.json.get("sorting_enabled")
+    registry_type = request.json.get("registry_type")
+
+    registry = Registry.load(registry_uuid)
+    if not registry:
+        return jsonify({"error": "Registry not found"}), 404
+
+    registry.update(
+        title=title, sorting_enabled=sorting_enabled, registry_type=registry_type
+    )
+
+    return jsonify(registry=dataclasses.asdict(registry))
 
 
 @registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST"])
@@ -82,30 +93,20 @@ def create_group_member(registry_uuid, group_uuid):
 
 @registries_blueprint.route(
     "/<string:registry_uuid>/groups/<string:group_uuid>/members/<string:member_uuid>",
-    methods=["PUT", "DELETE"],
+    methods=["PATCH", "DELETE"],
 )
 def update_group_member(registry_uuid, group_uuid, member_uuid):
-    if request.method == "PUT":
-        # Implement update logic
-        pass
+    if request.method == "PATCH":
+        title = request.json.get("title")
+        value_set_uuid = request.json.get("value_set_uuid")
+
+        group_member = GroupMember.load(member_uuid)
+        if not group_member:
+            return jsonify({"error": "Group member not found"}), 404
+
+        group_member.update(title=title, value_set_uuid=value_set_uuid)
+
+        return jsonify(group_member=dataclasses.asdict(group_member))
     elif request.method == "DELETE":
         # Implement delete logic
         pass
-
-
-@registries_blueprint.route("/<string:registry_uuid>", methods=["PATCH"])
-def update_registry_metadata(registry_uuid):
-    # Update the metadata of a specific registry
-    title = request.json.get("title")
-    sorting_enabled = request.json.get("sorting_enabled")
-    registry_type = request.json.get("registry_type")
-
-    registry = Registry.load(registry_uuid)
-    if not registry:
-        return jsonify({"error": "Registry not found"}), 404
-
-    registry.update(
-        title=title, sorting_enabled=sorting_enabled, registry_type=registry_type
-    )
-
-    return jsonify(registry=dataclasses.asdict(registry))
