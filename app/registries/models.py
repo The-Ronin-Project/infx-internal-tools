@@ -61,6 +61,25 @@ class Registry:
             uuid=registry_uuid, title=result.title, registry_type=result.registry_type
         )
 
+    @classmethod
+    def load_all_registries(cls):
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """
+                select * from flexible_registry.registry
+                """
+            )
+        )
+
+        return [
+            cls(
+                uuid=result.uuid,
+                title=result.title,
+                registry_type=result.registry_type,
+                sorting_enabled=result.sorting_enabled
+            ) for result in results]
+
     def update(self, title=None, sorting_enabled=None, registry_type=None):
         conn = get_db()
 
@@ -103,8 +122,13 @@ class Registry:
             )
             self.registry_type = registry_type
 
-    def update(self, title=None, sorting_enabled=None, registry_type=None):
-        pass
+    def serialize(self):
+        return {
+            "uuid": self.uuid,
+            "title": self.title,
+            "registry_type": self.registry_type,
+            "sorting_enabled": self.sorting_enabled
+        }
 
 
 @dataclass

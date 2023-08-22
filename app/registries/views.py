@@ -28,9 +28,8 @@ def create_or_get_registry():
 
     elif request.method == "GET":
         # get all registries (for main page with list of registries)
-        # skip this implementation for now, we'll come back to it later in the week...
-        pass
-
+        registries = Registry.load_all_registries()
+        return jsonify([registry.serialize() for registry in registries])
 
 @registries_blueprint.route("/<string:registry_uuid>", methods=["PATCH"])
 def update_registry_metadata(registry_uuid):
