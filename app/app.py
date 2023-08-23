@@ -21,7 +21,7 @@ from app.models.data_ingestion_registry import (
     DataNormalizationRegistry,
     DNRegistryEntry,
 )
-from app.errors import BadRequestWithCode
+from app.errors import BadRequestWithCode, NotFoundException
 from app.helpers.simplifier_helper import (
     publish_to_simplifier,
 )
@@ -89,6 +89,10 @@ def create_app(script_info=None):
         """Handles general HTTPExceptions by returning a JSON response with the appropriate error message and status code."""
         logger.critical(e.description, stack_info=True)
         return jsonify({"message": e.description}), e.code
+
+    @app.errorhandler(NotFoundException)
+    def handle_not_found(e):
+        return jsonify({"message": e.message}), 404
 
     # UseCase Endpoints
     @app.route("/usecase/", methods=["GET"])
