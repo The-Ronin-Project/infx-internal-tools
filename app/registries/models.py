@@ -17,8 +17,30 @@ from app.value_sets.models import ValueSet, ValueSetVersion
 class Registry:
     uuid: uuid.UUID
     title: str
-    registry_type: str  # todo: likely this should be an enum
+    registry_type: str  # not an enum so users can create new types of registries w/o code change
     sorting_enabled: bool
+
+    @classmethod
+    def create(cls, title: str, registry_type: str, sorting_enabled: bool):
+        conn = get_db()
+        registry_uuid = uuid.uuid4()
+        conn.execute(
+            text(
+                """
+                insert into flexible_registry.registry
+                (uuid, title, registry_type, sorting_enabled)
+                values
+                (:uuid, :title, :registry_type, :sorting_enabled)
+                """
+            ),
+            {
+                "uuid": registry_uuid,
+                "title": title,
+                "registry_type": registry_type,
+                "sorting_enabled": sorting_enabled,
+            },
+        )
+        return cls.load(registry_uuid)
 
     @classmethod
     def load(cls, registry_uuid):
@@ -40,8 +62,29 @@ class Registry:
             uuid=registry_uuid,
             title=result.title,
             registry_type=result.registry_type,
-            sorting_enabled=result.sorting_enabled,
+            sorting_enabled=result.sorting_enabled
         )
+
+    @classmethod
+    def load_all_registries(cls) -> List['Registry']:
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """
+                select * from flexible_registry.registry
+                """
+            )
+        )
+
+        return [
+            cls(
+                uuid=result.uuid,
+                title=result.title,
+                registry_type=result.registry_type,
+                sorting_enabled=result.sorting_enabled,
+            )
+            for result in results
+        ]
 
     def update(self, title=None, sorting_enabled=None, registry_type=None):
         conn = get_db()
@@ -84,8 +127,14 @@ class Registry:
                 {"registry_type": registry_type, "registry_uuid": self.uuid},
             )
             self.registry_type = registry_type
-        # Commit the changes to the database
-        conn.commit()
+
+    def serialize(self):
+        return {
+            "uuid": self.uuid,
+            "title": self.title,
+            "registry_type": self.registry_type,
+            "sorting_enabled": self.sorting_enabled,
+        }
 
 
 @dataclass
@@ -150,10 +199,31 @@ class Group:
         )
 
     def update(self, title):
-        pass
+        conn = get_db()
+        if title is not None:
+            conn.execute(
+                text(
+                    """    
+                    UPDATE flexible_registry."group"    
+                    SET title=:title    
+                    WHERE "uuid"=:group_uuid    
+                    """
+                ),
+                {"title": title, "group_uuid": self.uuid},
+            )
+            self.title = title
 
     def delete(self):
-        pass
+        conn = get_db()
+        conn.execute(
+            text(
+                """  
+                DELETE FROM flexible_registry."group"  
+                WHERE "uuid" = :group_uuid  
+                """
+            ),
+            {"group_uuid": self.uuid},
+        )
 
     def serialize(self):
         return {
@@ -174,6 +244,11 @@ class GroupMember:
 
     @classmethod
     def create(cls, group_uuid, title, value_set_uuid, **kwargs):
+        """
+        In order to allow effective subclassing, this method will NOT return the created resource.
+        Instead, it will call a `post_create_hook` that can be overridden in subclasses to perform additional processing
+        and then return the new resource.
+        """
         conn = get_db()
         gm_uuid = uuid.uuid4()
 
