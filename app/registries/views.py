@@ -125,13 +125,10 @@ def get_registry_groups(registry_uuid):
     registry = Registry.load(registry_uuid)
 
     # Load all the groups associated with the registry
-    groups = Group.load_all_for_registry(registry_uuid)
-
-    # Convert the groups to dictionaries
-    groups_dicts = [group.to_dict() for group in groups]
+    registry.load_groups()
 
     # Return the groups in the response
-    return jsonify(groups=groups_dicts)
+    return jsonify([group.serialize() for group in registry.groups])
 
 
 @registries_blueprint.route(

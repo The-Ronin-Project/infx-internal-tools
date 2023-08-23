@@ -20,6 +20,9 @@ class Registry:
     registry_type: str  # not an enum so users can create new types of registries w/o code change
     sorting_enabled: bool
 
+    def __post_init__(self):
+        self.groups = []
+
     @classmethod
     def create(cls, title: str, registry_type: str, sorting_enabled: bool):
         conn = get_db()
@@ -102,6 +105,31 @@ class Registry:
             )
             for result in results
         ]
+
+    def load_groups(self):
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """  
+                SELECT * FROM flexible_registry."group"  
+                WHERE registry_uuid = :registry_uuid
+                order by sequence  
+                """
+            ),
+            {"registry_uuid": self.uuid},
+        ).fetchall()
+
+        groups = []
+        for result in results:
+            group = Group(
+                uuid=result.uuid,
+                registry=self,
+                title=result.title,
+                sequence=result.sequence,
+            )
+            groups.append(group)
+
+        self.groups = groups
 
     def update(self, title=None, sorting_enabled=None, registry_type=None):
         conn = get_db()
@@ -214,33 +242,6 @@ class Group:
             sequence=result.sequence,
             registry=registry,
         )
-
-    @classmethod
-    def load_all_for_registry(cls, registry_uuid: str) -> List["Group"]:
-        conn = get_db()
-        results = conn.execute(
-            text(
-                """  
-                SELECT * FROM flexible_registry."group"  
-                WHERE registry_uuid = :registry_uuid  
-                """
-            ),
-            {"registry_uuid": registry_uuid},
-        ).fetchall()
-
-        registry = Registry.load(registry_uuid)
-
-        groups = []
-        for result in results:
-            group = cls(
-                uuid=result.uuid,
-                registry=registry,
-                title=result.title,
-                sequence=result.sequence,
-            )
-            groups.append(group)
-
-        return groups
 
     def update(self, title):
         conn = get_db()
