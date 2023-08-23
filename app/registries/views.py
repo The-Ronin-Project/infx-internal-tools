@@ -106,7 +106,8 @@ def update_group_member(registry_uuid, group_uuid, member_uuid):
 
         group_member.update(title=title, value_set_uuid=value_set_uuid)
 
-        return jsonify(group_member=dataclasses.asdict(group_member))
+        return "update complete"
+
     elif request.method == "DELETE":
         # Implement delete logic
         pass
