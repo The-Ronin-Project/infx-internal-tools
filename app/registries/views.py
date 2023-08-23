@@ -63,14 +63,14 @@ def create_group(registry_uuid):
 
 
 @registries_blueprint.route(
-    "/<string:registry_uuid>/groups/<group_uuid>", methods=["PUT", "DELETE"]
+    "/<string:registry_uuid>/groups/<string:group_uuid>", methods=["PATCH", "DELETE"]
 )
 def update_group(registry_uuid, group_uuid):
     group = Group.load(group_uuid)
     if not group:
         return jsonify({"error": "Group not found"}), 404
 
-    if request.method == "PUT":
+    if request.method == "PATCH":
         # Implement update logic
         title = request.json.get("title")
         group.update(title)
