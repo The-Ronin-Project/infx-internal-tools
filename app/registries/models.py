@@ -58,11 +58,14 @@ class Registry:
             return None
 
         return cls(
-            uuid=registry_uuid, title=result.title, registry_type=result.registry_type
+            uuid=registry_uuid,
+            title=result.title,
+            registry_type=result.registry_type,
+            sorting_enabled=result.sorting_enabled
         )
 
     @classmethod
-    def load_all_registries(cls):
+    def load_all_registries(cls) -> List['Registry']:
         conn = get_db()
         results = conn.execute(
             text(
@@ -217,6 +220,11 @@ class GroupMember:
 
     @classmethod
     def create(cls, group_uuid, title, value_set_uuid, **kwargs):
+        """
+        In order to allow effective subclassing, this method will NOT return the created resource.
+        Instead, it will call a `post_create_hook` that can be overridden in subclasses to perform additional processing
+        and then return the new resource.
+        """
         conn = get_db()
         gm_uuid = uuid.uuid4()
 
