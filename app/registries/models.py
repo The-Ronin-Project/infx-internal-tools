@@ -7,7 +7,7 @@ from sqlalchemy import text
 from functools import lru_cache
 import app.models.codes
 from app.database import get_db
-from app.errors import BadRequestWithCode
+from app.errors import BadRequestWithCode, NotFoundException
 from app.value_sets.models import ValueSet, ValueSetVersion
 
 # Need reference ranges for labs and vitals
@@ -73,7 +73,7 @@ class Registry:
         ).fetchone()
 
         if result is None:
-            return None
+            raise NotFoundException(f'No Registry found with UUID:{registry_uuid}')
 
         return cls(
             uuid=registry_uuid,

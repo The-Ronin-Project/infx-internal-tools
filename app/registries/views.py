@@ -6,7 +6,6 @@ from app.registries.models import (
     Registry,
     LabGroupMember,
 )
-from app.errors import NotFoundException
 from app.models.codes import *
 from app.terminologies.models import *
 
@@ -43,8 +42,6 @@ def create_or_get_registry():
 @registries_blueprint.route("/<string:registry_uuid>", methods=["PATCH", "GET"])
 def update_registry_metadata(registry_uuid):
     registry = Registry.load(registry_uuid)
-    if not registry:
-        raise NotFoundException(f"Registry with uuid:{registry_uuid} not found")
 
     # Update the metadata of a specific registry
     if request.method == "PATCH":
@@ -127,11 +124,7 @@ def get_registry_groups(registry_uuid):
     # Load the registry using its UUID
     registry = Registry.load(registry_uuid)
 
-    # If the registry is not found, return an error response
-    if not registry:
-        return jsonify({"error": "Registry not found"}), 404
-
-        # Load all the groups associated with the registry
+    # Load all the groups associated with the registry
     groups = Group.load_all_for_registry(registry_uuid)
 
     # Convert the groups to dictionaries
