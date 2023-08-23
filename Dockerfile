@@ -24,12 +24,12 @@ FROM docker-proxy.devops.projectronin.io/ronin/base/python-base:latest as runtim
 
 ARG USER_NAME=ronin
 
-RUN mkdir ./.oci
 COPY --from=builder --chown=${USER_NAME}:${USER_NAME} /app/.local/ /app/.local
 COPY --chown=${USER_NAME}:${USER_NAME} app ./app
 
 EXPOSE 8000
 USER ${USER_NAME}
+RUN mkdir ./.oci
 
 RUN pip install \
     cryptography \
