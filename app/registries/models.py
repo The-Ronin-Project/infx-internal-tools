@@ -37,7 +37,10 @@ class Registry:
             return None
 
         return cls(
-            uuid=registry_uuid, title=result.title, registry_type=result.registry_type
+            uuid=registry_uuid,
+            title=result.title,
+            registry_type=result.registry_type,
+            sorting_enabled=result.sorting_enabled,
         )
 
     def update(self, title=None, sorting_enabled=None, registry_type=None):
@@ -81,9 +84,8 @@ class Registry:
                 {"registry_type": registry_type, "registry_uuid": self.uuid},
             )
             self.registry_type = registry_type
-
-    def update(self, title=None, sorting_enabled=None, registry_type=None):
-        pass
+        # Commit the changes to the database
+        conn.commit()
 
 
 @dataclass
