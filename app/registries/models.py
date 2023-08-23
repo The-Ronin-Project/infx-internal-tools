@@ -62,11 +62,11 @@ class Registry:
             uuid=registry_uuid,
             title=result.title,
             registry_type=result.registry_type,
-            sorting_enabled=result.sorting_enabled
+            sorting_enabled=result.sorting_enabled,
         )
 
     @classmethod
-    def load_all_registries(cls) -> List['Registry']:
+    def load_all_registries(cls) -> List["Registry"]:
         conn = get_db()
         results = conn.execute(
             text(
