@@ -225,14 +225,13 @@ class Group:
             {"group_uuid": self.uuid},
         )
 
-
-def serialize(self):
-    return {
-        "uuid": self.uuid,
-        "registry_uuid": self.registry.uuid,
-        "title": self.title,
-        "sequence": self.sequence,
-    }
+    def serialize(self):
+        return {
+            "uuid": self.uuid,
+            "registry_uuid": self.registry.uuid,
+            "title": self.title,
+            "sequence": self.sequence,
+        }
 
 
 @dataclass
