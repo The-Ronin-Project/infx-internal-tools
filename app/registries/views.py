@@ -1,6 +1,12 @@
 from flask import Blueprint, request, jsonify
 import dataclasses
-from app.registries.models import GroupMember, Group, Registry, LabGroupMember
+from app.registries.models import (
+    GroupMember,
+    Group,
+    Registry,
+    LabGroupMember,
+    DuplicateRegistryNameError,
+)
 from app.models.codes import *
 from app.terminologies.models import *
 
@@ -20,11 +26,16 @@ def create_or_get_registry():
                 raise BadRequestWithCode(
                     "bad-request", "sorting_enabled must be boolean"
                 )
+        try:
+            new_registry = Registry.create(
+                title=title,
+                registry_type=registry_type,
+                sorting_enabled=sorting_enabled,
+            )
+            return jsonify(new_registry.serialize()), 201
 
-        new_registry = Registry.create(
-            title=title, registry_type=registry_type, sorting_enabled=sorting_enabled
-        )
-        return jsonify(new_registry.serialize())
+        except DuplicateRegistryNameError as e:
+            return jsonify({"error": str(e)}), 409  # 409 Conflict
 
     elif request.method == "GET":
         # get all registries (for main page with list of registries)
@@ -32,22 +43,34 @@ def create_or_get_registry():
         return jsonify([registry.serialize() for registry in registries])
 
 
-@registries_blueprint.route("/<string:registry_uuid>", methods=["PATCH"])
+@registries_blueprint.route("/<string:registry_uuid>", methods=["PATCH", "GET"])
 def update_registry_metadata(registry_uuid):
     # Update the metadata of a specific registry
-    title = request.json.get("title")
-    sorting_enabled = request.json.get("sorting_enabled")
-    registry_type = request.json.get("registry_type")
+    if request.method == "PATCH":
+        title = request.json.get("title")
+        sorting_enabled = request.json.get("sorting_enabled")
+        registry_type = request.json.get("registry_type")
 
-    registry = Registry.load(registry_uuid)
-    if not registry:
-        return jsonify({"error": "Registry not found"}), 404
+        registry = Registry.load(registry_uuid)
+        if not registry:
+            return jsonify({"error": "Registry not found"}), 404
 
-    registry.update(
-        title=title, sorting_enabled=sorting_enabled, registry_type=registry_type
-    )
+        registry.update(
+            title=title, sorting_enabled=sorting_enabled, registry_type=registry_type
+        )
 
-    return jsonify(registry=dataclasses.asdict(registry))
+        return jsonify(registry=dataclasses.asdict(registry))
+
+    elif request.method == "GET":
+        # Load the registry using its UUID
+        registry = Registry.load(registry_uuid)
+
+        # If the registry is not found, return an error response
+        if not registry:
+            return jsonify({"error": "Registry not found"}), 404
+
+            # Return the registry's metadata in the response
+        return jsonify(registry=dataclasses.asdict(registry))
 
 
 @registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST"])
@@ -107,6 +130,25 @@ def create_group_member(registry_uuid, group_uuid):
 
         return jsonify(new_group_member.serialize())
     pass
+
+
+@registries_blueprint.route("/<string:registry_uuid>/groups", methods=["GET"])
+def get_registry_groups(registry_uuid):
+    # Load the registry using its UUID
+    registry = Registry.load(registry_uuid)
+
+    # If the registry is not found, return an error response
+    if not registry:
+        return jsonify({"error": "Registry not found"}), 404
+
+        # Load all the groups associated with the registry
+    groups = Group.load_all_for_registry(registry_uuid)
+
+    # Convert the groups to dictionaries
+    groups_dicts = [group.to_dict() for group in groups]
+
+    # Return the groups in the response
+    return jsonify(groups=groups_dicts)
 
 
 @registries_blueprint.route(

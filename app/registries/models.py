@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 from typing import List, Dict, Union, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from sqlalchemy import text
 from functools import lru_cache
@@ -11,6 +11,11 @@ from app.errors import BadRequestWithCode
 from app.value_sets.models import ValueSet, ValueSetVersion
 
 # Need reference ranges for labs and vitals
+
+
+class DuplicateRegistryNameError(Exception):
+    def __init__(self, title):
+        super().__init__(f"A registry with the name '{title}' already exists.")
 
 
 @dataclass
@@ -23,6 +28,20 @@ class Registry:
     @classmethod
     def create(cls, title: str, registry_type: str, sorting_enabled: bool):
         conn = get_db()
+        # Check for duplicate registry names
+        existing_registry = conn.execute(
+            text(
+                """  
+                SELECT * FROM flexible_registry.registry  
+                WHERE title = :title  
+                """
+            ),
+            {"title": title},
+        ).fetchone()
+
+        if existing_registry:
+            raise DuplicateRegistryNameError(title)
+
         registry_uuid = uuid.uuid4()
         conn.execute(
             text(
@@ -144,6 +163,14 @@ class Group:
     title: str
     sequence: int
 
+    def to_dict(self):
+        return {
+            "uuid": self.uuid,
+            "registry": asdict(self.registry),
+            "title": self.title,
+            "sequence": self.sequence,
+        }
+
     @classmethod
     def create(
         cls,
@@ -197,6 +224,31 @@ class Group:
             sequence=result.sequence,
             registry=registry,
         )
+
+    @classmethod
+    def load_all_for_registry(cls, registry_uuid: str) -> List["Group"]:
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """  
+                SELECT * FROM flexible_registry."group"  
+                WHERE registry_uuid = :registry_uuid  
+                """
+            ),
+            {"registry_uuid": registry_uuid},
+        ).fetchall()
+
+        groups = []
+        for result in results:
+            group = cls(
+                uuid=result.uuid,
+                registry=Registry.load(result.registry_uuid),
+                title=result.title,
+                sequence=result.sequence,
+            )
+            groups.append(group)
+
+        return groups
 
     def update(self, title):
         conn = get_db()
