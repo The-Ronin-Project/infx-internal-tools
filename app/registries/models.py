@@ -17,7 +17,30 @@ from app.value_sets.models import ValueSet, ValueSetVersion
 class Registry:
     uuid: uuid.UUID
     title: str
-    registry_type: str  # todo: likely this should be an enum
+    registry_type: str  # not an enum so users can create new types of registries w/o code change
+    sorting_enabled: bool
+
+    @classmethod
+    def create(cls, title: str, registry_type: str, sorting_enabled: bool):
+        conn = get_db()
+        registry_uuid = uuid.uuid4()
+        conn.execute(
+            text(
+                """
+                insert into flexible_registry.registry
+                (uuid, title, registry_type, sorting_enabled)
+                values
+                (:uuid, :title, :registry_type, :sorting_enabled)
+                """
+            ),
+            {
+                "uuid": registry_uuid,
+                "title": title,
+                "registry_type": registry_type,
+                "sorting_enabled": sorting_enabled,
+            },
+        )
+        return cls.load(registry_uuid)
 
     @classmethod
     def load(cls, registry_uuid):
@@ -29,9 +52,7 @@ class Registry:
                 where uuid=:registry_uuid
                 """
             ),
-            {
-                "registry_uuid": registry_uuid
-            }
+            {"registry_uuid": registry_uuid},
         ).fetchone()
 
         if result is None:
@@ -40,8 +61,80 @@ class Registry:
         return cls(
             uuid=registry_uuid,
             title=result.title,
-            registry_type=result.registry_type
+            registry_type=result.registry_type,
+            sorting_enabled=result.sorting_enabled,
         )
+
+    @classmethod
+    def load_all_registries(cls) -> List["Registry"]:
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """
+                select * from flexible_registry.registry
+                """
+            )
+        )
+
+        return [
+            cls(
+                uuid=result.uuid,
+                title=result.title,
+                registry_type=result.registry_type,
+                sorting_enabled=result.sorting_enabled,
+            )
+            for result in results
+        ]
+
+    def update(self, title=None, sorting_enabled=None, registry_type=None):
+        conn = get_db()
+
+        if title is not None:
+            conn.execute(
+                text(
+                    """  
+                    UPDATE flexible_registry.registry  
+                    SET title=:title  
+                    WHERE uuid=:registry_uuid  
+                    """
+                ),
+                {"title": title, "registry_uuid": self.uuid},
+            )
+            self.title = title
+
+        if sorting_enabled is not None:
+            conn.execute(
+                text(
+                    """  
+                    UPDATE flexible_registry.registry  
+                    SET sorting_enabled=:sorting_enabled  
+                    WHERE uuid=:registry_uuid  
+                    """
+                ),
+                {"sorting_enabled": sorting_enabled, "registry_uuid": self.uuid},
+            )
+            self.sorting_enabled = sorting_enabled
+
+        if registry_type is not None:
+            conn.execute(
+                text(
+                    """  
+                        UPDATE flexible_registry.registry  
+                        SET registry_type=:registry_type  
+                        WHERE uuid=:registry_uuid  
+                        """
+                ),
+                {"registry_type": registry_type, "registry_uuid": self.uuid},
+            )
+            self.registry_type = registry_type
+
+    def serialize(self):
+        return {
+            "uuid": self.uuid,
+            "title": self.title,
+            "registry_type": self.registry_type,
+            "sorting_enabled": self.sorting_enabled,
+        }
 
 
 @dataclass
@@ -53,10 +146,10 @@ class Group:
 
     @classmethod
     def create(
-            cls,
-            registry_uuid,
-            title,
-               ):
+        cls,
+        registry_uuid,
+        title,
+    ):
         conn = get_db()
         group_uuid = uuid.uuid4()
 
@@ -102,7 +195,34 @@ class Group:
             uuid=result.uuid,
             title=result.title,
             sequence=result.sequence,
-            registry=registry
+            registry=registry,
+        )
+
+    def update(self, title):
+        conn = get_db()
+        if title is not None:
+            conn.execute(
+                text(
+                    """    
+                    UPDATE flexible_registry."group"    
+                    SET title=:title    
+                    WHERE "uuid"=:group_uuid    
+                    """
+                ),
+                {"title": title, "group_uuid": self.uuid},
+            )
+            self.title = title
+
+    def delete(self):
+        conn = get_db()
+        conn.execute(
+            text(
+                """  
+                DELETE FROM flexible_registry."group"  
+                WHERE "uuid" = :group_uuid  
+                """
+            ),
+            {"group_uuid": self.uuid},
         )
 
     def serialize(self):
@@ -123,13 +243,12 @@ class GroupMember:
     value_set: ValueSet
 
     @classmethod
-    def create(
-        cls,
-        group_uuid,
-        title,
-        value_set_uuid,
-        **kwargs
-    ):
+    def create(cls, group_uuid, title, value_set_uuid, **kwargs):
+        """
+        In order to allow effective subclassing, this method will NOT return the created resource.
+        Instead, it will call a `post_create_hook` that can be overridden in subclasses to perform additional processing
+        and then return the new resource.
+        """
         conn = get_db()
         gm_uuid = uuid.uuid4()
 
@@ -151,7 +270,7 @@ class GroupMember:
                 "uuid": gm_uuid,
                 "group_uuid": group_uuid,
                 "title": title,
-                "value_set_uuid": value_set_uuid
+                "value_set_uuid": value_set_uuid,
             },
         )
 
@@ -194,6 +313,39 @@ class GroupMember:
             }
         return None
 
+    def update(self, title=None, value_set_uuid=None):
+        conn = get_db()
+
+        if title is not None:
+            conn.execute(
+                text(
+                    """  
+                    UPDATE flexible_registry.group_member  
+                    SET title=:title  
+                    WHERE uuid=:member_uuid  
+                    """
+                ),
+                {"title": title, "member_uuid": self.uuid},
+            )
+            self.title = title
+
+        if value_set_uuid is not None:
+            # Load the new ValueSet instance using the provided value_set_uuid
+            new_value_set = ValueSet.load(value_set_uuid)
+            if new_value_set is None:
+                raise ValueError(f"ValueSet with UUID {value_set_uuid} not found")
+            conn.execute(
+                text(
+                    """  
+                    UPDATE flexible_registry.group_member  
+                    SET value_set_uuid=:value_set_uuid  
+                    WHERE uuid=:member_uuid  
+                    """
+                ),
+                {"value_set_uuid": value_set_uuid, "member_uuid": self.uuid},
+            )
+            self.value_set = new_value_set
+
     @classmethod
     def create_instance_from_data(cls, **data):
         return cls(
@@ -215,25 +367,52 @@ class GroupMember:
 
 
 @dataclass
-class LabGroupMember(GroupMember):
-    minimum_panel_members: int
+class VitalsGroupMember(GroupMember):
+    # todo: extra data declarations go here
 
     @classmethod
-    def create(
-        cls,
-        group_uuid,
-        title,
-        value_set_uuid,
-        **kwargs
-    ):
-        if 'minimum_panel_members' not in kwargs:
-            raise BadRequestWithCode('missing-required-param', "minimum_panel_members is required to add lab to panel")
+    def create(cls, group_uuid, title, value_set_uuid, **kwargs):
+        # todo: alidate any additional data required for vitals here
 
         super().create(group_uuid, title, value_set_uuid)
 
     @classmethod
     def post_create_hook(cls, gm_uuid, **kwargs):
-        minimum_panel_members = kwargs['minimum_panel_members']
+        # todo: save additional data for vitals to appropriate table
+        pass
+
+    @classmethod
+    def fetch_data(cls, uuid):
+        # todo: implement
+        pass
+
+    @classmethod
+    def create_instance_from_data(cls, **data):
+        # todo: implement
+        pass
+
+    def serialize(self):
+        # todo: implement
+        pass
+
+
+@dataclass
+class LabGroupMember(GroupMember):
+    minimum_panel_members: int
+
+    @classmethod
+    def create(cls, group_uuid, title, value_set_uuid, **kwargs):
+        if "minimum_panel_members" not in kwargs:
+            raise BadRequestWithCode(
+                "missing-required-param",
+                "minimum_panel_members is required to add lab to panel",
+            )
+
+        super().create(group_uuid, title, value_set_uuid)
+
+    @classmethod
+    def post_create_hook(cls, gm_uuid, **kwargs):
+        minimum_panel_members = kwargs["minimum_panel_members"]
 
         conn = get_db()
         conn.execute(
@@ -245,8 +424,8 @@ class LabGroupMember(GroupMember):
             """,
             {
                 "group_member_uuid": gm_uuid,
-                "minimum_panel_members": minimum_panel_members
-            }
+                "minimum_panel_members": minimum_panel_members,
+            },
         )
 
         return cls.load(gm_uuid)
@@ -266,11 +445,9 @@ class LabGroupMember(GroupMember):
             select * from flexible_registry.labs
             where group_member_uuid=:gm_uuid
             """,
-            {
-                "gm_uuid": gm_uuid
-            }
+            {"gm_uuid": gm_uuid},
         ).fetchone()
-        data['minimum_panel_members'] = result.minimum_panel_members
+        data["minimum_panel_members"] = result.minimum_panel_members
 
         return data
 
@@ -282,10 +459,10 @@ class LabGroupMember(GroupMember):
             title=data["title"],
             sequence=data["sequence"],
             value_set=data["value_set"],
-            minimum_panel_members=data["minimum_panel_members"]
+            minimum_panel_members=data["minimum_panel_members"],
         )
 
     def serialize(self):
         serialized = super().serialize()
-        serialized['minimum_panel_members'] = self.minimum_panel_members
+        serialized["minimum_panel_members"] = self.minimum_panel_members
         return serialized
