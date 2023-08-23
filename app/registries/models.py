@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 from typing import List, Dict, Union, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 from sqlalchemy import text
 from functools import lru_cache
@@ -11,11 +11,6 @@ from app.errors import BadRequestWithCode
 from app.value_sets.models import ValueSet, ValueSetVersion
 
 # Need reference ranges for labs and vitals
-
-
-class DuplicateRegistryNameError(Exception):
-    def __init__(self, title):
-        super().__init__(f"A registry with the name '{title}' already exists.")
 
 
 @dataclass
@@ -40,7 +35,10 @@ class Registry:
         ).fetchone()
 
         if existing_registry:
-            raise DuplicateRegistryNameError(title)
+            raise BadRequestWithCode(
+                "Registry.title.duplicate",
+                "Cannot create a new registry with the same title as an existing one",
+            )
 
         registry_uuid = uuid.uuid4()
         conn.execute(
@@ -163,14 +161,6 @@ class Group:
     title: str
     sequence: int
 
-    def to_dict(self):
-        return {
-            "uuid": self.uuid,
-            "registry": asdict(self.registry),
-            "title": self.title,
-            "sequence": self.sequence,
-        }
-
     @classmethod
     def create(
         cls,
@@ -238,11 +228,13 @@ class Group:
             {"registry_uuid": registry_uuid},
         ).fetchall()
 
+        registry = Registry.load(registry_uuid)
+
         groups = []
         for result in results:
             group = cls(
                 uuid=result.uuid,
-                registry=Registry.load(result.registry_uuid),
+                registry=registry,
                 title=result.title,
                 sequence=result.sequence,
             )

@@ -5,8 +5,8 @@ from app.registries.models import (
     Group,
     Registry,
     LabGroupMember,
-    DuplicateRegistryNameError,
 )
+from app.errors import NotFoundException
 from app.models.codes import *
 from app.terminologies.models import *
 
@@ -26,16 +26,13 @@ def create_or_get_registry():
                 raise BadRequestWithCode(
                     "bad-request", "sorting_enabled must be boolean"
                 )
-        try:
-            new_registry = Registry.create(
-                title=title,
-                registry_type=registry_type,
-                sorting_enabled=sorting_enabled,
-            )
-            return jsonify(new_registry.serialize()), 201
 
-        except DuplicateRegistryNameError as e:
-            return jsonify({"error": str(e)}), 409  # 409 Conflict
+        new_registry = Registry.create(
+            title=title,
+            registry_type=registry_type,
+            sorting_enabled=sorting_enabled,
+        )
+        return jsonify(new_registry.serialize()), 201
 
     elif request.method == "GET":
         # get all registries (for main page with list of registries)
@@ -45,15 +42,15 @@ def create_or_get_registry():
 
 @registries_blueprint.route("/<string:registry_uuid>", methods=["PATCH", "GET"])
 def update_registry_metadata(registry_uuid):
+    registry = Registry.load(registry_uuid)
+    if not registry:
+        raise NotFoundException(f"Registry with uuid:{registry_uuid} not found")
+
     # Update the metadata of a specific registry
     if request.method == "PATCH":
         title = request.json.get("title")
         sorting_enabled = request.json.get("sorting_enabled")
         registry_type = request.json.get("registry_type")
-
-        registry = Registry.load(registry_uuid)
-        if not registry:
-            return jsonify({"error": "Registry not found"}), 404
 
         registry.update(
             title=title, sorting_enabled=sorting_enabled, registry_type=registry_type
@@ -62,15 +59,8 @@ def update_registry_metadata(registry_uuid):
         return jsonify(registry=dataclasses.asdict(registry))
 
     elif request.method == "GET":
-        # Load the registry using its UUID
-        registry = Registry.load(registry_uuid)
-
-        # If the registry is not found, return an error response
-        if not registry:
-            return jsonify({"error": "Registry not found"}), 404
-
-            # Return the registry's metadata in the response
-        return jsonify(registry=dataclasses.asdict(registry))
+        # Return the registry's metadata in the response
+        return jsonify(registry.serialize())
 
 
 @registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST"])
