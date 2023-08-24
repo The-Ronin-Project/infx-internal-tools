@@ -377,7 +377,17 @@ class VitalsGroupMember(GroupMember):
         if "ucum_ref_units" not in kwargs:
             raise BadRequestWithCode(
                 "missing-required-param",
-                "ucum_ref_units is required to add lab to panel",
+                "ucum_ref_units is required to add vital to panel",
+            )
+        if "ref_range_high" not in kwargs:
+            raise BadRequestWithCode(
+                "missing-required-param",
+                "ref_range_high is required to add vital to panel",
+            )
+        if "ref_range_low" not in kwargs:
+            raise BadRequestWithCode(
+                "missing-required-param",
+                "ref_range_low is required to add vital to panel",
             )
 
         super().create(group_uuid, title, value_set_uuid)
