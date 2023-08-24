@@ -125,10 +125,10 @@ def create_group_member(registry_uuid, group_uuid):
         elif request.method == "GET":
             # use LabsGroupMember for labs
             if registry.registry_type == "labs":
-                raise NotFoundException(f'No Members found in Labs Registry Group with UUID: {group_uuid}')
+                raise NotFoundException(f'No Members in Group UUID: {group_uuid} in Labs Registry')
             # use VitalsGroupMember for vitals
             elif registry.registry_type == "vitals":
-                raise NotFoundException(f'No Members found in Vitals Registry Group UUID: {group_uuid}')
+                raise NotFoundException(f'No Members in Group UUID: {group_uuid} in Vitals Registry ')
             else:
                 # Load all the members associated with the group
                 group = Group.load(group_uuid)
