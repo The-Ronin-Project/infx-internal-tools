@@ -96,7 +96,7 @@ def update_group(registry_uuid, group_uuid):
 
     elif request.method == "DELETE":
         group.delete()
-        return jsonify({"success": "Group deleted"})
+        return jsonify(group.serialize())
 
 
 @registries_blueprint.route(
