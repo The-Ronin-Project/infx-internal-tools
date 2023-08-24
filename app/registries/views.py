@@ -103,14 +103,14 @@ def update_group(registry_uuid, group_uuid):
 def create_group_member(registry_uuid, group_uuid):
         registry = Registry.load(registry_uuid)
 
-        # use LabsGroupMember for labs
-        if registry.registry_type == "labs":
-            pass
-        # use VitalsGroupMember for vitals
-        elif registry.registry_type == "vitals":
-            pass
-        else:
-            if request.method == "POST":
+        if request.method == "POST":
+            # use LabsGroupMember for labs
+            if registry.registry_type == "labs":
+                pass
+            # use VitalsGroupMember for vitals
+            elif registry.registry_type == "vitals":
+                pass
+            else:
                 # Create a new group member
                 title = request.json.get("title")
                 value_set_uuid = request.json.get("value_set_uuid")
@@ -122,7 +122,14 @@ def create_group_member(registry_uuid, group_uuid):
 
                 # Return the group member in the response
                 return jsonify(new_group_member.serialize())
-            elif request.method == "GET":
+        elif request.method == "GET":
+            # use LabsGroupMember for labs
+            if registry.registry_type == "labs":
+                raise NotFoundException(f'No Labs found for Group with UUID: {group_uuid}')
+            # use VitalsGroupMember for vitals
+            elif registry.registry_type == "vitals":
+                raise NotFoundException(f'No Vitals found for Group with UUID: {group_uuid}')
+            else:
                 # Load all the members associated with the group
                 group = Group.load(group_uuid)
                 group.load_members()
