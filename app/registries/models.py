@@ -255,7 +255,7 @@ class Group:
         results = conn.execute(
             text(
                 """  
-                SELECT * FROM flexible_registry.group_members  
+                SELECT * FROM flexible_registry.group_member  
                 WHERE group_uuid = :group_uuid
                 order by sequence  
                 """
