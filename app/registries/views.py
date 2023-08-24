@@ -4,7 +4,7 @@ from app.registries.models import (
     GroupMember,
     Group,
     Registry,
-    LabGroupMember,
+    LabsGroupMember,
 )
 from app.models.codes import *
 from app.terminologies.models import *
@@ -69,7 +69,7 @@ def create_group(registry_uuid):
         new_group = Group.create(registry_uuid=registry_uuid, title=title)
 
         return jsonify(new_group.serialize())
-    if request.method == "GET":
+    elif request.method == "GET":
         registry = Registry.load(registry_uuid)
 
         # Load all the groups associated with the registry
@@ -98,31 +98,37 @@ def update_group(registry_uuid, group_uuid):
 
 
 @registries_blueprint.route(
-    "/<string:registry_uuid>/groups/<string:group_uuid>/members/", methods=["POST"]
+    "/<string:registry_uuid>/groups/<string:group_uuid>/members/", methods=["POST", "GET"]
 )
 def create_group_member(registry_uuid, group_uuid):
-    if request.method == "POST":
         registry = Registry.load(registry_uuid)
 
-        group_uuid = group_uuid
-        title = request.json.get("title")
-        value_set_uuid = request.json.get("value_set_uuid")
-
-        if registry.data_type == "lab":
+        # use LabsGroupMember for labs
+        if registry.registry_type == "labs":
             pass
-        elif registry.data_type == "vital":
+        # use VitalsGroupMember for vitals
+        elif registry.registry_type == "vitals":
             pass
         else:
-            # Create new group member
-            new_group_member = GroupMember.create(
-                group_uuid=group_uuid,
-                title=title,
-                value_set_uuid=value_set_uuid,
-            )
+            if request.method == "POST":
+                # Create a new group member
+                title = request.json.get("title")
+                value_set_uuid = request.json.get("value_set_uuid")
+                new_group_member = GroupMember.create(
+                    group_uuid=group_uuid,
+                    title=title,
+                    value_set_uuid=value_set_uuid,
+                )
 
-        return jsonify(new_group_member.serialize())
-    pass
+                # Return the group member in the response
+                return jsonify(new_group_member.serialize())
+            elif request.method == "GET":
+                # Load all the members associated with the group
+                group = Group.load(group_uuid)
+                group.load_members()
 
+                # Return the members in the response
+                return jsonify([group_member.serialize() for group_member in group.members])
 
 @registries_blueprint.route(
     "/<string:registry_uuid>/groups/<string:group_uuid>/members/<string:member_uuid>",

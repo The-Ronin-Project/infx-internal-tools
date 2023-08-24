@@ -84,7 +84,7 @@ recreate it.
 
 ### Testing
 
-We use [Pytest](https://docs.pytest.org/en/6.2.x/) for automated testing, Postman for automated testing.
+We use [Pytest](https://docs.pytest.org/en/6.2.x/) for automated testing, Postman for manual testing.
 
 
 ### Testing and Project Structure

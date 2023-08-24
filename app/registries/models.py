@@ -119,6 +119,9 @@ class Registry:
             {"registry_uuid": self.uuid},
         ).fetchall()
 
+        if result is None:
+            raise NotFoundException(f'No Groups found for Registry with UUID: {registry_uuid}')
+
         groups = []
         for result in results:
             group = Group(
@@ -371,6 +374,36 @@ class GroupMember:
             sequence=data["sequence"],
             value_set=data["value_set"],
         )
+
+    def load_members(self):
+        group_uuid = self.uuid
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """  
+                SELECT * FROM flexible_registry.group_members  
+                WHERE group_uuid = :group_uuid
+                order by sequence  
+                """
+            ),
+            {"group_uuid": group_uuid},
+        ).fetchall()
+
+        if results is None:
+            raise NotFoundException(f'No Members found for Group with UUID: {group_uuid}')
+
+        members = []
+        for result in results:
+            member = GroupMember(
+                uuid=result.uuid,
+                group_uuid=result.group_uuid,
+                title=result.title,
+                value_set_uuid=result.value_set_uuid,
+            )
+            members.append(member)
+
+        self.members = members
+
     def update(self, title=None, value_set_uuid=None):
         conn = get_db()
 
@@ -457,7 +490,7 @@ class VitalsGroupMember(GroupMember):
 
 
 @dataclass
-class LabGroupMember(GroupMember):
+class LabsGroupMember(GroupMember):
     minimum_panel_members: int
 
     @classmethod
