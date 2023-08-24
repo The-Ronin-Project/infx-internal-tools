@@ -368,32 +368,86 @@ class GroupMember:
 
 @dataclass
 class VitalsGroupMember(GroupMember):
-    # todo: extra data declarations go here
+    ucum_ref_units: str
+    ref_range_high: str
+    ref_range_low: str
 
     @classmethod
     def create(cls, group_uuid, title, value_set_uuid, **kwargs):
-        # todo: alidate any additional data required for vitals here
+        if "ucum_ref_units" not in kwargs:
+            raise BadRequestWithCode(
+                "missing-required-param",
+                "ucum_ref_units is required to add lab to panel",
+            )
 
         super().create(group_uuid, title, value_set_uuid)
 
     @classmethod
     def post_create_hook(cls, gm_uuid, **kwargs):
-        # todo: save additional data for vitals to appropriate table
-        pass
+        ucum_ref_units = kwargs["ucum_ref_units"]
+        ref_range_high = kwargs["ref_range_high"]
+        ref_range_low = kwargs["ref_range_low"]
+
+        conn = get_db()
+        conn.execute(
+            """
+            INSERT INTO flexible_registry.vitals
+            (group_member_uuid, ucum_ref_units, ref_range_high, ref_range_low)
+            values
+            (:group_member_uuid, :ucum_ref_units, :ref_range_high, :ref_range_low)
+            """,
+            {
+                "group_member_uuid": gm_uuid,
+                "ucum_ref_units": ucum_ref_units,
+                "ref_range_high": ref_range_high,
+                "ref_range_low": ref_range_low,
+            },
+        )
+
+        return cls.load(gm_uuid)
 
     @classmethod
     def fetch_data(cls, uuid):
-        # todo: implement
-        pass
+        data = super().fetch_data(uuid)
+
+        # If there's no data for the given uuid, return None
+        if not data:
+            return None
+
+        # Load additional data or modify existing data
+        conn = get_db()
+        result = conn.execute(
+            """
+            select * from flexible_registry.vitals
+            where group_member_uuid=:gm_uuid
+            """,
+            {"gm_uuid": gm_uuid},
+        ).fetchone()
+        data["ucum_ref_units"] = result.ucum_ref_units
+        data["ref_range_high"] = result.ref_range_high
+        data["ref_range_low"] = result.ref_range_low
+
+        return data
 
     @classmethod
     def create_instance_from_data(cls, **data):
-        # todo: implement
-        pass
+        return cls(
+            uuid=data["uuid"],
+            group=data["group"],
+            title=data["title"],
+            sequence=data["sequence"],
+            value_set=data["value_set"],
+            ucum_ref_units=data["ucum_ref_units"],
+            ref_range_high=data["ref_range_high"],
+            ref_range_low=data["ref_range_low"],
+        )
 
     def serialize(self):
-        # todo: implement
-        pass
+        serialized = super().serialize()
+        serialized["ucum_ref_units"] = self.ucum_ref_units
+        serialized["ref_range_high"] = self.ref_range_high
+        serialized["ref_range_low"] = self.ref_range_low
+        return serialized
 
 
 @dataclass
