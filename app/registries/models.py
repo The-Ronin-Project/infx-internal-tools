@@ -76,7 +76,7 @@ class Registry:
         ).fetchone()
 
         if result is None:
-            raise NotFoundException(f'No Registry found with UUID:{registry_uuid}')
+            raise NotFoundException(f'No Registry found with UUID: {registry_uuid}')
 
         return cls(
             uuid=registry_uuid,
@@ -332,7 +332,7 @@ class GroupMember:
     def load(cls, uuid):
         data = cls.fetch_data(uuid)
         if not data:
-            return None
+            raise NotFoundException(f'No Group Member found with UUID: {uuid}')
         return cls.create_instance_from_data(**data)
 
     @classmethod
@@ -358,6 +358,15 @@ class GroupMember:
             }
         return None
 
+    @classmethod
+    def create_instance_from_data(cls, **data):
+        return cls(
+            uuid=data["uuid"],
+            group=data["group"],
+            title=data["title"],
+            sequence=data["sequence"],
+            value_set=data["value_set"],
+        )
     def update(self, title=None, value_set_uuid=None):
         conn = get_db()
 
@@ -378,7 +387,7 @@ class GroupMember:
             # Load the new ValueSet instance using the provided value_set_uuid
             new_value_set = ValueSet.load(value_set_uuid)
             if new_value_set is None:
-                raise ValueError(f"ValueSet with UUID {value_set_uuid} not found")
+                raise NotFoundException(f'No ValueSet found with UUID: {value_set_uuid}')
             conn.execute(
                 text(
                     """  
@@ -391,14 +400,16 @@ class GroupMember:
             )
             self.value_set = new_value_set
 
-    @classmethod
-    def create_instance_from_data(cls, **data):
-        return cls(
-            uuid=data["uuid"],
-            group=data["group"],
-            title=data["title"],
-            sequence=data["sequence"],
-            value_set=data["value_set"],
+    def delete(self):
+        conn = get_db()
+        conn.execute(
+            text(
+                """  
+                DELETE FROM flexible_registry.group_member  
+                WHERE "uuid" = :member_uuid  
+                """
+            ),
+            {"member_uuid": self.uuid},
         )
 
     def serialize(self):

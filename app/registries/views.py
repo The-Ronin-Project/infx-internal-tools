@@ -85,7 +85,7 @@ def create_group(registry_uuid):
 def update_group(registry_uuid, group_uuid):
     group = Group.load(group_uuid)
     if not group:
-        return jsonify({"error": "Group not found"}), 404
+        raise NotFoundException(f'No Group found with UUID: {group_uuid}')
 
     if request.method == "PATCH":
         # Implement update logic
@@ -131,18 +131,16 @@ def create_group_member(registry_uuid, group_uuid):
     methods=["PATCH", "DELETE"],
 )
 def update_group_member(registry_uuid, group_uuid, member_uuid):
+    group_member = GroupMember.load(member_uuid)
+    if not group_member:
+        raise NotFoundException(f'No Group Member found with UUID: {member_uuid}')
+
     if request.method == "PATCH":
         title = request.json.get("title")
         value_set_uuid = request.json.get("value_set_uuid")
-
-        group_member = GroupMember.load(member_uuid)
-        if not group_member:
-            return jsonify({"error": "Group member not found"}), 404
-
         group_member.update(title=title, value_set_uuid=value_set_uuid)
-
-        return "update complete"
+        return jsonify(group_member.serialize())
 
     elif request.method == "DELETE":
-        # Implement delete logic
-        pass
+        group_member.delete()
+        return jsonify(group_member.serialize())

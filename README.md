@@ -6,7 +6,7 @@ A .gitignore is here as well. any subdirs or files not to be checked should have
 ## Team Conventions
 ### Branch naming
 
-Our basic convention is CLIN-{ticket-number}-lower-case-identifier
+Our basic convention is INFX-{ticket-number}-lower-case-identifier
 
 ### Python Versions and Virtualenvs
 
@@ -38,20 +38,9 @@ To list the all available versions of Python, including Anaconda, Jython, pypy, 
 
 Then install the desired versions:
 ```
-$ pyenv install 2.7.6
-$ pyenv install 2.6.8
+$ pyenv install 3.11.4
 $ pyenv versions
-  system
-  2.6.8
-* 2.7.6 (set by /home/yyuu/.pyenv/version)
 ```
-`$ pyenv local`
-
-Sets a local application-specific Python version by writing the version name to a .python-version file in the current directory. This version overrides the global version, and can be overridden itself by setting the PYENV_VERSION environment variable or with the pyenv shell command.
-
-`$ pyenv local 2.7.6`
-
-When you switch to a project directory with a .python-version, pyenv will switch to the proper version
 
 The [pyenv-virtualenv](https://github.com/pyenv/pyenv-virtualenv) plugin can be used to manage virtualenvs.
 
@@ -64,7 +53,7 @@ the following to the end of  ~/.zshrc:
 
 To create a virtualenv for the Python version used with pyenv, run pyenv virtualenv, specifying the Python version you want and the name of the virtualenv directory. For example,
 
-`$ pyenv virtualenv 2.7.10 my-virtual-env-2.7.10`
+`$ pyenv virtualenv 3.11.4 infx-internal-tools`
 
 If eval "$(pyenv virtualenv-init -)" is configured in your shell, pyenv-virtualenv will automatically activate/deactivate virtualenvs on entering/leaving directories which contain a .python-version file that contains the name of a valid virtual environment as shown in the output of pyenv virtualenvs (e.g., venv34 or 3.4.3/envs/venv34 in example above) . .python-version files are used by pyenv to denote local Python versions and can be created and deleted with the pyenv local command.
 
@@ -87,7 +76,7 @@ pipenv can be installed via pip, pipx or via
 
 In addition, according to the docs your current virtual environment should also work. But you will still need to install the deps via pipenv.
 
-A Pipefile.lock is in the working directory along with Pipfile. Please check this in on any changes. We use caching keyed 
+A Pipfile.lock is in the working directory along with Pipfile. Please check this in on any changes. We use caching keyed 
 off of the lock file, so the cache will be invalidated on mods to it. If you have challenges installing your dependencies
 you may need to check your [Pipfile](https://github.com/pypa/pipfile#pipfile-the-replacement-for-requirementstxt) and possibly
 recreate it.
@@ -95,12 +84,12 @@ recreate it.
 
 ### Testing
 
-[Pytest](https://docs.pytest.org/en/6.2.x/) is recommended for testing.
+We use [Pytest](https://docs.pytest.org/en/6.2.x/) for automated testing, Postman for automated testing.
 
 
 ### Testing and Project Structure
 
-We recommend splitting integration tests and unit tests into separate directories. Code coverage should be calculated using unit tests. We can guide to this platonic ideal.
+We recommend splitting integration tests and unit tests into separate directories. Code coverage should be calculated using integration tests. 
 
 Our current structure calls for tests to be outside of the app at the top level of the directory. Pytest will discover them.
 
@@ -108,11 +97,10 @@ Our current structure calls for tests to be outside of the app at the top level 
 
 Prerequisites:
 - Docker Desktop
-- Git (can be installed via xcode command line tools)
-- IDE (VSCode, PyCharm, etc.)
-- Postman
+- Git (can be installed via xcode command line tools) or GitHub Desktop
+- IDE (PyCharm)
+- Postman 
 - Homebrew (https://brew.sh)
-- Postgres (install via Homebrew with `brew install postgresql`)
 
 First, follow these directions: https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account
 

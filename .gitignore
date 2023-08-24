@@ -4,3 +4,4 @@
 .coverage
 .tox/
 coverage.xml
+.idea/workspace.xml
