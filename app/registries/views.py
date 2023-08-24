@@ -60,16 +60,23 @@ def update_registry_metadata(registry_uuid):
         return jsonify(registry.serialize())
 
 
-@registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST"])
+@registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST", "GET"])
 def create_group(registry_uuid):
     if request.method == "POST":
-        registry_uuid = registry_uuid
         title = request.json.get("title")
 
         # Create new group
         new_group = Group.create(registry_uuid=registry_uuid, title=title)
 
         return jsonify(new_group.serialize())
+    if request.method == "GET":
+        registry = Registry.load(registry_uuid)
+
+        # Load all the groups associated with the registry
+        registry.load_groups()
+
+        # Return the groups in the response
+        return jsonify([group.serialize() for group in registry.groups])
 
 
 @registries_blueprint.route(
@@ -117,18 +124,6 @@ def create_group_member(registry_uuid, group_uuid):
 
         return jsonify(new_group_member.serialize())
     pass
-
-
-@registries_blueprint.route("/<string:registry_uuid>/groups", methods=["GET"])
-def get_registry_groups(registry_uuid):
-    # Load the registry using its UUID
-    registry = Registry.load(registry_uuid)
-
-    # Load all the groups associated with the registry
-    registry.load_groups()
-
-    # Return the groups in the response
-    return jsonify([group.serialize() for group in registry.groups])
 
 
 @registries_blueprint.route(
