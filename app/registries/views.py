@@ -84,8 +84,6 @@ def create_group(registry_uuid):
 )
 def update_group(registry_uuid, group_uuid):
     group = Group.load(group_uuid)
-    if not group:
-        raise NotFoundException(f'No Group found with UUID: {group_uuid}')
 
     if request.method == "PATCH":
         # Implement update logic
@@ -132,8 +130,6 @@ def create_group_member(registry_uuid, group_uuid):
 )
 def update_group_member(registry_uuid, group_uuid, member_uuid):
     group_member = GroupMember.load(member_uuid)
-    if not group_member:
-        raise NotFoundException(f'No Group Member found with UUID: {member_uuid}')
 
     if request.method == "PATCH":
         title = request.json.get("title")

@@ -234,6 +234,9 @@ class Group:
             {"group_uuid": group_uuid},
         ).fetchone()
 
+        if result is None:
+            raise NotFoundException(f'No Group found with UUID: {group_uuid}')
+
         registry = Registry.load(result.registry_uuid)
 
         return cls(
@@ -331,8 +334,6 @@ class GroupMember:
     @classmethod
     def load(cls, uuid):
         data = cls.fetch_data(uuid)
-        if not data:
-            raise NotFoundException(f'No Group Member found with UUID: {uuid}')
         return cls.create_instance_from_data(**data)
 
     @classmethod
@@ -347,6 +348,9 @@ class GroupMember:
             ),
             {"uuid": uuid},
         ).fetchone()
+
+        if not result:
+            raise NotFoundException(f'No Group Member found with UUID: {uuid}')
 
         if result:
             return {
