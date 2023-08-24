@@ -76,7 +76,7 @@ class Registry:
         ).fetchone()
 
         if result is None:
-            raise NotFoundException(f'No Registry found with UUID: {registry_uuid}')
+            raise NotFoundException(f"No Registry found with UUID: {registry_uuid}")
 
         return cls(
             uuid=registry_uuid,
@@ -119,8 +119,10 @@ class Registry:
             {"registry_uuid": self.uuid},
         ).fetchall()
 
-        if result is None:
-            raise NotFoundException(f'No Groups found for Registry with UUID: {registry_uuid}')
+        if results is None:
+            raise NotFoundException(
+                f"No Groups found for Registry with UUID: {self.uuid}"
+            )
 
         groups = []
         for result in results:
@@ -238,7 +240,7 @@ class Group:
         ).fetchone()
 
         if result is None:
-            raise NotFoundException(f'No Group found with UUID: {group_uuid}')
+            raise NotFoundException(f"No Group found with UUID: {group_uuid}")
 
         registry = Registry.load(result.registry_uuid)
 
@@ -264,15 +266,21 @@ class Group:
         ).fetchall()
 
         if results is None:
-            raise NotFoundException(f'No Members found for Group with UUID: {group_uuid}')
+            raise NotFoundException(
+                f"No Members found for Group with UUID: {group_uuid}"
+            )
 
         members = []
         for result in results:
+            value_set = ValueSet.load(
+                result.value_set_uuid
+            )  # Load the ValueSet instance
             member = GroupMember(
                 uuid=result.uuid,
-                group_uuid=result.group_uuid,
+                group=self,  # Pass the group instance instead of the group_uuid
                 title=result.title,
-                value_set_uuid=result.value_set_uuid,
+                sequence=result.sequence,
+                value_set=value_set,
             )
             members.append(member)
 
@@ -382,7 +390,7 @@ class GroupMember:
         ).fetchone()
 
         if not result:
-            raise NotFoundException(f'No Group Member found with UUID: {uuid}')
+            raise NotFoundException(f"No Group Member found with UUID: {uuid}")
 
         if result:
             return {
@@ -424,7 +432,9 @@ class GroupMember:
             # Load the new ValueSet instance using the provided value_set_uuid
             new_value_set = ValueSet.load(value_set_uuid)
             if new_value_set is None:
-                raise NotFoundException(f'No ValueSet found with UUID: {value_set_uuid}')
+                raise NotFoundException(
+                    f"No ValueSet found with UUID: {value_set_uuid}"
+                )
             conn.execute(
                 text(
                     """  
