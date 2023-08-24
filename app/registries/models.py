@@ -255,7 +255,7 @@ class Group:
         results = conn.execute(
             text(
                 """  
-                SELECT * FROM flexible_registry.group_members  
+                SELECT * FROM flexible_registry.group_member  
                 WHERE group_uuid = :group_uuid
                 order by sequence  
                 """
@@ -268,11 +268,13 @@ class Group:
 
         members = []
         for result in results:
+            value_set = ValueSet.load(result.value_set_uuid)
             member = GroupMember(
                 uuid=result.uuid,
-                group_uuid=result.group_uuid,
+                group=self,
                 title=result.title,
-                value_set_uuid=result.value_set_uuid,
+                sequence=result.sequence,
+                value_set=value_set,
             )
             members.append(member)
 

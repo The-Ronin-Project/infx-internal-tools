@@ -72,15 +72,18 @@ pipenv can be installed via pip, pipx or via
 
 `pipenv install --dev` will install all deps and ensure the python version is correct 3.11.1
 
-`pipenv shell` will give you a virtual environment
-
-In addition, according to the docs your current virtual environment should also work. But you will still need to install the deps via pipenv.
+In addition, according to the docs your current virtual environment should also work. But you will still need to install the dependencies via pipenv.
 
 A Pipfile.lock is in the working directory along with Pipfile. Please check this in on any changes. We use caching keyed 
 off of the lock file, so the cache will be invalidated on mods to it. If you have challenges installing your dependencies
 you may need to check your [Pipfile](https://github.com/pypa/pipfile#pipfile-the-replacement-for-requirementstxt) and possibly
 recreate it.
 
+You will want to contact a team member for:
+- pgAdmin access
+- details about creating your own .env file from our .env.template
+- a key for OCI access
+- add yourself to the database access group clinical-intelligence
 
 ### Testing
 
@@ -106,5 +109,5 @@ First, follow these directions: https://docs.github.com/en/authentication/connec
 
 
 ### Running a dev server
-In the code editor terminal, run command "python -m app.app".
+In the code editor terminal, run command `python -m app.app`
 If the API request is calling to RxNav-in-a-box, make sure that container is running in Docker first.
