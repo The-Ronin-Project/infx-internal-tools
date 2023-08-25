@@ -98,6 +98,18 @@ def update_group(registry_uuid, group_uuid):
 
 
 @registries_blueprint.route(
+    "/<string:registry_uuid>/groups/<string:group_uuid>/actions/reorder/<string:direction>",
+    methods=["POST"],
+)
+def reorder_group(registry_uuid, group_uuid, direction):
+    if direction not in ['next', 'previous']:
+        raise BadRequestWithCode('Group.reorder.direction', "'up' and 'down' are the only valid directions to reorder a Group Member")
+    group = Group.load(group_uuid)
+    group.swap_sequence(direction=direction)
+    return "Reordered", 200
+
+
+@registries_blueprint.route(
     "/<string:registry_uuid>/groups/<string:group_uuid>/members/", methods=["POST", "GET"]
 )
 def create_group_member(registry_uuid, group_uuid):
@@ -146,3 +158,15 @@ def update_group_member(registry_uuid, group_uuid, member_uuid):
     elif request.method == "DELETE":
         group_member.delete()
         return jsonify(group_member.serialize())
+
+@registries_blueprint.route(
+    "/<string:registry_uuid>/groups/<string:group_uuid>/members/<string:member_uuid>/actions/reorder/<string:direction>",
+    methods=["POST"],
+)
+def reorder_group_member(registry_uuid, group_uuid, member_uuid, direction):
+    if direction not in ['next', 'previous']:
+        raise BadRequestWithCode('GroupMember.reorder.direction', "'up' and 'down' are the only valid directions to reorder a Group Member")
+    group_member = GroupMember.load(member_uuid)
+    group_member.swap_sequence(direction=direction)
+    return "Reordered", 200
+
