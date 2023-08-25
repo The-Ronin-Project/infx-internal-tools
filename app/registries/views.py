@@ -80,7 +80,8 @@ def create_group(registry_uuid):
 
 
 @registries_blueprint.route(
-    "/<string:registry_uuid>/groups/<string:group_uuid>", methods=["PATCH", "DELETE"]
+    "/<string:registry_uuid>/groups/<string:group_uuid>",
+    methods=["PATCH", "DELETE", "GET"],
 )
 def update_group(registry_uuid, group_uuid):
     group = Group.load(group_uuid)
@@ -94,6 +95,9 @@ def update_group(registry_uuid, group_uuid):
 
     elif request.method == "DELETE":
         group.delete()
+        return jsonify(group.serialize())
+
+    elif request.method == "GET":
         return jsonify(group.serialize())
 
 
