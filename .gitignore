@@ -4,3 +4,5 @@
 .coverage
 .tox/
 coverage.xml
+.idea/workspace.xml
+.python-version

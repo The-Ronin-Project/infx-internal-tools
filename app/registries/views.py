@@ -1,6 +1,11 @@
 from flask import Blueprint, request, jsonify
 import dataclasses
-from app.registries.models import GroupMember, Group, Registry, LabGroupMember
+from app.registries.models import (
+    GroupMember,
+    Group,
+    Registry,
+    LabsGroupMember,
+)
 from app.models.codes import *
 from app.terminologies.models import *
 
@@ -22,9 +27,11 @@ def create_or_get_registry():
                 )
 
         new_registry = Registry.create(
-            title=title, registry_type=registry_type, sorting_enabled=sorting_enabled
+            title=title,
+            registry_type=registry_type,
+            sorting_enabled=sorting_enabled,
         )
-        return jsonify(new_registry.serialize())
+        return jsonify(new_registry.serialize()), 201
 
     elif request.method == "GET":
         # get all registries (for main page with list of registries)
@@ -32,34 +39,44 @@ def create_or_get_registry():
         return jsonify([registry.serialize() for registry in registries])
 
 
-@registries_blueprint.route("/<string:registry_uuid>", methods=["PATCH"])
+@registries_blueprint.route("/<string:registry_uuid>", methods=["PATCH", "GET"])
 def update_registry_metadata(registry_uuid):
-    # Update the metadata of a specific registry
-    title = request.json.get("title")
-    sorting_enabled = request.json.get("sorting_enabled")
-    registry_type = request.json.get("registry_type")
-
     registry = Registry.load(registry_uuid)
-    if not registry:
-        return jsonify({"error": "Registry not found"}), 404
 
-    registry.update(
-        title=title, sorting_enabled=sorting_enabled, registry_type=registry_type
-    )
+    # Update the metadata of a specific registry
+    if request.method == "PATCH":
+        title = request.json.get("title")
+        sorting_enabled = request.json.get("sorting_enabled")
+        registry_type = request.json.get("registry_type")
 
-    return jsonify(registry=dataclasses.asdict(registry))
+        registry.update(
+            title=title, sorting_enabled=sorting_enabled, registry_type=registry_type
+        )
+
+        return jsonify(registry=dataclasses.asdict(registry))
+
+    elif request.method == "GET":
+        # Return the registry's metadata in the response
+        return jsonify(registry.serialize())
 
 
-@registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST"])
+@registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST", "GET"])
 def create_group(registry_uuid):
     if request.method == "POST":
-        registry_uuid = registry_uuid
         title = request.json.get("title")
 
         # Create new group
         new_group = Group.create(registry_uuid=registry_uuid, title=title)
 
         return jsonify(new_group.serialize())
+    elif request.method == "GET":
+        registry = Registry.load(registry_uuid)
+
+        # Load all the groups associated with the registry
+        registry.load_groups()
+
+        # Return the groups in the response
+        return jsonify([group.serialize() for group in registry.groups])
 
 
 @registries_blueprint.route(
@@ -67,8 +84,6 @@ def create_group(registry_uuid):
 )
 def update_group(registry_uuid, group_uuid):
     group = Group.load(group_uuid)
-    if not group:
-        return jsonify({"error": "Group not found"}), 404
 
     if request.method == "PATCH":
         # Implement update logic
@@ -79,34 +94,57 @@ def update_group(registry_uuid, group_uuid):
 
     elif request.method == "DELETE":
         group.delete()
-        return jsonify({"success": "Group deleted"})
+        return jsonify(group.serialize())
 
 
 @registries_blueprint.route(
-    "/<string:registry_uuid>/groups/<string:group_uuid>/members/", methods=["POST"]
+    "/<string:registry_uuid>/groups/<string:group_uuid>/actions/reorder/<string:direction>",
+    methods=["POST"],
+)
+def reorder_group(registry_uuid, group_uuid, direction):
+    if direction not in ["next", "previous"]:
+        raise BadRequestWithCode(
+            "Group.reorder.direction",
+            "'up' and 'down' are the only valid directions to reorder a Group Member",
+        )
+    group = Group.load(group_uuid)
+    group.swap_sequence(direction=direction)
+    return "Reordered", 200
+
+
+@registries_blueprint.route(
+    "/<string:registry_uuid>/groups/<string:group_uuid>/members/",
+    methods=["POST", "GET"],
 )
 def create_group_member(registry_uuid, group_uuid):
+    registry = Registry.load(registry_uuid)
+
     if request.method == "POST":
-        registry = Registry.load(registry_uuid)
-
-        group_uuid = group_uuid
-        title = request.json.get("title")
-        value_set_uuid = request.json.get("value_set_uuid")
-
-        if registry.data_type == "lab":
+        # use LabsGroupMember for labs
+        if registry.registry_type == "labs":
             pass
-        elif registry.data_type == "vital":
+        # use VitalsGroupMember for vitals
+        elif registry.registry_type == "vitals":
             pass
         else:
-            # Create new group member
+            # Create a new group member
+            title = request.json.get("title")
+            value_set_uuid = request.json.get("value_set_uuid")
             new_group_member = GroupMember.create(
                 group_uuid=group_uuid,
                 title=title,
                 value_set_uuid=value_set_uuid,
             )
 
-        return jsonify(new_group_member.serialize())
-    pass
+            # Return the group member in the response
+            return jsonify(new_group_member.serialize())
+    elif request.method == "GET":
+        # Load all the members associated with the group
+        group = Group.load(group_uuid)
+        group.load_members()
+
+        # Return the members in the response
+        return jsonify([group_member.serialize() for group_member in group.members])
 
 
 @registries_blueprint.route(
@@ -114,18 +152,29 @@ def create_group_member(registry_uuid, group_uuid):
     methods=["PATCH", "DELETE"],
 )
 def update_group_member(registry_uuid, group_uuid, member_uuid):
+    group_member = GroupMember.load(member_uuid)
+
     if request.method == "PATCH":
         title = request.json.get("title")
         value_set_uuid = request.json.get("value_set_uuid")
-
-        group_member = GroupMember.load(member_uuid)
-        if not group_member:
-            return jsonify({"error": "Group member not found"}), 404
-
         group_member.update(title=title, value_set_uuid=value_set_uuid)
-
-        return "update complete"
+        return jsonify(group_member.serialize())
 
     elif request.method == "DELETE":
-        # Implement delete logic
-        pass
+        group_member.delete()
+        return jsonify(group_member.serialize())
+
+
+@registries_blueprint.route(
+    "/<string:registry_uuid>/groups/<string:group_uuid>/members/<string:member_uuid>/actions/reorder/<string:direction>",
+    methods=["POST"],
+)
+def reorder_group_member(registry_uuid, group_uuid, member_uuid, direction):
+    if direction not in ["next", "previous"]:
+        raise BadRequestWithCode(
+            "GroupMember.reorder.direction",
+            "'up' and 'down' are the only valid directions to reorder a Group Member",
+        )
+    group_member = GroupMember.load(member_uuid)
+    group_member.swap_sequence(direction=direction)
+    return "Reordered", 200

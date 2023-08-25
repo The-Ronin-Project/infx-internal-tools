@@ -7,7 +7,7 @@ from sqlalchemy import text
 from functools import lru_cache
 import app.models.codes
 from app.database import get_db
-from app.errors import BadRequestWithCode
+from app.errors import BadRequestWithCode, NotFoundException
 from app.value_sets.models import ValueSet, ValueSetVersion
 
 # Need reference ranges for labs and vitals
@@ -20,9 +20,29 @@ class Registry:
     registry_type: str  # not an enum so users can create new types of registries w/o code change
     sorting_enabled: bool
 
+    def __post_init__(self):
+        self.groups = []
+
     @classmethod
     def create(cls, title: str, registry_type: str, sorting_enabled: bool):
         conn = get_db()
+        # Check for duplicate registry names
+        existing_registry = conn.execute(
+            text(
+                """  
+                SELECT * FROM flexible_registry.registry  
+                WHERE title = :title  
+                """
+            ),
+            {"title": title},
+        ).fetchone()
+
+        if existing_registry:
+            raise BadRequestWithCode(
+                "Registry.title.duplicate",
+                "Cannot create a new registry with the same title as an existing one",
+            )
+
         registry_uuid = uuid.uuid4()
         conn.execute(
             text(
@@ -56,7 +76,7 @@ class Registry:
         ).fetchone()
 
         if result is None:
-            return None
+            raise NotFoundException(f"No Registry found with UUID: {registry_uuid}")
 
         return cls(
             uuid=registry_uuid,
@@ -85,6 +105,36 @@ class Registry:
             )
             for result in results
         ]
+
+    def load_groups(self):
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """  
+                SELECT * FROM flexible_registry."group"  
+                WHERE registry_uuid = :registry_uuid
+                order by sequence  
+                """
+            ),
+            {"registry_uuid": self.uuid},
+        ).fetchall()
+
+        if results is None:
+            raise NotFoundException(
+                f"No Groups found for Registry with UUID: {self.uuid}"
+            )
+
+        groups = []
+        for result in results:
+            group = Group(
+                uuid=result.uuid,
+                registry=self,
+                title=result.title,
+                sequence=result.sequence,
+            )
+            groups.append(group)
+
+        self.groups = groups
 
     def update(self, title=None, sorting_enabled=None, registry_type=None):
         conn = get_db()
@@ -189,6 +239,9 @@ class Group:
             {"group_uuid": group_uuid},
         ).fetchone()
 
+        if result is None:
+            raise NotFoundException(f"No Group found with UUID: {group_uuid}")
+
         registry = Registry.load(result.registry_uuid)
 
         return cls(
@@ -197,6 +250,39 @@ class Group:
             sequence=result.sequence,
             registry=registry,
         )
+
+    def load_members(self):
+        group_uuid = self.uuid
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """  
+                SELECT * FROM flexible_registry.group_member  
+                WHERE group_uuid = :group_uuid
+                order by sequence  
+                """
+            ),
+            {"group_uuid": group_uuid},
+        ).fetchall()
+
+        if results is None:
+            raise NotFoundException(
+                f"No Members found for Group with UUID: {group_uuid}"
+            )
+
+        members = []
+        for result in results:
+            value_set = ValueSet.load(result.value_set_uuid)
+            member = GroupMember(
+                uuid=result.uuid,
+                group=self,
+                title=result.title,
+                sequence=result.sequence,
+                value_set=value_set,
+            )
+            members.append(member)
+
+        self.members = members
 
     def update(self, title):
         conn = get_db()
@@ -212,6 +298,88 @@ class Group:
                 {"title": title, "group_uuid": self.uuid},
             )
             self.title = title
+
+    def swap_sequence(self, direction):
+        """
+        Swap the sequence of a group item with the item after or before it.
+
+        Parameters:
+        - direction: A string, either "next" or "previous"
+        """
+
+        conn = get_db()
+
+        # Using self.sequence and self.group.uuid directly.
+        given_sequence = self.sequence
+        registry_uuid = self.registry.uuid
+
+        # Depending on the direction, the SQL query changes
+        if direction == "next":
+            order_by = "ASC"
+            comparison_operator = ">"
+        elif direction == "previous":
+            order_by = "DESC"
+            comparison_operator = "<"
+        else:
+            raise BadRequestWithCode(
+                "Group.sequence.direction",
+                "Direction should be either 'next' or 'previous'.",
+            )
+
+        # Get the UUID and sequence for the item after/before the current item
+        result = conn.execute(
+            text(
+                f"""
+            SELECT uuid, sequence FROM flexible_registry.group
+            WHERE sequence {comparison_operator} :given_sequence AND registry_uuid = :registry_uuid
+            ORDER BY sequence {order_by}
+            LIMIT 1
+        """
+            ),
+            {"given_sequence": given_sequence, "registry_uuid": registry_uuid},
+        )
+
+        adjacent_uuid, adjacent_sequence = result.fetchone()
+
+        # To avoid violating unique constraints, set the adjacent item's sequence to a temporary value
+        conn.execute(
+            text(
+                """
+            UPDATE flexible_registry.group
+            SET sequence = -1
+            WHERE uuid = :adjacent_uuid
+        """
+            ),
+            {"adjacent_uuid": adjacent_uuid},
+        )
+
+        # Now set the current item's sequence to the adjacent_sequence
+        conn.execute(
+            text(
+                """
+            UPDATE flexible_registry.group
+            SET sequence = :adjacent_sequence
+            WHERE sequence = :given_sequence AND registry_uuid = :registry_uuid
+        """
+            ),
+            {
+                "adjacent_sequence": adjacent_sequence,
+                "given_sequence": given_sequence,
+                "registry_uuid": registry_uuid,
+            },
+        )
+
+        # Finally, set the sequence of the adjacent item (currently -1) to the current item's original sequence
+        conn.execute(
+            text(
+                """
+            UPDATE flexible_registry.group
+            SET sequence = :given_sequence
+            WHERE uuid = :adjacent_uuid
+        """
+            ),
+            {"given_sequence": given_sequence, "adjacent_uuid": adjacent_uuid},
+        )
 
     def delete(self):
         conn = get_db()
@@ -286,8 +454,6 @@ class GroupMember:
     @classmethod
     def load(cls, uuid):
         data = cls.fetch_data(uuid)
-        if not data:
-            return None
         return cls.create_instance_from_data(**data)
 
     @classmethod
@@ -303,6 +469,9 @@ class GroupMember:
             {"uuid": uuid},
         ).fetchone()
 
+        if not result:
+            raise NotFoundException(f"No Group Member found with UUID: {uuid}")
+
         if result:
             return {
                 "uuid": result.uuid,
@@ -312,6 +481,16 @@ class GroupMember:
                 "value_set": ValueSet.load(result.value_set_uuid),
             }
         return None
+
+    @classmethod
+    def create_instance_from_data(cls, **data):
+        return cls(
+            uuid=data["uuid"],
+            group=data["group"],
+            title=data["title"],
+            sequence=data["sequence"],
+            value_set=data["value_set"],
+        )
 
     def update(self, title=None, value_set_uuid=None):
         conn = get_db()
@@ -333,7 +512,9 @@ class GroupMember:
             # Load the new ValueSet instance using the provided value_set_uuid
             new_value_set = ValueSet.load(value_set_uuid)
             if new_value_set is None:
-                raise ValueError(f"ValueSet with UUID {value_set_uuid} not found")
+                raise NotFoundException(
+                    f"No ValueSet found with UUID: {value_set_uuid}"
+                )
             conn.execute(
                 text(
                     """  
@@ -346,14 +527,98 @@ class GroupMember:
             )
             self.value_set = new_value_set
 
-    @classmethod
-    def create_instance_from_data(cls, **data):
-        return cls(
-            uuid=data["uuid"],
-            group=data["group"],
-            title=data["title"],
-            sequence=data["sequence"],
-            value_set=data["value_set"],
+    def swap_sequence(self, direction):
+        """
+        Swap the sequence of a group_member item with the item after or before it.
+
+        Parameters:
+        - direction: A string, either "next" or "previous"
+        """
+
+        conn = get_db()
+
+        # Using self.sequence and self.group.uuid directly.
+        given_sequence = self.sequence
+        group_uuid = self.group.uuid
+
+        # Depending on the direction, the SQL query changes
+        if direction == "next":
+            order_by = "ASC"
+            comparison_operator = ">"
+        elif direction == "previous":
+            order_by = "DESC"
+            comparison_operator = "<"
+        else:
+            raise BadRequestWithCode(
+                "GroupMember.sequence.direction",
+                "Direction should be either 'next' or 'previous'.",
+            )
+
+        # Get the UUID and sequence for the item after/before the current item
+        result = conn.execute(
+            text(
+                f"""
+            SELECT uuid, sequence FROM flexible_registry.group_member
+            WHERE sequence {comparison_operator} :given_sequence AND group_uuid = :group_uuid
+            ORDER BY sequence {order_by}
+            LIMIT 1
+        """
+            ),
+            {"given_sequence": given_sequence, "group_uuid": group_uuid},
+        )
+
+        adjacent_uuid, adjacent_sequence = result.fetchone()
+
+        # To avoid violating unique constraints, set the adjacent item's sequence to a temporary value
+        conn.execute(
+            text(
+                """
+            UPDATE flexible_registry.group_member
+            SET sequence = -1
+            WHERE uuid = :adjacent_uuid
+        """
+            ),
+            {"adjacent_uuid": adjacent_uuid},
+        )
+
+        # Now set the current item's sequence to the adjacent_sequence
+        conn.execute(
+            text(
+                """
+            UPDATE flexible_registry.group_member
+            SET sequence = :adjacent_sequence
+            WHERE sequence = :given_sequence AND group_uuid = :group_uuid
+        """
+            ),
+            {
+                "adjacent_sequence": adjacent_sequence,
+                "given_sequence": given_sequence,
+                "group_uuid": group_uuid,
+            },
+        )
+
+        # Finally, set the sequence of the adjacent item (currently -1) to the current item's original sequence
+        conn.execute(
+            text(
+                """
+            UPDATE flexible_registry.group_member
+            SET sequence = :given_sequence
+            WHERE uuid = :adjacent_uuid
+        """
+            ),
+            {"given_sequence": given_sequence, "adjacent_uuid": adjacent_uuid},
+        )
+
+    def delete(self):
+        conn = get_db()
+        conn.execute(
+            text(
+                """  
+                DELETE FROM flexible_registry.group_member  
+                WHERE "uuid" = :member_uuid  
+                """
+            ),
+            {"member_uuid": self.uuid},
         )
 
     def serialize(self):
@@ -397,7 +662,7 @@ class VitalsGroupMember(GroupMember):
 
 
 @dataclass
-class LabGroupMember(GroupMember):
+class LabsGroupMember(GroupMember):
     minimum_panel_members: int
 
     @classmethod
