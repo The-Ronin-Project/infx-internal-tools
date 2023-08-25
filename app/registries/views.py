@@ -102,45 +102,50 @@ def update_group(registry_uuid, group_uuid):
     methods=["POST"],
 )
 def reorder_group(registry_uuid, group_uuid, direction):
-    if direction not in ['next', 'previous']:
-        raise BadRequestWithCode('Group.reorder.direction', "'up' and 'down' are the only valid directions to reorder a Group Member")
+    if direction not in ["next", "previous"]:
+        raise BadRequestWithCode(
+            "Group.reorder.direction",
+            "'up' and 'down' are the only valid directions to reorder a Group Member",
+        )
     group = Group.load(group_uuid)
     group.swap_sequence(direction=direction)
     return "Reordered", 200
 
 
 @registries_blueprint.route(
-    "/<string:registry_uuid>/groups/<string:group_uuid>/members/", methods=["POST", "GET"]
+    "/<string:registry_uuid>/groups/<string:group_uuid>/members/",
+    methods=["POST", "GET"],
 )
 def create_group_member(registry_uuid, group_uuid):
-        registry = Registry.load(registry_uuid)
+    registry = Registry.load(registry_uuid)
 
-        if request.method == "POST":
-            # use LabsGroupMember for labs
-            if registry.registry_type == "labs":
-                pass
-            # use VitalsGroupMember for vitals
-            elif registry.registry_type == "vitals":
-                pass
-            else:
-                # Create a new group member
-                title = request.json.get("title")
-                value_set_uuid = request.json.get("value_set_uuid")
-                new_group_member = GroupMember.create(
-                    group_uuid=group_uuid,
-                    title=title,
-                    value_set_uuid=value_set_uuid,
-                )
+    if request.method == "POST":
+        # use LabsGroupMember for labs
+        if registry.registry_type == "labs":
+            pass
+        # use VitalsGroupMember for vitals
+        elif registry.registry_type == "vitals":
+            pass
+        else:
+            # Create a new group member
+            title = request.json.get("title")
+            value_set_uuid = request.json.get("value_set_uuid")
+            new_group_member = GroupMember.create(
+                group_uuid=group_uuid,
+                title=title,
+                value_set_uuid=value_set_uuid,
+            )
 
-                # Return the group member in the response
-                return jsonify(new_group_member.serialize())
-        elif request.method == "GET":
-            # Load all the members associated with the group
-            group = Group.load(group_uuid)
-            group.load_members()
+            # Return the group member in the response
+            return jsonify(new_group_member.serialize())
+    elif request.method == "GET":
+        # Load all the members associated with the group
+        group = Group.load(group_uuid)
+        group.load_members()
 
-            # Return the members in the response
-            return jsonify([group_member.serialize() for group_member in group.members])
+        # Return the members in the response
+        return jsonify([group_member.serialize() for group_member in group.members])
+
 
 @registries_blueprint.route(
     "/<string:registry_uuid>/groups/<string:group_uuid>/members/<string:member_uuid>",
@@ -159,14 +164,17 @@ def update_group_member(registry_uuid, group_uuid, member_uuid):
         group_member.delete()
         return jsonify(group_member.serialize())
 
+
 @registries_blueprint.route(
     "/<string:registry_uuid>/groups/<string:group_uuid>/members/<string:member_uuid>/actions/reorder/<string:direction>",
     methods=["POST"],
 )
 def reorder_group_member(registry_uuid, group_uuid, member_uuid, direction):
-    if direction not in ['next', 'previous']:
-        raise BadRequestWithCode('GroupMember.reorder.direction', "'up' and 'down' are the only valid directions to reorder a Group Member")
+    if direction not in ["next", "previous"]:
+        raise BadRequestWithCode(
+            "GroupMember.reorder.direction",
+            "'up' and 'down' are the only valid directions to reorder a Group Member",
+        )
     group_member = GroupMember.load(member_uuid)
     group_member.swap_sequence(direction=direction)
     return "Reordered", 200
-

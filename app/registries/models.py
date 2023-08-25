@@ -321,38 +321,65 @@ class Group:
             order_by = "DESC"
             comparison_operator = "<"
         else:
-            raise BadRequestWithCode("Group.sequence.direction", "Direction should be either 'next' or 'previous'.")
+            raise BadRequestWithCode(
+                "Group.sequence.direction",
+                "Direction should be either 'next' or 'previous'.",
+            )
 
         # Get the UUID and sequence for the item after/before the current item
-        result = conn.execute(text(f"""
+        result = conn.execute(
+            text(
+                f"""
             SELECT uuid, sequence FROM flexible_registry.group
             WHERE sequence {comparison_operator} :given_sequence AND registry_uuid = :registry_uuid
             ORDER BY sequence {order_by}
             LIMIT 1
-        """), {"given_sequence": given_sequence, "registry_uuid": registry_uuid})
+        """
+            ),
+            {"given_sequence": given_sequence, "registry_uuid": registry_uuid},
+        )
 
         adjacent_uuid, adjacent_sequence = result.fetchone()
 
         # To avoid violating unique constraints, set the adjacent item's sequence to a temporary value
-        conn.execute(text("""
+        conn.execute(
+            text(
+                """
             UPDATE flexible_registry.group
             SET sequence = -1
             WHERE uuid = :adjacent_uuid
-        """), {"adjacent_uuid": adjacent_uuid})
+        """
+            ),
+            {"adjacent_uuid": adjacent_uuid},
+        )
 
         # Now set the current item's sequence to the adjacent_sequence
-        conn.execute(text("""
+        conn.execute(
+            text(
+                """
             UPDATE flexible_registry.group
             SET sequence = :adjacent_sequence
             WHERE sequence = :given_sequence AND registry_uuid = :registry_uuid
-        """), {"adjacent_sequence": adjacent_sequence, "given_sequence": given_sequence, "registry_uuid": registry_uuid})
+        """
+            ),
+            {
+                "adjacent_sequence": adjacent_sequence,
+                "given_sequence": given_sequence,
+                "registry_uuid": registry_uuid,
+            },
+        )
 
         # Finally, set the sequence of the adjacent item (currently -1) to the current item's original sequence
-        conn.execute(text("""
+        conn.execute(
+            text(
+                """
             UPDATE flexible_registry.group
             SET sequence = :given_sequence
             WHERE uuid = :adjacent_uuid
-        """), {"given_sequence": given_sequence, "adjacent_uuid": adjacent_uuid})
+        """
+            ),
+            {"given_sequence": given_sequence, "adjacent_uuid": adjacent_uuid},
+        )
 
     def delete(self):
         conn = get_db()
@@ -522,38 +549,65 @@ class GroupMember:
             order_by = "DESC"
             comparison_operator = "<"
         else:
-            raise BadRequestWithCode("GroupMember.sequence.direction", "Direction should be either 'next' or 'previous'.")
+            raise BadRequestWithCode(
+                "GroupMember.sequence.direction",
+                "Direction should be either 'next' or 'previous'.",
+            )
 
         # Get the UUID and sequence for the item after/before the current item
-        result = conn.execute(text(f"""
+        result = conn.execute(
+            text(
+                f"""
             SELECT uuid, sequence FROM flexible_registry.group_member
             WHERE sequence {comparison_operator} :given_sequence AND group_uuid = :group_uuid
             ORDER BY sequence {order_by}
             LIMIT 1
-        """), {"given_sequence": given_sequence, "group_uuid": group_uuid})
+        """
+            ),
+            {"given_sequence": given_sequence, "group_uuid": group_uuid},
+        )
 
         adjacent_uuid, adjacent_sequence = result.fetchone()
 
         # To avoid violating unique constraints, set the adjacent item's sequence to a temporary value
-        conn.execute(text("""
+        conn.execute(
+            text(
+                """
             UPDATE flexible_registry.group_member
             SET sequence = -1
             WHERE uuid = :adjacent_uuid
-        """), {"adjacent_uuid": adjacent_uuid})
+        """
+            ),
+            {"adjacent_uuid": adjacent_uuid},
+        )
 
         # Now set the current item's sequence to the adjacent_sequence
-        conn.execute(text("""
+        conn.execute(
+            text(
+                """
             UPDATE flexible_registry.group_member
             SET sequence = :adjacent_sequence
             WHERE sequence = :given_sequence AND group_uuid = :group_uuid
-        """), {"adjacent_sequence": adjacent_sequence, "given_sequence": given_sequence, "group_uuid": group_uuid})
+        """
+            ),
+            {
+                "adjacent_sequence": adjacent_sequence,
+                "given_sequence": given_sequence,
+                "group_uuid": group_uuid,
+            },
+        )
 
         # Finally, set the sequence of the adjacent item (currently -1) to the current item's original sequence
-        conn.execute(text("""
+        conn.execute(
+            text(
+                """
             UPDATE flexible_registry.group_member
             SET sequence = :given_sequence
             WHERE uuid = :adjacent_uuid
-        """), {"given_sequence": given_sequence, "adjacent_uuid": adjacent_uuid})
+        """
+            ),
+            {"given_sequence": given_sequence, "adjacent_uuid": adjacent_uuid},
+        )
 
     def delete(self):
         conn = get_db()
