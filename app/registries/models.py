@@ -627,7 +627,10 @@ class GroupMember:
             "group_uuid": self.group.uuid,
             "title": self.title,
             "sequence": self.sequence,
-            "value_set_uuid": self.value_set.uuid,
+            "value_set": {
+                "uuid": self.value_set.uuid,
+                "title": self.value_set.title
+            },
         }
 
 
