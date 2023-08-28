@@ -31,12 +31,35 @@ jobs:
       username: ${{ secrets.NEXUS_DOCKER_USERNAME }}
       password: ${{ secrets.NEXUS_DOCKER_PASSWORD }}
 
-  argocd_prod:
-    if: github.ref == 'refs/heads/master'
-    uses: projectronin/github/.github/workflows/argocd_deploy.yml@main
-    needs: [ application-image ]
+  deploy_dev:
+    if: github.ref == 'refs/heads/master' || contains(github.ref, 'hotfix/')
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
+    needs: [application-image]
+    with:
+      environment: dev
+      application: infx-internal-tools
+      tag: ${{ github.sha }}
+      commit-sha: ${{ github.sha }}
+    secrets: inherit
+
+  deploy_stage:
+    if: github.ref == 'refs/heads/master' || contains(github.ref, 'hotfix/')
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
+    needs: [deploy_dev]
+    with:
+      environment: stage
+      application: infx-internal-tools
+      tag: ${{ github.sha }}
+      commit-sha: ${{ github.sha }}
+    secrets: inherit
+
+  deploy_prod:
+    if: github.ref == 'refs/heads/master' || contains(github.ref, 'hotfix/')
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
+    needs: [deploy_stage]
     with:
       environment: prod
-      image-tag: ${{ github.sha }}
-    secrets:
-      argocd-svc-automation: ${{ secrets.ARGOCD_SVC_AUTOMATION }}
+      application: infx-internal-tools
+      tag: ${{ github.sha }}
+      commit-sha: ${{ github.sha }}
+    secrets: inherit
