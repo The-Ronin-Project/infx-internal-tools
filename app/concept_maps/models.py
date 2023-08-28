@@ -1669,3 +1669,38 @@ def make_author_assigned_mapper(source_concept_uuid, author):
         return "ok"
     else:
         return "Author not found"
+
+
+def make_reviewed_by_assigned_reviewer(source_concept_uuid, reviewed_by):
+    conn = get_db()
+    user_uuid_query = conn.execute(
+        text(
+            """  
+            select uuid from project_management.user  
+            where first_last_name = :reviewed_by
+            """
+        ),
+        {
+            "reviewed_by": reviewed_by,
+        },
+    ).first()
+
+    if user_uuid_query:
+        assigned_reviewer_update = (
+            conn.execute(
+                text(
+                    """  
+                update concept_maps.source_concept  
+                set assigned_reviewer = :user_uuid  
+                where uuid = :source_concept_uuid  
+                """
+                ),
+                {
+                    "user_uuid": user_uuid_query.uuid,
+                    "source_concept_uuid": source_concept_uuid,
+                },
+            ),
+        )
+        return "ok"
+    else:
+        return "Author not found"
