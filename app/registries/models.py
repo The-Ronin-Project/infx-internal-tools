@@ -126,6 +126,7 @@ class Registry:
 
         groups = []
         for result in results:
+            # todo: identify and instantiate the correct type of group
             group = Group(
                 uuid=result.uuid,
                 registry=self,

@@ -66,6 +66,8 @@ def create_group(registry_uuid):
     if request.method == "POST":
         title = request.json.get("title")
 
+        # todo: identify and instantiate the correct type of group
+
         # Create new group
         new_group = Group.create(registry_uuid=registry_uuid, title=title)
 
