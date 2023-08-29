@@ -10,13 +10,14 @@ Our basic convention is INFX-{ticket-number}-lower-case-identifier
 
 ### Python Versions and Virtualenvs
 
-If you do want to manage multiple Python versions on your system, you can use **pyenv** to install and switch between
-different Python versions and then use **pipenv** to create virtual environments and manage dependencies for each project.
+To support automation tools provided by the Platform team, we use [pipenv](https://github.com/pypa/pipenv) 
+to manage the dependencies and virtual environments for Python projects. 
 
-We recommend [pyenv](https://github.com/pyenv/pyenv) for managing multiple Python versions for a project. Pyenv 
-works with all versions of Python and allows you to easily switch between different Python versions on the same
-system. Due to automation needs we are now [pipenv](https://github.com/pypa/pipenv), it is a tool for managing dependencies and virtual environments for Python projects. It provides a way to create 
-isolated Python environments for each project with its own dependencies.
+We use the major and minor versions of Python specified in our [Pipfile](Pipfile) `python_version` setting.
+For example, if the [Pipfile](Pipfile) has `python_version = "3.9"` 
+then the System devs all use the same Python 3.9.x version. 
+
+We update the [Pipfile](Pipfile) `python_version` when advised by Platform to stay in sync with automation tools.
 
 ### Install pyenv
 
@@ -38,7 +39,7 @@ To list the all available versions of Python, including Anaconda, Jython, pypy, 
 
 Then install the desired versions:
 ```
-$ pyenv install 3.11.4
+$ pyenv install 3.9.10
 $ pyenv versions
 ```
 
@@ -51,9 +52,9 @@ the following to the end of  ~/.zshrc:
 
 `eval "$(pyenv virtualenv-init -)"`
 
-To create a virtualenv for the Python version used with pyenv, run pyenv virtualenv, specifying the Python version you want and the name of the virtualenv directory. For example,
+To create a virtualenv for the Python version used with pyenv, run pyenv virtualenv, specifying the Python version you are using and the name of the virtualenv directory. For example,
 
-`$ pyenv virtualenv 3.11.4 infx-internal-tools`
+`$ pyenv virtualenv 3.9.10 infx-internal-tools`
 
 If eval "$(pyenv virtualenv-init -)" is configured in your shell, pyenv-virtualenv will automatically activate/deactivate virtualenvs on entering/leaving directories which contain a .python-version file that contains the name of a valid virtual environment as shown in the output of pyenv virtualenvs (e.g., venv34 or 3.4.3/envs/venv34 in example above) . .python-version files are used by pyenv to denote local Python versions and can be created and deleted with the pyenv local command.
 
@@ -70,20 +71,18 @@ pipenv can be installed via pip, pipx or via
 
 `brew install pipenv`
 
-`pipenv install --dev` will install all deps and ensure the python version is correct 3.11.1
+`pipenv install --dev` will install all dependencies and set the `python_version` to the value in the [Pipfile](Pipfile) 
 
-In addition, according to the docs your current virtual environment should also work. But you will still need to install the dependencies via pipenv.
-
-A Pipfile.lock is in the working directory along with Pipfile. Please check this in on any changes. We use caching keyed 
+A `Pipfile.lock` file is in the working directory along with Pipfile. Please check this in on any changes. We use caching keyed 
 off of the lock file, so the cache will be invalidated on mods to it. If you have challenges installing your dependencies
-you may need to check your [Pipfile](https://github.com/pypa/pipfile#pipfile-the-replacement-for-requirementstxt) and possibly
+you may need to check your [Pipfile](Pipfile) and possibly
 recreate it.
 
-You will want to contact a team member for:
-- pgAdmin access
+Contact a team member for:
+- pgAdmin access: you need to ask the IT team for a username and password  
 - details about creating your own .env file from our .env.template
-- a key for OCI access
-- add yourself to the database access group clinical-intelligence
+- get a PEM file that contains your key for OCI access, create a folder `.oci` at your top level folder, and put the PEM file there
+- ask your team to be added to the database access group `clinical-intelligence`
 
 ### Testing
 
@@ -94,7 +93,7 @@ We use [Pytest](https://docs.pytest.org/en/6.2.x/) for automated testing, Postma
 
 We recommend splitting integration tests and unit tests into separate directories. Code coverage should be calculated using integration tests. 
 
-Our current structure calls for tests to be outside of the app at the top level of the directory. Pytest will discover them.
+Our current structure calls for tests to be outside the app at the top level of the directory. Pytest will discover them.
 
 ### Setting up a dev environment
 
@@ -109,5 +108,15 @@ First, follow these directions: https://docs.github.com/en/authentication/connec
 
 
 ### Running a dev server
-In the code editor terminal, run command `python -m app.app`
+
+1. In PyCharm, working in the infx-internal-tools repo, open a terminal session.
+2. In the terminal session, activate your environment by name: `pyenv activate infx-internal-tools`
+3. Environment is active when you see that name at the start of the terminal prompt: `(infx-internal-tools) `
+4. If dependencies and/or the [Pipfile](Pipfile) have changed recently, also run: `pipenv install --dev`
+5. Start the local dev server with: `python -m app.app`
+6. See messages that the Flask app is serving, Debug mode is on, and the Debugger is active.
+7. When viewing a Python file in PyCharm, run and debug controls are available at top right in the PyCharm window.
+8. In Postman, in the Informatics workspace, choose the Dev environment. 
+9. Postman requests are routed to your local dev server. 
+
 If the API request is calling to RxNav-in-a-box, make sure that container is running in Docker first.
