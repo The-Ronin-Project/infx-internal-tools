@@ -199,6 +199,7 @@ class Group:
         cls,
         registry_uuid,
         title,
+        **kwargs
     ):
         conn = get_db()
         group_uuid = uuid.uuid4()
@@ -224,10 +225,22 @@ class Group:
             },
         )
 
+        return cls.post_create_hook(group_uuid, **kwargs)
+
+    @classmethod
+    def post_create_hook(cls, group_uuid, **kwargs):
+        """
+        To be overridden in subclasses to save additional data to accessory tables
+        """
         return cls.load(group_uuid)
 
     @classmethod
-    def load(cls, group_uuid):
+    def load(cls, uuid):
+        data = cls.fetch_data(uuid)
+        return cls.create_instance_from_data(**data)
+
+    @classmethod
+    def fetch_data(cls, uuid):
         conn = get_db()
         result = conn.execute(
             text(
@@ -236,19 +249,28 @@ class Group:
                 WHERE "uuid" = :group_uuid
                 """
             ),
-            {"group_uuid": group_uuid},
+            {"group_uuid": uuid},
         ).fetchone()
 
         if result is None:
-            raise NotFoundException(f"No Group found with UUID: {group_uuid}")
+            raise NotFoundException(f"No Group found with UUID: {uuid}")
 
         registry = Registry.load(result.registry_uuid)
 
+        return {
+            "uuid": result.uuid,
+            "title": result.title,
+            "sequence": result.sequence,
+            "registry": registry
+        }
+
+    @classmethod
+    def create_instance_from_data(cls, **data):
         return cls(
-            uuid=result.uuid,
-            title=result.title,
-            sequence=result.sequence,
-            registry=registry,
+            uuid=data['uuid'],
+            title=data['title'],
+            sequence=data['sequence'],
+            registry=data['registry'],
         )
 
     def load_members(self):
@@ -403,6 +425,63 @@ class Group:
 
 
 @dataclass
+class LabsGroup(Group):
+    minimum_panel_members: Optional[int]
+
+    @classmethod
+    def post_create_hook(cls, group_uuid, **kwargs):
+        minimum_panel_members = kwargs["minimum_panel_members"]
+
+        conn = get_db()
+        conn.execute(
+            """
+            INSERT INTO flexible_registry.labs
+            (group_uuid, minimum_panel_members)
+            values
+            (:group_uuid, :minimum_panel_members)
+            """,
+            {
+                "group_uuid": group_uuid,
+                "minimum_panel_members": minimum_panel_members,
+            },
+        )
+
+        return cls.load(group_uuid)
+
+    @classmethod
+    def fetch_data(cls, uuid):
+        data = super().fetch_data(uuid)
+
+        # Load additional data or modify existing data
+        conn = get_db()
+        result = conn.execute(
+            """
+            select * from flexible_registry.labs
+            where group_uuid=:group_uuid
+            """,
+            {"group_uuid": uuid},
+        ).fetchone()
+        data["minimum_panel_members"] = result.minimum_panel_members
+
+        return data
+
+    @classmethod
+    def create_instance_from_data(cls, **data):
+        return cls(
+            uuid=data['uuid'],
+            title=data['title'],
+            sequence=data['sequence'],
+            registry=data['registry'],
+            minimum_panel_members=data['minimum_panel_members']
+        )
+
+    def serialize(self):
+        serialized = super().serialize()
+        serialized['minimum_panel_members'] = self.minimum_panel_members
+        return serialized
+
+
+@dataclass
 class GroupMember:
     uuid: uuid.UUID
     group: Group
@@ -480,7 +559,6 @@ class GroupMember:
                 "sequence": result.sequence,
                 "value_set": ValueSet.load(result.value_set_uuid),
             }
-        return None
 
     @classmethod
     def create_instance_from_data(cls, **data):
@@ -699,7 +777,7 @@ class VitalsGroupMember(GroupMember):
             select * from flexible_registry.vitals
             where group_member_uuid=:gm_uuid
             """,
-            {"gm_uuid": gm_uuid},
+            {"gm_uuid": uuid},
         ).fetchone()
         data["ucum_ref_units"] = result.ucum_ref_units
         data["ref_range_high"] = result.ref_range_high
@@ -728,73 +806,73 @@ class VitalsGroupMember(GroupMember):
         return serialized
 
 
-@dataclass
-class LabsGroupMember(GroupMember):
-    minimum_panel_members: int
-
-    @classmethod
-    def create(cls, group_uuid, title, value_set_uuid, **kwargs):
-        if "minimum_panel_members" not in kwargs:
-            raise BadRequestWithCode(
-                "missing-required-param",
-                "minimum_panel_members is required to add lab to panel",
-            )
-
-        super().create(group_uuid, title, value_set_uuid)
-
-    @classmethod
-    def post_create_hook(cls, gm_uuid, **kwargs):
-        minimum_panel_members = kwargs["minimum_panel_members"]
-
-        conn = get_db()
-        conn.execute(
-            """
-            INSERT INTO flexible_registry.labs
-            (group_member_uuid, minimum_panel_members)
-            values
-            (:group_member_uuid, :minimum_panel_members)
-            """,
-            {
-                "group_member_uuid": gm_uuid,
-                "minimum_panel_members": minimum_panel_members,
-            },
-        )
-
-        return cls.load(gm_uuid)
-
-    @classmethod
-    def fetch_data(cls, gm_uuid):
-        data = super().fetch_data(uuid)
-
-        # If there's no data for the given uuid, return None
-        if not data:
-            return None
-
-        # Load additional data or modify existing data
-        conn = get_db()
-        result = conn.execute(
-            """
-            select * from flexible_registry.labs
-            where group_member_uuid=:gm_uuid
-            """,
-            {"gm_uuid": gm_uuid},
-        ).fetchone()
-        data["minimum_panel_members"] = result.minimum_panel_members
-
-        return data
-
-    @classmethod
-    def create_instance_from_data(cls, **data):
-        return cls(
-            uuid=data["uuid"],
-            group=data["group"],
-            title=data["title"],
-            sequence=data["sequence"],
-            value_set=data["value_set"],
-            minimum_panel_members=data["minimum_panel_members"],
-        )
-
-    def serialize(self):
-        serialized = super().serialize()
-        serialized["minimum_panel_members"] = self.minimum_panel_members
-        return serialized
+# @dataclass
+# class LabsGroupMember(GroupMember):
+#     minimum_panel_members: int
+#
+#     @classmethod
+#     def create(cls, group_uuid, title, value_set_uuid, **kwargs):
+#         if "minimum_panel_members" not in kwargs:
+#             raise BadRequestWithCode(
+#                 "missing-required-param",
+#                 "minimum_panel_members is required to add lab to panel",
+#             )
+#
+#         super().create(group_uuid, title, value_set_uuid)
+#
+#     @classmethod
+#     def post_create_hook(cls, gm_uuid, **kwargs):
+#         minimum_panel_members = kwargs["minimum_panel_members"]
+#
+#         conn = get_db()
+#         conn.execute(
+#             """
+#             INSERT INTO flexible_registry.labs
+#             (group_member_uuid, minimum_panel_members)
+#             values
+#             (:group_member_uuid, :minimum_panel_members)
+#             """,
+#             {
+#                 "group_member_uuid": gm_uuid,
+#                 "minimum_panel_members": minimum_panel_members,
+#             },
+#         )
+#
+#         return cls.load(gm_uuid)
+#
+#     @classmethod
+#     def fetch_data(cls, gm_uuid):
+#         data = super().fetch_data(uuid)
+#
+#         # If there's no data for the given uuid, return None
+#         if not data:
+#             return None
+#
+#         # Load additional data or modify existing data
+#         conn = get_db()
+#         result = conn.execute(
+#             """
+#             select * from flexible_registry.labs
+#             where group_member_uuid=:gm_uuid
+#             """,
+#             {"gm_uuid": gm_uuid},
+#         ).fetchone()
+#         data["minimum_panel_members"] = result.minimum_panel_members
+#
+#         return data
+#
+#     @classmethod
+#     def create_instance_from_data(cls, **data):
+#         return cls(
+#             uuid=data["uuid"],
+#             group=data["group"],
+#             title=data["title"],
+#             sequence=data["sequence"],
+#             value_set=data["value_set"],
+#             minimum_panel_members=data["minimum_panel_members"],
+#         )
+#
+#     def serialize(self):
+#         serialized = super().serialize()
+#         serialized["minimum_panel_members"] = self.minimum_panel_members
+#         return serialized

@@ -124,12 +124,11 @@ def create_group_member(registry_uuid, group_uuid):
     registry = Registry.load(registry_uuid)
 
     if request.method == "POST":
-        # use LabsGroupMember for labs
-        if registry.registry_type == "labs":
-            pass
         # use VitalsGroupMember for vitals
-        elif registry.registry_type == "vitals":
+        if registry.registry_type == "vitals":
             pass
+        # labs, documents, and all others can use the generic class
+        # because they have no additional data
         else:
             # Create a new group member
             title = request.json.get("title")
