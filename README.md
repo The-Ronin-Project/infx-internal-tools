@@ -119,10 +119,12 @@ In PyCharm:
 6. See messages that the Flask app is serving, Debug mode is on, and the Debugger is active.
 7. When viewing a Python file in PyCharm, run and debug controls are available at top right in the PyCharm window.
 8. In Postman, in the Informatics workspace, choose your working environment:
-    a. ? to run your most recent code locally, in your virtual environment
-    a. Dev to run the most recent deployed code in Dev
-    a. Prod to run the most recent deployed code in Prod
-9. Use PyCharm to debug and step through the code running in your virtual environment. 
+    - `Dev-Local` to run the code in your local environment:
+    - `Prod` to run the code currently deployed in Prod
+    - `Dev` to run the code currently deployed in Dev
+    - `Dev-Docker` to run the Docker image in your local machine environment
+9. Then run test calls in Postman.
+10. Use PyCharm to debug and step through the code running in your virtual environment. 
 10. Postman will display messages when there are issues. In Dev and Prod, DataDog also displays messages. 
 11. To debug Dev or Prod, first synchronize your local virtual environment with the deployed code version, then debug.
 
