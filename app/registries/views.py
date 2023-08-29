@@ -5,7 +5,7 @@ from app.registries.models import (
     Group,
     Registry,
     LabsGroup,
-    VitalsGroupMember
+    VitalsGroupMember,
 )
 from app.models.codes import *
 from app.terminologies.models import *
@@ -137,7 +137,7 @@ def create_group_member(registry_uuid, group_uuid):
                 value_set_uuid=value_set_uuid,
                 ucum_ref_units=request.json.get("ucum_ref_units"),
                 ref_range_high=request.json.get("ref_range_high"),
-                ref_range_low=request.json.get("ref_range_low")
+                ref_range_low=request.json.get("ref_range_low"),
             )
         # labs, documents, and all others can use the generic class
         # because they have no additional data

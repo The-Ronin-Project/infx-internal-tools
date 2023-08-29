@@ -196,12 +196,7 @@ class Group:
     sequence: int
 
     @classmethod
-    def create(
-        cls,
-        registry_uuid,
-        title,
-        **kwargs
-    ):
+    def create(cls, registry_uuid, title, **kwargs):
         conn = get_db()
         group_uuid = uuid.uuid4()
 
@@ -263,16 +258,16 @@ class Group:
             "uuid": result.uuid,
             "title": result.title,
             "sequence": result.sequence,
-            "registry": registry
+            "registry": registry,
         }
 
     @classmethod
     def create_instance_from_data(cls, **data):
         return cls(
-            uuid=data['uuid'],
-            title=data['title'],
-            sequence=data['sequence'],
-            registry=data['registry'],
+            uuid=data["uuid"],
+            title=data["title"],
+            sequence=data["sequence"],
+            registry=data["registry"],
         )
 
     def load_members(self):
@@ -471,16 +466,16 @@ class LabsGroup(Group):
     @classmethod
     def create_instance_from_data(cls, **data):
         return cls(
-            uuid=data['uuid'],
-            title=data['title'],
-            sequence=data['sequence'],
-            registry=data['registry'],
-            minimum_panel_members=data['minimum_panel_members']
+            uuid=data["uuid"],
+            title=data["title"],
+            sequence=data["sequence"],
+            registry=data["registry"],
+            minimum_panel_members=data["minimum_panel_members"],
         )
 
     def serialize(self):
         serialized = super().serialize()
-        serialized['minimum_panel_members'] = self.minimum_panel_members
+        serialized["minimum_panel_members"] = self.minimum_panel_members
         return serialized
 
 
@@ -708,10 +703,7 @@ class GroupMember:
             "group_uuid": self.group.uuid,
             "title": self.title,
             "sequence": self.sequence,
-            "value_set": {
-                "uuid": self.value_set.uuid,
-                "title": self.value_set.title
-            },
+            "value_set": {"uuid": self.value_set.uuid, "title": self.value_set.title},
         }
 
 
