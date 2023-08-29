@@ -236,6 +236,7 @@ class Group:
 
     @classmethod
     def load(cls, uuid):
+        # todo: identify and instantiate the correct type of Group
         data = cls.fetch_data(uuid)
         return cls.create_instance_from_data(**data)
 
@@ -295,6 +296,7 @@ class Group:
         members = []
         for result in results:
             value_set = ValueSet.load(result.value_set_uuid)
+            # todo: load the appropriate type of group member
             member = GroupMember(
                 uuid=result.uuid,
                 group=self,
@@ -714,9 +716,9 @@ class GroupMember:
 
 @dataclass
 class VitalsGroupMember(GroupMember):
-    ucum_ref_units: str
-    ref_range_high: str
-    ref_range_low: str
+    ucum_ref_units: Optional[str]
+    ref_range_high: Optional[str]
+    ref_range_low: Optional[str]
 
     @classmethod
     def create(cls, group_uuid, title, value_set_uuid, **kwargs):

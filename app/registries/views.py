@@ -4,7 +4,8 @@ from app.registries.models import (
     GroupMember,
     Group,
     Registry,
-    LabsGroupMember,
+    LabsGroup,
+    VitalsGroupMember
 )
 from app.models.codes import *
 from app.terminologies.models import *
@@ -91,7 +92,6 @@ def update_group(registry_uuid, group_uuid):
         title = request.json.get("title")
         group.update(title)
         return jsonify(group.serialize())
-        # todo: let's have a separate conversation on how to update sequence appropriately
 
     elif request.method == "DELETE":
         group.delete()
@@ -124,15 +124,23 @@ def create_group_member(registry_uuid, group_uuid):
     registry = Registry.load(registry_uuid)
 
     if request.method == "POST":
+        title = request.json.get("title")
+        value_set_uuid = request.json.get("value_set_uuid")
+
         # use VitalsGroupMember for vitals
         if registry.registry_type == "vitals":
-            pass
+            new_group_member = VitalsGroupMember.create(
+                group_uuid=group_uuid,
+                title=title,
+                value_set_uuid=value_set_uuid,
+                ucum_ref_units=request.json.get("ucum_ref_units"),
+                ref_range_high=request.json.get("ref_range_high"),
+                ref_range_low=request.json.get("ref_range_low")
+            )
         # labs, documents, and all others can use the generic class
         # because they have no additional data
         else:
             # Create a new group member
-            title = request.json.get("title")
-            value_set_uuid = request.json.get("value_set_uuid")
             new_group_member = GroupMember.create(
                 group_uuid=group_uuid,
                 title=title,
