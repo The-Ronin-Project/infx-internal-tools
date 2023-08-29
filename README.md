@@ -82,30 +82,53 @@ you may need to check your [Pipfile](Pipfile) and possibly
 recreate it.
 
 Contact a team member for:
-- pgAdmin access: you need to ask the IT team for a username and password  
-- details about creating your own .env file from our .env.template
+- details about creating your own .env file from our [.env.template](.env.template)
+- ask your team to add you to the database access group `clinical-intelligence`
+- pgAdmin setup: ask the IT team for a username and password, then use the team Confluence instructions
 - get a PEM file that contains your key for OCI access, create a folder `.oci` at your top level folder, and put the PEM file there
-- ask your team to be added to the database access group `clinical-intelligence`
 
 
 ### Setting up a dev environment
 
 First, follow these directions: https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account
 
-Tool set:
+#### Tool set
 - Docker Desktop
 - Git (can be installed via xcode command line tools, or use GitHub Desktop)
 - PyCharm IDE
+- pgAdmin
 - CodeWithMe
 - Postman 
 - Homebrew (https://brew.sh)
 - DataDog
 
-In PyCharm:
-1. Settings > Project: Python Interpreter > Virtualenv Environment > in the dropdown, navigate to your local python > Apply > OK
-2. You should now see a number of plugins listed, including Black for code style
-3. CodeWithMe person icon at top right in PyCharm window > Permissions > enable Full Access, disable Start Call
-4. Settings > Tools > Plugins > Database Tools and SQL > click Disabled > Apply > OK
+
+#### PyCharm setup
+1. In PyCharm, choose Add Environment > Virtualenv Environment > Existing > and for Interpreter:
+2. For Interpreter, navigate from ~/.pyenv/versions via the Python version number for your virtual environment:
+    - select the file /envs/infx-internal-tools/bin/python 
+    - click OK > Apply > OK
+3. You should now see a number of plugins listed, including Black for code style
+4. Click the CodeWithMe person icon at top right in PyCharm window > Permissions > enable Full Access, disable Start Call
+5. Choose Settings > Languages and Frameworks > SQL Dialects > (choose a desired option or Generic SQL) > Apply > OK
+6. Restart PyCharm
+
+
+#### Flask setup: Run and Debug in PyCharm
+1. In PyCharm, open [app/app.py](app/app.py)
+2. At top right, near the Run and Debug icons, drop the menu and choose `Edit configuration`
+3. Modify the Flask server configuration in this dialog:
+    - Name: Flask
+    - Target type: Script path
+    - Target: (navigate to the local file infx-internal-tools/app/app.py)
+    - Application: application
+    - Additional options: `--host=0.0.0.0 --port=5500`
+    - FLASK_ENV: development
+    - FLASK_DEBUG: (check the box)
+    - Python interpreter: (should already be correct from "PyCharm setup" above)
+    - Working directory: (navigate to local folder infx-internal-tools)
+    - Add content/source roots to PYTHONPATH (check both boxes)
+4. Choose Apply and OK. 
 5. Restart PyCharm
 
 
