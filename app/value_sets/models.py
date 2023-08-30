@@ -1151,6 +1151,30 @@ class FHIRRule(VSRule):
     This class inherits from the VSRule class and provides implementation for FHIR specific value set rules.
     """
 
+    def include_entire_code_system(self):
+        """
+        This function gathers all codes from a specific FHIR value set.
+        @return: A set of all codes by code and long description.
+        """
+        conn = get_db()
+        query = """
+        select * from fhir_defined_terminologies.code_systems_new
+        where version_uuid=:terminology_version_uuid
+        """
+        results_data = conn.execute(
+            text(query), {"terminology_version_uuid": self.terminology_version.uuid}
+        )
+        results = [
+            Code(
+                self.fhir_system,
+                self.terminology_version.version,
+                x.code,
+                x.long_description,
+            )
+            for x in results_data
+        ]
+        self.results = set(results)
+
     def has_fhir_terminology_rule(self):
         conn = get_db()
         query = """
