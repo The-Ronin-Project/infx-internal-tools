@@ -126,13 +126,15 @@ class Registry:
 
         groups = []
         for result in results:
-            # todo: identify and instantiate the correct type of group
-            group = Group(
-                uuid=result.uuid,
-                registry=self,
-                title=result.title,
-                sequence=result.sequence,
-            )
+            if self.registry_type == "labs":
+                group = LabsGroup.load(result.uuid)
+            else:
+                group = Group(
+                    uuid=result.uuid,
+                    registry=self,
+                    title=result.title,
+                    sequence=result.sequence,
+                )
             groups.append(group)
 
         self.groups = groups
@@ -428,19 +430,20 @@ class LabsGroup(Group):
 
     @classmethod
     def post_create_hook(cls, group_uuid, **kwargs):
-        minimum_panel_members = kwargs["minimum_panel_members"]
-
+        """
+        Provide create overrides for this subclass
+        """
         conn = get_db()
         conn.execute(
             """
-            INSERT INTO flexible_registry.labs
+            INSERT INTO flexible_registry.labs_group
             (group_uuid, minimum_panel_members)
             values
             (:group_uuid, :minimum_panel_members)
             """,
             {
                 "group_uuid": group_uuid,
-                "minimum_panel_members": minimum_panel_members,
+                "minimum_panel_members": kwargs["minimum_panel_members"],
             },
         )
 
@@ -454,7 +457,7 @@ class LabsGroup(Group):
         conn = get_db()
         result = conn.execute(
             """
-            select * from flexible_registry.labs
+            select * from flexible_registry.labs_group
             where group_uuid=:group_uuid
             """,
             {"group_uuid": uuid},
@@ -714,27 +717,10 @@ class VitalsGroupMember(GroupMember):
     ref_range_low: Optional[str]
 
     @classmethod
-    def create(cls, group_uuid, title, value_set_uuid, **kwargs):
-        if "ucum_ref_units" not in kwargs:
-            raise BadRequestWithCode(
-                "missing-required-param",
-                "ucum_ref_units is required to add vital to panel",
-            )
-        if "ref_range_high" not in kwargs:
-            raise BadRequestWithCode(
-                "missing-required-param",
-                "ref_range_high is required to add vital to panel",
-            )
-        if "ref_range_low" not in kwargs:
-            raise BadRequestWithCode(
-                "missing-required-param",
-                "ref_range_low is required to add vital to panel",
-            )
-
-        super().create(group_uuid, title, value_set_uuid)
-
-    @classmethod
     def post_create_hook(cls, gm_uuid, **kwargs):
+        """
+        Provide create overrides for this subclass
+        """
         ucum_ref_units = kwargs["ucum_ref_units"]
         ref_range_high = kwargs["ref_range_high"]
         ref_range_low = kwargs["ref_range_low"]
@@ -742,7 +728,7 @@ class VitalsGroupMember(GroupMember):
         conn = get_db()
         conn.execute(
             """
-            INSERT INTO flexible_registry.vitals
+            INSERT INTO flexible_registry.vitals_group_member
             (group_member_uuid, ucum_ref_units, ref_range_high, ref_range_low)
             values
             (:group_member_uuid, :ucum_ref_units, :ref_range_high, :ref_range_low)
@@ -769,7 +755,7 @@ class VitalsGroupMember(GroupMember):
         conn = get_db()
         result = conn.execute(
             """
-            select * from flexible_registry.vitals
+            select * from flexible_registry.vitals_group_member
             where group_member_uuid=:gm_uuid
             """,
             {"gm_uuid": uuid},
@@ -800,74 +786,3 @@ class VitalsGroupMember(GroupMember):
         serialized["ref_range_low"] = self.ref_range_low
         return serialized
 
-
-# @dataclass
-# class LabsGroupMember(GroupMember):
-#     minimum_panel_members: int
-#
-#     @classmethod
-#     def create(cls, group_uuid, title, value_set_uuid, **kwargs):
-#         if "minimum_panel_members" not in kwargs:
-#             raise BadRequestWithCode(
-#                 "missing-required-param",
-#                 "minimum_panel_members is required to add lab to panel",
-#             )
-#
-#         super().create(group_uuid, title, value_set_uuid)
-#
-#     @classmethod
-#     def post_create_hook(cls, gm_uuid, **kwargs):
-#         minimum_panel_members = kwargs["minimum_panel_members"]
-#
-#         conn = get_db()
-#         conn.execute(
-#             """
-#             INSERT INTO flexible_registry.labs
-#             (group_member_uuid, minimum_panel_members)
-#             values
-#             (:group_member_uuid, :minimum_panel_members)
-#             """,
-#             {
-#                 "group_member_uuid": gm_uuid,
-#                 "minimum_panel_members": minimum_panel_members,
-#             },
-#         )
-#
-#         return cls.load(gm_uuid)
-#
-#     @classmethod
-#     def fetch_data(cls, gm_uuid):
-#         data = super().fetch_data(uuid)
-#
-#         # If there's no data for the given uuid, return None
-#         if not data:
-#             return None
-#
-#         # Load additional data or modify existing data
-#         conn = get_db()
-#         result = conn.execute(
-#             """
-#             select * from flexible_registry.labs
-#             where group_member_uuid=:gm_uuid
-#             """,
-#             {"gm_uuid": gm_uuid},
-#         ).fetchone()
-#         data["minimum_panel_members"] = result.minimum_panel_members
-#
-#         return data
-#
-#     @classmethod
-#     def create_instance_from_data(cls, **data):
-#         return cls(
-#             uuid=data["uuid"],
-#             group=data["group"],
-#             title=data["title"],
-#             sequence=data["sequence"],
-#             value_set=data["value_set"],
-#             minimum_panel_members=data["minimum_panel_members"],
-#         )
-#
-#     def serialize(self):
-#         serialized = super().serialize()
-#         serialized["minimum_panel_members"] = self.minimum_panel_members
-#         return serialized

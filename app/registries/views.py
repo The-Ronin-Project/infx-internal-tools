@@ -66,10 +66,13 @@ def create_group(registry_uuid):
     if request.method == "POST":
         title = request.json.get("title")
 
-        # todo: identify and instantiate the correct type of group
-
-        # Create new group
-        new_group = Group.create(registry_uuid=registry_uuid, title=title)
+        # Identify and instantiate the correct type of group
+        registry = Registry.load(registry_uuid)
+        if registry.registry_type == "labs":
+            minimum_panel_members = request.json.get("minimum_panel_members")
+            new_group = LabsGroup.create(registry_uuid=registry_uuid, title=title, minimum_panel_members=minimum_panel_members)
+        else:
+            new_group = Group.create(registry_uuid=registry_uuid, title=title)
 
         return jsonify(new_group.serialize())
     elif request.method == "GET":
@@ -165,6 +168,7 @@ def create_group_member(registry_uuid, group_uuid):
     methods=["PATCH", "DELETE"],
 )
 def update_group_member(registry_uuid, group_uuid, member_uuid):
+    # todo: update to support vitals group member
     group_member = GroupMember.load(member_uuid)
 
     if request.method == "PATCH":
