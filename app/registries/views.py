@@ -5,7 +5,7 @@ from app.registries.models import (
     Group,
     Registry,
     LabsGroup,
-    VitalsGroupMember,
+    VitalsGroupMember, VitalsGroup,
 )
 from app.models.codes import *
 from app.terminologies.models import *
@@ -69,8 +69,11 @@ def create_group(registry_uuid):
         # Identify and instantiate the correct type of group
         registry = Registry.load(registry_uuid)
         if registry.registry_type == "labs":
-            minimum_panel_members = request.json.get("minimum_panel_members")
-            new_group = LabsGroup.create(registry_uuid=registry_uuid, title=title, minimum_panel_members=minimum_panel_members)
+            new_group = LabsGroup.create(
+                registry_uuid=registry_uuid,
+                title=title,
+                minimum_panel_members=request.json.get("minimum_panel_members")
+            )
         else:
             new_group = Group.create(registry_uuid=registry_uuid, title=title)
 
@@ -79,9 +82,8 @@ def create_group(registry_uuid):
         registry = Registry.load(registry_uuid)
 
         # Load all the groups associated with the registry
+        # load_groups will determine if it is a Group or LabsGroup
         registry.load_groups()
-
-        # Return the groups in the response
         return jsonify([group.serialize() for group in registry.groups])
 
 
@@ -90,12 +92,21 @@ def create_group(registry_uuid):
     methods=["PATCH", "DELETE", "GET"],
 )
 def update_group(registry_uuid, group_uuid):
-    group = Group.load(group_uuid)
+    # todo: rename function to reflect the routes included
+
+    registry = Registry.load(registry_uuid)
+    if registry.registry_type == "labs":
+        group = LabsGroup.load(group_uuid)
+    else:
+        group = Group.load(group_uuid)
 
     if request.method == "PATCH":
-        # Implement update logic
         title = request.json.get("title")
-        group.update(title)
+        if registry.registry_type == "labs":
+            minimum_panel_members = request.json.get("minimum_panel_members")
+            group.update(title=title, minimum_panel_members=minimum_panel_members)
+        else:
+            group.update(title)
         return jsonify(group.serialize())
 
     elif request.method == "DELETE":
@@ -130,10 +141,20 @@ def create_group_member(registry_uuid, group_uuid):
 
     if request.method == "POST":
         title = request.json.get("title")
+        if title is None:
+            raise BadRequestWithCode(
+                "GroupMember.title.required",
+                "Group member title was not provided",
+            )
         value_set_uuid = request.json.get("value_set_uuid")
+        if value_set_uuid is None:
+            raise BadRequestWithCode(
+                "GroupMember.value_set_uuid.required",
+                "Group member value_set_uuid was not provided",
+            )
 
-        # use VitalsGroupMember for vitals
         if registry.registry_type == "vitals":
+            # use VitalsGroupMember for vitals
             new_group_member = VitalsGroupMember.create(
                 group_uuid=group_uuid,
                 title=title,
@@ -142,25 +163,31 @@ def create_group_member(registry_uuid, group_uuid):
                 ref_range_high=request.json.get("ref_range_high"),
                 ref_range_low=request.json.get("ref_range_low"),
             )
-        # labs, documents, and all others can use the generic class
-        # because they have no additional data
+            return jsonify(new_group_member.serialize())
         else:
-            # Create a new group member
+            # labs, documents, and all others can use the generic class
+            # because they have no additional data on the member
             new_group_member = GroupMember.create(
                 group_uuid=group_uuid,
                 title=title,
                 value_set_uuid=value_set_uuid,
             )
-
-            # Return the group member in the response
             return jsonify(new_group_member.serialize())
+
     elif request.method == "GET":
         # Load all the members associated with the group
-        group = Group.load(group_uuid)
-        group.load_members()
-
-        # Return the members in the response
-        return jsonify([group_member.serialize() for group_member in group.members])
+        if registry.registry_type == "vitals":
+            vitals_group = VitalsGroup.load(group_uuid)
+            vitals_group.load_members()
+            return jsonify([group_member.serialize() for group_member in vitals_group.members])
+        elif registry.registry_type == "labs":
+            vitals_group = LabsGroup.load(group_uuid)
+            vitals_group.load_members()
+            return jsonify([group_member.serialize() for group_member in vitals_group.members])
+        else:
+            group = Group.load(group_uuid)
+            group.load_members()
+            return jsonify([group_member.serialize() for group_member in group.members])
 
 
 @registries_blueprint.route(
@@ -168,19 +195,28 @@ def create_group_member(registry_uuid, group_uuid):
     methods=["PATCH", "DELETE"],
 )
 def update_group_member(registry_uuid, group_uuid, member_uuid):
-    # todo: update to support vitals group member
-    group_member = GroupMember.load(member_uuid)
+    registry = Registry.load(registry_uuid)
+    if registry.registry_type == "vitals":
+        group_member = VitalsGroupMember.load(member_uuid)
+    else:
+        group_member = GroupMember.load(member_uuid)
 
     if request.method == "PATCH":
         title = request.json.get("title")
-        value_set_uuid = request.json.get("value_set_uuid")
-        group_member.update(title=title, value_set_uuid=value_set_uuid)
+        if registry.registry_type == "vitals":
+            group_member.update(
+                title=title,
+                ucum_ref_units=request.json.get("ucum_ref_units"),
+                ref_range_high=request.json.get("ref_range_high"),
+                ref_range_low=request.json.get("ref_range_low"),
+            )
+        else:
+            group_member.update(title)
         return jsonify(group_member.serialize())
 
     elif request.method == "DELETE":
         group_member.delete()
         return jsonify(group_member.serialize())
-
 
 @registries_blueprint.route(
     "/<string:registry_uuid>/groups/<string:group_uuid>/members/<string:member_uuid>/actions/reorder/<string:direction>",
