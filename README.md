@@ -82,7 +82,7 @@ you may need to check your [Pipfile](Pipfile) and possibly
 recreate it.
 
 Contact a team member for:
-- details about creating your own .env file from our [.env.template](.env.template)
+- details about creating your own .env file from our [.env.template](.env.template) and saving it in the same folder
 - ask your team to add you to the database access group `clinical-intelligence`
 - pgAdmin setup: ask the IT team for a username and password, then use the team Confluence instructions
 - get a PEM file that contains your key for OCI access, create a folder `.oci` at your top level folder, and put the PEM file there
@@ -148,19 +148,31 @@ First, follow these directions: https://docs.github.com/en/authentication/connec
     - `Dev-Docker` to run the Docker image in your local machine environment
 9. Then run test calls in Postman.
 10. Use PyCharm to debug and step through the code running in your virtual environment. 
-10. Postman will display messages when there are issues. In Dev and Prod, DataDog also displays messages. 
-11. To debug Dev or Prod, first synchronize your local virtual environment with the deployed code version, then debug.
-
-When using Postman, if the API request is calling to RxNav-in-a-box, make sure that container is running in Docker first.
+10. Postman will display messages when there are issues. In Prod, [DataDog](https://app.datadoghq.com/logs) also displays messages. 
+11. To debug Dev or Prod, first setup your local virtual environment to use a branch that is synchronized with the deployed code in Dev or Prod, then debug.
+12. When using Postman, if the API request is calling to RxNav-in-a-box, make sure that container is running in Docker first.
 
 
 ### Testing
 
 We use [Pytest](https://docs.pytest.org/en/6.2.x/) for automated testing, Postman for manual testing.
 
+We  split integration tests and unit tests into separate directories. Code coverage should be calculated using integration tests. 
 
-### Testing and Project Structure
+Tests are in folders outside the app at the top level of the project. Pytest will discover them. 
 
-We recommend splitting integration tests and unit tests into separate directories. Code coverage should be calculated using integration tests. 
 
-Our current structure calls for tests to be outside the app at the top level of the directory. Pytest will discover them.
+### Project Structure
+
+Modified frequently:
+- [app](app) - Python application - API endpoints - model-view-controller
+- [test](test) - Python unit tests and supporting JSON data files
+- [integration_tests](integration_tests) - SQL integration tests
+
+Occasional changes:
+- [.github](.github) - GitHub CI/CD workflows
+- Top level project configuration files - [docker-compose.yml](docker-compose.yml), [pull_request_templaet.md](pull_request_templaet.md), [codecov.yml](codecov.yml), [Pipfile](Pipfile), etc.
+
+Ignore:
+- [.pytest_cache](.pytest_cache), [compose](compose), [resources](resources) - generated or configuration files
+- [deprecated_tests](deprecated_tests) - do not use
