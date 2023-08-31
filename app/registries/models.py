@@ -1,5 +1,6 @@
 from datetime import datetime
 import uuid
+import csv
 from typing import List, Dict, Union, Optional
 from dataclasses import dataclass
 
@@ -180,6 +181,27 @@ class Registry:
                 {"registry_type": registry_type, "registry_uuid": self.uuid},
             )
             self.registry_type = registry_type
+
+    def prepare_csv(self):
+        """
+        The registry needs to load all of its groups and items in the group
+        and prepare a CSV to export
+        """
+
+        rows = []
+        # Iterate through groups
+        for group in self.groups:
+            # Load all the members for each group
+            # ...
+            new_row = {
+                "productGroupLabel": None,
+                "productItemLabel": None
+            }
+            rows.append(new_row)
+
+        # Use CSVDictWriter from the csv library to prepare the final CSV
+
+        pass
 
     def serialize(self):
         return {
