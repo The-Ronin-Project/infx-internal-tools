@@ -354,7 +354,7 @@ class Group:
         # Get the UUID and sequence for the item after/before the current item
         result = conn.execute(
             text(
-                """
+                f"""
                 SELECT uuid, sequence FROM flexible_registry.group
                 WHERE sequence {comparison_operator} :given_sequence AND registry_uuid = :registry_uuid
                 ORDER BY sequence {order_by}
@@ -693,7 +693,7 @@ class GroupMember:
         # Get the UUID and sequence for the item after/before the current item
         result = conn.execute(
             text(
-                """
+                f"""
                 SELECT uuid, sequence FROM flexible_registry.group_member
                 WHERE sequence {comparison_operator} :given_sequence AND group_uuid = :group_uuid
                 ORDER BY sequence {order_by}
