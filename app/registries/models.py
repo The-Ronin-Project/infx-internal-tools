@@ -848,7 +848,7 @@ class VitalsGroupMember(GroupMember):
         conn.execute(
             text(
                 """    
-                UPDATE flexible_registry.labs_group    
+                UPDATE flexible_registry.vitals_group_member
                 SET ucum_ref_units=:ucum_ref_units, ref_range_high=:ref_range_high, ref_range_low=:ref_range_low
                 WHERE group_uuid=:group_uuid    
                 """
