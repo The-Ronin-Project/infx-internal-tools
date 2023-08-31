@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import uuid
 from sqlalchemy import text
 from app.database import get_db
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Union
 
 
 @dataclass
@@ -207,7 +207,7 @@ class UseCase:
 
 def load_use_case_by_value_set_uuid(
     value_set_uuid: uuid.UUID,
-) -> Tuple[UseCase, List[UseCase]]:
+) -> dict[str, Union[list[UseCase], UseCase, None]]:
     """
     Retrieve the primary and secondary use cases associated with a specific value set from the database.
 
