@@ -850,14 +850,14 @@ class VitalsGroupMember(GroupMember):
                 """    
                 UPDATE flexible_registry.vitals_group_member
                 SET ucum_ref_units=:ucum_ref_units, ref_range_high=:ref_range_high, ref_range_low=:ref_range_low
-                WHERE group_uuid=:group_uuid    
+                WHERE group_member_uuid=:group_member_uuid    
                 """
             ),
             {
                 "ucum_ref_units": ucum_ref_units,
                 "ref_range_high": ref_range_high,
                 "ref_range_low": ref_range_low,
-                "group_uuid": self.uuid,
+                "group_member_uuid": self.uuid,
             },
         )
         self.ucum_ref_units = ucum_ref_units
