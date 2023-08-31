@@ -1,48 +1,28 @@
-import dataclasses
-import io
-from io import StringIO
-import string
-from uuid import uuid4
 import logging
-from app.helpers.structlog import config_structlog, common_handler
+from io import StringIO
+from uuid import uuid4
+
 import structlog
-from flask import Flask, jsonify, request, Response, make_response
-from app.database import close_db
-from app.models.normalization_error_service import get_outstanding_errors
-from app.value_sets.models import *
-from app.concept_maps.models import *
-from app.models.use_case import *
-from app.models.teams import *
-from app.models.surveys import *
-from app.models.patient_edu import *
-from app.models.teams import *
-from app.concept_maps.versioning_models import *
-from app.models.data_ingestion_registry import (
-    DataNormalizationRegistry,
-    DNRegistryEntry,
-)
-from app.errors import BadRequestWithCode, NotFoundException
-from app.helpers.simplifier_helper import (
-    publish_to_simplifier,
-)
-from app.models.models import Organization
-import app.value_sets.views as value_set_views
+from flask import Flask, jsonify, request, Response
+from werkzeug.exceptions import HTTPException
+
 import app.concept_maps.views as concept_map_views
-import app.concept_maps.models as concept_maps_models
-import app.terminologies.views as terminology_views
+import app.models.rxnorm as rxnorm
 import app.registries.views as registry_views
 import app.tasks as tasks
-
-import app.models.rxnorm as rxnorm
-from werkzeug.exceptions import HTTPException
-from app.helpers.oci_helper import (
-    version_set_status_active,
-    get_object_type_from_db,
-    get_object_type_from_object_store,
-    set_up_object_store,
-    get_json_from_oci,
+import app.terminologies.views as terminology_views
+import app.value_sets.views as value_set_views
+from app.database import close_db
+from app.errors import BadRequestWithCode, NotFoundException
+from app.helpers.structlog import config_structlog, common_handler
+from app.models.data_ingestion_registry import (
+    DataNormalizationRegistry,
 )
-
+from app.models.normalization_error_service import get_outstanding_errors
+from app.models.patient_edu import *
+from app.models.surveys import *
+from app.models.teams import *
+from app.value_sets.models import *
 
 # Configure the logger when the application is imported. This ensures that
 # everything below uses the same configured logger.
@@ -81,12 +61,16 @@ def create_app(script_info=None):
 
     @app.errorhandler(BadRequestWithCode)
     def handle_bad_request_with_code(e):
-        """Handles BadRequestWithCode exceptions by returning a JSON response with the appropriate error code and message."""
+        """
+        Handles BadRequestWithCode exceptions by returning a JSON response with the appropriate error code and message.
+        """
         return jsonify({"code": e.code, "message": e.description}), e.http_status_code
 
     @app.errorhandler(HTTPException)
     def handle_exception(e):
-        """Handles general HTTPExceptions by returning a JSON response with the appropriate error message and status code."""
+        """
+        Handles general HTTPExceptions by returning a JSON response with the appropriate error message and status code.
+        """
         logger.critical(e.description, stack_info=True)
         return jsonify({"message": e.description}), e.code
 
@@ -102,25 +86,62 @@ def create_app(script_info=None):
             return jsonify(all_cases)
 
     @app.route("/usecase/create/", methods=["POST"])
+    # todo: consistent conventions for REST - GET and POST use same route of "/usecase/"
     def create_use_case():
         data = request.get_json()
+        name = data.get("name")
+        description = data.get("description")
+        status = data.get("status")
+        if name is None:
+            raise BadRequestWithCode(
+                "UseCase.name.required",
+                "Use Case name was not provided",
+            )
+        if description is None:
+            raise BadRequestWithCode(
+                "UseCase.description.required",
+                "Use Case description was not provided",
+            )
+        if status is None:
+            raise BadRequestWithCode(
+                "UseCase.status.required",
+                "Use Case status was not provided",
+            )
+
+        conn = get_db()
+        existing_use_case = conn.execute(
+            text(
+                """  
+                SELECT * FROM project_management.use_case  
+                WHERE name = :name  
+                """
+            ),
+            {"name": name},
+        ).fetchone()
+        if existing_use_case:
+            raise BadRequestWithCode(
+                "UseCase.name.duplicate",
+                "Cannot create a new Use Case with the same name as an existing one",
+            )
 
         new_uuid = uuid4()
 
         use_case = UseCase(
             uuid=new_uuid,
-            name=data["name"],
-            description=data["description"],
-            point_of_contact=data["point_of_contact"],
-            status=data["status"],
+            name=name,
+            description=description,
+            point_of_contact=data.get("point_of_contact"),
+            status=status,
             jira_ticket=data.get("jira_ticket"),
             point_of_contact_email=data.get("point_of_contact_email"),
         )
 
         use_case.save(use_case)
+        # todo: consistent conventions for REST - POST success returns the created object
         return jsonify({"message": "UseCase saved successfully"}), 201
 
     @app.route("/usecases_from_team/", methods=["GET"])
+    # todo: consistent conventions for REST - GET and POST use same route "/usecase/" - team_uuid is query param for GET
     def get_use_cases_from_team():
         if request.method == "GET":
             team_uuid_str = request.values.get("team_uuid")
