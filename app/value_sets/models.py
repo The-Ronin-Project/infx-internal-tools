@@ -1,11 +1,11 @@
 import datetime
 import json
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional, Any
 import re
 import requests
 import concurrent.futures
-from sqlalchemy import text, MetaData, Table, Column, String
+from sqlalchemy import text, MetaData, Table, Column, String, Row
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import datetime

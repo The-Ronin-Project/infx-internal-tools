@@ -126,12 +126,15 @@ class Registry:
 
         groups = []
         for result in results:
-            group = Group(
-                uuid=result.uuid,
-                registry=self,
-                title=result.title,
-                sequence=result.sequence,
-            )
+            if self.registry_type == "labs":
+                group = LabsGroup.load(result.uuid)
+            else:
+                group = Group(
+                    uuid=result.uuid,
+                    registry=self,
+                    title=result.title,
+                    sequence=result.sequence,
+                )
             groups.append(group)
 
         self.groups = groups
@@ -169,10 +172,10 @@ class Registry:
             conn.execute(
                 text(
                     """  
-                        UPDATE flexible_registry.registry  
-                        SET registry_type=:registry_type  
-                        WHERE uuid=:registry_uuid  
-                        """
+                    UPDATE flexible_registry.registry  
+                    SET registry_type=:registry_type  
+                    WHERE uuid=:registry_uuid  
+                    """
                 ),
                 {"registry_type": registry_type, "registry_uuid": self.uuid},
             )
@@ -195,11 +198,7 @@ class Group:
     sequence: int
 
     @classmethod
-    def create(
-        cls,
-        registry_uuid,
-        title,
-    ):
+    def create(cls, registry_uuid, title, **kwargs):
         conn = get_db()
         group_uuid = uuid.uuid4()
 
@@ -224,10 +223,22 @@ class Group:
             },
         )
 
+        return cls.post_create_hook(group_uuid, **kwargs)
+
+    @classmethod
+    def post_create_hook(cls, group_uuid, **kwargs):
+        """
+        To be overridden in subclasses to save additional data to accessory tables
+        """
         return cls.load(group_uuid)
 
     @classmethod
-    def load(cls, group_uuid):
+    def load(cls, uuid):
+        data = cls.fetch_data(uuid)
+        return cls.create_instance_from_data(**data)
+
+    @classmethod
+    def fetch_data(cls, uuid):
         conn = get_db()
         result = conn.execute(
             text(
@@ -236,19 +247,28 @@ class Group:
                 WHERE "uuid" = :group_uuid
                 """
             ),
-            {"group_uuid": group_uuid},
+            {"group_uuid": uuid},
         ).fetchone()
 
         if result is None:
-            raise NotFoundException(f"No Group found with UUID: {group_uuid}")
+            raise NotFoundException(f"No Group found with UUID: {uuid}")
 
         registry = Registry.load(result.registry_uuid)
 
+        return {
+            "uuid": result.uuid,
+            "title": result.title,
+            "sequence": result.sequence,
+            "registry": registry,
+        }
+
+    @classmethod
+    def create_instance_from_data(cls, **data):
         return cls(
-            uuid=result.uuid,
-            title=result.title,
-            sequence=result.sequence,
-            registry=registry,
+            uuid=data["uuid"],
+            title=data["title"],
+            sequence=data["sequence"],
+            registry=data["registry"],
         )
 
     def load_members(self):
@@ -273,6 +293,7 @@ class Group:
         members = []
         for result in results:
             value_set = ValueSet.load(result.value_set_uuid)
+            # todo: load the appropriate type of group member
             member = GroupMember(
                 uuid=result.uuid,
                 group=self,
@@ -284,7 +305,7 @@ class Group:
 
         self.members = members
 
-    def update(self, title):
+    def update(self, title, **kwargs):
         conn = get_db()
         if title is not None:
             conn.execute(
@@ -298,6 +319,10 @@ class Group:
                 {"title": title, "group_uuid": self.uuid},
             )
             self.title = title
+        self.post_update_hook(**kwargs)
+
+    def post_update_hook(self, **kwargs):
+        return
 
     def swap_sequence(self, direction):
         """
@@ -329,12 +354,12 @@ class Group:
         # Get the UUID and sequence for the item after/before the current item
         result = conn.execute(
             text(
-                f"""
-            SELECT uuid, sequence FROM flexible_registry.group
-            WHERE sequence {comparison_operator} :given_sequence AND registry_uuid = :registry_uuid
-            ORDER BY sequence {order_by}
-            LIMIT 1
-        """
+                """
+                SELECT uuid, sequence FROM flexible_registry.group
+                WHERE sequence {comparison_operator} :given_sequence AND registry_uuid = :registry_uuid
+                ORDER BY sequence {order_by}
+                LIMIT 1
+                """
             ),
             {"given_sequence": given_sequence, "registry_uuid": registry_uuid},
         )
@@ -345,10 +370,10 @@ class Group:
         conn.execute(
             text(
                 """
-            UPDATE flexible_registry.group
-            SET sequence = -1
-            WHERE uuid = :adjacent_uuid
-        """
+                UPDATE flexible_registry.group
+                SET sequence = -1
+                WHERE uuid = :adjacent_uuid
+                """
             ),
             {"adjacent_uuid": adjacent_uuid},
         )
@@ -357,10 +382,10 @@ class Group:
         conn.execute(
             text(
                 """
-            UPDATE flexible_registry.group
-            SET sequence = :adjacent_sequence
-            WHERE sequence = :given_sequence AND registry_uuid = :registry_uuid
-        """
+                UPDATE flexible_registry.group
+                SET sequence = :adjacent_sequence
+                WHERE sequence = :given_sequence AND registry_uuid = :registry_uuid
+                """
             ),
             {
                 "adjacent_sequence": adjacent_sequence,
@@ -373,12 +398,15 @@ class Group:
         conn.execute(
             text(
                 """
-            UPDATE flexible_registry.group
-            SET sequence = :given_sequence
-            WHERE uuid = :adjacent_uuid
-        """
+                UPDATE flexible_registry.group
+                SET sequence = :given_sequence
+                WHERE uuid = :adjacent_uuid
+                """
             ),
-            {"given_sequence": given_sequence, "adjacent_uuid": adjacent_uuid},
+            {
+                "given_sequence": given_sequence,
+                "adjacent_uuid": adjacent_uuid
+            }
         )
 
     def delete(self):
@@ -390,7 +418,9 @@ class Group:
                 WHERE "uuid" = :group_uuid  
                 """
             ),
-            {"group_uuid": self.uuid},
+            {
+                "group_uuid": self.uuid
+            },
         )
 
     def serialize(self):
@@ -401,6 +431,127 @@ class Group:
             "sequence": self.sequence,
         }
 
+@dataclass
+class LabsGroup(Group):
+    minimum_panel_members: Optional[int]
+
+    @classmethod
+    def post_create_hook(cls, group_uuid, **kwargs):
+        """
+        Provide create overrides for this subclass
+        """
+        conn = get_db()
+        conn.execute(
+            text(
+                """
+                INSERT INTO flexible_registry.labs_group
+                (group_uuid, minimum_panel_members)
+                values
+                (:group_uuid, :minimum_panel_members)
+                """
+            ),
+            {
+                "group_uuid": group_uuid,
+                "minimum_panel_members": kwargs["minimum_panel_members"],
+            },
+        )
+
+        return cls.load(group_uuid)
+
+    @classmethod
+    def fetch_data(cls, uuid):
+        data = super().fetch_data(uuid)
+
+        # Load additional data or modify existing data
+        conn = get_db()
+        result = conn.execute(
+            text(
+                """
+                select * from flexible_registry.labs_group
+                where group_uuid=:group_uuid
+                """
+            ),
+            {"group_uuid": uuid},
+        ).fetchone()
+        data["minimum_panel_members"] = result.minimum_panel_members
+
+        return data
+
+    @classmethod
+    def create_instance_from_data(cls, **data):
+        return cls(
+            uuid=data["uuid"],
+            title=data["title"],
+            sequence=data["sequence"],
+            registry=data["registry"],
+            minimum_panel_members=data["minimum_panel_members"],
+        )
+
+    def post_update_hook(self, **kwargs):
+        conn = get_db()
+        minimum_panel_members = kwargs.get("minimum_panel_members")
+        if minimum_panel_members is not None:
+            conn.execute(
+                text(
+                    """    
+                    UPDATE flexible_registry.labs_group    
+                    SET minimum_panel_members=:minimum_panel_members    
+                    WHERE group_uuid=:group_uuid    
+                    """
+                ),
+                {
+                    "minimum_panel_members": minimum_panel_members,
+                    "group_uuid": self.uuid
+                },
+            )
+            self.minimum_panel_members = minimum_panel_members
+
+    def serialize(self):
+        serialized = super().serialize()
+        serialized["minimum_panel_members"] = self.minimum_panel_members
+        return serialized
+
+@dataclass
+class VitalsGroup(Group):
+    def load_members(self):
+        """
+        Join all the data from group_member and vitals_group_member and return a VitalsGroupMember
+        """
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """  
+                SELECT * FROM flexible_registry.group_member 
+                JOIN flexible_registry.vitals_group_member
+                ON group_member.uuid = vitals_group_member.group_member_uuid
+                WHERE group_member.group_uuid = :group_uuid
+                order by sequence  
+                """
+            ),
+            {"group_uuid": self.uuid},
+        ).fetchall()
+
+        if results is None:
+            raise NotFoundException(
+                f"No Members found for Vitals Group with UUID: {self.uuid}"
+            )
+
+        members = []
+        for result in results:
+            value_set = ValueSet.load(result.value_set_uuid)
+            member = VitalsGroupMember(
+                uuid=result.uuid,
+                group=self,
+                title=result.title,
+                sequence=result.sequence,
+                value_set=value_set,
+                ucum_ref_units=result.ucum_ref_units,
+                ref_range_high=result.ref_range_high,
+                ref_range_low=result.ref_range_low,
+            )
+            members.append(member)
+
+        self.members = members
 
 @dataclass
 class GroupMember:
@@ -418,7 +569,7 @@ class GroupMember:
         and then return the new resource.
         """
         conn = get_db()
-        gm_uuid = uuid.uuid4()
+        group_member_uuid = uuid.uuid4()
 
         conn.execute(
             text(
@@ -435,42 +586,42 @@ class GroupMember:
                 """
             ),
             {
-                "uuid": gm_uuid,
+                "uuid": group_member_uuid,
                 "group_uuid": group_uuid,
                 "title": title,
                 "value_set_uuid": value_set_uuid,
             },
         )
 
-        return cls.post_create_hook(gm_uuid, **kwargs)
+        return cls.post_create_hook(group_member_uuid, **kwargs)
 
     @classmethod
-    def post_create_hook(cls, gm_uuid, **kwargs):
+    def post_create_hook(cls, group_member_uuid, **kwargs):
         """
         To be overridden in subclasses to save additional data to accessory tables
         """
-        return cls.load(gm_uuid)
+        return cls.load(group_member_uuid)
 
     @classmethod
-    def load(cls, uuid):
-        data = cls.fetch_data(uuid)
+    def load(cls, group_member_uuid):
+        data = cls.fetch_data(group_member_uuid)
         return cls.create_instance_from_data(**data)
 
     @classmethod
-    def fetch_data(cls, uuid):
+    def fetch_data(cls, group_member_uuid):
         conn = get_db()
         result = conn.execute(
             text(
                 """
                 SELECT * FROM flexible_registry."group_member"
-                WHERE "uuid" = :uuid
+                WHERE "uuid" = :group_member_uuid
                 """
             ),
-            {"uuid": uuid},
+            {"group_member_uuid": group_member_uuid},
         ).fetchone()
 
         if not result:
-            raise NotFoundException(f"No Group Member found with UUID: {uuid}")
+            raise NotFoundException(f"No Group Member found with UUID: {group_member_uuid}")
 
         if result:
             return {
@@ -480,7 +631,6 @@ class GroupMember:
                 "sequence": result.sequence,
                 "value_set": ValueSet.load(result.value_set_uuid),
             }
-        return None
 
     @classmethod
     def create_instance_from_data(cls, **data):
@@ -492,7 +642,7 @@ class GroupMember:
             value_set=data["value_set"],
         )
 
-    def update(self, title=None, value_set_uuid=None):
+    def update(self, title=None, **kwargs):
         conn = get_db()
 
         if title is not None:
@@ -508,24 +658,10 @@ class GroupMember:
             )
             self.title = title
 
-        if value_set_uuid is not None:
-            # Load the new ValueSet instance using the provided value_set_uuid
-            new_value_set = ValueSet.load(value_set_uuid)
-            if new_value_set is None:
-                raise NotFoundException(
-                    f"No ValueSet found with UUID: {value_set_uuid}"
-                )
-            conn.execute(
-                text(
-                    """  
-                    UPDATE flexible_registry.group_member  
-                    SET value_set_uuid=:value_set_uuid  
-                    WHERE uuid=:member_uuid  
-                    """
-                ),
-                {"value_set_uuid": value_set_uuid, "member_uuid": self.uuid},
-            )
-            self.value_set = new_value_set
+        self.post_update_hook(**kwargs)
+
+    def post_update_hook(self, **kwargs):
+        return
 
     def swap_sequence(self, direction):
         """
@@ -557,14 +693,17 @@ class GroupMember:
         # Get the UUID and sequence for the item after/before the current item
         result = conn.execute(
             text(
-                f"""
-            SELECT uuid, sequence FROM flexible_registry.group_member
-            WHERE sequence {comparison_operator} :given_sequence AND group_uuid = :group_uuid
-            ORDER BY sequence {order_by}
-            LIMIT 1
-        """
+                """
+                SELECT uuid, sequence FROM flexible_registry.group_member
+                WHERE sequence {comparison_operator} :given_sequence AND group_uuid = :group_uuid
+                ORDER BY sequence {order_by}
+                LIMIT 1
+                """
             ),
-            {"given_sequence": given_sequence, "group_uuid": group_uuid},
+            {
+                "given_sequence": given_sequence,
+                "group_uuid": group_uuid
+            },
         )
 
         adjacent_uuid, adjacent_sequence = result.fetchone()
@@ -573,10 +712,10 @@ class GroupMember:
         conn.execute(
             text(
                 """
-            UPDATE flexible_registry.group_member
-            SET sequence = -1
-            WHERE uuid = :adjacent_uuid
-        """
+                UPDATE flexible_registry.group_member
+                SET sequence = -1
+                WHERE uuid = :adjacent_uuid
+                """
             ),
             {"adjacent_uuid": adjacent_uuid},
         )
@@ -585,10 +724,10 @@ class GroupMember:
         conn.execute(
             text(
                 """
-            UPDATE flexible_registry.group_member
-            SET sequence = :adjacent_sequence
-            WHERE sequence = :given_sequence AND group_uuid = :group_uuid
-        """
+                UPDATE flexible_registry.group_member
+                SET sequence = :adjacent_sequence
+                WHERE sequence = :given_sequence AND group_uuid = :group_uuid
+                """
             ),
             {
                 "adjacent_sequence": adjacent_sequence,
@@ -601,10 +740,10 @@ class GroupMember:
         conn.execute(
             text(
                 """
-            UPDATE flexible_registry.group_member
-            SET sequence = :given_sequence
-            WHERE uuid = :adjacent_uuid
-        """
+                UPDATE flexible_registry.group_member
+                SET sequence = :given_sequence
+                WHERE uuid = :adjacent_uuid
+                """
             ),
             {"given_sequence": given_sequence, "adjacent_uuid": adjacent_uuid},
         )
@@ -627,66 +766,45 @@ class GroupMember:
             "group_uuid": self.group.uuid,
             "title": self.title,
             "sequence": self.sequence,
-            "value_set": {
-                "uuid": self.value_set.uuid,
-                "title": self.value_set.title
-            },
+            "value_set": {"uuid": self.value_set.uuid, "title": self.value_set.title},
         }
 
 
 @dataclass
 class VitalsGroupMember(GroupMember):
-    ucum_ref_units: str
-    ref_range_high: str
-    ref_range_low: str
+    ucum_ref_units: Optional[str]
+    ref_range_high: Optional[str]
+    ref_range_low: Optional[str]
 
     @classmethod
-    def create(cls, group_uuid, title, value_set_uuid, **kwargs):
-        if "ucum_ref_units" not in kwargs:
-            raise BadRequestWithCode(
-                "missing-required-param",
-                "ucum_ref_units is required to add vital to panel",
-            )
-        if "ref_range_high" not in kwargs:
-            raise BadRequestWithCode(
-                "missing-required-param",
-                "ref_range_high is required to add vital to panel",
-            )
-        if "ref_range_low" not in kwargs:
-            raise BadRequestWithCode(
-                "missing-required-param",
-                "ref_range_low is required to add vital to panel",
-            )
-
-        super().create(group_uuid, title, value_set_uuid)
-
-    @classmethod
-    def post_create_hook(cls, gm_uuid, **kwargs):
-        ucum_ref_units = kwargs["ucum_ref_units"]
-        ref_range_high = kwargs["ref_range_high"]
-        ref_range_low = kwargs["ref_range_low"]
+    def post_create_hook(cls, group_member_uuid, **kwargs):
+        """
+        Provide create overrides for this subclass
+        """
 
         conn = get_db()
         conn.execute(
-            """
-            INSERT INTO flexible_registry.vitals
-            (group_member_uuid, ucum_ref_units, ref_range_high, ref_range_low)
-            values
-            (:group_member_uuid, :ucum_ref_units, :ref_range_high, :ref_range_low)
-            """,
+            text(
+                """
+                INSERT INTO flexible_registry.vitals_group_member
+                (group_member_uuid, ucum_ref_units, ref_range_high, ref_range_low)
+                values
+                (:group_member_uuid, :ucum_ref_units, :ref_range_high, :ref_range_low)
+                """
+            ),
             {
-                "group_member_uuid": gm_uuid,
-                "ucum_ref_units": ucum_ref_units,
-                "ref_range_high": ref_range_high,
-                "ref_range_low": ref_range_low,
+                "group_member_uuid": group_member_uuid,
+                "ucum_ref_units": kwargs["ucum_ref_units"],
+                "ref_range_high": kwargs["ref_range_high"],
+                "ref_range_low": kwargs["ref_range_low"],
             },
         )
 
-        return cls.load(gm_uuid)
+        return cls.load(group_member_uuid)
 
     @classmethod
-    def fetch_data(cls, uuid):
-        data = super().fetch_data(uuid)
+    def fetch_data(cls, group_member_uuid):
+        data = super().fetch_data(group_member_uuid)
 
         # If there's no data for the given uuid, return None
         if not data:
@@ -695,11 +813,13 @@ class VitalsGroupMember(GroupMember):
         # Load additional data or modify existing data
         conn = get_db()
         result = conn.execute(
-            """
-            select * from flexible_registry.vitals
-            where group_member_uuid=:gm_uuid
-            """,
-            {"gm_uuid": gm_uuid},
+            text(
+                """
+                select * from flexible_registry.vitals_group_member
+                where group_member_uuid=:group_member_uuid
+                """
+            ),
+            {"group_member_uuid": group_member_uuid},
         ).fetchone()
         data["ucum_ref_units"] = result.ucum_ref_units
         data["ref_range_high"] = result.ref_range_high
@@ -720,6 +840,28 @@ class VitalsGroupMember(GroupMember):
             ref_range_low=data["ref_range_low"],
         )
 
+    def post_update_hook(self, **kwargs):
+        ucum_ref_units = kwargs.get("ucum_ref_units")
+        ref_range_high = kwargs.get("ref_range_high")
+        ref_range_low = kwargs.get("ref_range_low")
+        conn = get_db()
+        conn.execute(
+            text(
+                """    
+                UPDATE flexible_registry.labs_group    
+                SET ucum_ref_units=:ucum_ref_units, ref_range_high=:ref_range_high, ref_range_low=:ref_range_low
+                WHERE group_uuid=:group_uuid    
+                """
+            ),
+            {
+                "ucum_ref_units": ucum_ref_units,
+                "ref_range_high": ref_range_high,
+                "ref_range_low": ref_range_low,
+                "group_uuid": self.uuid,
+            },
+        )
+        self.ucum_ref_units = ucum_ref_units
+
     def serialize(self):
         serialized = super().serialize()
         serialized["ucum_ref_units"] = self.ucum_ref_units
@@ -727,74 +869,3 @@ class VitalsGroupMember(GroupMember):
         serialized["ref_range_low"] = self.ref_range_low
         return serialized
 
-
-@dataclass
-class LabsGroupMember(GroupMember):
-    minimum_panel_members: int
-
-    @classmethod
-    def create(cls, group_uuid, title, value_set_uuid, **kwargs):
-        if "minimum_panel_members" not in kwargs:
-            raise BadRequestWithCode(
-                "missing-required-param",
-                "minimum_panel_members is required to add lab to panel",
-            )
-
-        super().create(group_uuid, title, value_set_uuid)
-
-    @classmethod
-    def post_create_hook(cls, gm_uuid, **kwargs):
-        minimum_panel_members = kwargs["minimum_panel_members"]
-
-        conn = get_db()
-        conn.execute(
-            """
-            INSERT INTO flexible_registry.labs
-            (group_member_uuid, minimum_panel_members)
-            values
-            (:group_member_uuid, :minimum_panel_members)
-            """,
-            {
-                "group_member_uuid": gm_uuid,
-                "minimum_panel_members": minimum_panel_members,
-            },
-        )
-
-        return cls.load(gm_uuid)
-
-    @classmethod
-    def fetch_data(cls, gm_uuid):
-        data = super().fetch_data(uuid)
-
-        # If there's no data for the given uuid, return None
-        if not data:
-            return None
-
-        # Load additional data or modify existing data
-        conn = get_db()
-        result = conn.execute(
-            """
-            select * from flexible_registry.labs
-            where group_member_uuid=:gm_uuid
-            """,
-            {"gm_uuid": gm_uuid},
-        ).fetchone()
-        data["minimum_panel_members"] = result.minimum_panel_members
-
-        return data
-
-    @classmethod
-    def create_instance_from_data(cls, **data):
-        return cls(
-            uuid=data["uuid"],
-            group=data["group"],
-            title=data["title"],
-            sequence=data["sequence"],
-            value_set=data["value_set"],
-            minimum_panel_members=data["minimum_panel_members"],
-        )
-
-    def serialize(self):
-        serialized = super().serialize()
-        serialized["minimum_panel_members"] = self.minimum_panel_members
-        return serialized
