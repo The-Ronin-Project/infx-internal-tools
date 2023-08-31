@@ -6,3 +6,9 @@
 coverage.xml
 .idea/workspace.xml
 .python-version
+.idea/infx-internal-tools.iml
+.idea/inspectionProfiles/profiles_settings.xml
+.idea/misc.xml
+.idea/modules.xml
+.idea/vcs.xml
+.idea/sqldialects.xml
