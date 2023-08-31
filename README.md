@@ -138,16 +138,17 @@ First, follow these directions: https://docs.github.com/en/authentication/connec
 2. In the terminal session, activate your environment by name: `pyenv activate infx-internal-tools`
 3. Environment is active when you see that name at the start of the terminal prompt: `(infx-internal-tools) `
 4. If dependencies and/or the [Pipfile](Pipfile) have changed recently, also run: `pipenv install --dev`
-5. Start the local dev server with: `python -m app.app`
-6. See messages that the Flask app is serving, Debug mode is on, and the Debugger is active.
-7. When viewing a Python file in PyCharm, run and debug controls are available at top right in the PyCharm window.
+5. Either:
+    - In the terminal session, enter: `python -m app.app` to start the local dev server, or: 
+    - At top right in the PyCharm window, near the Run and Debug icons, select Flask and click either Run or Debug to start the server.
+6. In the terminal console, see messages that Debug mode is on and the Debugger is active. 
 8. In Postman, in the Informatics workspace, choose your working environment:
     - `Dev-Local` to run the code in your local environment:
     - `Prod` to run the code currently deployed in Prod
     - `Dev` to run the code currently deployed in Dev
     - `Dev-Docker` to run the Docker image in your local machine environment
 9. Then run test calls in Postman.
-10. Use PyCharm to debug and step through the code running in your virtual environment. 
+10. If you started Flask with Debug, in the PyCharm window you can step through the code running in your virtual environment. 
 10. Postman will display messages when there are issues. In Prod, [DataDog](https://app.datadoghq.com/logs) also displays messages. 
 11. To debug Dev or Prod, first setup your local virtual environment to use a branch that is synchronized with the deployed code in Dev or Prod, then debug.
 12. When using Postman, if the API request is calling to RxNav-in-a-box, make sure that container is running in Docker first.
