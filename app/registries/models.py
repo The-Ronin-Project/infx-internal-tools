@@ -1,17 +1,14 @@
-from datetime import datetime
+import csv
+import io
 import uuid
-from typing import List, Dict, Union, Optional
 from dataclasses import dataclass
+from typing import List, Optional
 
 from sqlalchemy import text
-from functools import lru_cache
-import app.models.codes
+
 from app.database import get_db
 from app.errors import BadRequestWithCode, NotFoundException
-from app.value_sets.models import ValueSet, ValueSetVersion
-
-# Need reference ranges for labs and vitals
-
+from app.value_sets.models import ValueSet
 
 @dataclass
 class Registry:
@@ -188,7 +185,156 @@ class Registry:
             "registry_type": self.registry_type,
             "sorting_enabled": self.sorting_enabled,
         }
+    @classmethod
+    def export_csv(self, uuid):
+        """
+            CSV column labels for Product, and corresponding table column names, are
+            - "productGroupLabel" group.title
+            - "productItemLabel" group_member.title
+            - "minimum_panel_members" lab_group.minimum_panel_members (labs only)
+            - "ucum_ref_units" vitals_group_member.ucum_ref_units (vitals only)
+            - "ref_range_low" vitals_group_member.ref_range_low (vitals only)
+            - "ref_range_low" vitals_group_member.ref_range_low (vitals only)
+            - "sequence" group.sequence
+            - "valueSetUuid" group_member.value_set_uuid
+            - "valueSetDisplayTitle" value_set.title
+            - "valueSetCodeName" value_set.name
+            - "valueSetVersion" value_set_version.version
+        """
+        # Create a file-like object in memory
+        output = io.StringIO()
 
+        # Get the row data from the flexible_registry tables
+        conn = get_db()
+        registry = Registry.load(uuid)
+        if registry.registry_type == "labs":
+            results = conn.execute(
+                text(
+                    """  
+                    SELECT 
+                    S.uuid AS value_set_uuid, S.title AS value_set_title, S.name AS value_set_name,
+                    M.title AS member_title, M.sequence AS sequence,
+                    G.title AS group_title, 
+                    L.minimum_panel_members AS minimum_panel_members
+                    FROM flexible_registry."group" G
+                    JOIN flexible_registry.labs_group L ON L.group_uuid = G.uuid
+                    JOIN flexible_registry.group_member M ON M.group_uuid = G.uuid
+                    JOIN value_sets.value_set S ON S.uuid = M.value_set_uuid
+                    WHERE G.registry_uuid = :registry_uuid
+                    ORDER BY G.title, M.sequence  
+                    """
+                ),
+                {"registry_uuid": uuid},
+            ).fetchall()
+        elif registry.registry_type == "vitals":
+                results = conn.execute(
+                    text(
+                        """  
+                        SELECT 
+                        S.uuid AS value_set_uuid, S.title AS value_set_title, S.name AS value_set_name,
+                        M.title AS member_title, M.sequence AS sequence,
+                        G.title AS group_title, 
+                        V.ucum_ref_units AS ucum_ref_units, 
+                        V.ref_range_high AS ref_range_high, V.ref_range_low AS ref_range_low
+                        FROM flexible_registry."group" G
+                        JOIN flexible_registry.group_member M ON M.group_uuid = G.uuid
+                        JOIN flexible_registry.vitals_group_member V ON V.group_member_uuid = M.uuid
+                        JOIN value_sets.value_set S ON S.uuid = M.value_set_uuid
+                        WHERE G.registry_uuid = :registry_uuid
+                        ORDER BY G.title, M.sequence  
+                        """
+                    ),
+                    {"registry_uuid": uuid},
+                ).fetchall()
+        else:
+            results = conn.execute(
+                text(
+                    """  
+                    SELECT 
+                    S.uuid AS value_set_uuid, S.title AS value_set_title, S.name AS value_set_name,
+                    M.title AS member_title, M.sequence AS sequence,
+                    G.title AS group_title
+                    FROM flexible_registry."group" G
+                    JOIN flexible_registry.group_member M ON M.group_uuid = G.uuid
+                    JOIN value_sets.value_set S ON S.uuid = M.value_set_uuid
+                    WHERE G.registry_uuid = :registry_uuid
+                    ORDER BY G.title, M.sequence  
+                    """
+                ),
+                {"registry_uuid": uuid},
+            ).fetchall()
+
+        # Make a dictionary using the keys for Product
+        data = []
+        for result in results:
+            value_set_uuid = result.value_set_uuid
+            value_set_version = ValueSet.load_most_recent_active_version(value_set_uuid).version
+            if registry.registry_type == "labs":
+                row = {
+                    "productGroupLabel": result.group_title,
+                    "productItemLabel": result.member_title,
+                    "minimumPanelMembers": result.minimum_panel_members,
+                    "sequence": result.sequence,
+                    "valueSetUuid": value_set_uuid,
+                    "valueSetDisplayTitle": result.value_set_title,
+                    "valueSetCodeName": result.value_set_name,
+                    "valueSetVersion": value_set_version
+                }
+            elif registry.registry_type == "vitals":
+                row = {
+                    "productGroupLabel": result.group_title,
+                    "productItemLabel": result.member_title,
+                    "ucumRefUnits": result.ucum_ref_units,
+                    "refRangeLow": result.ref_range_low,
+                    "refRangeHigh": result.ref_range_high,
+                    "sequence": result.sequence,
+                    "valueSetUuid": value_set_uuid,
+                    "valueSetDisplayTitle": result.value_set_title,
+                    "valueSetCodeName": result.value_set_name,
+                    "valueSetVersion": value_set_version
+                }
+            else:
+                row = {
+                    "productGroupLabel": result.group_title,
+                    "productItemLabel": result.member_title,
+                    "sequence": result.sequence,
+                    "valueSetUuid": value_set_uuid,
+                    "valueSetDisplayTitle": result.value_set_title,
+                    "valueSetCodeName": result.value_set_name,
+                    "valueSetVersion": value_set_version
+                }
+            data.append(row)
+
+        # Create a DictWriter object
+        fieldnames = [
+            "productGroupLabel",
+            "productItemLabel",
+        ]
+        if registry.registry_type == "labs":
+            fieldnames += ["minimumPanelMembers"]
+        if registry.registry_type == "vitals":
+            fieldnames += [
+                "ucumRefUnits",
+                "refRangeLow",
+                "refRangeHigh"
+            ]
+        fieldnames += [
+            "sequence",
+            "valueSetUuid",
+            "valueSetDisplayTitle",
+            "valueSetCodeName",
+            "valueSetVersion",
+        ]
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+
+        # Write the header and then the rows
+        writer.writeheader()
+        for row in data:
+            writer.writerow(row)
+
+        # Move the cursor to the beginning of the file-like object to read its content
+        output.seek(0)
+        return output.getvalue()
 
 @dataclass
 class Group:
