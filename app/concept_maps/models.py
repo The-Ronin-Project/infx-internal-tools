@@ -675,6 +675,7 @@ class ConceptMapVersion:
                 author=item.author,
                 uuid=item.mapping_uuid,
                 review_status=item.review_status,
+                reason_for_no_map=item.reason_for_no_map,
             )
             if source_code in self.mappings:
                 self.mappings[source_code].append(mapping)
@@ -907,7 +908,10 @@ class ConceptMapVersion:
                             "code": mapping.target.code,
                             "display": mapping.target.display,
                             "equivalence": mapping.relationship.code,
-                            "comment": None,
+                            "comment": mapping.reason_for_no_map
+                            if mapping.target.code == "No map"
+                            and mapping.target.display == "no matching concept"
+                            else None,
                         }
 
                         # Add dependsOn data
@@ -1416,6 +1420,7 @@ class Mapping:
     reviewed_date: Optional[datetime.datetime] = None
     review_comment: Optional[str] = None
     reviewed_by: Optional[str] = None
+    reason_for_no_map: Optional[str] = None
 
     def __post_init__(self):
         self.conn = get_db()
