@@ -10,6 +10,22 @@ from app.database import get_db
 from app.errors import BadRequestWithCode, NotFoundException
 from app.value_sets.models import ValueSet
 
+import json
+import datetime
+import app.concept_maps.models
+import app.value_sets.models
+
+from dataclasses import dataclass
+from decouple import config
+from sqlalchemy import text
+from typing import List, Optional
+from app.database import get_db
+from app.helpers.oci_helper import oci_authentication
+from datetime import datetime
+from dateutil import tz
+
+FLEXIBLE_REGISTRY_SCHEMA_VERSION = 1
+
 @dataclass
 class Registry:
     uuid: uuid.UUID
@@ -205,8 +221,11 @@ class Registry:
         output = io.StringIO()
 
         # Get the row data from the flexible_registry tables
-        conn = get_db()
         registry = Registry.load(uuid)
+        if registry is None:
+            raise NotFoundException(f"No Registry found with UUID: {uuid}")
+
+        conn = get_db()
         if registry.registry_type == "labs":
             results = conn.execute(
                 text(
@@ -335,6 +354,27 @@ class Registry:
         # Move the cursor to the beginning of the file-like object to read its content
         output.seek(0)
         return output.getvalue()
+
+    @classmethod
+    def publish_to_object_store(self, uuid, environment="dev"):
+        """
+        Publish the Registry to the Object Storage.
+        """
+        registry = Registry.load(uuid)
+        if registry is None:
+            raise NotFoundException(f"No Registry found with UUID: {uuid}")
+
+        output = registry.export_csv(uuid)
+        object_storage_client = oci_authentication()
+        bucket_name = config("OCI_CLI_BUCKET")
+        namespace = object_storage_client.get_namespace().data
+        object_storage_client.put_object(
+            namespace,
+            bucket_name,
+            f"Registries/{environment}/v{FLEXIBLE_REGISTRY_SCHEMA_VERSION}/{registry.registry_type}/{uuid}.csv",
+            output.encode("utf-8")
+        )
+        return output
 
 @dataclass
 class Group:
