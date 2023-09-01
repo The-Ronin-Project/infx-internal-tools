@@ -177,17 +177,13 @@ def create_group_member(registry_uuid, group_uuid):
     elif request.method == "GET":
         # Load all the members associated with the group
         if registry.registry_type == "vitals":
-            vitals_group = VitalsGroup.load(group_uuid)
-            vitals_group.load_members()
-            return jsonify([group_member.serialize() for group_member in vitals_group.members])
+            group = VitalsGroup.load(group_uuid)
         elif registry.registry_type == "labs":
-            vitals_group = LabsGroup.load(group_uuid)
-            vitals_group.load_members()
-            return jsonify([group_member.serialize() for group_member in vitals_group.members])
+            group = LabsGroup.load(group_uuid)
         else:
             group = Group.load(group_uuid)
-            group.load_members()
-            return jsonify([group_member.serialize() for group_member in group.members])
+        group.load_members()
+        return jsonify([group_member.serialize() for group_member in group.members])
 
 
 @registries_blueprint.route(
