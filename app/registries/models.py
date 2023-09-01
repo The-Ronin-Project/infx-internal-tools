@@ -403,10 +403,7 @@ class Group:
                 WHERE uuid = :adjacent_uuid
                 """
             ),
-            {
-                "given_sequence": given_sequence,
-                "adjacent_uuid": adjacent_uuid
-            }
+            {"given_sequence": given_sequence, "adjacent_uuid": adjacent_uuid},
         )
 
     def delete(self):
@@ -418,9 +415,7 @@ class Group:
                 WHERE "uuid" = :group_uuid  
                 """
             ),
-            {
-                "group_uuid": self.uuid
-            },
+            {"group_uuid": self.uuid},
         )
 
     def serialize(self):
@@ -430,6 +425,7 @@ class Group:
             "title": self.title,
             "sequence": self.sequence,
         }
+
 
 @dataclass
 class LabsGroup(Group):
@@ -473,7 +469,11 @@ class LabsGroup(Group):
             ),
             {"group_uuid": uuid},
         ).fetchone()
-        data["minimum_panel_members"] = result.minimum_panel_members
+
+        if result is not None:
+            data["minimum_panel_members"] = result.minimum_panel_members
+        else:
+            data["minimum_panel_members"] = None
 
         return data
 
@@ -501,7 +501,7 @@ class LabsGroup(Group):
                 ),
                 {
                     "minimum_panel_members": minimum_panel_members,
-                    "group_uuid": self.uuid
+                    "group_uuid": self.uuid,
                 },
             )
             self.minimum_panel_members = minimum_panel_members
@@ -510,6 +510,7 @@ class LabsGroup(Group):
         serialized = super().serialize()
         serialized["minimum_panel_members"] = self.minimum_panel_members
         return serialized
+
 
 @dataclass
 class VitalsGroup(Group):
@@ -552,6 +553,7 @@ class VitalsGroup(Group):
             members.append(member)
 
         self.members = members
+
 
 @dataclass
 class GroupMember:
@@ -621,7 +623,9 @@ class GroupMember:
         ).fetchone()
 
         if not result:
-            raise NotFoundException(f"No Group Member found with UUID: {group_member_uuid}")
+            raise NotFoundException(
+                f"No Group Member found with UUID: {group_member_uuid}"
+            )
 
         if result:
             return {
@@ -700,10 +704,7 @@ class GroupMember:
                 LIMIT 1
                 """
             ),
-            {
-                "given_sequence": given_sequence,
-                "group_uuid": group_uuid
-            },
+            {"given_sequence": given_sequence, "group_uuid": group_uuid},
         )
 
         adjacent_uuid, adjacent_sequence = result.fetchone()
@@ -868,4 +869,3 @@ class VitalsGroupMember(GroupMember):
         serialized["ref_range_high"] = self.ref_range_high
         serialized["ref_range_low"] = self.ref_range_low
         return serialized
-
