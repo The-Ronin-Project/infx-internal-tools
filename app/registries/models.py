@@ -16,7 +16,6 @@ from app.helpers.oci_helper import oci_authentication
 from app.value_sets.models import ValueSet
 
 REGISTRY_SCHEMA_VERSION = 1
-REGISTRY_OCI_PATH_ROOT = "Registries"  # "DoNotUseTestingRegistries"
 
 
 @dataclass
@@ -350,17 +349,11 @@ class Registry:
         return output.getvalue()
 
     @classmethod
-    def publish_to_object_store(cls, registry_uuid, environment="dev", oci_root=REGISTRY_OCI_PATH_ROOT):
+    def publish_to_object_store(cls, registry_uuid, environment, oci_root):
         """
         Publish the Registry CSV export to the Object Storage in the specified environment:
         'dev', 'stage', or 'prod, default 'dev'
         """
-        if environment not in ["dev", "stage", "prod"]:
-            raise BadRequestWithCode(
-                "Registry.publish.environment",
-                "Publish environment must be 'dev' 'stage' or 'prod'",
-            )
-
         registry = Registry.load(registry_uuid)
         object_storage_client = oci_authentication()
         bucket_name = config("OCI_CLI_BUCKET")
@@ -376,7 +369,7 @@ class Registry:
                     namespace,
                     bucket_name,
                     f"{file_path_root}/retired/{registry_uuid}-retired-{time_stamp}.csv",
-                    str(retired).encode("utf-8")
+                    retired
                 )
         except oci.exceptions.ServiceError as e:
             if e.status == 404:
@@ -386,9 +379,19 @@ class Registry:
 
         # generate a new CSV for dev, or promote the previous CSV: from dev to stage, or stage to prod
         if environment == "prod":
-            output = Registry.get_from_object_store(registry_uuid, environment="stage", oci_root=oci_root)
+            output = Registry.get_from_object_store(
+                registry_uuid,
+                environment="stage",
+                oci_root=oci_root,
+                raise_error=False
+            )
         elif environment == "stage":
-            output = Registry.get_from_object_store(registry_uuid, environment="dev", oci_root=oci_root)
+            output = Registry.get_from_object_store(
+                registry_uuid,
+                environment="dev",
+                oci_root=oci_root,
+                raise_error=False
+            )
         else:
             output = registry.export_csv(registry_uuid)
 
@@ -397,12 +400,12 @@ class Registry:
             namespace,
             bucket_name,
             f"{file_path_root}/{registry_uuid}.csv",
-            output.encode("utf-8"),
+            output
         )
         return output
 
     @classmethod
-    def get_from_object_store(cls, registry_uuid, environment="dev", oci_root=REGISTRY_OCI_PATH_ROOT, raise_error=True):
+    def get_from_object_store(cls, registry_uuid, environment, oci_root, raise_error=True):
         """
         Get the Registry CSV export from Object Storage in the specified environment:
         'dev', 'stage', or 'prod, default 'dev'
@@ -414,10 +417,15 @@ class Registry:
         file_path = f"{oci_root}/{environment}/v{REGISTRY_SCHEMA_VERSION}/{registry.registry_type}/{registry_uuid}.csv"
         try:
             csv_export = object_storage_client.get_object(namespace, bucket_name, file_path)
-            return csv_export.data.content
+            return csv_export.data.content.decode("utf-8")
         except oci.exceptions.ServiceError as e:
-            if e.status == 404 and raise_error:
-                raise NotFoundException(f"No CSV Export found in {environment} for Registry with UUID: {registry_uuid}")
+            if e.status == 404:
+                if raise_error:
+                    raise NotFoundException(
+                        f"No CSV Export found in '{environment}' for Registry with UUID: {registry_uuid}"
+                    )
+                else:
+                    return None
             else:
                 raise e
 

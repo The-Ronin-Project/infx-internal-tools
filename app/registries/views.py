@@ -9,7 +9,11 @@ from app.registries.models import (
 )
 from app.terminologies.models import *
 
+# REST path root for API
 registries_blueprint = Blueprint("registries", __name__, url_prefix="/registries")
+
+# OCI path root for storage: "Registries" for committed code, "DoNotUseTestingRegistries" for testing
+REGISTRY_OCI_PATH_ROOT = "DoNotUseTestingRegistries"
 
 
 @registries_blueprint.route("/", methods=["POST", "GET"])
@@ -69,10 +73,15 @@ def get_or_publish_registry_csv(registry_uuid, environment="dev"):
     Handles both GET and POST requests.
     Returns CSV for the registry.
     """
+    if environment not in ["dev", "stage", "prod"]:
+        raise BadRequestWithCode(
+            "Registry.publish.environment",
+            "Environment must be 'dev' 'stage' or 'prod'",
+        )
     if request.method == "POST":
-        return Registry.publish_to_object_store(registry_uuid=registry_uuid, environment=environment)
+        return Registry.publish_to_object_store(registry_uuid=registry_uuid, environment=environment, oci_root=REGISTRY_OCI_PATH_ROOT)
     if request.method == "GET":
-        return Registry.get_from_object_store(registry_uuid=registry_uuid, environment=environment)
+        return Registry.get_from_object_store(registry_uuid=registry_uuid, environment=environment, oci_root=REGISTRY_OCI_PATH_ROOT)
 
 
 @registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST", "GET"])
