@@ -1,30 +1,23 @@
 import csv
+import datetime
 import io
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import List, Optional
 
+import oci
+from decouple import config
 from sqlalchemy import text
 
 from app.database import get_db
 from app.errors import BadRequestWithCode, NotFoundException
+from app.helpers.oci_helper import oci_authentication
 from app.value_sets.models import ValueSet
 
-import json
-import datetime
-import app.concept_maps.models
-import app.value_sets.models
+REGISTRY_SCHEMA_VERSION = 1
+REGISTRY_OCI_PATH_ROOT = "DoNotUseTestingRegistries"  # "Registries"
 
-from dataclasses import dataclass
-from decouple import config
-from sqlalchemy import text
-from typing import List, Optional
-from app.database import get_db
-from app.helpers.oci_helper import oci_authentication
-from datetime import datetime
-from dateutil import tz
-
-FLEXIBLE_REGISTRY_SCHEMA_VERSION = 1
 
 @dataclass
 class Registry:
@@ -33,8 +26,8 @@ class Registry:
     registry_type: str  # not an enum so users can create new types of registries w/o code change
     sorting_enabled: bool
 
-    def __post_init__(self):
-        self.groups = []
+    def __post_init__(cls):
+        cls.groups = []
 
     @classmethod
     def create(cls, title: str, registry_type: str, sorting_enabled: bool):
@@ -201,8 +194,9 @@ class Registry:
             "registry_type": self.registry_type,
             "sorting_enabled": self.sorting_enabled,
         }
+    
     @classmethod
-    def export_csv(self, uuid):
+    def export_csv(cls, registry_uuid):
         """
             CSV column labels for Product, and corresponding table column names, are
             - "productGroupLabel" group.title
@@ -211,7 +205,7 @@ class Registry:
             - "ucum_ref_units" vitals_group_member.ucum_ref_units (vitals only)
             - "ref_range_low" vitals_group_member.ref_range_low (vitals only)
             - "ref_range_low" vitals_group_member.ref_range_low (vitals only)
-            - "sequence" group.sequence
+            - "sequence" group.sequence (for display, recalculate entire list as sequential starting from 1)
             - "valueSetUuid" group_member.value_set_uuid
             - "valueSetDisplayTitle" value_set.title
             - "valueSetCodeName" value_set.name
@@ -221,9 +215,7 @@ class Registry:
         output = io.StringIO()
 
         # Get the row data from the flexible_registry tables
-        registry = Registry.load(uuid)
-        if registry is None:
-            raise NotFoundException(f"No Registry found with UUID: {uuid}")
+        registry = Registry.load(registry_uuid)
 
         conn = get_db()
         if registry.registry_type == "labs":
@@ -243,28 +235,28 @@ class Registry:
                     ORDER BY G.title, M.sequence  
                     """
                 ),
-                {"registry_uuid": uuid},
+                {"registry_uuid": registry_uuid},
             ).fetchall()
         elif registry.registry_type == "vitals":
-                results = conn.execute(
-                    text(
-                        """  
-                        SELECT 
-                        S.uuid AS value_set_uuid, S.title AS value_set_title, S.name AS value_set_name,
-                        M.title AS member_title, M.sequence AS sequence,
-                        G.title AS group_title, 
-                        V.ucum_ref_units AS ucum_ref_units, 
-                        V.ref_range_high AS ref_range_high, V.ref_range_low AS ref_range_low
-                        FROM flexible_registry."group" G
-                        JOIN flexible_registry.group_member M ON M.group_uuid = G.uuid
-                        JOIN flexible_registry.vitals_group_member V ON V.group_member_uuid = M.uuid
-                        JOIN value_sets.value_set S ON S.uuid = M.value_set_uuid
-                        WHERE G.registry_uuid = :registry_uuid
-                        ORDER BY G.title, M.sequence  
-                        """
-                    ),
-                    {"registry_uuid": uuid},
-                ).fetchall()
+            results = conn.execute(
+                text(
+                    """  
+                    SELECT 
+                    S.uuid AS value_set_uuid, S.title AS value_set_title, S.name AS value_set_name,
+                    M.title AS member_title, M.sequence AS sequence,
+                    G.title AS group_title, 
+                    V.ucum_ref_units AS ucum_ref_units, 
+                    V.ref_range_high AS ref_range_high, V.ref_range_low AS ref_range_low
+                    FROM flexible_registry."group" G
+                    JOIN flexible_registry.group_member M ON M.group_uuid = G.uuid
+                    JOIN flexible_registry.vitals_group_member V ON V.group_member_uuid = M.uuid
+                    JOIN value_sets.value_set S ON S.uuid = M.value_set_uuid
+                    WHERE G.registry_uuid = :registry_uuid
+                    ORDER BY G.title, M.sequence  
+                    """
+                ),
+                {"registry_uuid": registry_uuid},
+            ).fetchall()
         else:
             results = conn.execute(
                 text(
@@ -280,12 +272,14 @@ class Registry:
                     ORDER BY G.title, M.sequence  
                     """
                 ),
-                {"registry_uuid": uuid},
+                {"registry_uuid": registry_uuid},
             ).fetchall()
 
         # Make a dictionary using the keys for Product
         data = []
+        csv_sequence = 0
         for result in results:
+            csv_sequence += 1
             value_set_uuid = result.value_set_uuid
             value_set_version = ValueSet.load_most_recent_active_version(value_set_uuid).version
             if registry.registry_type == "labs":
@@ -293,7 +287,7 @@ class Registry:
                     "productGroupLabel": result.group_title,
                     "productItemLabel": result.member_title,
                     "minimumPanelMembers": result.minimum_panel_members,
-                    "sequence": result.sequence,
+                    "sequence": csv_sequence,
                     "valueSetUuid": value_set_uuid,
                     "valueSetDisplayTitle": result.value_set_title,
                     "valueSetCodeName": result.value_set_name,
@@ -306,7 +300,7 @@ class Registry:
                     "ucumRefUnits": result.ucum_ref_units,
                     "refRangeLow": result.ref_range_low,
                     "refRangeHigh": result.ref_range_high,
-                    "sequence": result.sequence,
+                    "sequence": csv_sequence,
                     "valueSetUuid": value_set_uuid,
                     "valueSetDisplayTitle": result.value_set_title,
                     "valueSetCodeName": result.value_set_name,
@@ -316,7 +310,7 @@ class Registry:
                 row = {
                     "productGroupLabel": result.group_title,
                     "productItemLabel": result.member_title,
-                    "sequence": result.sequence,
+                    "sequence": csv_sequence,
                     "valueSetUuid": value_set_uuid,
                     "valueSetDisplayTitle": result.value_set_title,
                     "valueSetCodeName": result.value_set_name,
@@ -356,25 +350,77 @@ class Registry:
         return output.getvalue()
 
     @classmethod
-    def publish_to_object_store(self, uuid, environment="dev"):
+    def publish_to_object_store(cls, registry_uuid, environment="dev", oci_root=REGISTRY_OCI_PATH_ROOT):
         """
-        Publish the Registry to the Object Storage.
+        Publish the Registry CSV export to the Object Storage in the specified environment:
+        'dev', 'stage', or 'prod, default 'dev'
         """
-        registry = Registry.load(uuid)
-        if registry is None:
-            raise NotFoundException(f"No Registry found with UUID: {uuid}")
+        if environment not in ["dev", "stage", "prod"]:
+            raise BadRequestWithCode(
+                "Registry.publish.environment",
+                "Publish environment must be 'dev' 'stage' or 'prod'",
+            )
 
-        output = registry.export_csv(uuid)
+        registry = Registry.load(registry_uuid)
         object_storage_client = oci_authentication()
         bucket_name = config("OCI_CLI_BUCKET")
         namespace = object_storage_client.get_namespace().data
+        file_path_root = f"{oci_root}/{environment}/v{REGISTRY_SCHEMA_VERSION}/{registry.registry_type}"
+
+        # see if there is a CSV for this registry in this environment; if there is one, retire it
+        try:
+            retired = Registry.get_from_object_store(registry_uuid, environment, oci_root, raise_error=False)
+            if retired is not None:
+                time_stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+                object_storage_client.put_object(
+                    namespace,
+                    bucket_name,
+                    f"{file_path_root}/retired/{registry_uuid}-retired-{time_stamp}.csv",
+                    str(retired).encode("utf-8")
+                )
+        except oci.exceptions.ServiceError as e:
+            if e.status == 404:
+                pass
+            else:
+                raise e
+
+        # generate a new CSV for dev, or promote the previous CSV: from dev to stage, or stage to prod
+        if environment == "prod":
+            output = Registry.get_from_object_store(registry_uuid, environment="stage", oci_root=oci_root)
+        elif environment == "stage":
+            output = Registry.get_from_object_store(registry_uuid, environment="dev", oci_root=oci_root)
+        else:
+            output = registry.export_csv(registry_uuid)
+
+        # write to OCI and return the CSV to the caller
         object_storage_client.put_object(
             namespace,
             bucket_name,
-            f"Registries/{environment}/v{FLEXIBLE_REGISTRY_SCHEMA_VERSION}/{registry.registry_type}/{uuid}.csv",
-            output.encode("utf-8")
+            f"{file_path_root}/{registry_uuid}.csv",
+            output.encode("utf-8"),
         )
         return output
+
+    @classmethod
+    def get_from_object_store(cls, registry_uuid, environment="dev", oci_root=REGISTRY_OCI_PATH_ROOT, raise_error=True):
+        """
+        Get the Registry CSV export from Object Storage in the specified environment:
+        'dev', 'stage', or 'prod, default 'dev'
+        """
+        registry = Registry.load(registry_uuid)
+        object_storage_client = oci_authentication()
+        bucket_name = config("OCI_CLI_BUCKET")
+        namespace = object_storage_client.get_namespace().data
+        file_path = f"{oci_root}/{environment}/v{REGISTRY_SCHEMA_VERSION}/{registry.registry_type}/{registry_uuid}.csv"
+        try:
+            csv_export = object_storage_client.get_object(namespace, bucket_name, file_path)
+            return csv_export.data.content
+        except oci.exceptions.ServiceError as e:
+            if e.status == 404 and raise_error:
+                raise NotFoundException(f"No CSV Export found in {environment} for Registry with UUID: {registry_uuid}")
+            else:
+                raise e
+
 
 @dataclass
 class Group:
@@ -419,12 +465,12 @@ class Group:
         return cls.load(group_uuid)
 
     @classmethod
-    def load(cls, uuid):
-        data = cls.fetch_data(uuid)
+    def load(cls, group_uuid):
+        data = cls.fetch_data(group_uuid)
         return cls.create_instance_from_data(**data)
 
     @classmethod
-    def fetch_data(cls, uuid):
+    def fetch_data(cls, group_uuid):
         conn = get_db()
         result = conn.execute(
             text(
@@ -433,11 +479,11 @@ class Group:
                 WHERE "uuid" = :group_uuid
                 """
             ),
-            {"group_uuid": uuid},
+            {"group_uuid": group_uuid},
         ).fetchone()
 
         if result is None:
-            raise NotFoundException(f"No Group found with UUID: {uuid}")
+            raise NotFoundException(f"No Group found with UUID: {group_uuid}")
 
         registry = Registry.load(result.registry_uuid)
 
@@ -534,7 +580,7 @@ class Group:
         else:
             raise BadRequestWithCode(
                 "Group.sequence.direction",
-                "Direction should be either 'next' or 'previous'.",
+                "Direction must be 'next' or 'previous'.",
             )
 
         # Get the UUID and sequence for the item after/before the current item
@@ -641,8 +687,8 @@ class LabsGroup(Group):
         return cls.load(group_uuid)
 
     @classmethod
-    def fetch_data(cls, uuid):
-        data = super().fetch_data(uuid)
+    def fetch_data(cls, group_uuid):
+        data = super().fetch_data(group_uuid)
 
         # Load additional data or modify existing data
         conn = get_db()
@@ -653,7 +699,7 @@ class LabsGroup(Group):
                 where group_uuid=:group_uuid
                 """
             ),
-            {"group_uuid": uuid},
+            {"group_uuid": group_uuid},
         ).fetchone()
 
         if result is not None:
@@ -877,7 +923,7 @@ class GroupMember:
         else:
             raise BadRequestWithCode(
                 "GroupMember.sequence.direction",
-                "Direction should be either 'next' or 'previous'.",
+                "Direction must be 'next' or 'previous'.",
             )
 
         # Get the UUID and sequence for the item after/before the current item

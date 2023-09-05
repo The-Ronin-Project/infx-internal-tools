@@ -7,7 +7,6 @@ from app.registries.models import (
     LabsGroup,
     VitalsGroupMember, VitalsGroup,
 )
-from app.models.codes import *
 from app.terminologies.models import *
 
 registries_blueprint = Blueprint("registries", __name__, url_prefix="/registries")
@@ -59,6 +58,21 @@ def update_registry_metadata(registry_uuid):
     elif request.method == "GET":
         # Return the registry's metadata in the response
         return jsonify(registry.serialize())
+
+
+@registries_blueprint.route(
+    "/<string:registry_uuid>/<string:environment>", methods=["GET", "POST"]
+)
+def get_or_publish_registry_csv(registry_uuid, environment="dev"):
+    """
+    Retrieve or create a CSV export of the registry.
+    Handles both GET and POST requests.
+    Returns CSV for the registry.
+    """
+    if request.method == "POST":
+        return Registry.publish_to_object_store(registry_uuid=registry_uuid, environment=environment)
+    if request.method == "GET":
+        return Registry.get_from_object_store(registry_uuid=registry_uuid, environment=environment)
 
 
 @registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST", "GET"])
@@ -213,6 +227,7 @@ def update_group_member(registry_uuid, group_uuid, member_uuid):
     elif request.method == "DELETE":
         group_member.delete()
         return jsonify(group_member.serialize())
+
 
 @registries_blueprint.route(
     "/<string:registry_uuid>/groups/<string:group_uuid>/members/<string:member_uuid>/actions/reorder/<string:direction>",
