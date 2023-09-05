@@ -16,7 +16,7 @@ from app.helpers.oci_helper import oci_authentication
 from app.value_sets.models import ValueSet
 
 REGISTRY_SCHEMA_VERSION = 1
-REGISTRY_OCI_PATH_ROOT = "DoNotUseTestingRegistries"  # "Registries"
+REGISTRY_OCI_PATH_ROOT = "Registries"  # "DoNotUseTestingRegistries"
 
 
 @dataclass
