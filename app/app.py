@@ -296,6 +296,11 @@ def create_app(script_info=None):
         convert_last_update = DataNormalizationRegistry.convert_gmt_time(last_update)
         return convert_last_update
 
+    @app.route("/data_normalization/actions/load_outstanding_errors_to_custom_terminologies", methods=["POST"])
+    def trigger_load_outstanding_errors_to_custom_terminologies():
+        tasks.load_outstanding_errors_to_custom_terminologies.apply_async()
+        return "Started"
+
     @app.route("/data_normalization/outstanding_mapping_rows", methods=["GET"])
     def outstanding_errors():
         # incremental_load_concept_map = concept_maps_models.ConceptMap(
