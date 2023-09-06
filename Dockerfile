@@ -24,12 +24,12 @@ FROM docker-proxy.devops.projectronin.io/ronin/base/python-base:latest as runtim
 
 ARG USER_NAME=ronin
 
-RUN mkdir ./.oci
 COPY --from=builder --chown=${USER_NAME}:${USER_NAME} /app/.local/ /app/.local
 COPY --chown=${USER_NAME}:${USER_NAME} app ./app
 
 EXPOSE 8000
 USER ${USER_NAME}
+RUN mkdir ./.oci
 
 RUN pip install \
     cryptography \
@@ -42,11 +42,6 @@ RUN pip install \
 ENV PYTHONUNBUFFERED 1
 ENV PYTHONDONTWRITEBYTECODE 1
 
-#COPY --chown=${USER_NAME}:${USER_NAME} ./compose/local/flask/entrypoint.sh ./
-COPY --chown=${USER_NAME}:${USER_NAME} ./compose/local/flask/start.sh ./
-COPY --chown=${USER_NAME}:${USER_NAME} compose/local/celery/worker/start.sh ./start-celeryworker.sh
-COPY --chown=${USER_NAME}:${USER_NAME} compose/local/celery/beat/start.sh ./start-celerybeat.sh
-COPY --chown=${USER_NAME}:${USER_NAME} compose/local/celery/flower/start.sh ./start-flower.sh
 
-#ENTRYPOINT [ "./entrypoint.sh" ]
-CMD [ "python", "-m", "app", "--reload" ]
+# ENTRYPOINT [ "./entrypoint.sh" ]
+CMD [ "python", "-m", "app" ]
