@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 from uuid import UUID
 from decouple import config
 from app.models.normalization_error_service import (
@@ -22,6 +23,16 @@ celery_app = Celery("infx-tasks", broker=BROKER_URL)
 # celery_app.conf.broker_url = config('CELERY_BROKER_URL')
 
 
+@celery_app.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
+    # Executes every 4hrs
+    sender.add_periodic_task(
+        crontab(hour='4'),
+        load_outstanding_errors_to_custom_terminologies.s(),
+    )
+
+
+@celery_app.task
 def load_outstanding_errors_to_custom_terminologies():
     """ """
     conn = get_db()
