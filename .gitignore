@@ -4,3 +4,4 @@
 .coverage
 .tox/
 coverage.xml
+.python-version
