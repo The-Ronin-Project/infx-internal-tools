@@ -14,9 +14,9 @@ from app.models.normalization_error_service import load_concepts_from_errors
 from app.database import get_db
 
 
-BROKER_HOST = config('CELERY_BROKER_HOST', 'localhost')
-BROKER_PORT = config('CELERY_BROKER_PORT', '5672')
-BROKER_URL = f'redis://{BROKER_HOST}:{BROKER_PORT}//'
+BROKER_HOST = config("CELERY_BROKER_HOST", "localhost")
+BROKER_PORT = config("CELERY_BROKER_PORT", "5672")
+BROKER_URL = f"redis://{BROKER_HOST}:{BROKER_PORT}//"
 
 celery_app = Celery("infx-tasks", broker=BROKER_URL)
 # celery_app.conf.task_always_eager = True
@@ -27,7 +27,7 @@ celery_app = Celery("infx-tasks", broker=BROKER_URL)
 def setup_periodic_tasks(sender, **kwargs):
     # Executes every 4hrs
     sender.add_periodic_task(
-        crontab(hour='4'),
+        crontab(hour="4"),
         load_outstanding_errors_to_custom_terminologies.s(),
     )
 

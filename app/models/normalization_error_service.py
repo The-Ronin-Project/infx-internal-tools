@@ -21,18 +21,10 @@ from app.value_sets.models import ValueSet, ValueSetVersion
 DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL = config(
     "DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL", default=""
 )
-CLIENT_ID = config(
-    "DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_ID", default=""
-)
-CLIENT_SECRET = config(
-    "DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_SECRET", default=""
-)
-AUTH_AUDIENCE = config(
-    "DATA_NORMALIZATION_ERROR_SERVICE_AUDIENCE", default=""
-)
-AUTH_URL = config(
-    "DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default=""
-)
+CLIENT_ID = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_ID", default="")
+CLIENT_SECRET = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_SECRET", default="")
+AUTH_AUDIENCE = config("DATA_NORMALIZATION_ERROR_SERVICE_AUDIENCE", default="")
+AUTH_URL = config("DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default="")
 
 LOGGER = logging.getLogger()
 
@@ -87,7 +79,7 @@ def convert_string_to_datetime_or_none(input_string):
 def make_get_request(token, client, base_url, api_url, params={}):
     headers: dict[str, str] = {
         "Authorization": f"Bearer {token}",
-        "content-type": "application/json"
+        "content-type": "application/json",
     }
     response = client.get(base_url + api_url, headers=headers, params=params)
     return response.json()
@@ -217,23 +209,23 @@ class ErrorServiceIssue:
 
 def load_concepts_from_errors():
     """
-        Extracts specific concepts from a list of errors and saves them to a custom terminology.
+    Extracts specific concepts from a list of errors and saves them to a custom terminology.
 
-        This function processes errors to identify and extract relevant concepts. It then organizes
-        these concepts by the originating organization and type of resource they pertain to. The
-        results are saved back to the appropriate custom terminology.
+    This function processes errors to identify and extract relevant concepts. It then organizes
+    these concepts by the originating organization and type of resource they pertain to. The
+    results are saved back to the appropriate custom terminology.
 
-        Parameters:
-            terminology_whitelist (list, optional): A list of URIs (fhir_uri) specifying the terminologies
-                to which data can be loaded. If not provided, uses a default whitelist.
+    Parameters:
+        terminology_whitelist (list, optional): A list of URIs (fhir_uri) specifying the terminologies
+            to which data can be loaded. If not provided, uses a default whitelist.
 
-        Procedure:
-            1. Fetch resources that have encountered errors.
-            2. Process these resources to identify the source of the error.
-            3. Extract relevant codes from the resource.
-            4. Deduplicate the codes to avoid redundancy.
-            5. Load the unique codes into their respective terminologies.
-        """
+    Procedure:
+        1. Fetch resources that have encountered errors.
+        2. Process these resources to identify the source of the error.
+        3. Extract relevant codes from the resource.
+        4. Deduplicate the codes to avoid redundancy.
+        5. Load the unique codes into their respective terminologies.
+    """
 
     # Step 1: Fetch resources that have encountered errors.
     token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
@@ -246,7 +238,7 @@ def load_concepts_from_errors():
         "order": "ASC",
         "limit": PAGE_SIZE,
         "issue_type": "NOV_CONMAP_LOOKUP",
-        "resource_type": "DocumentReference"  # todo: remove hard-coded limit, eventually
+        "resource_type": "DocumentReference",  # todo: remove hard-coded limit, eventually
     }
 
     # Continuously fetch resources until all pages have been retrieved.
@@ -287,7 +279,7 @@ def load_concepts_from_errors():
             if resource_type not in (
                 ResourceType.CONDITION,
                 ResourceType.OBSERVATION,
-                ResourceType.DOCUMENT_REFERENCE
+                ResourceType.DOCUMENT_REFERENCE,
             ):
                 warnings.warn(
                     f"Support for the {resource_type} resource type has not been implemented"
@@ -327,7 +319,6 @@ def load_concepts_from_errors():
         new_codes_to_deduplicate_by_terminology = {}
 
         for error_service_resource in resources:
-
             # For a given resource type, identify the actual coding which needs to make it into the concept map
             raw_resource = json.loads(error_service_resource.resource)
 
@@ -341,23 +332,27 @@ def load_concepts_from_errors():
             ]:
                 raw_coding = raw_resource["type"]
             else:
-                raise NotImplementedError(f"Support for extracting codeable concept not implemented for {error_service_resource.resource_type}")
+                raise NotImplementedError(
+                    f"Support for extracting codeable concept not implemented for {error_service_resource.resource_type}"
+                )
 
-            raw_coding_as_value_codeable_concept = {
-                "valueCodeableConcept": raw_coding
-            }
+            raw_coding_as_value_codeable_concept = {"valueCodeableConcept": raw_coding}
 
             # Lookup the concept map version used to normalize this type of resource
             # So that we can then identify the correct terminology to load the new coding to
 
             # The data element where validation is failed is stored in the 'location' on the issue
             # We need to filter the issues to just the NOV_CONMAP_LOOKUP issues and get the location
-            nov_conmap_issues = error_service_resource.filter_issues_by_type('NOV_CONMAP_LOOKUP')
+            nov_conmap_issues = error_service_resource.filter_issues_by_type(
+                "NOV_CONMAP_LOOKUP"
+            )
             locations = [issue.location for issue in nov_conmap_issues]
             locations = list(set(locations))
             if len(locations) > 1:
-                warnings.warn("Resource has more than one issue of type NOV_CONMAP_LOOKUP; cannot extract just one location")
-                continue # Skip the rest of this one and move on
+                warnings.warn(
+                    "Resource has more than one issue of type NOV_CONMAP_LOOKUP; cannot extract just one location"
+                )
+                continue  # Skip the rest of this one and move on
             if not locations:
                 warnings.warn("Resource has no locations")
                 continue
@@ -375,7 +370,9 @@ def load_concepts_from_errors():
                 concept_map_version_for_normalization.concept_map.source_value_set_uuid
             )
             most_recent_active_source_value_set_version = (
-                ValueSet.load_most_recent_active_version_with_cache(source_value_set_uuid)
+                ValueSet.load_most_recent_active_version_with_cache(
+                    source_value_set_uuid
+                )
             )
             most_recent_active_source_value_set_version.expand(no_repeat=True)
 
@@ -407,32 +404,36 @@ def load_concepts_from_errors():
             # Assemble additionalData from the raw resource.
             # This is where we'll extract unit, value, valueQuantity, and referenceRange if available
             resource_json = json.loads(error_service_resource.resource)
-            unit = resource_json.get('unit')
-            value = resource_json.get('value')
-            value_quantity = resource_json.get('valueQuantity')
-            reference_range = resource_json.get('referenceRange')
+            unit = resource_json.get("unit")
+            value = resource_json.get("value")
+            value_quantity = resource_json.get("valueQuantity")
+            reference_range = resource_json.get("referenceRange")
 
             if unit or value or value_quantity or reference_range:
                 new_code.add_examples_to_additional_data(
                     unit=unit,
                     value=value,
                     value_quantity=value_quantity,
-                    reference_range=reference_range
+                    reference_range=reference_range,
                 )
 
             if terminology_to_load_to.uuid in new_codes_to_deduplicate_by_terminology:
-                new_codes_to_deduplicate_by_terminology[terminology_to_load_to.uuid].append(
-                    new_code
-                )
+                new_codes_to_deduplicate_by_terminology[
+                    terminology_to_load_to.uuid
+                ].append(new_code)
             else:
-                new_codes_to_deduplicate_by_terminology[terminology_to_load_to.uuid] = [new_code]
+                new_codes_to_deduplicate_by_terminology[terminology_to_load_to.uuid] = [
+                    new_code
+                ]
 
         # Step 4: Deduplicate the codes to avoid redundant data.
         deduped_codes_by_terminology = {}
 
         # Loop through codes, identify duplicates, and merge them.
-        for terminology_uuid, new_codes_to_deduplicate in new_codes_to_deduplicate_by_terminology.items():
-
+        for (
+            terminology_uuid,
+            new_codes_to_deduplicate,
+        ) in new_codes_to_deduplicate_by_terminology.items():
             # Store duplicates in a dictionary with lists
             dedup_dict = {}
             for code in new_codes_to_deduplicate:
@@ -451,10 +452,18 @@ def load_concepts_from_errors():
                         # Merge in duplicates
                         if merged_code.additional_data:
                             merged_code.add_examples_to_additional_data(
-                                unit=current_duplicate.additional_data.get('example_unit'),
-                                value=current_duplicate.additional_data.get('example_value'),
-                                value_quantity=current_duplicate.additional_data.get('example_value_quantity'),
-                                reference_range=current_duplicate.additional_data.get('example_reference_range')
+                                unit=current_duplicate.additional_data.get(
+                                    "example_unit"
+                                ),
+                                value=current_duplicate.additional_data.get(
+                                    "example_value"
+                                ),
+                                value_quantity=current_duplicate.additional_data.get(
+                                    "example_value_quantity"
+                                ),
+                                reference_range=current_duplicate.additional_data.get(
+                                    "example_reference_range"
+                                ),
                             )
                     deduped_codes.append(merged_code)
                 else:
@@ -466,8 +475,12 @@ def load_concepts_from_errors():
         for terminology_version_uuid, code_list in deduped_codes_by_terminology.items():
             terminology = Terminology.load(terminology_version_uuid)
 
-            LOGGER.info(f"Loading {len(code_list)} new codes to terminology {terminology.terminology} version {terminology.version}")
-            terminology.load_new_codes_to_terminology(code_list, on_conflict_do_nothing=True) #todo: reconsider on conflict do nothing
+            LOGGER.info(
+                f"Loading {len(code_list)} new codes to terminology {terminology.terminology} version {terminology.version}"
+            )
+            terminology.load_new_codes_to_terminology(
+                code_list, on_conflict_do_nothing=True
+            )  # todo: reconsider on conflict do nothing
 
     LOGGER.info("Loading data from error service to custom terminologies complete")
 
@@ -576,11 +589,10 @@ def get_outstanding_errors(
 
 if __name__ == "__main__":
     from app.database import get_db
+
     conn = get_db()
 
     load_concepts_from_errors()
 
     conn.commit()
     conn.close()
-
-
