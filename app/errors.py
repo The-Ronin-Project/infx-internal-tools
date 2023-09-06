@@ -8,6 +8,11 @@ class BadRequestWithCode(BadRequest):
         self.http_status_code = http_status_code
 
 
+class NotFoundException(Exception):
+    def __init__(self, message):
+        self.message = message
+
+
 class TerminologyExpiredError(Exception):
     pass
 

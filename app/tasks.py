@@ -14,9 +14,14 @@ from app.models.normalization_error_service import load_concepts_from_errors
 from app.database import get_db
 
 
-BROKER_HOST = config("CELERY_BROKER_HOST", "localhost")
-BROKER_PORT = config("CELERY_BROKER_PORT", "5672")
-BROKER_URL = f"redis://{BROKER_HOST}:{BROKER_PORT}//"
+BROKER_HOST = config('CELERY_BROKER_HOST', 'localhost')
+BROKER_PORT = config('CELERY_BROKER_PORT', '5672')
+BROKER_TLS_ENFORCED = bool(config('CELERY_BROKER_TLS_ENFORCED', False))
+broker_protocol = "rediss" if BROKER_TLS_ENFORCED else "redis"
+BROKER_URL = f'{broker_protocol}://{BROKER_HOST}:{BROKER_PORT}//'
+if BROKER_TLS_ENFORCED:
+    BROKER_URL += "?ssl_cert_reqs=required"
+
 
 celery_app = Celery("infx-tasks", broker=BROKER_URL)
 # celery_app.conf.task_always_eager = True
