@@ -748,24 +748,6 @@ class ConceptMapVersion:
 
         This method updates the status of this instance of a concept map version in the
         'concept_maps.concept_map_version' table in the database, setting it to 'active'.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        Any exceptions raised by the database operation will propagate up to the caller.
-
-        Notes
-        -----
-        This method directly modifies the database and does not return a value. The database connection
-        is obtained from the `get_db` function. The 'status' field of the concept map version specified
-        by `self.uuid` is updated.
         """
 
         conn = get_db()
@@ -782,6 +764,20 @@ class ConceptMapVersion:
                 "version_uuid": self.uuid,
             },
         )
+        self.status = "active"
+
+    def set_publication_date(self):
+        conn = get_db()
+        conn.execute(
+            text(
+                """
+                UPDATE concept_maps.concept_map_version
+                SET published_date=now()
+                where uuid=:uuid
+                """
+            )
+        )
+        self.published_date = datetime.datetime.now()
 
     def retire_and_obsolete_previous_version(self):
         """
@@ -1092,6 +1088,7 @@ class ConceptMapVersion:
             concept_map_to_json, initial_path, folder="published"
         )  # sends to OCI
         self.version_set_status_active()
+        self.set_publication_date()
         self.retire_and_obsolete_previous_version()
         self.to_simplifier()
         # Publish new version of data normalization registry
