@@ -94,6 +94,7 @@ class Terminology:
         return f"Terminology(uuid={self.uuid}, name={self.terminology}, version={self.version})"
 
     @classmethod
+    @lru_cache
     def load(cls, terminology_version_uuid):
         """
         A class method that loads a Terminology given its UUID.
@@ -127,6 +128,7 @@ class Terminology:
         )
 
     @classmethod
+    @lru_cache
     def load_by_fhir_uri_and_version(cls, fhir_uri, version):
         terminology_version_uuid = terminology_version_uuid_lookup(fhir_uri, version)
         if terminology_version_uuid:
@@ -310,6 +312,7 @@ class Terminology:
             most_recent_terminology = Terminology.load(most_recent_version_uuid)
         return most_recent_terminology
 
+    @lru_cache
     def version_to_load_new_content_to(self) -> "Terminology":
         """
         A custom terminology should only have content loaded to it if its effective_end date has
@@ -442,7 +445,7 @@ class Terminology:
             )
         return True, None
 
-    def load_new_codes_to_terminology(self, codes: List["app.models.codes.Code"]):
+    def load_new_codes_to_terminology(self, codes: List["app.models.codes.Code"], on_conflict_do_nothing=False):
         """
         This method loads new codes into the terminology.
 
@@ -482,13 +485,18 @@ class Terminology:
             serialized_code = code.code
             if type(serialized_code) == dict:
                 serialized_code = json.dumps(serialized_code)
+
             # Insert new code into the database
-            conn.execute(
-                text(
-                    """
+            query_text = """
                     INSERT INTO custom_terminologies.code (uuid, code, display, additional_data, terminology_version_uuid, depends_on_value, depends_on_display, depends_on_property, depends_on_system)
                     VALUES (:uuid, :code, :display, :additional_data, :terminology_version_uuid, :depends_on_value, :depends_on_display, :depends_on_property, :depends_on_system)
                 """
+            if on_conflict_do_nothing:
+                query_text += """ on conflict do nothing
+                """
+            conn.execute(
+                text(
+                    query_text
                 ),
                 {
                     "uuid": uuid.uuid4(),

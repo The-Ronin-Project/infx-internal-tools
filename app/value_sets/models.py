@@ -1,6 +1,7 @@
 import datetime
 import json
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import List, Dict, Tuple, Optional, Any
 import re
 import requests
@@ -1714,6 +1715,11 @@ class ValueSet:
         ]
 
     @classmethod
+    @lru_cache(maxsize=None)
+    def load_most_recent_active_version_with_cache(cls, uuid):
+        return cls.load_most_recent_active_version(uuid)
+
+    @classmethod
     def load_most_recent_active_version(cls, uuid):
         return cls.load_most_recent_version(uuid, active_only=True)
 
@@ -2464,6 +2470,8 @@ class ValueSetVersion:
         self.extensional_codes = {}
         self.explicitly_included_codes = []
 
+        self._expanded = False
+
     def __repr__(self):
         return f"<ValueSetVersion uuid={self.uuid}, title={self.value_set.title}, version={self.version}>"
 
@@ -2585,14 +2593,24 @@ class ValueSetVersion:
         rule_group_ids = [x.rule_group for x in rule_groups_query]
         self.rule_groups = [RuleGroup(self.uuid, x) for x in rule_group_ids]
 
-    def expand(self, force_new=False):
+    def expand(self, force_new=False, no_repeat=False):
+        if no_repeat is True:
+            if self._expanded is True:
+                return
+
         if force_new is True:
-            return self.create_expansion()
+            self.create_expansion()
+            self._expanded = True
+            return
 
         if self.expansion_already_exists():
-            return self.load_current_expansion()
+            self.load_current_expansion()
+            self._expanded = True
+            return
         else:
-            return self.create_expansion()
+            self.create_expansion()
+            self._expanded = True
+            return
 
     def expansion_already_exists(self):
         conn = get_db()
