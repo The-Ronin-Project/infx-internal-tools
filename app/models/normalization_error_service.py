@@ -10,6 +10,7 @@ import logging
 
 from decouple import config
 import requests
+from sqlalchemy import text
 
 from app.models.models import Organization
 from app.models.codes import Code
@@ -540,51 +541,179 @@ def lookup_concept_map_version_for_data_element(
     return concept_map_version
 
 
+# def get_outstanding_errors(
+#     registry: DataNormalizationRegistry = None,
+# ) -> List[Dict]:
+#     if registry is None:
+#         registry = DataNormalizationRegistry()
+#         registry.load_entries()
+#
+#     outstanding_errors = []
+#     for registry_item in registry.entries:
+#         if registry_item.registry_entry_type == "concept_map":
+#             # Load the most recent concept map version (not just the most recent active)
+#             concept_map = registry_item.concept_map
+#             concept_map_version = concept_map.get_most_recent_version(active_only=False, load_mappings=False)
+#
+#             # Identify the source terminology
+#             if concept_map_version.source_value_set_version_uuid is not None:
+#                 value_set_version = ValueSetVersion.load(
+#                     concept_map_version.source_value_set_version_uuid
+#                 )
+#
+#                 terminologies_in_value_set_version = (
+#                     value_set_version.lookup_terminologies_in_value_set_version()
+#                 )
+#                 if terminologies_in_value_set_version:
+#                     source_terminology = terminologies_in_value_set_version[0]
+#                     source_terminology = source_terminology.load_latest_version()
+#
+#                     # Grab the first item from the list
+#
+#                     # Write a SQL query to identify all codes in custom_terminology.code
+#                     # with a created_date for the code that is more recent than
+#                     # the created_date of the underlying source terminology
+#                     recent_codes = source_terminology.get_recent_codes(
+#                         concept_map_version.created_date
+#                     )
+#
+#                     if len(recent_codes) != 0:
+#                         outstanding_errors.append(
+#                             {
+#                                 "concept_map_uuid": registry_item.concept_map.uuid,
+#                                 "concept_map_title": registry_item.concept_map.title,
+#                                 "number_of_outstanding_codes": len(recent_codes),
+#                             }
+#                         )
+#     return outstanding_errors
+
 def get_outstanding_errors(
     registry: DataNormalizationRegistry = None,
 ) -> List[Dict]:
-    if registry is None:
-        registry = DataNormalizationRegistry()
-        registry.load_entries()
+    """
+    This will generate a report on concept maps which have data
+    waiting to be loaded into them in custom terminologies.
 
-    outstanding_errors = []
-    for registry_item in registry.entries:
-        if registry_item.registry_entry_type == "concept_map":
-            # Load the most recent concept map version (not just the most recent active)
-            concept_map = registry_item.concept_map
-            concept_map_version = concept_map.get_most_recent_version(active_only=False)
+    It will provide a list of dictionaries, each specifying:
+    - the concept map impacted, including title and uuid
+    - the number of codes outstanding (waiting to be pulled into a new version of the concept map)
+    - the date the oldest outstanding code was loaded to the custom terminology
+    """
+    conn = get_db()
 
-            # Identify the source terminology
-            if concept_map_version.source_value_set_version_uuid is not None:
-                value_set_version = ValueSetVersion.load(
-                    concept_map_version.source_value_set_version_uuid
-                )
+    results = conn.execute(
+        text(
+            """
+            -- Use a CTE to rank the concept map versions in descending order of their versions for each concept map
+            WITH RankedCMVersions AS (
+                SELECT 
+                    concept_map_uuid, 
+                    uuid AS concept_map_version_uuid,
+                    version,
+                    created_date,
+                    source_value_set_version_uuid,
+                    -- Rank the versions in descending order for each concept map
+                    ROW_NUMBER() OVER(PARTITION BY concept_map_uuid ORDER BY version DESC) as rn
+                FROM 
+                    concept_maps.concept_map_version
+            ),
+            
+            -- Use a CTE to get the latest version for each concept map
+            LatestConceptMapVersions as (
+                SELECT 
+                    concept_map.title,
+                    concept_map_uuid, 
+                    concept_map_version_uuid,
+                    RankedCMVersions.created_date as version_created_date,
+                    source_value_set_version_uuid
+                FROM 
+                    RankedCMVersions
+                JOIN
+                    concept_maps.concept_map
+                    on concept_map.uuid=concept_map_uuid
+                WHERE 
+                    rn = 1 -- Only pick the latest version
+            ),
+            
+            -- Use a CTE to fetch unique concept maps that are being used for data normalization
+            ConceptMapsForDataNormalization as (
+                SELECT distinct concept_map_uuid 
+                FROM data_ingestion.registry
+            ),
+            
+            -- Use a CTE to get unique value set versions and their associated terminology versions
+            TerminologiesInValueSetVersions as (
+                SELECT distinct value_set_version, terminology_version 
+                FROM value_sets.value_set_rule
+            ),
+            
+            -- Use a CTE to rank the terminology versions in descending order for each terminology
+            TerminologyRankedVersions AS (
+                SELECT 
+                    terminology,
+                    uuid AS latest_version_uuid,
+                    -- Rank the versions in descending order for each terminology
+                    ROW_NUMBER() OVER(PARTITION BY terminology ORDER BY version DESC) as rn
+                FROM 
+                    public.terminology_versions
+            ),
+            
+            -- Use a CTE to link the previous version UUID of a terminology to its latest version UUID
+            TerminologyVersionLatestLookup as (
+                SELECT 
+                    tv.uuid AS previous_uuid,
+                    lv.latest_version_uuid
+                FROM 
+                    public.terminology_versions tv
+                JOIN 
+                    TerminologyRankedVersions lv ON tv.terminology = lv.terminology
+                WHERE 
+                    lv.rn = 1
+            )
+            
+            -- Main query to fetch the details for concept maps being used for data normalization 
+            -- and the count of new codes from the latest terminology version post the creation of the concept map version
+            SELECT 
+                lcmv.title concept_map_title,
+                lcmv.concept_map_uuid,
+                lcmv.concept_map_version_uuid as latest_concept_map_version_uuid,
+                term_latest_lookup.latest_version_uuid as latest_terminology_version,
+                COUNT(ctc.uuid) AS code_count,
+                -- This will fetch the oldest code creation date that's newer than the concept map version creation date
+                MIN(ctc.created_date) AS oldest_new_code_date 
+            FROM 
+                LatestConceptMapVersions lcmv
+            JOIN 
+                TerminologiesInValueSetVersions tivs ON tivs.value_set_version = lcmv.source_value_set_version_uuid
+            LEFT JOIN
+                TerminologyVersionLatestLookup term_latest_lookup ON term_latest_lookup.previous_uuid = tivs.terminology_version 
+            LEFT JOIN 
+                custom_terminologies.code ctc ON ctc.terminology_version_uuid = term_latest_lookup.latest_version_uuid 
+                                            AND ctc.created_date > lcmv.version_created_date
+            WHERE 
+                lcmv.concept_map_uuid in (SELECT concept_map_uuid FROM ConceptMapsForDataNormalization)
+            GROUP BY 
+                lcmv.title,
+                lcmv.concept_map_uuid, 
+                lcmv.concept_map_version_uuid, 
+                lcmv.version_created_date, 
+                lcmv.source_value_set_version_uuid,
+                term_latest_lookup.latest_version_uuid
+            HAVING COUNT(ctc.uuid) > 0;
+            """
+        )
+    )
+    return [
+        {
+            "concept_map_title": row.concept_map_title,
+            "concept_map_uuid": row.concept_map_uuid,
+            "latest_concept_map_version_uuid": row.latest_concept_map_version_uuid,
+            "outstanding_code_count": row.code_count,
+            "oldest_new_code_date": row.oldest_new_code_date
+        }
+        for row in results
+    ]
 
-                terminologies_in_value_set_version = (
-                    value_set_version.lookup_terminologies_in_value_set_version()
-                )
-                if terminologies_in_value_set_version:
-                    source_terminology = terminologies_in_value_set_version[0]
-                    source_terminology = source_terminology.load_latest_version()
-
-                    # Grab the first item from the list
-
-                    # Write a SQL query to identify all codes in custom_terminology.code
-                    # with a created_date for the code that is more recent than
-                    # the created_date of the underlying source terminology
-                    recent_codes = source_terminology.get_recent_codes(
-                        concept_map_version.created_date
-                    )
-
-                    if len(recent_codes) != 0:
-                        outstanding_errors.append(
-                            {
-                                "concept_map_uuid": registry_item.concept_map.uuid,
-                                "concept_map_title": registry_item.concept_map.title,
-                                "number_of_outstanding_codes": len(recent_codes),
-                            }
-                        )
-    return outstanding_errors
 
 
 if __name__ == "__main__":
@@ -592,7 +721,9 @@ if __name__ == "__main__":
 
     conn = get_db()
 
-    load_concepts_from_errors()
+    # load_concepts_from_errors()
+    result = get_outstanding_errors()
+    print(result)
 
     conn.commit()
     conn.close()

@@ -267,7 +267,7 @@ class ConceptMap:
         else:
             self.most_recent_active_version = None
 
-    def get_most_recent_version(self, active_only=False):
+    def get_most_recent_version(self, active_only=False, load_mappings=True):
         conn = get_db()
         if active_only:
             query = """
@@ -289,7 +289,7 @@ class ConceptMap:
             text(query),
             {"concept_map_uuid": self.uuid},
         ).first()
-        return ConceptMapVersion(version_data.uuid)
+        return ConceptMapVersion(version_data.uuid, load_mappings=load_mappings)
 
     @classmethod
     def concept_map_metadata(cls, cm_uuid):
