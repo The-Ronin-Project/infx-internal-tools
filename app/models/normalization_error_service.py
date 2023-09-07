@@ -4,7 +4,7 @@ from uuid import UUID
 from typing import Dict, Tuple, List, Optional
 from enum import Enum
 from dataclasses import dataclass
-from functools import lru_cache
+from cachetools.func import ttl_cache
 import warnings
 import logging
 
@@ -18,6 +18,7 @@ from app.terminologies.models import Terminology
 from app.models.data_ingestion_registry import DataNormalizationRegistry
 from app.concept_maps.models import ConceptMapVersion, ConceptMap
 from app.value_sets.models import ValueSet, ValueSetVersion
+from app.database import get_db
 
 DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL = config(
     "DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL", default=""
@@ -486,7 +487,7 @@ def load_concepts_from_errors():
     LOGGER.info("Loading data from error service to custom terminologies complete")
 
 
-@lru_cache
+@ttl_cache()
 def lookup_concept_map_version_for_data_element(
     data_element: str, organization: Organization
 ) -> "ConceptMapVersion":

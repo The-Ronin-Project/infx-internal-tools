@@ -4,14 +4,14 @@ import uuid
 from typing import List, Dict, Union, Optional
 
 from sqlalchemy import text
-from functools import lru_cache
+from cachetools.func import ttl_cache
 import app.models.codes
 from app.database import get_db
 from app.errors import BadRequestWithCode
 
 
-@lru_cache(maxsize=None)
-def terminology_version_uuid_lookup(fhir_uri, version):
+@ttl_cache()
+def terminology_version_uuid_lookup(fhir_uri: str, version: str):
     """
     Given a FHIR URI and version, this function retrieves the UUID of the corresponding terminology version from the database.
 
@@ -37,23 +37,11 @@ def terminology_version_uuid_lookup(fhir_uri, version):
         return result.uuid
 
 
-@lru_cache(maxsize=None)
 def load_terminology_version_with_cache(terminology_version_uuid):
     """
-    Load a Terminology instance with the given UUID and cache the result.
-
-    This function utilizes an LRU (Least Recently Used) cache with an
-    unlimited size. The caching mechanism allows for faster retrieval of
-    Terminology instances that have been previously loaded, reducing the
-    number of database queries needed for repeated lookups.
-
-    Args:
-        terminology_version_uuid (UUID): The UUID of the Terminology instance to be loaded.
-
-    Returns:
-        Terminology: The Terminology instance corresponding to the provided UUID.
+    Eventually, this should be removed and all references replaced with the classmethod
     """
-    return Terminology.load(terminology_version_uuid)
+    return Terminology.load_from_cache(terminology_version_uuid)
 
 
 class Terminology:
@@ -94,7 +82,6 @@ class Terminology:
         return f"Terminology(uuid={self.uuid}, name={self.terminology}, version={self.version})"
 
     @classmethod
-    @lru_cache
     def load(cls, terminology_version_uuid):
         """
         A class method that loads a Terminology given its UUID.
@@ -128,11 +115,20 @@ class Terminology:
         )
 
     @classmethod
-    @lru_cache
-    def load_by_fhir_uri_and_version(cls, fhir_uri, version):
+    @ttl_cache()
+    def load_from_cache(cls, terminology_version_uuid):
+        cls.load(terminology_version_uuid)
+
+    @classmethod
+    def load_by_fhir_uri_and_version(cls, fhir_uri: str, version: str):
         terminology_version_uuid = terminology_version_uuid_lookup(fhir_uri, version)
         if terminology_version_uuid:
             return cls.load(terminology_version_uuid)
+
+    @classmethod
+    @ttl_cache()
+    def load_by_fhir_uri_and_version_from_cache(cls, fhir_uri: str, version: str):
+        cls.load_by_fhir_uri_and_version(fhir_uri, version)
 
     def load_content(self):
         """
@@ -312,7 +308,7 @@ class Terminology:
             most_recent_terminology = Terminology.load(most_recent_version_uuid)
         return most_recent_terminology
 
-    @lru_cache
+    @ttl_cache()
     def version_to_load_new_content_to(self) -> "Terminology":
         """
         A custom terminology should only have content loaded to it if its effective_end date has
