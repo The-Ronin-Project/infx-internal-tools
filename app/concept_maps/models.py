@@ -1,9 +1,10 @@
 import datetime
 import uuid
-import functools
 import json
 import hashlib
 import re
+
+from cachetools.func import ttl_cache
 
 import app.models.codes
 import app.value_sets.models
@@ -128,7 +129,6 @@ class ConceptMapSettings:
         return {key: value for key, value in self.__dict__.items()}
 
     @classmethod
-    @functools.lru_cache
     def load(cls, concept_map_uuid):
         conn = get_db()
         data = conn.execute(
@@ -147,7 +147,11 @@ class ConceptMapSettings:
         )
 
     @classmethod
-    @functools.lru_cache
+    @ttl_cache()
+    def load_from_cache(cls, concept_map_uuid):
+        cls.load(concept_map_uuid)
+
+    @classmethod
     def load_by_concept_map_version_uuid(cls, concept_map_version_uuid):
         conn = get_db()
         data = conn.execute(
@@ -171,6 +175,10 @@ class ConceptMapSettings:
             show_target_codes_in_mapping_interface=bool(data.show_target_codes),
         )
 
+    @classmethod
+    @ttl_cache(ttl=60)  # Caching for 1min to speed up concept map versioning
+    def load_by_concept_map_version_uuid_from_cache(cls, concept_map_version_uuid):
+        cls.load_by_concept_map_version_uuid(concept_map_version_uuid)
 
 # This is the new maps system
 class ConceptMap:
@@ -267,7 +275,7 @@ class ConceptMap:
         else:
             self.most_recent_active_version = None
 
-    def get_most_recent_version(self, active_only=False):
+    def get_most_recent_version(self, active_only=False, load_mappings=True):
         conn = get_db()
         if active_only:
             query = """
@@ -289,7 +297,7 @@ class ConceptMap:
             text(query),
             {"concept_map_uuid": self.uuid},
         ).first()
-        return ConceptMapVersion(version_data.uuid)
+        return ConceptMapVersion(version_data.uuid, load_mappings=load_mappings)
 
     @classmethod
     def concept_map_metadata(cls, cm_uuid):
@@ -663,7 +671,7 @@ class ConceptMapVersion:
                 item.target_concept_code,
                 item.target_concept_display,
             )
-            relationship = MappingRelationship.load_by_code(
+            relationship = MappingRelationship.load_by_code_from_cache(
                 item.relationship_code
             )  # this needs optimization
 
@@ -1175,7 +1183,6 @@ class MappingRelationship:
         return cls(uuid=data.uuid, code=data.code, display=data.display)
 
     @classmethod
-    @functools.lru_cache(maxsize=32)
     def load_by_code(cls, code):
         """
         Load a mapping relationship from the database by code of the mapping relationship.
@@ -1196,7 +1203,11 @@ class MappingRelationship:
         return cls(uuid=data.uuid, code=data.code, display=data.display)
 
     @classmethod
-    @functools.lru_cache(maxsize=32)
+    @ttl_cache()
+    def load_by_code_from_cache(cls, code):
+        cls.load_by_code(code)
+
+    @classmethod
     def load_by_uuid(cls, uuid):
         conn = get_db()
         data = conn.execute(
@@ -1209,6 +1220,11 @@ class MappingRelationship:
             {"uuid": uuid},
         ).first()
         return cls(uuid=data.uuid, code=data.code, display=data.display)
+
+    @classmethod
+    @ttl_cache()
+    def load_by_uuid_from_cache(cls, uuid):
+        cls.load_by_uuid(uuid)
 
     def serialize(self):
         """
@@ -1487,7 +1503,7 @@ class Mapping:
         )
 
         # If auto-advance is on, mark the source_concept as ready for review
-        concept_map_settings = ConceptMapSettings.load_by_concept_map_version_uuid(
+        concept_map_settings = ConceptMapSettings.load_by_concept_map_version_uuid_from_cache(
             self.source.concept_map_version_uuid
         )
         if concept_map_settings.auto_advance_after_mapping:

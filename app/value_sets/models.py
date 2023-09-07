@@ -1,7 +1,7 @@
 import datetime
 import json
 from dataclasses import dataclass, field
-from functools import lru_cache
+from cachetools.func import ttl_cache
 from typing import List, Dict, Tuple, Optional, Any
 import re
 import requests
@@ -1715,7 +1715,7 @@ class ValueSet:
         ]
 
     @classmethod
-    @lru_cache(maxsize=None)
+    @ttl_cache()
     def load_most_recent_active_version_with_cache(cls, uuid):
         return cls.load_most_recent_active_version(uuid)
 
@@ -3345,7 +3345,7 @@ class ValueSetVersion:
         for code in self.expansion:
             key = (code.system, code.version)
             if key not in terminologies:
-                terminologies[key] = Terminology.load_by_fhir_uri_and_version(
+                terminologies[key] = Terminology.load_by_fhir_uri_and_version_from_cache(
                     fhir_uri=code.system, version=code.version
                 )
 
