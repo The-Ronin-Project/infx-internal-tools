@@ -71,17 +71,27 @@ def get_or_publish_registry_csv(registry_uuid, environment="dev"):
     """
     Retrieve or create a CSV export of the registry.
     Handles both GET and POST requests.
-    Returns CSV for the registry.
+    Returns the most recent version of the exported CSV for the registry in the specified environment.
+    GET supports "dev" "stage" or "prod" for environment. Environment values for POST:
+    "dev" - generate a new CSV export of the Registry from the database and publish it to OCI Registries/dev
+    "stage" - copy the most recent CSV export of the Registry from OCI Registries/dev to Registries/stage
+    "prod" - copy the most recent  CSV export of the Registry from OCI Registries/stage to Registries/prod
+    "dev,stage,prod" - generate a new CSV export, publish it to OCI Registries/dev, copy it to stage, copy it to prod
     """
-    if environment not in ["dev", "stage", "prod"]:
-        raise BadRequestWithCode(
-            "Registry.publish.environment",
-            "Environment must be 'dev' 'stage' or 'prod'",
-        )
     if request.method == "POST":
-        return Registry.publish_to_object_store(registry_uuid=registry_uuid, environment=environment, oci_root=REGISTRY_OCI_PATH_ROOT)
-    if request.method == "GET":
-        return Registry.get_from_object_store(registry_uuid=registry_uuid, environment=environment, oci_root=REGISTRY_OCI_PATH_ROOT)
+        if environment not in ["dev", "stage", "prod", "dev,stage,prod"]:
+            raise BadRequestWithCode(
+                "Registry.publish.environment",
+                "Environment to publish Registry must be 'dev' 'stage' 'prod' or 'dev,stage,prod'",
+            )
+        return Registry.publish_to_object_store(registry_uuid=registry_uuid, environment=environment)
+    elif request.method == "GET":
+        if environment not in ["dev", "stage", "prod"]:
+            raise BadRequestWithCode(
+                "Registry.get.environment",
+                "Environment to get published Registry must be 'dev' 'stage' or 'prod'",
+            )
+        return Registry.get_from_object_store(registry_uuid=registry_uuid, environment=environment)
 
 
 @registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST", "GET"])

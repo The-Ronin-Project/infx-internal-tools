@@ -6,8 +6,32 @@ import datetime
 import json
 from sqlalchemy import text
 
-from app.database import get_db
+from app.errors import NotFoundException
 from app.helpers.db_helper import db_cursor
+
+# todo: oci_helper should not know specific resource types - each resource class should be able to tell us these names
+DATABASE_SCHEMA_AND_TABLE_NAME = {
+    "concept_map": "concept_maps.concept_map_version",
+    "value_set": "value_sets.value_set_version",
+    "registry": "flexible_registry.registry_version",
+}
+DATABASE_VERSION_PARENT_NAME = {
+    "concept_map": "concept_map_uuid",
+    "value_set": "value_set_uuid",
+    "registry": "registry_uuid",
+}
+# Uncomment these lines for commit to GitHub, comment out these lines to test locally
+OCI_BUCKET_FOLDER_NAME = {
+    "concept_map": "ConceptMaps",
+    "value_set": "ValueSets",
+    "registry": "Registries",
+}
+# Comment out these lines for commit to GitHub, uncomment these lines to test locally
+# OCI_BUCKET_FOLDER_NAME = {
+#     "concept_map": "DoNotUseTestingConceptMaps",
+#     "value_set": "DoNotUseTestingValueSets",
+#     "registry": "DoNotUseTestingRegistries",
+# }
 
 
 def oci_authentication():
@@ -211,17 +235,13 @@ def get_object_type_from_db(conn, version_uuid, object_type):
     oci storage, sql query returns most recent version
     @param conn: db_cursor wrapper function to create connection to sql db
     @param version_uuid: UUID; concept map version used to retrieve overall object_type uuid
-    @param object_type: either concept map or value set object, used to determine the correct schema and table
+    @param object_type: table in database: concept_map, value_set, registry, etc.
     @return: dictionary containing overall object_type uuid and version
     """
-    if object_type == "concept_map":
-        schema_and_table = "concept_maps.concept_map_version"
-    else:
-        schema_and_table = "value_sets.value_set_version"
     data = conn.execute(
         text(
             f"""
-            select * from {schema_and_table}
+            select * from {DATABASE_SCHEMA_AND_TABLE_NAME[object_type]}
             where uuid=:uuid order by version desc 
             """
         ),
@@ -231,7 +251,7 @@ def get_object_type_from_db(conn, version_uuid, object_type):
         return False
 
     result = dict(data)
-    return {"folder_name": result["concept_map_uuid"], "version": result["version"]}
+    return {"folder_name": result[DATABASE_VERSION_PARENT_NAME[object_type]], "version": result["version"]}
 
 
 def get_json_from_oci(
@@ -242,34 +262,118 @@ def get_json_from_oci(
     resource_version,
     return_content=True,
 ):
+    return get_data_from_oci(
+        resource_type=resource_type,
+        resource_schema_version=resource_schema_version,
+        release_status=release_status,
+        resource_id=resource_id,
+        resource_version=resource_version,
+        content_type="json",
+        return_content=return_content
+    )
+
+
+def get_csv_from_oci(
+    resource_type,
+    resource_schema,
+    environment,
+    resource_uuid,
+    resource_version,
+    return_content=True,
+):
+    return get_data_from_oci(
+        resource_type=resource_type,
+        resource_schema_version=resource_schema,
+        release_status=environment,
+        resource_id=resource_uuid,
+        resource_version=resource_version,
+        content_type="csv",
+        return_content=return_content
+    )
+
+
+def get_data_from_oci(
+    resource_type,
+    resource_schema_version: str,
+    release_status,
+    resource_id,
+    resource_version,
+    content_type,
+    return_content=True,
+):
+    """
+    Return data of the specified content_type from the OCI infx-shared bucket.
+    The path to the data in infx-shared is given by the following inputs in order:
+    @param resource_type: may be in ["concept_map", "value_set", "registry", "survey"] and indicates the top level
+    folder in the path: ConceptMaps, ValueSets, Registries, or Surveys.
+    @param resource_schema_version: "1", "2" etc. - caller may append a sub-folder path to the number using "/" i.e. "5/vitals"
+    @param release_status: status value i.e. "published" vs. "prerelease" - or "dev" vs. "stage" vs. "prod"
+    @param resource_id: uuid in the database for the resource_type
+    @param resource_version: integer - this is the file name
+    @param content_type: for example "json" or "csv" - the content type and file name extension
+    @param return_content: True or False
+    @return:
+    """
     # Reset to default if not explicitly passed in as False
     if return_content is None:
         return_content = True
 
-    if resource_type == "concept_map":
-        resource_folder_name = "ConceptMaps"
-    elif resource_type == "value_set":
-        resource_folder_name = "ValueSets"
-
     object_storage_client = oci_authentication()
     bucket_name = config("OCI_CLI_BUCKET")
     namespace = object_storage_client.get_namespace().data
-    path = f"{resource_folder_name}/v{resource_schema_version}/{release_status}/{resource_id}/{resource_version}.json"
+    oci_root = OCI_BUCKET_FOLDER_NAME[resource_type]
+    path = f"{oci_root}/v{resource_schema_version}/{release_status}/{resource_id}/{resource_version}.{content_type}"
     try:
         resource = object_storage_client.get_object(namespace, bucket_name, path)
-        if return_content:
+        if return_content and content_type == "json":
             return resource.data.json()
+        elif return_content and content_type == "csv":
+            return resource.data.content.decode("utf-8")
         else:
             return {
-                "message": f"Found {resource_type} of ID: {resource_id} and version {resource_version} in OCI"
+                "message": f"Found {resource_type} UUID: {resource_id} version {resource_version} in {release_status}"
             }
     except oci.exceptions.ServiceError as e:
         if e.status == 404:
-            raise NotFound(
-                f"Resource NOT found {resource_type} of ID: {resource_id} and version {resource_version} in OCI"
+            raise NotFoundException(
+                f"Did NOT find the expected {resource_type} UUID: {resource_id} version {resource_version} in {release_status}"
             )
         else:
             raise e
+
+
+def put_data_to_oci(
+    content,
+    resource_type,
+    resource_schema_version: str,
+    release_status,
+    resource_id,
+    resource_version,
+    content_type
+):
+    """
+    Store data of the specified content_type in the OCI infx-shared bucket.
+    The path to the data in infx-shared is given by the following inputs in order:
+    @param content: the data
+    @param resource_type: "concept_map", "value_set", "registry", etc.
+    @param resource_schema_version: "1", "2" etc. - caller may append a sub-folder path using "/" i.e. "5/vitals"
+    @param release_status: status value i.e. "published" vs. "prerelease" - or "dev" vs. "stage" vs. "prod"
+    @param resource_id: uuid in the database for the resource_type
+    @param resource_version: integer - this is the file name
+    @param content_type: for example "json" or "csv" - the content type and file name extension
+    @return:
+    """
+    object_storage_client = oci_authentication()
+    bucket_name = config("OCI_CLI_BUCKET")
+    namespace = object_storage_client.get_namespace().data
+    oci_root = OCI_BUCKET_FOLDER_NAME[resource_type]
+    path = f"{oci_root}/v{resource_schema_version}/{release_status}/{resource_id}/{resource_version}.{content_type}"
+    object_storage_client.put_object(
+        namespace,
+        bucket_name,
+        path,
+        content
+    )
 
 
 # todo: deprecate this function
