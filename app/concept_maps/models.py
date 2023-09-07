@@ -683,6 +683,7 @@ class ConceptMapVersion:
                 author=item.author,
                 uuid=item.mapping_uuid,
                 review_status=item.review_status,
+                reason_for_no_map=item.reason_for_no_map,
             )
             if source_code in self.mappings:
                 self.mappings[source_code].append(mapping)
@@ -906,12 +907,19 @@ class ConceptMapVersion:
 
                     # Iterate through each mapping for the source and serialize it
                     for mapping in filtered_mappings:
+                        if (
+                            mapping.target.code == "No map"
+                            and mapping.target.display == "No matching concept"
+                        ):
+                            comment = mapping.reason_for_no_map
+                        else:
+                            comment = None
                         target_serialized = {
                             "id": mapping.id,
                             "code": mapping.target.code,
                             "display": mapping.target.display,
                             "equivalence": mapping.relationship.code,
-                            "comment": None,
+                            "comment": comment,
                         }
 
                         # Add dependsOn data
@@ -998,6 +1006,9 @@ class ConceptMapVersion:
                             if item["comment"]
                             else "source-is-broader-than-target"
                         )
+                    # Conditionally remove the comment field if it is None or empty
+                    if item["comment"] is None or item["comment"] == "":
+                        item.pop("comment", None)
         serialized = {
             "resourceType": "ConceptMap",
             "title": self.concept_map.title,
@@ -1429,6 +1440,7 @@ class Mapping:
     reviewed_date: Optional[datetime.datetime] = None
     review_comment: Optional[str] = None
     reviewed_by: Optional[str] = None
+    reason_for_no_map: Optional[str] = None
 
     def __post_init__(self):
         self.conn = get_db()
