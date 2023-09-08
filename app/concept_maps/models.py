@@ -178,7 +178,8 @@ class ConceptMapSettings:
     @classmethod
     @ttl_cache(ttl=60)  # Caching for 1min to speed up concept map versioning
     def load_by_concept_map_version_uuid_from_cache(cls, concept_map_version_uuid):
-        cls.load_by_concept_map_version_uuid(concept_map_version_uuid)
+        return cls.load_by_concept_map_version_uuid(concept_map_version_uuid)
+
 
 # This is the new maps system
 class ConceptMap:
