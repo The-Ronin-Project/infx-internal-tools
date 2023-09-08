@@ -117,7 +117,7 @@ class Terminology:
     @classmethod
     @ttl_cache()
     def load_from_cache(cls, terminology_version_uuid):
-        cls.load(terminology_version_uuid)
+        return cls.load(terminology_version_uuid)
 
     @classmethod
     def load_by_fhir_uri_and_version(cls, fhir_uri: str, version: str):
@@ -128,7 +128,7 @@ class Terminology:
     @classmethod
     @ttl_cache()
     def load_by_fhir_uri_and_version_from_cache(cls, fhir_uri: str, version: str):
-        cls.load_by_fhir_uri_and_version(fhir_uri, version)
+        return cls.load_by_fhir_uri_and_version(fhir_uri, version)
 
     def load_content(self):
         """
@@ -441,7 +441,9 @@ class Terminology:
             )
         return True, None
 
-    def load_new_codes_to_terminology(self, codes: List["app.models.codes.Code"], on_conflict_do_nothing=False):
+    def load_new_codes_to_terminology(
+        self, codes: List["app.models.codes.Code"], on_conflict_do_nothing=False
+    ):
         """
         This method loads new codes into the terminology.
 
@@ -491,9 +493,7 @@ class Terminology:
                 query_text += """ on conflict do nothing
                 """
             conn.execute(
-                text(
-                    query_text
-                ),
+                text(query_text),
                 {
                     "uuid": uuid.uuid4(),
                     "code": serialized_code,
