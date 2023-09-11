@@ -280,7 +280,7 @@ def load_concepts_from_errors():
 
             if resource_type not in (
                 ResourceType.CONDITION,
-                ResourceType.OBSERVATION,
+                # ResourceType.OBSERVATION,
                 ResourceType.DOCUMENT_REFERENCE,
             ):
                 warnings.warn(
@@ -338,7 +338,7 @@ def load_concepts_from_errors():
                     f"Support for extracting codeable concept not implemented for {error_service_resource.resource_type}"
                 )
 
-            raw_coding_as_value_codeable_concept = {"valueCodeableConcept": raw_coding}
+            raw_coding_as_value_codeable_concept = {"valueCodeableConcept": raw_coding} #todo: change so it matches where it came from; code for code, etc
 
             # Lookup the concept map version used to normalize this type of resource
             # So that we can then identify the correct terminology to load the new coding to
@@ -428,6 +428,8 @@ def load_concepts_from_errors():
                     new_code
                 ]
 
+            # todo: link the issue ids to the codes
+
         # Step 4: Deduplicate the codes to avoid redundant data.
         deduped_codes_by_terminology = {}
 
@@ -483,6 +485,7 @@ def load_concepts_from_errors():
             terminology.load_new_codes_to_terminology(
                 code_list, on_conflict_do_nothing=True
             )  # todo: reconsider on conflict do nothing
+            # todo: save linked issues
 
     LOGGER.info("Loading data from error service to custom terminologies complete")
 
