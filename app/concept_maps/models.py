@@ -149,7 +149,7 @@ class ConceptMapSettings:
     @classmethod
     @ttl_cache()
     def load_from_cache(cls, concept_map_uuid):
-        cls.load(concept_map_uuid)
+        return cls.load(concept_map_uuid)
 
     @classmethod
     def load_by_concept_map_version_uuid(cls, concept_map_version_uuid):
@@ -1217,7 +1217,7 @@ class MappingRelationship:
     @classmethod
     @ttl_cache()
     def load_by_code_from_cache(cls, code):
-        cls.load_by_code(code)
+        return cls.load_by_code(code)
 
     @classmethod
     def load_by_uuid(cls, uuid):
@@ -1236,7 +1236,7 @@ class MappingRelationship:
     @classmethod
     @ttl_cache()
     def load_by_uuid_from_cache(cls, uuid):
-        cls.load_by_uuid(uuid)
+        return cls.load_by_uuid(uuid)
 
     def serialize(self):
         """
@@ -1516,8 +1516,10 @@ class Mapping:
         )
 
         # If auto-advance is on, mark the source_concept as ready for review
-        concept_map_settings = ConceptMapSettings.load_by_concept_map_version_uuid_from_cache(
-            self.source.concept_map_version_uuid
+        concept_map_settings = (
+            ConceptMapSettings.load_by_concept_map_version_uuid_from_cache(
+                self.source.concept_map_version_uuid
+            )
         )
         if concept_map_settings.auto_advance_after_mapping:
             self.source.update(map_status="ready for review")
