@@ -708,7 +708,7 @@ class ConceptMapVersion:
                 {
                     "Source Code": row[1],
                     "Source Display": row[2],
-                    "Relationship": row[30],
+                    "Relationship": row[31],
                     "Target Code": row[19],
                     "Target Display": row[20],
                     "Review Status": row[16],
@@ -880,7 +880,8 @@ class ConceptMapVersion:
                     source_code_code = source_code.code.rstrip()
                     source_code_display = source_code.display.rstrip()
 
-                    # Checking to see if the display is a coding array TODO: INFX-2521 this is a temporary problem that we should fix in the future
+                    # Checking to see if the display is a coding array
+                    # TODO: INFX-2521 this is a temporary problem that we should fix in the future
                     if is_coding_array(source_code_display):
                         source_code_code, source_code_display = (
                             source_code_display,
