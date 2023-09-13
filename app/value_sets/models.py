@@ -1637,7 +1637,18 @@ class ValueSet:
         for x in results:
             use_case_info = load_use_case_by_value_set_uuid(x.uuid)
             # Extract the names from use_case_info
-            use_case_names = [uc.name for uc in use_case_info] if use_case_info else []
+            use_case_names = (
+                (
+                    (
+                        [use_case_info["primary_use_case"].name]
+                        if use_case_info["primary_use_case"]
+                        else []
+                    )
+                    + [uc.name for uc in use_case_info["secondary_use_cases"]]
+                )
+                if use_case_info
+                else []
+            )
 
         value_sets_metadata.append(
             {
@@ -3345,7 +3356,9 @@ class ValueSetVersion:
         for code in self.expansion:
             key = (code.system, code.version)
             if key not in terminologies:
-                terminologies[key] = Terminology.load_by_fhir_uri_and_version_from_cache(
+                terminologies[
+                    key
+                ] = Terminology.load_by_fhir_uri_and_version_from_cache(
                     fhir_uri=code.system, version=code.version
                 )
 
