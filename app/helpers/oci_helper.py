@@ -273,25 +273,6 @@ def get_json_from_oci(
     )
 
 
-def get_csv_from_oci(
-    resource_type,
-    resource_schema,
-    environment,
-    resource_uuid,
-    resource_version,
-    return_content=True,
-):
-    return get_data_from_oci(
-        resource_type=resource_type,
-        resource_schema_version=resource_schema,
-        release_status=environment,
-        resource_id=resource_uuid,
-        resource_version=resource_version,
-        content_type="csv",
-        return_content=return_content
-    )
-
-
 def get_data_from_oci(
     resource_type,
     resource_schema_version: str,

@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from app.database import get_db
 from app.errors import BadRequestWithCode, NotFoundException
-from app.helpers.oci_helper import get_csv_from_oci, put_data_to_oci
+from app.helpers.oci_helper import get_data_from_oci, put_data_to_oci
 from app.value_sets.models import ValueSet
 
 REGISTRY_SCHEMA_VERSION = 1
@@ -237,7 +237,7 @@ class Registry:
         }
     
     @classmethod
-    def export_csv(cls, registry_uuid):
+    def export(cls, registry_uuid, environment="pending", content_type="csv"):
         """
             CSV column labels for Product, and corresponding table column names, are
             - "productGroupLabel" group.title
@@ -252,10 +252,7 @@ class Registry:
             - "valueSetCodeName" value_set.name
             - "valueSetVersion" value_set_version.version
         """
-        # Create a file-like object in memory
-        output = io.StringIO()
-
-        # Get the row data from the flexible_registry tables
+        # Get the row data from the current flexible_registry.registry table
         registry = Registry.load(registry_uuid)
 
         conn = get_db()
@@ -318,17 +315,17 @@ class Registry:
 
         # Make a dictionary using the keys for Product
         data = []
-        csv_sequence = 0
+        row_number = 0
         for result in results:
-            csv_sequence += 1
-            value_set_uuid = result.value_set_uuid
+            row_number += 1
+            value_set_uuid = str(result.value_set_uuid)
             value_set_version = ValueSet.load_most_recent_active_version(value_set_uuid).version
             if registry.registry_type == "labs":
                 row = {
                     "productGroupLabel": result.group_title,
                     "productItemLabel": result.member_title,
                     "minimumPanelMembers": result.minimum_panel_members,
-                    "sequence": csv_sequence,
+                    "sequence": row_number,
                     "valueSetUuid": value_set_uuid,
                     "valueSetDisplayTitle": result.value_set_title,
                     "valueSetCodeName": result.value_set_name,
@@ -341,7 +338,7 @@ class Registry:
                     "ucumRefUnits": result.ucum_ref_units,
                     "refRangeLow": result.ref_range_low,
                     "refRangeHigh": result.ref_range_high,
-                    "sequence": csv_sequence,
+                    "sequence": row_number,
                     "valueSetUuid": value_set_uuid,
                     "valueSetDisplayTitle": result.value_set_title,
                     "valueSetCodeName": result.value_set_name,
@@ -351,7 +348,7 @@ class Registry:
                 row = {
                     "productGroupLabel": result.group_title,
                     "productItemLabel": result.member_title,
-                    "sequence": csv_sequence,
+                    "sequence": row_number,
                     "valueSetUuid": value_set_uuid,
                     "valueSetDisplayTitle": result.value_set_title,
                     "valueSetCodeName": result.value_set_name,
@@ -359,36 +356,45 @@ class Registry:
                 }
             data.append(row)
 
-        # Create a DictWriter object
-        fieldnames = [
-            "productGroupLabel",
-            "productItemLabel",
-        ]
-        if registry.registry_type == "labs":
-            fieldnames += ["minimumPanelMembers"]
-        if registry.registry_type == "vitals":
-            fieldnames += [
-                "ucumRefUnits",
-                "refRangeLow",
-                "refRangeHigh"
+        if content_type == "csv":
+            # Create header row
+            fieldnames = [
+                "productGroupLabel",
+                "productItemLabel",
             ]
-        fieldnames += [
-            "sequence",
-            "valueSetUuid",
-            "valueSetDisplayTitle",
-            "valueSetCodeName",
-            "valueSetVersion",
-        ]
-        writer = csv.DictWriter(output, fieldnames=fieldnames)
+            if registry.registry_type == "labs":
+                fieldnames += ["minimumPanelMembers"]
+            if registry.registry_type == "vitals":
+                fieldnames += [
+                    "ucumRefUnits",
+                    "refRangeLow",
+                    "refRangeHigh"
+                ]
+            fieldnames += [
+                "sequence",
+                "valueSetUuid",
+                "valueSetDisplayTitle",
+                "valueSetCodeName",
+                "valueSetVersion",
+            ]
 
-        # Write the header and then the rows
-        writer.writeheader()
-        for row in data:
-            writer.writerow(row)
+            # Create a file-like object in memory
+            output = io.StringIO()
 
-        # Move the cursor to the beginning of the file-like object to read its content
-        output.seek(0)
-        return output.getvalue()
+            # Create a DictWriter object
+            writer = csv.DictWriter(output, fieldnames=fieldnames)
+
+            # Write the header and then the rows
+            writer.writeheader()
+            for row in data:
+                writer.writerow(row)
+
+            # Move the cursor to the beginning of the file-like object to read its content
+            output.seek(0)
+            return output.getvalue()
+        else:
+            return data
+
 
     @classmethod
     def publish_to_object_store(cls, registry_uuid, environment):
@@ -405,16 +411,22 @@ class Registry:
             output = Registry.get_from_object_store(
                 registry_uuid,
                 environment=previous,
+                content_type="csv",
             )
         elif environment == "stage":
             previous = "dev"
             output = Registry.get_from_object_store(
                 registry_uuid,
                 environment=previous,
+                content_type="csv",
             )
         else:
             previous = "pending"
-            output = registry.export_csv(registry_uuid)
+            output = registry.export(
+                registry_uuid,
+                environment=previous,
+                content_type="csv"
+            )
 
         # write current version CSV output to OCI
         resource_schema_version = f"{REGISTRY_SCHEMA_VERSION}/{registry.registry_type}"
@@ -440,21 +452,22 @@ class Registry:
         return output
 
     @classmethod
-    def get_from_object_store(cls, registry_uuid, environment):
+    def get_from_object_store(cls, registry_uuid, environment, content_type="csv"):
         """
-        Get the Registry CSV export from Object Storage in the specified environment:
-        'dev', 'stage', or 'prod'
+        Get the Registry CSV or JSON export from Object Storage in the most recent published version in the specified
+        environment 'dev', 'stage', or 'prod', or if the environment is 'pending', the most recent draft in the database
         """
         registry = Registry.load(registry_uuid)
         registry_version_number = Registry.load_most_recent_version(registry_uuid, environment).version
         resource_schema_version = f"{REGISTRY_SCHEMA_VERSION}/{registry.registry_type}"
-        return get_csv_from_oci(
+        return get_data_from_oci(
             resource_type="registry",
-            resource_schema=resource_schema_version,
-            environment=environment,
-            resource_uuid=registry_uuid,
+            resource_schema_version=resource_schema_version,
+            release_status=environment,
+            resource_id=registry_uuid,
             resource_version=registry_version_number,
-            return_content=True
+            content_type=content_type,
+            return_content=True,
         )
 
 
