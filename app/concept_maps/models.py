@@ -789,7 +789,10 @@ class ConceptMapVersion:
                 SET published_date=now()
                 where uuid=:uuid
                 """
-            )
+            ),
+            {
+                "uuid": self.uuid,
+            },
         )
         self.published_date = datetime.datetime.now()
 
