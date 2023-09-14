@@ -1,33 +1,30 @@
 import datetime
-import uuid
-import json
 import hashlib
+import itertools
+import json
 import re
+import uuid
+from dataclasses import dataclass
+from operator import itemgetter
+from typing import Optional, List
+from uuid import UUID
 
 from cachetools.func import ttl_cache
-
-import app.models.codes
-import app.value_sets.models
 from elasticsearch.helpers import bulk
 from sqlalchemy import text
-from dataclasses import dataclass
-from uuid import UUID
-from typing import Optional, List
+
+import app.models.codes
+import app.models.data_ingestion_registry
+import app.value_sets.models
 from app.database import get_db, get_elasticsearch
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.models.codes import Code
-import app.models.data_ingestion_registry
 from app.terminologies.models import (
     Terminology,
     terminology_version_uuid_lookup,
     load_terminology_version_with_cache,
 )
-from operator import itemgetter
-import itertools
-from app.models.use_case import load_use_case_by_value_set_uuid
-
-CONCEPT_MAPS_SCHEMA_VERSION = 3
 
 
 # Function for checking if we have a coding array string that used to be JSON
@@ -201,6 +198,8 @@ class ConceptMap:
         target_value_set_uuid (str): The UUID of the target value set used in the concept map.
         most_recent_active_version (str): The UUID of the most recent active version of the concept map.
     """
+    database_schema_version = 3
+    object_storage_folder_name = "ConceptMaps"
 
     def __init__(self, uuid, load_mappings_for_most_recent_active: bool = True):
         self.uuid = uuid
@@ -1034,7 +1033,7 @@ class ConceptMapVersion:
             "extension": [
                 {
                     "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema",
-                    "valueString": f"{CONCEPT_MAPS_SCHEMA_VERSION}.0.0",
+                    "valueString": f"{ConceptMap.database_schema_version}.0.0",
                 }
             ]
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and
@@ -1098,7 +1097,7 @@ class ConceptMapVersion:
         serialized.pop("contact")
         serialized.pop("publisher")
         serialized.pop("title")
-        initial_path = f"ConceptMaps/v{CONCEPT_MAPS_SCHEMA_VERSION}/folder/{self.concept_map.uuid}"  # folder is set in oci_helper(determined by api call)
+        initial_path = f"{ConceptMap.object_storage_folder_name}/v{ConceptMap.database_schema_version}"
 
         return serialized, initial_path
 
@@ -1108,14 +1107,12 @@ class ConceptMapVersion:
         Normalization Registry and setting status active.
         @return: n/a
         """
-        concept_map_version = self
-        (
-            concept_map_to_json,
-            initial_path,
-        ) = self.prepare_for_oci()  # serialize the metadata
-
+        concept_map_to_json, initial_path = self.prepare_for_oci()
         set_up_object_store(
-            concept_map_to_json, initial_path, folder="published"
+            concept_map_to_json,
+            initial_path + f"/published/{self.concept_map.uuid}",
+            folder="published",
+            content_type="json"
         )  # sends to OCI
         self.version_set_status_active()
         self.set_publication_date()

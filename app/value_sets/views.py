@@ -1,16 +1,6 @@
 from io import StringIO
 from flask import Blueprint, request, jsonify, Response
-from app.helpers.oci_helper import (
-    version_set_status_active,
-    get_object_type_from_db,
-    get_object_type_from_object_store,
-    set_up_object_store,
-    get_json_from_oci,
-)
-from app.helpers.simplifier_helper import (
-    publish_to_simplifier,
-)
-from app.models.data_ingestion_registry import DataNormalizationRegistry
+from app.helpers.oci_helper import get_data_from_oci
 from app.value_sets.models import *
 from app.models.use_case import (
     load_use_case_by_value_set_uuid,
@@ -391,23 +381,28 @@ def get_value_set_version_prerelease(version_uuid):
     Handles both GET and POST requests.
     Returns JSON data for the prerelease ValueSet version.
     """
-    object_type = "value_set"
+    vs_version = ValueSetVersion.load(version_uuid)
     if request.method == "POST":
         force_new = request.values.get("force_new") == "true"
-        vs_version = ValueSetVersion.load(version_uuid)
         vs_version.expand(force_new=force_new)
         value_set_to_json, initial_path = vs_version.prepare_for_oci()
         value_set_to_datastore = set_up_object_store(
-            value_set_to_json, initial_path, folder="prerelease"
-        )
+            value_set_to_json,
+            initial_path + f"/prerelease/{vs_version.value_set.uuid}",
+            folder="prerelease",
+            content_type="json"
+        )  # sends to OCI
         return jsonify(value_set_to_datastore)
     if request.method == "GET":
-        value_set = get_object_type_from_db(version_uuid)
-        if not value_set:
-            return {"message": "value_set uuid not found."}
-        value_set_from_object_store = get_object_type_from_object_store(
-            object_type, value_set, folder="prerelease"
-        )
+        value_set_from_object_store = get_data_from_oci(
+                ValueSet.object_storage_folder_name,
+                ValueSet.database_schema_version,
+                release_status="prerelease",
+                resource_id=vs_version.value_set.uuid,
+                resource_version=vs_version.version,
+                content_type="json",
+                return_content=True,
+            )
         return jsonify(value_set_from_object_store)
 
 
@@ -430,11 +425,11 @@ def get_value_set_version_published(version_uuid):
         flask.Response: A JSON response containing the data of the published ValueSet version.
 
     Raises:
-        NotFound: If the ValueSet version with the specified UUID is not found.
+        NotFoundException: If the ValueSet version with the specified UUID is not found.
     """
+    value_set_version = ValueSetVersion.load(version_uuid)
     if request.method == "POST":
         force_new = request.values.get("force_new")
-        value_set_version = ValueSetVersion.load(version_uuid)
         value_set_version.publish(force_new)
         return "Published"
 
@@ -443,14 +438,13 @@ def get_value_set_version_published(version_uuid):
         if return_content == "false":
             return_content = False
 
-        value_set_version = ValueSetVersion.load(version_uuid)
-
-        value_set_from_object_store = get_json_from_oci(
-            resource_type="value_set",
-            resource_schema_version=VALUE_SET_SCHEMA_VERSION,
+        value_set_from_object_store = get_data_from_oci(
+            ValueSet.object_storage_folder_name,
+            ValueSet.database_schema_version,
             release_status="published",
             resource_id=value_set_version.value_set.uuid,
             resource_version=value_set_version.version,
+            content_type="json",
             return_content=return_content,
         )
         return jsonify(value_set_from_object_store)

@@ -12,9 +12,6 @@ from app.terminologies.models import *
 # REST path root for API
 registries_blueprint = Blueprint("registries", __name__, url_prefix="/registries")
 
-# OCI path root for storage: "Registries" for committed code, "DoNotUseTestingRegistries" for testing
-REGISTRY_OCI_PATH_ROOT = "DoNotUseTestingRegistries"
-
 
 @registries_blueprint.route("/", methods=["POST", "GET"])
 def create_or_get_registry():

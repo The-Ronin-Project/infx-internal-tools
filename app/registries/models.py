@@ -13,8 +13,6 @@ from app.errors import BadRequestWithCode, NotFoundException
 from app.helpers.oci_helper import get_data_from_oci, put_data_to_oci
 from app.value_sets.models import ValueSet
 
-REGISTRY_SCHEMA_VERSION = 1
-
 
 @dataclass
 class Registry:
@@ -22,9 +20,12 @@ class Registry:
     title: str
     registry_type: str  # not an enum so users can create new types of registries w/o code change
     sorting_enabled: bool
+    database_schema_version = 1
+    object_storage_folder_name = "Registries"
 
     def __post_init__(cls):
         cls.groups = []
+
 
     @classmethod
     def create(
@@ -429,13 +430,13 @@ class Registry:
             )
 
         # write current version CSV output to OCI
-        resource_schema_version = f"{REGISTRY_SCHEMA_VERSION}/{registry.registry_type}"
+        resource_schema_version = f"{Registry.database_schema_version}/{registry.registry_type}"
         registry_version = Registry.load_most_recent_version(registry_uuid, environment=previous)
         publish_version_number = registry_version.version
         for env in environment_options:
             put_data_to_oci(
                 content=output,
-                resource_type="registry",
+                oci_root=Registry.object_storage_folder_name,
                 resource_schema_version=resource_schema_version,
                 release_status=env,
                 resource_id=registry_uuid,
@@ -459,15 +460,15 @@ class Registry:
         """
         registry = Registry.load(registry_uuid)
         registry_version_number = Registry.load_most_recent_version(registry_uuid, environment).version
-        resource_schema_version = f"{REGISTRY_SCHEMA_VERSION}/{registry.registry_type}"
+        resource_schema_version = f"{Registry.database_schema_version}/{registry.registry_type}"
         return get_data_from_oci(
-            resource_type="registry",
+            oci_root=Registry.object_storage_folder_name,
             resource_schema_version=resource_schema_version,
             release_status=environment,
             resource_id=registry_uuid,
             resource_version=registry_version_number,
-            content_type=content_type,
-            return_content=True,
+            content_type="csv",
+            return_content=True
         )
 
 

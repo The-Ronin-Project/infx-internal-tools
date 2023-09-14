@@ -1,8 +1,5 @@
 import json
 import uuid
-from uuid import UUID
-
-import uuid
 
 import pytest
 
@@ -10,17 +7,17 @@ from app.registries.models import Registry
 
 LABS_REGISTRY_TEST_LIST = [
     # "2680d404-eca1-474c-8212-d8b7e53a4c94",  # test (groups but no members)
-    # "df7f8893-3672-4b12-b6aa-e3e8e8463870",  # test (has a group with many members)
-    "bb921ad0-0b86-4070-89ea-7b5152d3da70"   # Product: SMT-MVP
+    "df7f8893-3672-4b12-b6aa-e3e8e8463870",  # test (has a group with many members)
+    # "bb921ad0-0b86-4070-89ea-7b5152d3da70"   # Product: SMT-MVP
 ]
 VITALS_REGISTRY_TEST_LIST = [
     # "45248e7a-4c83-4692-9062-df957506f953",  # test
-    "24458a61-db21-42b7-95b1-9d3b166dff2c"  # Product: SMT-MVP
+    # "24458a61-db21-42b7-95b1-9d3b166dff2c"  # Product: SMT-MVP
 ]
 DOCUMENTS_REGISTRY_TEST_LIST = [
     # "029f929a-3edc-4d50-a3be-f201d1440859",  # test
-    "187c87fa-c3ac-4f22-9718-b728791f0723",  # Product: Timeline
-    "765b49c5-dff6-4fd9-9809-4c03fd9beb3a"   # Product: Slideout
+    # "187c87fa-c3ac-4f22-9718-b728791f0723",  # Product: Timeline
+    # "765b49c5-dff6-4fd9-9809-4c03fd9beb3a"   # Product: Slideout
 ]
 
 
@@ -43,7 +40,7 @@ def test_labs_registry_publish_csv():
     labs_registry_uuid = LABS_REGISTRY_TEST_LIST
     for uuid in labs_registry_uuid:
         # publish
-        output = Registry.publish_to_object_store(registry_uuid=uuid, environment="dev")
+        output = Registry.publish_to_object_store(registry_uuid=uuid, environment="dev,stage,prod")
 
         # dev convenience (comment for commit)
         print(f"published labs registry {uuid}")
