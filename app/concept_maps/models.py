@@ -932,19 +932,20 @@ class ConceptMapVersion:
                             or source_code.depends_on_value
                         ):
                             depends_on_value = source_code.depends_on_value
-                            if is_coding_array(depends_on_value):
-                                depends_on_value = transform_struct_string_to_json(
-                                    depends_on_value
-                                )
-                            depends_on = {
-                                "property": source_code.depends_on_property,
-                                "value": depends_on_value,
-                            }
-                            if source_code.depends_on_system:
-                                depends_on["system"] = source_code.depends_on_system
-                            if source_code.depends_on_display:
-                                depends_on["display"] = source_code.depends_on_display
-                            target_serialized["dependsOn"] = depends_on
+                            if depends_on_value not in ("[null]", ""):
+                                if is_coding_array(depends_on_value):
+                                    depends_on_value = transform_struct_string_to_json(
+                                        depends_on_value
+                                    )
+                                depends_on = {
+                                    "property": source_code.depends_on_property,
+                                    "value": depends_on_value,
+                                }
+                                if source_code.depends_on_system:
+                                    depends_on["system"] = source_code.depends_on_system
+                                if source_code.depends_on_display:
+                                    depends_on["display"] = source_code.depends_on_display
+                                target_serialized["dependsOn"] = depends_on
 
                         new_element["target"].append(target_serialized)
 
@@ -1643,9 +1644,6 @@ def transform_struct_string_to_json(struct_string):
 
     if text_string is not None:
         result["text"] = text_string
-
-    # Wrapping the result with 'valueCodeableConcept'
-    result = {"valueCodeableConcept": result}
 
     # Convert the dictionary into a JSON string
     return json.dumps(result)
