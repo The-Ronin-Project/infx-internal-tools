@@ -483,6 +483,8 @@ class ConceptMapVersionCreator:
                                 previous_mapping_context, cls=CustomJSONEncoder
                             ),
                         )
+        # Return the new concept map version UUID
+        return self.new_version_uuid
 
     def create_no_map_mappings(self):
         """
@@ -499,17 +501,21 @@ class ConceptMapVersionCreator:
                 # Create a new mapping between the source concept and the Ronin_No map terminology
                 mapping = Mapping(
                     source=source_concept,
-                    relationship=MappingRelationship.load_by_uuid(no_map_relationship_uuid),
+                    relationship=MappingRelationship.load_by_uuid(
+                        no_map_relationship_uuid
+                    ),
                     target=Code(
                         code=no_map_target_concept_code,
                         display=no_map_target_concept_display,
                         system=None,
                         version=None,
-                        terminology_version=load_terminology_version_with_cache(no_map_target_system_version_uuid),
+                        terminology_version=load_terminology_version_with_cache(
+                            no_map_target_system_version_uuid
+                        ),
                     ),
-                    mapping_comments=None,  # Add any comments for the mapping, if required
+                    mapping_comments="mapped no map",
                     author=None,  # Add the author of the mapping, if required
-                    review_status=None,  # Add the review_status of the mapping, if required
+                    review_status="reviewed",  # Add the review_status of the mapping, if required
                     created_date=None,  # Add the created_date of the mapping, if required
                     reviewed_date=None,  # Add the reviewed_date of the mapping, if required
                     review_comment=None,  # Add the review_comment of the mapping, if required
@@ -517,7 +523,6 @@ class ConceptMapVersionCreator:
                 )
                 # Save the new mapping
                 mapping.save()
-
 
     def process_no_map(
         self,
