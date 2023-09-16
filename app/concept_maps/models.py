@@ -932,7 +932,8 @@ class ConceptMapVersion:
                             or source_code.depends_on_value
                         ):
                             depends_on_value = source_code.depends_on_value
-                            if depends_on_value not in ("[null]", ""):
+                            # TODO: This "[null]" values need to be fixed in the database not on export
+                            if depends_on_value not in ("", "[null]", "[null, null]", "[null, null, null]"):
                                 if is_coding_array(depends_on_value):
                                     depends_on_value = transform_struct_string_to_json(
                                         depends_on_value
