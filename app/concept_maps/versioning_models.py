@@ -483,10 +483,12 @@ class ConceptMapVersionCreator:
                                 previous_mapping_context, cls=CustomJSONEncoder
                             ),
                         )
+        # Commit the changes to the database
+        self.conn.commit()
         # Return the new concept map version UUID
         return self.new_version_uuid
 
-    def create_no_map_mappings(self):
+    def create_no_map_mappings(self, new_concept_map_version):
         """
         Creates mappings for source concepts where no_map=True.
         """
@@ -495,34 +497,45 @@ class ConceptMapVersionCreator:
         no_map_target_concept_display = "No matching concept"
         no_map_target_system_version_uuid = "93ec9286-17cf-4837-a4dc-218ce3015de6"
 
-        # Iterate through the novel_sources list
-        for source_concept in self.novel_sources:
-            if source_concept.no_map:
-                # Create a new mapping between the source concept and the Ronin_No map terminology
-                mapping = Mapping(
-                    source=source_concept,
-                    relationship=MappingRelationship.load_by_uuid(
-                        no_map_relationship_uuid
+        no_maps = self.conn.execute(
+            text(
+                """
+                SELECT uuid FROM concept_maps.source_concept  
+                WHERE no_map=true AND concept_map_version_uuid=:new_concept_map_version;
+                """
+            ),
+            {"new_concept_map_version": new_concept_map_version},
+        )
+
+        # Iterate through the source uuids that are no maps
+        for row in no_maps:
+            source_uuid = row[0]
+            source_concept = SourceConcept.load(source_uuid)
+            # Create a new mapping between the source concept and the Ronin_No map terminology
+            mapping = Mapping(
+                source=source_concept,
+                relationship=MappingRelationship.load_by_uuid(no_map_relationship_uuid),
+                target=Code(
+                    code=no_map_target_concept_code,
+                    display=no_map_target_concept_display,
+                    system=None,
+                    version=None,
+                    terminology_version=load_terminology_version_with_cache(
+                        no_map_target_system_version_uuid
                     ),
-                    target=Code(
-                        code=no_map_target_concept_code,
-                        display=no_map_target_concept_display,
-                        system=None,
-                        version=None,
-                        terminology_version=load_terminology_version_with_cache(
-                            no_map_target_system_version_uuid
-                        ),
-                    ),
-                    mapping_comments="mapped no map",
-                    author=None,  # Add the author of the mapping, if required
-                    review_status="reviewed",  # Add the review_status of the mapping, if required
-                    created_date=None,  # Add the created_date of the mapping, if required
-                    reviewed_date=None,  # Add the reviewed_date of the mapping, if required
-                    review_comment=None,  # Add the review_comment of the mapping, if required
-                    reviewed_by=None,  # Add the reviewed_by of the mapping, if required
-                )
-                # Save the new mapping
-                mapping.save()
+                ),
+                mapping_comments="mapped no map",
+                author=None,  # Add the author of the mapping, if required
+                review_status="reviewed",  # Add the review_status of the mapping, if required
+                created_date=None,  # Add the created_date of the mapping, if required
+                reviewed_date=None,  # Add the reviewed_date of the mapping, if required
+                review_comment=None,  # Add the review_comment of the mapping, if required
+                reviewed_by=None,  # Add the reviewed_by of the mapping, if required
+            )
+
+            mapping.save()
+        # Commit the changes to the database
+        self.conn.commit()
 
     def process_no_map(
         self,

@@ -441,6 +441,6 @@ def new_concept_map_version_map_no_maps():
     )
 
     # Call create_no_map_mappings on the new concept map version
-    creator.create_no_map_mappings()
+    creator.create_no_map_mappings(new_version_uuid)
 
     return "Concept map version processed successfully."
