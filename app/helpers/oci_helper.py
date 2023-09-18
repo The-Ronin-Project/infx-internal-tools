@@ -227,7 +227,7 @@ def put_data_to_oci(
     @param oci_root: top level folder name for this resource_type: "ConceptMap", "ValueSet" etc.
     @param resource_schema_version: "1", "2" etc. - caller may also append a sub-folder path using "/" i.e. "5/vitals"
     @param release_status: status value i.e. "published" vs. "prerelease" - or "dev" vs. "stage" vs. "prod"
-    @param resource_id: uuid in the database for the resource_type
+    @param resource_id: uuid for the item - lowest level folder - caller may also append a sub-folder path using "/"
     @param resource_version: integer - this is the file name
     @param content_type: for example "json" or "csv" - the content type and file name extension
     @return:

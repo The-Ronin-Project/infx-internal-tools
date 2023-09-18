@@ -1,7 +1,15 @@
+from datetime import datetime
+from io import StringIO
+
 import pandas as pd
+import uuid
+
 from sqlalchemy import text
 from app.database import get_db
 from flask import current_app
+
+from app.errors import NotFoundException
+from app.helpers.oci_helper import put_data_to_oci
 
 
 def parse_array_in_sqlite(input):
@@ -11,6 +19,9 @@ def parse_array_in_sqlite(input):
 
 
 class SurveyExporter:
+    database_schema_version = 1
+    object_storage_folder_name = "Questionnaires"
+
     def __init__(self, survey_uuid, organization_uuid):
         self.survey_uuid = survey_uuid
         self.organization_uuid = organization_uuid
@@ -25,7 +36,7 @@ class SurveyExporter:
         self.load_metadata()
 
     def load_metadata(self):
-        # Load name of survey and name of organization
+        # Load name of the active survey and name of organization
         survey_title_query = self.conn.execute(
             text(
                 """
@@ -35,8 +46,10 @@ class SurveyExporter:
                 """
             ),
             {"survey_uuid": self.survey_uuid},
-        )
-        self.survey_title = survey_title_query.first().title
+        ).first()
+        if survey_title_query is None:
+            raise NotFoundException(f"No Survey found with UUID {self.survey_uuid}")
+        self.survey_title = survey_title_query.title
 
         organization_title_query = self.conn.execute(
             text(
@@ -51,6 +64,8 @@ class SurveyExporter:
             ),
             {"org_uuid": self.organization_uuid},
         ).first()
+        if organization_title_query is None:
+            raise NotFoundException(f"No Organization found with UUID {self.organization_uuid}")
         self.organization_name = (
             organization_title_query.child_name
             + " - "
@@ -59,7 +74,7 @@ class SurveyExporter:
 
     def load_symptoms(self):
         """Load data from symptom table"""
-        symptom_query = self.conn.execute("select * from surveys.symptom")
+        symptom_query = self.conn.execute(text("select * from surveys.symptom"))
         symptoms = [x for x in symptom_query]
 
         self.symptom_uuid_to_symptom_map = {
@@ -120,11 +135,12 @@ class SurveyExporter:
         self, answer_uuid_array, present_most_severe_first=False
     ):
         present_most_severe_first = present_most_severe_first if not None else False
-        answer_array = [
-            self.answer_uuid_to_answer_map.get(x) for x in answer_uuid_array
-        ]
-        #   print(answer_array)
-        #   for x in answer_array: print(x.get('clinical_severity_order'))
+        answer_array = []
+        for answer in answer_uuid_array:
+            row = self.answer_uuid_to_answer_map.get(answer)
+            if row is not None:
+                answer_array.append(row)
+
         sorted_array = sorted(answer_array, key=lambda k: k["clinical_severity_order"])
         if present_most_severe_first is False:
             return sorted_array
@@ -431,3 +447,241 @@ class SurveyExporter:
             else 0,
             "survey_name": None,
         }
+
+    @classmethod
+    def load_most_recent_active_version(cls, survey_uuid, organization_uuid):
+        """
+        Get the most recent version of the survey in any environment. If never published, publish version 1.
+        For now, we publish to dev, stage, and prod environments all in one step, so environment is not an input.
+        Note that the SurveyExporter only publishes active surveys
+        @rtype: SurveyVersion
+        """
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """
+                select s.uuid as survey_uuid, s.status as status,
+                sv.uuid as uuid, sv.organization_uuid as organization_uuid, sv.version_number as version_number
+                from surveys.survey_version sv join surveys.survey s on sv.survey_uuid = s.uuid 
+                where sv.survey_uuid = :survey_uuid and sv.organization_uuid = :organization_uuid
+                order by version desc
+                limit 1
+                """
+            ),
+            {
+                "survey_uuid": survey_uuid,
+                "organization_uuid": organization_uuid
+            }
+        )
+        recent_version = results.first()
+        if recent_version is None:
+            raise NotFoundException(f"No Survey with UUID {survey_uuid} found.")
+        if recent_version.status == 'active':
+            if recent_version.uuid is None:
+                return SurveyVersion.create(survey_uuid, organization_uuid, version=1)
+            else:
+                return SurveyVersion.load(recent_version.uuid)
+        else:
+            raise NotFoundException(f"No active Survey with UUID {survey_uuid} found. Status is {recent_version.status}")
+
+    def publish_to_object_store(self, content, content_type="csv"):
+        """
+        Publish the most recent version of the survey to object storage in dev, stage, and prod environments.
+        For now, we publish to dev, stage, and prod environments all in one step, so environment is not an input.
+        @param content: content to output to file
+        @param content_type: "csv" or "json"
+        """
+        environment_options = ["dev", "stage", "prod"]
+        # @param environment: may be 'dev' 'stage' 'prod' for cumulative updates or 'dev,stage,prod' for 3-in-1 updates
+        # environment_options = environment.split(",")
+
+        # write current version CSV output to OCI
+
+        # todo: after survey_version table exists - uncomment the next 2 lines
+        # survey_version = self.load_most_recent_version(self.survey_uuid, self.organization_uuid)
+        # publish_version_number = survey_version.version
+        # todo: after survey_version table exists - delete the next 1 line
+        publish_version_number = 1
+
+        for env in environment_options:
+            put_data_to_oci(
+                content=content,
+                oci_root=self.object_storage_folder_name,
+                resource_schema_version=f"{self.database_schema_version}",
+                release_status=env,
+                resource_id=f"{self.survey_uuid}/{self.organization_uuid}",
+                resource_version=publish_version_number,
+                content_type=content_type,
+            )
+
+        # todo: after survey_version table exists - uncomment the next 4 lines
+        # if write did not raise an exception, update current version and (if dev) create new version in database
+        # survey_version.update()
+        # if environment_options[0] == "dev":
+        #     survey_version.create_new_version_from_specified_previous(survey_version.uuid)
+
+
+class SurveyVersion:
+    def __init__(
+        self,
+        version_uuid,
+        effective_start,
+        effective_end,
+        version,
+        survey_uuid,
+        organization_uuid,
+        status,
+        description,
+        comments,
+    ):
+        self.uuid = version_uuid
+        self.effective_start = effective_start
+        self.effective_end = effective_end
+        self.version = version
+        self.survey_uuid = survey_uuid
+        self.organization_uuid = organization_uuid
+        self.status = status
+        self.description = description
+        self.comments = comments
+
+    def __repr__(self):
+        return f"<SurveyVersion uuid={self.uuid}, survey_uuid={self.survey_uuid}, organization_uuid={self.organization_uuid}, version={self.version}>"
+
+    @classmethod
+    def create(
+        cls,
+        survey_uuid,
+        organization_uuid,
+        version: int
+    ):
+        """
+        Only the essential fields are used at this time. created_date is now() and uuid is generated during create.
+        Initial status is "pending".
+        """
+        new_version_uuid = uuid.uuid4()
+        conn = get_db()
+        conn.execute(
+            text(
+                """  
+                insert into survey.survey_version  
+                (uuid, survey_uuid, organization_uuid, status, created_date, version)  
+                values  
+                (:new_version_uuid, :survey_uuid, :organization_uuid, :status, :created_date, :version)  
+                """
+            ),
+            {
+                "new_version_uuid": new_version_uuid,
+                # "effective_start": effective_start,
+                # "effective_end": effective_end,
+                "survey_uuid": survey_uuid,
+                "organization_uuid": organization_uuid,
+                "status": "pending",
+                # "version_description": description,
+                # "version_comments": comments,
+                "created_date": datetime.now(),
+                "version": version,
+            },
+        )
+        return cls.load(new_version_uuid)
+
+    @classmethod
+    def load(cls, version_uuid):
+        if version_uuid is None:
+            raise NotFoundException(f"Survey Version not found")
+
+        conn = get_db()
+        version_data = conn.execute(
+            text(
+                """
+                select * from survey.survey_version where uuid=:uuid
+                """
+            ),
+            {"uuid": version_uuid},
+        ).first()
+        if version_data is None:
+            raise NotFoundException(f"Unable to find Survey Version with UUID: {version_uuid}")
+
+        survey_version = cls(
+            version_data.uuid,
+            version_data.effective_start,
+            version_data.effective_end,
+            version_data.version,
+            version_data.survey_uuid,
+            version_data.organization_uuid,
+            version_data.status,
+            version_data.description,
+            version_data.comments,
+        )
+        return survey_version
+
+    @classmethod
+    def create_new_version_from_specified_previous(
+        cls,
+        version_uuid
+    ):
+        """
+        Only the essential fields are used at this time. created_date is now() and uuid is generated during create.
+        Initial status is "pending".
+        """
+        # Load the input survey_version
+        input_version = cls.load(version_uuid)
+
+        # Create a new survey_version
+        new_version_uuid = uuid.uuid4()
+        new_version = input_version.version + 1
+        conn = get_db()
+        conn.execute(
+            text(
+                """  
+                INSERT INTO survey.survey_version  
+                (uuid, survey_uuid, organization_uuid, status, created_date, version)  
+                VALUES  
+                (:new_version_uuid, :survey_uuid, :organization_uuid, :status, :created_date, :version)  
+                """
+            ),
+            {
+                "new_version_uuid": new_version_uuid,
+                # "effective_start": input_version.effective_start,
+                # "effective_end": input_version.effective_end,
+                "survey_uuid": input_version.survey_uuid,
+                "organization_uuid": input_version.organization_uuid,
+                "status": "pending",
+                # "description": new_version_description or input_version.description,
+                # "comments": new_version_comments or input_version.comments,
+                "created_date": datetime.now(),
+                "version": new_version,
+            },
+        )
+
+        # Return the new SurveyVersion object
+        return cls.load(new_version_uuid)
+
+    def update(self):
+        """
+        The only update is to set status to 'dev' 'dev,stage' or 'dev,stage,prod' when publishing the version to OCI.
+        For now, we publish to dev, stage, and prod environments all in one step, so there is no environment parameter.
+        """
+        environment = "dev,stage,prod"
+        # @param environment: may be 'dev' 'stage' 'prod' for cumulative updates or 'dev,stage,prod' for 3-in-1 updates
+        if self.status == "pending":
+            status_update = environment
+        elif environment not in self.status:
+            status_update = ",".join([self.status, environment])
+        else:
+            return
+
+        conn = get_db()
+        result = conn.execute(
+            text(
+                """  
+                update survey.survey_version SET status=:status where version=:version and uuid=:uuid
+                """
+            ),
+            {
+                "status": status_update,
+                "version": self.version,
+                "uuid": self.uuid,
+            }
+        )
+
+        return status_update

@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import structlog
 from flask import Flask, jsonify, request, Response
+from pandas import DataFrame
 from werkzeug.exceptions import HTTPException
 
 import app.concept_maps.views as concept_map_views
@@ -206,30 +207,45 @@ def create_app(script_info=None):
             return jsonify({"status": "success"}), 200
 
     # Survey Endpoints
-    @app.route("/surveys/<string:survey_uuid>")
+    @app.route("/surveys/<string:survey_uuid>", methods=["GET", "POST"])
     def export_survey(survey_uuid):
         """
-        Export a survey identified by the survey_uuid as a CSV file.
-        Returns the survey data as a CSV file attachment.
+        Handle GET request for a survey identified by survey_uuid; returns the survey data as JSON for a UI preview.
+        Handle POST request for a survey identified by survey_uuid; writes the survey to a CSV file and ups the version.
+        For now, we POST a survey to dev, stage, and prod environments, all in one step, so an environment is not input.
         """
+
+        # If survey_uuid or organization_uuid is bad, the SurveyExporter() call raises an exception
         organization_uuid = request.values.get("organization_uuid")
-        # print(survey_uuid, organization_uuid)
         exporter = SurveyExporter(survey_uuid, organization_uuid)
 
+        # Get the data
         file_buffer = StringIO()
-        exporter.export_survey().to_csv(file_buffer)
-        file_buffer.seek(0)
-        response = Response(
-            file_buffer,
-            mimetype="text/csv",
-            headers={
-                "Content-Disposition": f"attachment; filename={exporter.survey_title} {exporter.organization_name}.csv"
-            },
-        )
-        return response
+        df: DataFrame = exporter.export_survey()
 
-        # Patient Education Endpoints
+        # Return JSON for GET
+        if request.method == "GET":
+            return Response(
+                df.to_json(orient="records"),
+                mimetype="application/json"
+            )
 
+        # Return CSV for POST
+        elif request.method == "POST":
+            df.to_csv(file_buffer)
+            file_buffer.seek(0)
+            output = file_buffer.getvalue()
+
+            # Write the CSV out to a file in object storage
+            exporter.publish_to_object_store(output, content_type="csv")
+
+            # Return CSV
+            return Response(
+                output,
+                mimetype="text/csv",
+            )
+
+    # Patient Education Endpoints
     @app.route("/PatientEducation/", methods=["GET", "POST", "PATCH", "DELETE"])
     def get_external_resources():
         """
