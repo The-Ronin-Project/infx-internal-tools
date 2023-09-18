@@ -23,6 +23,7 @@ from app.models.patient_edu import *
 from app.models.surveys import *
 from app.models.teams import *
 from app.value_sets.models import *
+import app.concept_maps.models as concept_map_models
 
 # Configure the logger when the application is imported. This ensures that
 # everything below uses the same configured logger.
@@ -358,6 +359,16 @@ def create_app(script_info=None):
         concept_map_uuid = request.json.get("concept_map_uuid")
         tasks.load_outstanding_codes_to_new_concept_map_version(concept_map_uuid)
         return "OK"
+
+    @app.route(
+        "/data_normalization/actions/resolve_issues_for_concept_map_version",
+        methods=["POST"],
+    )
+    def resolve_issues_for_concept_map_version():
+        concept_map_version_uuid = request.json.get("concept_map_version_uuid")
+        concept_map_version = concept_map_models.ConceptMapVersion(concept_map_version_uuid)
+        concept_map_version.resolve_error_service_issues()
+        return "Resolved"
 
     @app.route("/TerminologyUpdate/ValueSets/report", methods=["GET"])
     def terminology_update_value_set_report():

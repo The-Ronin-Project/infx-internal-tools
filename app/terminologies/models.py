@@ -495,7 +495,9 @@ class Terminology:
             conn.execute(
                 text(query_text),
                 {
-                    "uuid": uuid.uuid4(),
+                    "uuid": code.custom_terminology_code_uuid
+                    if code.custom_terminology_code_uuid is not None
+                    else uuid.uuid4(),
                     "code": serialized_code,
                     "display": code.display,
                     "terminology_version_uuid": code.terminology_version_uuid,

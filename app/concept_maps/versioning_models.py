@@ -4,13 +4,7 @@ import uuid
 from sqlalchemy import text
 
 from app.database import get_db
-from app.concept_maps.models import (
-    ConceptMap,
-    ConceptMapVersion,
-    Mapping,
-    SourceConcept,
-    MappingRelationship,
-)
+import app.concept_maps.models
 from app.models.codes import Code
 from app.terminologies.models import load_terminology_version_with_cache
 
@@ -211,7 +205,7 @@ class ConceptMapVersionCreator:
                 row.source_concept_system
             )
 
-            source_concept = SourceConcept(
+            source_concept = app.concept_maps.models.SourceConcept(
                 uuid=row.source_concept_uuid,
                 code=row.source_concept_code,
                 display=row.source_concept_display,
@@ -235,7 +229,7 @@ class ConceptMapVersionCreator:
 
             # Check if the row has a mapping
             if row.target_concept_code is not None:
-                mapping_relationship = MappingRelationship.load_by_uuid(
+                mapping_relationship = app.concept_maps.models.MappingRelationship.load_by_uuid(
                     row.concept_relationship_relationship_code_uuid
                 )
 
@@ -251,7 +245,7 @@ class ConceptMapVersionCreator:
                     terminology_version=target_system
                 )
 
-                mapping = Mapping(
+                mapping = app.concept_maps.models.Mapping(
                     uuid=row.concept_relationship_uuid,
                     source=source_concept.code_object,
                     relationship=mapping_relationship,
@@ -355,7 +349,7 @@ class ConceptMapVersionCreator:
             require_review_no_maps_not_in_target (bool): Whether to require review for no-maps not in the target.
         """
         # Set up our variables we need to work with
-        self.previous_concept_map_version = ConceptMapVersion(previous_version_uuid)
+        self.previous_concept_map_version = app.concept_maps.models.ConceptMapVersion(previous_version_uuid)
         self.new_source_value_set_version_uuid = new_source_value_set_version_uuid
         self.new_target_value_set_version_uuid = new_target_value_set_version_uuid
 
@@ -384,7 +378,7 @@ class ConceptMapVersionCreator:
 
         # Load and index the new targets
         new_targets_lookup = self.load_all_targets()
-        ConceptMap.index_targets(
+        app.concept_maps.models.ConceptMap.index_targets(
             self.new_version_uuid, new_target_value_set_version_uuid
         )
         previous_contexts_list = []
@@ -484,8 +478,8 @@ class ConceptMapVersionCreator:
 
     def process_no_map(
         self,
-        previous_source_concept: SourceConcept,
-        new_source_concept: SourceConcept,
+        previous_source_concept: "app.concept_maps.models.SourceConcept",
+        new_source_concept: "app.concept_maps.models.SourceConcept",
         require_review_no_maps_not_in_target: bool,
         previous_contexts_list: list,
     ):
@@ -541,7 +535,7 @@ class ConceptMapVersionCreator:
         #     )
 
     def process_inactive_target_mapping(
-        self, new_source_concept: SourceConcept, previous_mapping: Mapping
+        self, new_source_concept: "app.concept_maps.models.SourceConcept", previous_mapping: "app.concept_maps.models.Mapping"
     ):
         """
         Processes a mapping with an inactive target.
@@ -578,9 +572,9 @@ class ConceptMapVersionCreator:
 
     def copy_mapping_exact(
         self,
-        new_source_concept: SourceConcept,
+        new_source_concept: "app.concept_maps.models.SourceConcept",
         new_target_code: Code,
-        previous_mapping: Mapping,
+        previous_mapping: "app.concept_maps.models.Mapping",
     ):
         """
         Copies a mapping exactly from the previous version to the new version.
@@ -597,7 +591,7 @@ class ConceptMapVersionCreator:
 
         target_code = new_target_code
 
-        new_mapping = Mapping(
+        new_mapping = app.concept_maps.models.Mapping(
             source=new_source_concept,
             relationship=relationship,
             target=target_code,
@@ -614,9 +608,9 @@ class ConceptMapVersionCreator:
 
     def copy_mapping_require_review(
         self,
-        new_source_concept: SourceConcept,
+        new_source_concept: "app.concept_maps.models.SourceConcept",
         new_target_concept: Code,
-        previous_mapping: Mapping,
+        previous_mapping: "app.concept_maps.models.Mapping",
     ):
         """
         Copies a mapping from the previous version to the new version and sets its review status to "ready for review".
@@ -637,7 +631,7 @@ class ConceptMapVersionCreator:
         target_code = new_target_concept
 
         # Explicitly over-write the review status to set it back to needing review
-        new_mapping = Mapping(
+        new_mapping = app.concept_maps.models.Mapping(
             source=source_code,
             relationship=relationship,
             target=target_code,

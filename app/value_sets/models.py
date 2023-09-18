@@ -1217,7 +1217,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid,
+                custom_terminology_code_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1247,7 +1247,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid,
+                custom_terminology_code_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1278,7 +1278,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid,
+                custom_terminology_code_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1572,7 +1572,6 @@ class ValueSet:
         }
 
     def delete(self):
-
         conn = get_db()
         # check for a version
         vs_version_data = conn.execute(
@@ -2710,8 +2709,10 @@ class ValueSetVersion:
                         "display": code.display,
                         "system": code.system,
                         "version": code.version,
-                        "custom_terminology_uuid": str(code.custom_terminology_uuid)
-                        if code.custom_terminology_uuid
+                        "custom_terminology_uuid": str(
+                            code.custom_terminology_code_uuid
+                        )
+                        if code.custom_terminology_code_uuid
                         else None,
                     }
                     for code in self.expansion

@@ -20,11 +20,13 @@ from app.database import get_db, get_elasticsearch
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.models.codes import Code
+import app.models.data_ingestion_registry
 from app.terminologies.models import (
     Terminology,
     terminology_version_uuid_lookup,
     load_terminology_version_with_cache,
 )
+import app.tasks
 
 
 # Function for checking if we have a coding array string that used to be JSON
@@ -1121,6 +1123,8 @@ class ConceptMapVersion:
         self.to_simplifier()
         # Publish new version of data normalization registry
         app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
+        app.tasks.resolve_errors_after_concept_map_publish.delay(concept_map_version_uuid=self.uuid)
+
 
     def to_simplifier(self):
         """
@@ -1149,6 +1153,54 @@ class ConceptMapVersion:
                             target for target, _ in itertools.groupby(element["target"])
                         )  # Remove duplicates
         publish_to_simplifier(resource_type, resource_id, concept_map_to_json)
+
+    def resolve_error_service_issues(self):
+        """
+        After the ConceptMapVersion has been published, call this function to identify open Data Validation Service
+        issues associated with codes in this new concept map version, marking those issues 'resolved' on our side and
+        calling the reprocessResource API in the Interops Data Validation Service to reprocess those resources. That
+        call sets the associated issue(s) to status REPROCESSED, the final status for Data Validation Service issues.
+        """
+        conn = get_db()
+        issues_resources_query = text(
+            """
+            SELECT e.issue_uuid, e.resource_uuid FROM 
+            concept_maps.source_concept as sc JOIN custom_terminologies.error_service_issue as e
+            ON
+            sc.custom_terminology_uuid = e.custom_terminology_code_uuid 
+            WHERE
+            e.status <> 'resolved'
+            AND
+            sc.concept_map_version_uuid = :concept_map_version_uuid
+            AND
+            sc.uuid in (
+                select source_concept_uuid 
+                from concept_maps.concept_relationship 
+                where review_status = 'reviewed'
+            )
+            """
+        )
+        issues_resources_result = conn.execute(
+            issues_resources_query,
+            {
+                "concept_map_version_uuid": self.uuid
+            }
+        )
+        issue_uuid_list = []
+        resource_uuid_list = []
+        for row in issues_resources_result:
+            issue_uuid_list.append(row.issue_uuid)
+            resource_uuid = row.resource_uuid
+            if resource_uuid not in resource_uuid_list:
+                resource_uuid_list.append(resource_uuid)
+
+        # Using full paths to avoid circular import from normalization_error_service
+        # Gather the reprocessing calls for each resource_uuid 
+        app.models.normalization_error_service.reprocess_resources(resource_uuid_list)
+
+        # Mark issues resolved - full path avoids circular import
+        app.models.normalization_error_service.set_issues_resolved(issue_uuid_list)
+
 
     @classmethod
     def get_active_concept_map_versions(cls) -> List["ConceptMapVersion"]:
