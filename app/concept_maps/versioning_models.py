@@ -5,6 +5,7 @@ from sqlalchemy import text
 
 from app.database import get_db
 import app.concept_maps.models
+from app.errors import BadRequestWithCode
 from app.models.codes import Code
 from app.terminologies.models import load_terminology_version_with_cache
 from app.value_sets.models import ValueSet
@@ -364,16 +365,26 @@ class ConceptMapVersionCreator:
             value_set = app.value_sets.models.ValueSet.load(concept_map.source_value_set_uuid)
         else:
             value_set = app.value_sets.models.ValueSetVersion.load(new_source_value_set_version_uuid).value_set
-        new_source_value_set_version_uuid = ValueSet.load_most_recent_active_version(value_set.uuid).uuid
-        self.new_source_value_set_version_uuid = new_source_value_set_version_uuid
+        new_source_value_set_version = ValueSet.load_most_recent_active_version(value_set.uuid)
+        if new_source_value_set_version is None:
+            raise BadRequestWithCode(
+                "ConceptMap.new_version_from_previous",
+                f"There is no active version of source Value Set with UUID: {value_set.uuid}",
+            )
+        self.new_source_value_set_version_uuid = new_source_value_set_version.uuid
 
         # new_target_value_set_version_uuid - use uuid provided or load most recent concept map.target_value_set_uuid
         if new_target_value_set_version_uuid is None:
             value_set = app.value_sets.models.ValueSet.load(concept_map.target_value_set_uuid)
         else:
             value_set = app.value_sets.models.ValueSetVersion.load(new_target_value_set_version_uuid).value_set
-        new_target_value_set_version_uuid = ValueSet.load_most_recent_active_version(value_set.uuid).uuid
-        self.new_target_value_set_version_uuid = new_target_value_set_version_uuid
+        new_target_value_set_version = ValueSet.load_most_recent_active_version(value_set.uuid)
+        if new_target_value_set_version_uuid is None:
+            raise BadRequestWithCode(
+                "ConceptMap.new_version_from_previous",
+                f"There is no active version of target Value Set with UUID: {value_set.uuid}",
+            )
+        self.new_target_value_set_version_uuid = new_target_value_set_version.uuid
 
         # Open a persistent connection and begin a transaction
         self.conn = get_db()
