@@ -1,18 +1,21 @@
 import datetime
-import uuid
-import json
 import hashlib
+import itertools
+import json
 import re
+import uuid
+from dataclasses import dataclass
+from operator import itemgetter
+from typing import Optional, List
+from uuid import UUID
 
 from cachetools.func import ttl_cache
-
-import app.models.codes
-import app.value_sets.models
 from elasticsearch.helpers import bulk
 from sqlalchemy import text
-from dataclasses import dataclass
-from uuid import UUID
-from typing import Optional, List
+
+import app.models.codes
+import app.models.data_ingestion_registry
+import app.value_sets.models
 from app.database import get_db, get_elasticsearch
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
@@ -23,11 +26,7 @@ from app.terminologies.models import (
     terminology_version_uuid_lookup,
     load_terminology_version_with_cache,
 )
-from operator import itemgetter
-import itertools
-from app.models.use_case import load_use_case_by_value_set_uuid
-
-CONCEPT_MAPS_SCHEMA_VERSION = 3
+import app.tasks
 
 
 # Function for checking if we have a coding array string that used to be JSON
@@ -201,6 +200,8 @@ class ConceptMap:
         target_value_set_uuid (str): The UUID of the target value set used in the concept map.
         most_recent_active_version (str): The UUID of the most recent active version of the concept map.
     """
+    database_schema_version = 3
+    object_storage_folder_name = "ConceptMaps"
 
     def __init__(self, uuid, load_mappings_for_most_recent_active: bool = True):
         self.uuid = uuid
@@ -885,6 +886,7 @@ class ConceptMapVersion:
                         if x.target.system == target_uri
                         and x.target.version == target_version
                     ]
+
                     # Only proceed if there are filtered_mappings for the current target_uri and target_version
                     if filtered_mappings:
                         # Do relevant checks on the code and display
@@ -927,6 +929,7 @@ class ConceptMapVersion:
                                 "equivalence": mapping.relationship.code,
                                 "comment": comment,
                             }
+
 
                             # Add dependsOn data
                             if (
@@ -1037,7 +1040,7 @@ class ConceptMapVersion:
             "extension": [
                 {
                     "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema",
-                    "valueString": f"{CONCEPT_MAPS_SCHEMA_VERSION}.0.0",
+                    "valueString": f"{ConceptMap.database_schema_version}.0.0",
                 }
             ]
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and
@@ -1101,7 +1104,7 @@ class ConceptMapVersion:
         serialized.pop("contact")
         serialized.pop("publisher")
         serialized.pop("title")
-        initial_path = f"ConceptMaps/v{CONCEPT_MAPS_SCHEMA_VERSION}/folder/{self.concept_map.uuid}"  # folder is set in oci_helper(determined by api call)
+        initial_path = f"{ConceptMap.object_storage_folder_name}/v{ConceptMap.database_schema_version}"
 
         return serialized, initial_path
 
@@ -1111,14 +1114,12 @@ class ConceptMapVersion:
         Normalization Registry and setting status active.
         @return: n/a
         """
-        concept_map_version = self
-        (
-            concept_map_to_json,
-            initial_path,
-        ) = self.prepare_for_oci()  # serialize the metadata
-
+        concept_map_to_json, initial_path = self.prepare_for_oci()
         set_up_object_store(
-            concept_map_to_json, initial_path, folder="published"
+            concept_map_to_json,
+            initial_path + f"/published/{self.concept_map.uuid}",
+            folder="published",
+            content_type="json"
         )  # sends to OCI
         self.version_set_status_active()
         self.set_publication_date()
@@ -1126,6 +1127,8 @@ class ConceptMapVersion:
         self.to_simplifier()
         # Publish new version of data normalization registry
         app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
+        app.tasks.resolve_errors_after_concept_map_publish.delay(concept_map_version_uuid=self.uuid)
+
 
     def to_simplifier(self):
         """
@@ -1154,6 +1157,54 @@ class ConceptMapVersion:
                             target for target, _ in itertools.groupby(element["target"])
                         )  # Remove duplicates
         publish_to_simplifier(resource_type, resource_id, concept_map_to_json)
+
+    def resolve_error_service_issues(self):
+        """
+        After the ConceptMapVersion has been published, call this function to identify open Data Validation Service
+        issues associated with codes in this new concept map version, marking those issues 'resolved' on our side and
+        calling the reprocessResource API in the Interops Data Validation Service to reprocess those resources. That
+        call sets the associated issue(s) to status REPROCESSED, the final status for Data Validation Service issues.
+        """
+        conn = get_db()
+        issues_resources_query = text(
+            """
+            SELECT e.issue_uuid, e.resource_uuid FROM 
+            concept_maps.source_concept as sc JOIN custom_terminologies.error_service_issue as e
+            ON
+            sc.custom_terminology_uuid = e.custom_terminology_code_uuid 
+            WHERE
+            e.status <> 'resolved'
+            AND
+            sc.concept_map_version_uuid = :concept_map_version_uuid
+            AND
+            sc.uuid in (
+                select source_concept_uuid 
+                from concept_maps.concept_relationship 
+                where review_status = 'reviewed'
+            )
+            """
+        )
+        issues_resources_result = conn.execute(
+            issues_resources_query,
+            {
+                "concept_map_version_uuid": self.uuid
+            }
+        )
+        issue_uuid_list = []
+        resource_uuid_list = []
+        for row in issues_resources_result:
+            issue_uuid_list.append(row.issue_uuid)
+            resource_uuid = row.resource_uuid
+            if resource_uuid not in resource_uuid_list:
+                resource_uuid_list.append(resource_uuid)
+
+        # Using full paths to avoid circular import from normalization_error_service
+        # Gather the reprocessing calls for each resource_uuid 
+        app.models.normalization_error_service.reprocess_resources(resource_uuid_list)
+
+        # Mark issues resolved - full path avoids circular import
+        app.models.normalization_error_service.set_issues_resolved(issue_uuid_list)
+
 
     @classmethod
     def get_active_concept_map_versions(cls) -> List["ConceptMapVersion"]:
@@ -1649,9 +1700,6 @@ def transform_struct_string_to_json(struct_string):
 
     if text_string is not None:
         result["text"] = text_string
-
-    # Wrapping the result with 'valueCodeableConcept'
-    result = {"valueCodeableConcept": result}
 
     # Convert the dictionary into a JSON string
     return json.dumps(result)

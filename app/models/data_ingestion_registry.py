@@ -1,18 +1,17 @@
-import json
 import datetime
-import app.concept_maps.models
-import app.value_sets.models
-
+import json
 from dataclasses import dataclass
+from datetime import datetime
+from typing import List
+
+from dateutil import tz
 from decouple import config
 from sqlalchemy import text
-from typing import List, Optional
+
+import app.concept_maps.models
+import app.value_sets.models
 from app.database import get_db
 from app.helpers.oci_helper import oci_authentication
-from datetime import datetime
-from dateutil import tz
-
-DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION = 3
 
 
 @dataclass
@@ -28,6 +27,7 @@ class DNRegistryEntry:
     registry_uuid: str
     registry_entry_type: str
     profile_url: str
+    # Full path avoids circular import of ConceptMap and ValueSet
     concept_map: "app.concept_maps.models.ConceptMap" = None
     value_set: "app.value_sets.models.ValueSet" = None
 
@@ -53,14 +53,15 @@ class DNRegistryEntry:
             serialized["version"] = value_set_version
             serialized[
                 "filename"
-            ] = f"ValueSets/v{app.value_sets.models.VALUE_SET_SCHEMA_VERSION}/published/{self.value_set.uuid}/{value_set_version}.json"
+            ] = f"{app.value_sets.models.ValueSet.object_storage_folder_name}/v{app.value_sets.models.ValueSet.database_schema_version}/published/{self.value_set.uuid}/{value_set_version}.json"
         if self.registry_entry_type == "concept_map":
+            concept_map_version = self.concept_map.most_recent_active_version.version
             serialized["concept_map_name"] = self.concept_map.name
             serialized["concept_map_uuid"] = str(self.concept_map.uuid)
-            serialized["version"] = self.concept_map.most_recent_active_version.version
+            serialized["version"] = concept_map_version
             serialized[
                 "filename"
-            ] = f"ConceptMaps/v{app.concept_maps.models.CONCEPT_MAPS_SCHEMA_VERSION}/published/{self.concept_map.uuid}/{self.concept_map.most_recent_active_version.version}.json"
+            ] = f"{app.concept_maps.models.ConceptMap.object_storage_folder_name}/v{app.concept_maps.models.ConceptMap.database_schema_version}/published/{self.concept_map.uuid}/{concept_map_version}.json"
         return serialized
 
 
@@ -69,8 +70,11 @@ class DataNormalizationRegistry:
     """
     A class representing the Data Normalization Registry containing multiple DNRegistryEntry objects.
     """
-
     entries: List[DNRegistryEntry] = None
+    database_schema_version = 3
+    object_storage_folder_name = "DataNormalizationRegistry"
+    object_storage_file_name = "registry.json"
+    object_storage_diff_name = "registry_diff.json"
 
     def __post_init__(self):
         if self.entries is None:
@@ -136,6 +140,8 @@ class DataNormalizationRegistry:
     def publish_to_object_store(registry, filename):
         """
         Publish the Data Normalization Registry to the Object Storage.
+        @param registry: data to publish
+        @param filename: Caller sets the file name only. Application controls the path.
         """
         object_storage_client = oci_authentication()
         bucket_name = config("OCI_CLI_BUCKET")
@@ -143,7 +149,7 @@ class DataNormalizationRegistry:
         object_storage_client.put_object(
             namespace,
             bucket_name,
-            f"DataNormalizationRegistry/v{DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION}/{filename}",
+            f"{DataNormalizationRegistry.object_storage_folder_name}/v{DataNormalizationRegistry.database_schema_version}/{filename}",
             json.dumps(registry, indent=2).encode("utf-8"),
         )
         return registry
@@ -160,7 +166,7 @@ class DataNormalizationRegistry:
         bucket_item = object_storage_client.get_object(
             namespace,
             bucket_name,
-            f"DataNormalizationRegistry/v{DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION}/registry.json",
+            f"{DataNormalizationRegistry.object_storage_folder_name}/v{DataNormalizationRegistry.database_schema_version}/{DataNormalizationRegistry.object_storage_file_name}",
         )
         return bucket_item.headers["last-modified"]
 
@@ -172,7 +178,7 @@ class DataNormalizationRegistry:
         bucket_item = object_storage_client.get_object(
             namespace,
             bucket_name,
-            f"DataNormalizationRegistry/v{DATA_NORMALIZATION_REGISTRY_SCHEMA_VERSION}/registry.json",
+            f"{DataNormalizationRegistry.object_storage_folder_name}/v{DataNormalizationRegistry.database_schema_version}/{DataNormalizationRegistry.object_storage_file_name}",
         )
         return bucket_item.data.json()
 
@@ -205,14 +211,14 @@ class DataNormalizationRegistry:
         current_registry.load_entries()
         current_registry_serialized = current_registry.serialize()
         newly_published_version = DataNormalizationRegistry.publish_to_object_store(
-            current_registry_serialized, "registry.json"
+            current_registry_serialized, DataNormalizationRegistry.object_storage_file_name
         )
 
         diff_version = get_incremented_versions_and_update(
             previous_version, newly_published_version
         )
         DataNormalizationRegistry.publish_to_object_store(
-            diff_version, "registry_diff.json"
+            diff_version, DataNormalizationRegistry.object_storage_diff_name
         )
 
         return newly_published_version

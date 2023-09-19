@@ -157,13 +157,13 @@ concept_map = {
 }
 concept_map_uuid = concept_map["url"].rsplit("/", 1)[1]
 folder = "published"
-path = f"ConceptMaps/v1/{folder}/{concept_map_uuid}"
+path = f"DoNotUseTestingConceptMaps/v1/{folder}/{concept_map_uuid}"
 
 
 def test_folder_path_for_oci():
     assert (
-        folder_path_for_oci(folder, concept_map, path)
-        == "ConceptMaps/v1/published/FAKEFAKE-FAKE-FAKE-FAKE-FAKEFAKEFAKE/1.json"
+        folder_path_for_oci(concept_map, path, content_type="json")
+        == "DoNotUseTestingConceptMaps/v1/published/FAKEFAKE-FAKE-FAKE-FAKE-FAKEFAKEFAKE/1.json"
     )
 
 

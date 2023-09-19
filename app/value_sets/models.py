@@ -29,8 +29,6 @@ from app.helpers.simplifier_helper import publish_to_simplifier
 
 from app.models.use_case import load_use_case_by_value_set_uuid, UseCase
 
-VALUE_SET_SCHEMA_VERSION = 2
-
 ECL_SERVER_PATH = "https://snowstorm.prod.projectronin.io"
 SNOSTORM_LIMIT = 1000
 
@@ -1219,7 +1217,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid,
+                custom_terminology_code_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1249,7 +1247,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid,
+                custom_terminology_code_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1280,7 +1278,7 @@ class CustomTerminologyRule(VSRule):
                 depends_on_system=x.depends_on_system,
                 depends_on_value=x.depends_on_value,
                 depends_on_display=x.depends_on_display,
-                custom_terminology_uuid=x.uuid,
+                custom_terminology_code_uuid=x.uuid,
             )
             for x in results_data
         ]
@@ -1330,6 +1328,8 @@ class ValueSet:
             Loads all value sets metadata from the database.
 
     """
+    database_schema_version = 2
+    object_storage_folder_name = "ValueSets"
 
     def __init__(
         self,
@@ -1379,6 +1379,7 @@ class ValueSet:
         self.synonyms = synonyms
         self.primary_use_case = primary_use_case
         self.secondary_use_cases = secondary_use_cases
+
 
     @classmethod
     def create(
@@ -1571,7 +1572,6 @@ class ValueSet:
         }
 
     def delete(self):
-
         conn = get_db()
         # check for a version
         vs_version_data = conn.execute(
@@ -1650,21 +1650,21 @@ class ValueSet:
                 else []
             )
 
-        value_sets_metadata.append(
-            {
-                "uuid": x.uuid,
-                "name": x.name,
-                "title": x.title,
-                "publisher": x.publisher,
-                "contact": x.contact,
-                "description": x.description,
-                "immutable": x.immutable,
-                "experimental": x.experimental,
-                "purpose": x.purpose,
-                "type": x.type,
-                "use_case_names": use_case_names,  # Add use_case_names to the dictionary
-            }
-        )
+            value_sets_metadata.append(
+                {
+                    "uuid": x.uuid,
+                    "name": x.name,
+                    "title": x.title,
+                    "publisher": x.publisher,
+                    "contact": x.contact,
+                    "description": x.description,
+                    "immutable": x.immutable,
+                    "experimental": x.experimental,
+                    "purpose": x.purpose,
+                    "type": x.type,
+                    "use_case_names": use_case_names,  # Add use_case_names to the dictionary
+                }
+            )
 
         return value_sets_metadata
 
@@ -2709,8 +2709,10 @@ class ValueSetVersion:
                         "display": code.display,
                         "system": code.system,
                         "version": code.version,
-                        "custom_terminology_uuid": str(code.custom_terminology_uuid)
-                        if code.custom_terminology_uuid
+                        "custom_terminology_uuid": str(
+                            code.custom_terminology_code_uuid
+                        )
+                        if code.custom_terminology_code_uuid
                         else None,
                     }
                     for code in self.expansion
@@ -3115,7 +3117,7 @@ class ValueSetVersion:
         serialized.pop("immutable")
         serialized.pop("contact")
         serialized.pop("publisher")
-        initial_path = f"ValueSets/v2/folder/{self.value_set.uuid}"  # folder is set in oci_helper(determined by api call)
+        initial_path = f"{ValueSet.object_storage_folder_name}/v{ValueSet.database_schema_version}"
 
         return serialized, initial_path
 
@@ -3128,7 +3130,10 @@ class ValueSetVersion:
         self.retire_and_obsolete_previous_version()
         value_set_uuid = self.value_set.uuid
         set_up_object_store(
-            value_set_to_json, initial_path, folder="published"
+            value_set_to_json,
+            initial_path + f"/published/{value_set_uuid}",
+            folder="published",
+            content_type="json"
         )  # sending to OCI
         resource_type = "ValueSet"  # param for Simplifier
         value_set_to_json_copy["status"] = "active"

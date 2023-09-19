@@ -1,17 +1,17 @@
-from flask import Blueprint, jsonify, request, make_response
-import io
 import csv
+import io
 import string
-from uuid import uuid4, UUID
+
+from uuid import uuid4
+
+from flask import Blueprint, jsonify, request, make_response
+
 from werkzeug.exceptions import BadRequest
-from app.helpers.oci_helper import (
-    get_object_type_from_db,
-    get_object_type_from_object_store,
-)
-from app.concept_maps.models import *
-from app.concept_maps.versioning_models import *
 
 import app.tasks as tasks
+from app.concept_maps.models import *
+from app.concept_maps.versioning_models import *
+from app.helpers.oci_helper import get_data_from_oci
 
 from app.errors import NotFoundException
 
@@ -190,31 +190,27 @@ def get_concept_map_version_prerelease(version_uuid):
     If a POST request is made, a new pre-release version is created and stored.
     If a GET request is made, the pre-release version is retrieved.
     """
-    object_type = "concept_map"
+    concept_map_version = ConceptMapVersion(version_uuid)
     if request.method == "POST":
-        concept_map_version = ConceptMapVersion(
-            version_uuid
-        )  # using the version uuid to get the version metadata from the ConceptMapVersion class
-        (
+        concept_map_to_json, initial_path = concept_map_version.prepare_for_oci()
+        concept_map_to_datastore = set_up_object_store(
             concept_map_to_json,
-            initial_path,
-        ) = concept_map_version.prepare_for_oci()  # serialize the metadata
-        concept_map_to_datastore = (
-            set_up_object_store(  # use the serialized data with an oci_helper function
-                concept_map_to_json, initial_path, folder="prerelease"
-            )
-        )
+            initial_path + f"/prerelease/{concept_map_version.concept_map.uuid}",
+            folder="prerelease",
+            content_type="json"
+        )  # sends to OCI
         return jsonify(
             concept_map_to_datastore
         )  # returns the serialized metadata posted to OCI
     if request.method == "GET":
-        concept_map = get_object_type_from_db(  # concept_map will be a dictionary of overall concept_map uuid and version integer
-            version_uuid, object_type
-        )  # use the version uuid with an oci_helper function to check DB first
-        if not concept_map:
-            return {"message": "concept map uuid not found."}  # error if not in DB
-        concept_map_from_object_store = get_object_type_from_object_store(  # uses the return from the above oci_helper function to call another  oci_helper function
-            object_type, concept_map, folder="prerelease"
+        concept_map_from_object_store = get_data_from_oci(
+                oci_root=ConceptMap.object_storage_folder_name,
+                resource_schema_version=ConceptMap.database_schema_version,
+                release_status="prerelease",
+                resource_id=concept_map_version.concept_map.uuid,
+                resource_version=concept_map_version.version,
+                content_type="json",
+                return_content=True,
         )
         return jsonify(concept_map_from_object_store)  # returns the file from OCI
 
@@ -228,18 +224,20 @@ def get_concept_map_version_published(version_uuid):
     If a POST request is made, a new published version is created and stored.
     If a GET request is made, the published version is retrieved.
     """
-    object_type = "concept_map"
+    concept_map_version = ConceptMapVersion(version_uuid)
     if request.method == "POST":
-        concept_map_version = ConceptMapVersion(version_uuid)
         concept_map_version.publish()
         return "Published"
 
     if request.method == "GET":
-        concept_map = get_object_type_from_db(version_uuid, object_type)
-        if not concept_map:
-            return {"message": "concept map uuid not found."}
-        concept_map_from_object_store = get_object_type_from_object_store(
-            object_type, concept_map, folder="published"
+        concept_map_from_object_store = get_data_from_oci(
+                oci_root=ConceptMap.object_storage_folder_name,
+                resource_schema_version=ConceptMap.database_schema_version,
+                release_status="published",
+                resource_id=concept_map_version.concept_map.uuid,
+                resource_version=concept_map_version.version,
+                content_type="json",
+                return_content=True,
         )
         return jsonify(concept_map_from_object_store)
 

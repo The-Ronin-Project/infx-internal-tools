@@ -2,14 +2,10 @@ from celery import Celery
 from celery.schedules import crontab
 from uuid import UUID
 from decouple import config
-from app.models.normalization_error_service import (
-    load_concepts_from_errors,
-    lookup_concept_map_version_for_data_element,
-)
+
 from app.value_sets.models import ValueSetVersion, ValueSet
-from app.concept_maps.models import ConceptMap, ConceptMapVersion
-from app.terminologies.models import Terminology
-from app.concept_maps.versioning_models import ConceptMapVersionCreator
+import app.concept_maps.models
+import app.concept_maps.versioning_models
 from app.models.normalization_error_service import load_concepts_from_errors
 from app.database import get_db
 
@@ -49,11 +45,24 @@ def load_outstanding_errors_to_custom_terminologies():
 
 
 @celery_app.task
+def resolve_errors_after_concept_map_publish(concept_map_version_uuid):
+    """ """
+    conn = get_db()
+
+    # same code here as for a synchronous api endpoint
+    concept_map_version = app.concept_maps.models.ConceptMapVersion(concept_map_version_uuid)
+    concept_map_version.resolve_error_service_issues()
+
+    conn.commit()
+    conn.close()
+
+
+@celery_app.task
 def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
     conn = get_db()
 
     # Step 6: look up source and target value set
-    concept_map = ConceptMap(concept_map_uuid)  # instantiate object
+    concept_map = app.concept_maps.models.ConceptMap(concept_map_uuid)  # instantiate object
 
     concept_map_most_recent_version = concept_map.get_most_recent_version(
         active_only=False
@@ -96,7 +105,7 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
     new_source_value_set_version.publish(force_new=True)
 
     # Step 9: Create new concept map version
-    version_creator = ConceptMapVersionCreator()
+    version_creator = app.concept_maps.versioning_models.ConceptMapVersionCreator()
     new_concept_map_version_description = (
         "New version created for loading outstanding codes"
     )
@@ -119,10 +128,10 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
 @celery_app.task
 def back_fill_concept_maps_to_simplifier():
     active_concept_map_versions_to_push = (
-        ConceptMapVersion.get_active_concept_map_versions()
+        app.concept_maps.models.ConceptMapVersion.get_active_concept_map_versions()
     )
     for concept_map_version in active_concept_map_versions_to_push:
-        concept_map_object = ConceptMapVersion(concept_map_version)
+        concept_map_object = app.concept_maps.models.ConceptMapVersion(concept_map_version)
         concept_map_object.to_simplifier()
 
     return "Active concept map versions back fill to Simplifier complete."

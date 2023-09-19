@@ -4,6 +4,8 @@ import json
 from app.database import get_db
 from sqlalchemy import text
 import app.terminologies.models
+from typing import List
+from uuid import UUID
 from app.errors import BadRequestWithCode
 
 
@@ -44,7 +46,7 @@ class Code:
         depends_on_system: str = None,
         depends_on_value: str = None,
         depends_on_display: str = None,
-        custom_terminology_uuid: uuid.UUID = None,
+        custom_terminology_code_uuid: uuid.UUID = None,
     ):
         self.system = system
         self.version = version
@@ -57,7 +59,7 @@ class Code:
             terminology_version
         )
         self.terminology_version_uuid: uuid.UUID = terminology_version_uuid
-        self.custom_terminology_uuid = custom_terminology_uuid
+        self.custom_terminology_code_uuid = custom_terminology_code_uuid
 
         self.depends_on_property = depends_on_property
         self.depends_on_system = depends_on_system
@@ -280,7 +282,9 @@ class Code:
 
         return serialized
 
-    def add_examples_to_additional_data(self, unit=None, value=None, value_quantity=None, reference_range=None):
+    def add_examples_to_additional_data(
+        self, unit=None, value=None, value_quantity=None, reference_range=None
+    ):
         """
         When we're loading data from the error service to load into concept maps, we need to bring along some additional
         pieces of data which are useful context to help the mapper. These include: unit, value, value_quantity, reference_range
@@ -288,61 +292,69 @@ class Code:
         This method will store these in the additional_data
         """
         # todo: we should structure these and store them in their own dataclass, then serialize to additional_data
-        if unit is None and value is None and value_quantity is None and reference_range is None:
+        if (
+            unit is None
+            and value is None
+            and value_quantity is None
+            and reference_range is None
+        ):
             return
 
         if self.additional_data is None:
             self.additional_data = {}
 
         if unit is not None:
-            if 'example_unit' not in self.additional_data:
-                self.additional_data['example_unit'] = []
+            if "example_unit" not in self.additional_data:
+                self.additional_data["example_unit"] = []
             if isinstance(unit, list):
-                self.additional_data['example_unit'].extend(unit)
+                self.additional_data["example_unit"].extend(unit)
             else:
-                self.additional_data['example_unit'].append(unit)
+                self.additional_data["example_unit"].append(unit)
 
-            json_list = [json.dumps(x) for x in self.additional_data['example_unit']]
+            json_list = [json.dumps(x) for x in self.additional_data["example_unit"]]
             deduplicated_list = list(set(json_list))
             unjsoned_list = [json.loads(x) for x in deduplicated_list]
-            self.additional_data['example_unit'] = unjsoned_list[:5]
+            self.additional_data["example_unit"] = unjsoned_list[:5]
 
         if value is not None:
-            if 'example_value' not in self.additional_data:
-                self.additional_data['example_value'] = []
+            if "example_value" not in self.additional_data:
+                self.additional_data["example_value"] = []
             if isinstance(value, list):
-                self.additional_data['example_value'].extend(value)
+                self.additional_data["example_value"].extend(value)
             else:
-                self.additional_data['example_value'].append(value)
+                self.additional_data["example_value"].append(value)
 
-            json_list = [json.dumps(x) for x in self.additional_data['example_value']]
+            json_list = [json.dumps(x) for x in self.additional_data["example_value"]]
             deduplicated_list = list(set(json_list))
             unjsoned_list = [json.loads(x) for x in deduplicated_list]
-            self.additional_data['example_value'] = unjsoned_list[:5]
+            self.additional_data["example_value"] = unjsoned_list[:5]
 
         if value_quantity is not None:
-            if 'example_value_quantity' not in self.additional_data:
-                self.additional_data['example_value_quantity'] = []
+            if "example_value_quantity" not in self.additional_data:
+                self.additional_data["example_value_quantity"] = []
             if isinstance(value_quantity, list):
-                self.additional_data['example_value_quantity'].extend(value_quantity)
+                self.additional_data["example_value_quantity"].extend(value_quantity)
             else:
-                self.additional_data['example_value_quantity'].append(value_quantity)
+                self.additional_data["example_value_quantity"].append(value_quantity)
 
-            json_list = [json.dumps(x) for x in self.additional_data['example_value_quantity']]
+            json_list = [
+                json.dumps(x) for x in self.additional_data["example_value_quantity"]
+            ]
             deduplicated_list = list(set(json_list))
             unjsoned_list = [json.loads(x) for x in deduplicated_list]
-            self.additional_data['example_value_quantity'] = unjsoned_list[:5]
+            self.additional_data["example_value_quantity"] = unjsoned_list[:5]
 
         if reference_range is not None:
-            if 'example_reference_range' not in self.additional_data:
-                self.additional_data['example_reference_range'] = []
+            if "example_reference_range" not in self.additional_data:
+                self.additional_data["example_reference_range"] = []
             if isinstance(reference_range, list):
-                self.additional_data['example_reference_range'].extend(reference_range)
+                self.additional_data["example_reference_range"].extend(reference_range)
             else:
-                self.additional_data['example_reference_range'].append(reference_range)
+                self.additional_data["example_reference_range"].append(reference_range)
 
-            json_list = [json.dumps(x) for x in self.additional_data['example_reference_range']]
+            json_list = [
+                json.dumps(x) for x in self.additional_data["example_reference_range"]
+            ]
             deduplicated_list = list(set(json_list))
             unjsoned_list = [json.loads(x) for x in deduplicated_list]
-            self.additional_data['example_reference_range'] = unjsoned_list[:5]
-
+            self.additional_data["example_reference_range"] = unjsoned_list[:5]

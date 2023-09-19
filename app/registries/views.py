@@ -12,9 +12,6 @@ from app.terminologies.models import *
 # REST path root for API
 registries_blueprint = Blueprint("registries", __name__, url_prefix="/registries")
 
-# OCI path root for storage: "Registries" for committed code, "DoNotUseTestingRegistries" for testing
-REGISTRY_OCI_PATH_ROOT = "DoNotUseTestingRegistries"
-
 
 @registries_blueprint.route("/", methods=["POST", "GET"])
 def create_or_get_registry():
@@ -67,12 +64,14 @@ def update_registry_metadata(registry_uuid):
 @registries_blueprint.route(
     "/<string:registry_uuid>/<string:environment>", methods=["GET", "POST"]
 )
-def get_or_publish_registry_csv(registry_uuid, environment="dev"):
+def get_or_publish_registry(registry_uuid, environment="dev"):
     """
     Retrieve or create a CSV export of the registry.
     Handles both GET and POST requests.
     Returns the most recent version of the exported CSV for the registry in the specified environment.
-    GET supports "dev" "stage" or "prod" for environment. Environment values for POST:
+    @environment: GET supports the release environment "dev" or "stage" or "prod" for published CSV,
+    or "pending" to get the most recent unpublished draft in the database as JSON to display a Preview in the UI.
+    POST supports release environment values as follows:
     "dev" - generate a new CSV export of the Registry from the database and publish it to OCI Registries/dev
     "stage" - copy the most recent CSV export of the Registry from OCI Registries/dev to Registries/stage
     "prod" - copy the most recent  CSV export of the Registry from OCI Registries/stage to Registries/prod
@@ -84,14 +83,30 @@ def get_or_publish_registry_csv(registry_uuid, environment="dev"):
                 "Registry.publish.environment",
                 "Environment to publish Registry must be 'dev' 'stage' 'prod' or 'dev,stage,prod'",
             )
-        return Registry.publish_to_object_store(registry_uuid=registry_uuid, environment=environment)
+        return Registry.publish_to_object_store(
+            registry_uuid=registry_uuid,
+            environment=environment
+        )
     elif request.method == "GET":
-        if environment not in ["dev", "stage", "prod"]:
+        if environment not in ["pending", "dev", "stage", "prod"]:
             raise BadRequestWithCode(
                 "Registry.get.environment",
-                "Environment to get published Registry must be 'dev' 'stage' or 'prod'",
+                "For the most recent draft Registry use 'pending' - published versions use 'dev' or 'stage' or 'prod'",
             )
-        return Registry.get_from_object_store(registry_uuid=registry_uuid, environment=environment)
+        if environment == "pending":
+            return jsonify(
+                Registry.export(
+                    registry_uuid=registry_uuid,
+                    environment=environment,
+                    content_type="json"
+                )
+            )
+        else:
+            return Registry.get_from_object_store(
+                registry_uuid=registry_uuid,
+                environment=environment,
+                content_type="csv"
+            )
 
 
 @registries_blueprint.route("/<string:registry_uuid>/groups/", methods=["POST", "GET"])
