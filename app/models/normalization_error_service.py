@@ -990,11 +990,11 @@ if __name__ == "__main__":
     from app.database import get_db
 
     conn = get_db()
-
-    load_concepts_from_errors(commit_changes=True)  # False for test
-    # result = get_outstanding_errors()
-    # print(result)
-
-    # conn.rollback()  # uncomment for test
-    conn.commit()  # comment for test
+    #
+    # load_concepts_from_errors(commit_changes=True)  # False for test
+    # # result = get_outstanding_errors()
+    # # print(result)
+    #
+    # # conn.rollback()  # uncomment for test
+    # conn.commit()  # comment for test
     conn.close()
