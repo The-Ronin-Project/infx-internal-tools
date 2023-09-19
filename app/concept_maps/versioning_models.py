@@ -7,6 +7,7 @@ from app.database import get_db
 import app.concept_maps.models
 from app.models.codes import Code
 from app.terminologies.models import load_terminology_version_with_cache
+from app.value_sets.models import ValueSet
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -344,13 +345,27 @@ class ConceptMapVersionCreator:
             previous_version_uuid (uuid.UUID): The UUID of the previous ConceptMapVersion.
             new_version_description (str): The description of the new ConceptMapVersion.
             new_source_value_set_version_uuid (uuid.UUID): The UUID of the new source value set version.
+            Omit this input to use the most recent active version of the current source value set.
             new_target_value_set_version_uuid (uuid.UUID): The UUID of the new target value set version.
+            Omit this input to use the most recent active version of the current target value set.
             require_review_for_non_equivalent_relationships (bool): Whether to require review for non-equivalent relationships.
             require_review_no_maps_not_in_target (bool): Whether to require review for no-maps not in the target.
         """
-        # Set up our variables we need to work with
-        self.previous_concept_map_version = app.concept_maps.models.ConceptMapVersion(previous_version_uuid)
+        # previous_concept_map_version - load using the previous_version_uuid
+        concept_map_version = app.concept_maps.models.ConceptMapVersion(previous_version_uuid)
+        self.previous_concept_map_version = concept_map_version
+
+        # new_source_value_set_version_uuid - use uuid provided or load most recent concept map.source_value_set_uuid
+        concept_map = app.concept_maps.models.ConceptMap(concept_map_version.concept_map.uuid)
+        if new_source_value_set_version_uuid is None:
+            current_value_set = app.value_sets.models.ValueSet.load(concept_map.source_value_set_uuid)
+            new_source_value_set_version_uuid = ValueSet.load_most_recent_active_version(current_value_set.uuid).uuid
         self.new_source_value_set_version_uuid = new_source_value_set_version_uuid
+
+        # new_target_value_set_version_uuid - use uuid provided or load most recent concept map.target_value_set_uuid
+        if new_target_value_set_version_uuid is None:
+            current_value_set = app.value_sets.models.ValueSet.load(concept_map.target_value_set_uuid)
+            new_target_value_set_version_uuid = ValueSet.load_most_recent_active_version(current_value_set.uuid).uuid
         self.new_target_value_set_version_uuid = new_target_value_set_version_uuid
 
         # Open a persistent connection and begin a transaction
