@@ -503,7 +503,6 @@ class ConceptMapVersionCreator:
                     if previous_mapping_context:
                         # If previous context needs to be written to the source, do it after the loop so we have it all
                         new_source_concept.update(
-                            conn=self.conn,
                             previous_version_context=json.dumps(
                                 previous_mapping_context, cls=CustomJSONEncoder
                             )
