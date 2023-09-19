@@ -789,7 +789,10 @@ class ConceptMapVersion:
                 SET published_date=now()
                 where uuid=:uuid
                 """
-            )
+            ),
+            {
+                "uuid": self.uuid,
+            },
         )
         self.published_date = datetime.datetime.now()
 
@@ -882,70 +885,74 @@ class ConceptMapVersion:
                         if x.target.system == target_uri
                         and x.target.version == target_version
                     ]
-                    # Do relevant checks on the code and display
-                    source_code_code = source_code.code.rstrip()
-                    source_code_display = source_code.display.rstrip()
+                    # Only proceed if there are filtered_mappings for the current target_uri and target_version
+                    if filtered_mappings:
+                        # Do relevant checks on the code and display
+                        source_code_code = source_code.code.rstrip()
+                        source_code_display = source_code.display.rstrip()
 
-                    # Checking to see if the display is a coding array TODO: INFX-2521 this is a temporary problem that we should fix in the future
-                    if is_coding_array(source_code_display):
-                        source_code_code, source_code_display = (
-                            source_code_display,
-                            source_code_code,
-                        )
+                        # Checking to see if the display is a coding array TODO: INFX-2521 this is a temporary problem that we should fix in the future
+                        if is_coding_array(source_code_display):
+                            source_code_code, source_code_display = (
+                                source_code_display,
+                                source_code_code,
+                            )
 
-                    # We want the text string array that is supposed to be json to be formatted correctly
-                    # If it's not an array it should return the original string
-                    if is_coding_array(source_code_code):
-                        source_code_code = transform_struct_string_to_json(
-                            source_code_code
-                        )
-                    new_element = {
-                        "id": source_code.id,
-                        "code": source_code_code,
-                        "display": source_code_display,
-                        "target": [],
-                    }
-
-                    # Iterate through each mapping for the source and serialize it
-                    for mapping in filtered_mappings:
-                        if (
-                            mapping.target.code == "No map"
-                            and mapping.target.display == "No matching concept"
-                        ):
-                            comment = mapping.reason_for_no_map
-                        else:
-                            comment = None
-                        target_serialized = {
-                            "id": mapping.id,
-                            "code": mapping.target.code,
-                            "display": mapping.target.display,
-                            "equivalence": mapping.relationship.code,
-                            "comment": comment,
+                        # We want the text string array that is supposed to be json to be formatted correctly
+                        # If it's not an array it should return the original string
+                        if is_coding_array(source_code_code):
+                            source_code_code = transform_struct_string_to_json(
+                                source_code_code
+                            )
+                        new_element = {
+                            "id": source_code.id,
+                            "code": source_code_code,
+                            "display": source_code_display,
+                            "target": [],
                         }
 
-                        # Add dependsOn data
-                        if (
-                            source_code.depends_on_property
-                            or source_code.depends_on_value
-                        ):
-                            depends_on_value = source_code.depends_on_value
-                            if is_coding_array(depends_on_value):
-                                depends_on_value = transform_struct_string_to_json(
-                                    depends_on_value
-                                )
-                            depends_on = {
-                                "property": source_code.depends_on_property,
-                                "value": depends_on_value,
+                        # Iterate through each mapping for the source and serialize it
+                        for mapping in filtered_mappings:
+                            if (
+                                mapping.target.code == "No map"
+                                and mapping.target.display == "No matching concept"
+                            ):
+                                comment = mapping.reason_for_no_map
+                            else:
+                                comment = None
+                            target_serialized = {
+                                "id": mapping.id,
+                                "code": mapping.target.code,
+                                "display": mapping.target.display,
+                                "equivalence": mapping.relationship.code,
+                                "comment": comment,
                             }
-                            if source_code.depends_on_system:
-                                depends_on["system"] = source_code.depends_on_system
-                            if source_code.depends_on_display:
-                                depends_on["display"] = source_code.depends_on_display
-                            target_serialized["dependsOn"] = depends_on
 
-                        new_element["target"].append(target_serialized)
+                            # Add dependsOn data
+                            if (
+                                source_code.depends_on_property
+                                or source_code.depends_on_value
+                            ):
+                                depends_on_value = source_code.depends_on_value
+                                if is_coding_array(depends_on_value):
+                                    depends_on_value = transform_struct_string_to_json(
+                                        depends_on_value
+                                    )
+                                depends_on = {
+                                    "property": source_code.depends_on_property,
+                                    "value": depends_on_value,
+                                }
+                                if source_code.depends_on_system:
+                                    depends_on["system"] = source_code.depends_on_system
+                                if source_code.depends_on_display:
+                                    depends_on[
+                                        "display"
+                                    ] = source_code.depends_on_display
+                                target_serialized["dependsOn"] = depends_on
 
-                    elements.append(new_element)
+                            new_element["target"].append(target_serialized)
+
+                        elements.append(new_element)
 
             groups.append(
                 {
