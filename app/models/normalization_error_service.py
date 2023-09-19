@@ -990,11 +990,19 @@ if __name__ == "__main__":
     from app.database import get_db
 
     conn = get_db()
-    #
-    # load_concepts_from_errors(commit_changes=True)  # False for test
-    # # result = get_outstanding_errors()
-    # # print(result)
-    #
-    # # conn.rollback()  # uncomment for test
-    # conn.commit()  # comment for test
+
+    # todo: clean out altogether, when temporary error load task is not needed
+    # uncomment this 1 line when running the temporary error load task
+    # comment out this 1 line for normal pytest use on local machine
+    # load_concepts_from_errors(commit_changes=True)
+
+    # comment out these 2 lines when running the temporary error load task
+    # uncomment these 2 lines for normal pytest use on local machine
+    load_concepts_from_errors(commit_changes=False)
+    conn.rollback()
+
+    # uncomment this 1 line when running the temporary error load task
+    # comment out this 1 line for normal pytest use on local machine
+    # conn.commit()
+
     conn.close()
