@@ -379,7 +379,7 @@ class ConceptMapVersionCreator:
         else:
             value_set = app.value_sets.models.ValueSetVersion.load(new_target_value_set_version_uuid).value_set
         new_target_value_set_version = ValueSet.load_most_recent_active_version(value_set.uuid)
-        if new_target_value_set_version_uuid is None:
+        if new_target_value_set_version is None:
             raise BadRequestWithCode(
                 "ConceptMap.new_version_from_previous",
                 f"There is no active version of target Value Set with UUID: {value_set.uuid}",
