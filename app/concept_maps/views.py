@@ -1,15 +1,19 @@
 import csv
 import io
 import string
+
 from uuid import uuid4
 
 from flask import Blueprint, jsonify, request, make_response
+
 from werkzeug.exceptions import BadRequest
 
 import app.tasks as tasks
 from app.concept_maps.models import *
 from app.concept_maps.versioning_models import *
 from app.helpers.oci_helper import get_data_from_oci
+
+from app.errors import NotFoundException
 
 concept_maps_blueprint = Blueprint("concept_maps", __name__)
 
@@ -404,3 +408,37 @@ def full_back_fill_to_simplifier():
     tasks.back_fill_concept_maps_to_simplifier.delay()
 
     return "Full concept map back fill to Simplifier complete."
+
+
+@concept_maps_blueprint.route("/ConceptMaps/map_no_maps", methods=["POST"])
+def new_concept_map_version_map_no_maps():
+    previous_version_uuid = request.json.get("previous_version_uuid")
+    new_version_description = request.json.get("new_version_description")
+    new_source_value_set_version_uuid = request.json.get(
+        "new_source_value_set_version_uuid"
+    )
+    new_target_value_set_version_uuid = request.json.get(
+        "new_target_value_set_version_uuid"
+    )
+    require_review_for_non_equivalent_relationships = request.json.get(
+        "require_review_for_non_equivalent_relationships"
+    )
+    require_review_no_maps_not_in_target = request.json.get(
+        "require_review_no_maps_not_in_target"
+    )
+
+    # Process the concept map version and get the new concept map version UUID
+    creator = ConceptMapVersionCreator()
+    new_version_uuid = creator.new_version_from_previous(
+        previous_version_uuid=previous_version_uuid,
+        new_version_description=new_version_description,
+        new_source_value_set_version_uuid=new_source_value_set_version_uuid,
+        new_target_value_set_version_uuid=new_target_value_set_version_uuid,
+        require_review_for_non_equivalent_relationships=require_review_for_non_equivalent_relationships,
+        require_review_no_maps_not_in_target=require_review_no_maps_not_in_target,
+    )
+
+    # Call create_no_map_mappings on the new concept map version
+    creator.create_no_map_mappings(new_version_uuid)
+
+    return "Concept map version processed successfully."

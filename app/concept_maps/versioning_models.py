@@ -224,7 +224,7 @@ class ConceptMapVersionCreator:
                 depends_on_system=row.depends_on_system,
                 depends_on_property=row.depends_on_property,
                 depends_on_value=row.depends_on_value,
-                depends_on_display=row.depends_on_display
+                depends_on_display=row.depends_on_display,
             )
 
             mapping = None
@@ -244,7 +244,7 @@ class ConceptMapVersionCreator:
                     display=row.target_concept_display,
                     system=None,
                     version=None,
-                    terminology_version=target_system
+                    terminology_version=target_system,
                 )
 
                 mapping = app.concept_maps.models.Mapping(
@@ -473,9 +473,11 @@ class ConceptMapVersionCreator:
 
                         if target_lookup_key not in new_targets_lookup:
                             # Append previous context to list in case multiple mappings which need to save it
-                            previous_context_for_row = self.process_inactive_target_mapping(
-                                new_source_concept=new_source_concept,
-                                previous_mapping=previous_mapping,
+                            previous_context_for_row = (
+                                self.process_inactive_target_mapping(
+                                    new_source_concept=new_source_concept,
+                                    previous_mapping=previous_mapping,
+                                )
                             )
                             previous_mapping_context.append(previous_context_for_row)
                         else:
@@ -505,8 +507,61 @@ class ConceptMapVersionCreator:
                         new_source_concept.update(
                             previous_version_context=json.dumps(
                                 previous_mapping_context, cls=CustomJSONEncoder
-                            )
+                            ),
                         )
+        # Commit the changes to the database
+        self.conn.commit()
+        # Return the new concept map version UUID
+        return self.new_version_uuid
+
+    def create_no_map_mappings(self, new_concept_map_version):
+        """
+        Creates mappings for source concepts where no_map=True.
+        """
+        no_map_relationship_uuid = "dca7c556-82d9-4433-8971-0b7edb9c9661"
+        no_map_target_concept_code = "No map"
+        no_map_target_concept_display = "No matching concept"
+        no_map_target_system_version_uuid = "93ec9286-17cf-4837-a4dc-218ce3015de6"
+
+        no_maps = self.conn.execute(
+            text(
+                """
+                SELECT uuid FROM concept_maps.source_concept  
+                WHERE no_map=true AND concept_map_version_uuid=:new_concept_map_version;
+                """
+            ),
+            {"new_concept_map_version": new_concept_map_version},
+        )
+
+        # Iterate through the source uuids that are no maps
+        for row in no_maps:
+            source_uuid = row[0]
+            source_concept = SourceConcept.load(source_uuid)
+            # Create a new mapping between the source concept and the Ronin_No map terminology
+            mapping = Mapping(
+                source=source_concept,
+                relationship=MappingRelationship.load_by_uuid(no_map_relationship_uuid),
+                target=Code(
+                    code=no_map_target_concept_code,
+                    display=no_map_target_concept_display,
+                    system=None,
+                    version=None,
+                    terminology_version=load_terminology_version_with_cache(
+                        no_map_target_system_version_uuid
+                    ),
+                ),
+                mapping_comments="mapped no map",
+                author=None,  # Add the author of the mapping, if required
+                review_status="reviewed",  # Add the review_status of the mapping, if required
+                created_date=None,  # Add the created_date of the mapping, if required
+                reviewed_date=None,  # Add the reviewed_date of the mapping, if required
+                review_comment=None,  # Add the review_comment of the mapping, if required
+                reviewed_by=None,  # Add the reviewed_by of the mapping, if required
+            )
+
+            mapping.save()
+        # Commit the changes to the database
+        self.conn.commit()
 
     def process_no_map(
         self,
