@@ -368,7 +368,7 @@ class ConceptMapVersionCreator:
         new_source_value_set_version = ValueSet.load_most_recent_active_version(value_set.uuid)
         if new_source_value_set_version is None:
             raise BadRequestWithCode(
-                "ConceptMap.new_version_from_previous",
+                "ConceptMap.new_version_from_previous.source_value_set_version",
                 f"There is no active version of source Value Set with UUID: {value_set.uuid}",
             )
         self.new_source_value_set_version_uuid = new_source_value_set_version.uuid
@@ -381,7 +381,7 @@ class ConceptMapVersionCreator:
         new_target_value_set_version = ValueSet.load_most_recent_active_version(value_set.uuid)
         if new_target_value_set_version is None:
             raise BadRequestWithCode(
-                "ConceptMap.new_version_from_previous",
+                "ConceptMap.new_version_from_previous.target_value_set_version",
                 f"There is no active version of target Value Set with UUID: {value_set.uuid}",
             )
         self.new_target_value_set_version_uuid = new_target_value_set_version.uuid
@@ -412,7 +412,7 @@ class ConceptMapVersionCreator:
         # Load and index the new targets
         new_targets_lookup = self.load_all_targets()
         app.concept_maps.models.ConceptMap.index_targets(
-            self.new_version_uuid, new_target_value_set_version_uuid
+            self.new_version_uuid, self.new_target_value_set_version_uuid
         )
         previous_contexts_list = []
 
