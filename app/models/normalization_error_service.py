@@ -322,7 +322,7 @@ def load_concepts_from_errors(commit_changes=True):
             "limit": PAGE_SIZE,
             "issue_type": "NOV_CONMAP_LOOKUP",
             # Hard code resource_type and organization_id only for testing
-            # "resource_type": "Observation",
+            "resource_type": "Observation",
             # "organization_id": "apposnd"
         }
 
@@ -414,18 +414,22 @@ def load_concepts_from_errors(commit_changes=True):
             # Create a list to put the data linking codes back to the issues/errors they came from
             error_code_link_data = []
 
+            # Walk through all the error service resources
             for error_service_resource in resources:
                 # The data element where validation is failed is stored in the 'location' on the issue
                 # We need to filter the issues to just the NOV_CONMAP_LOOKUP issues and get the location
                 nov_conmap_issues = error_service_resource.filter_issues_by_type(
                     "NOV_CONMAP_LOOKUP"
                 )
+
+                # In each error service resource, walk through each mapping issue
                 for issue in nov_conmap_issues:
                     location = issue.location
 
                     # For a given resource type, identify the actual coding which needs to make it into the concept map
                     raw_resource = json.loads(error_service_resource.resource)
 
+                    # Extract codes from the issues for the condition FHIR ResourceType
                     if error_service_resource.resource_type in [
                         ResourceType.CONDITION,
                     ]:
@@ -434,20 +438,43 @@ def load_concepts_from_errors(commit_changes=True):
                         processed_code = raw_code
                         processed_display = raw_code.get("text")
 
+                    # Extract codes from the issues for the observation FHIR ResourceType
                     if error_service_resource.resource_type in [
                         ResourceType.OBSERVATION
                     ]:
+
+                        # This is for the locations with an index
                         observation_data_element = re.sub(r'\[\d+\]', '', location)
-                        
                         match = re.search(r'\[(\d+)\]', location)
                         index = None
                         if match is not None:
                             index = int(match.group(1))
 
+                        # if location == "Observation.value":
+                        #     # the only one we want is valuecodableconcept, so if it is not that we will ignore it
+                        #     LOGGER.info(f'The full Observation.value element: {observation_data_element}')
+                        #     LOGGER.info(f'The raw Observation.value resource: {raw_resource}')
+
+                        # This could be stored in observation.value, if so we want to. If this works we want it for both
+                        if location == "Observation.value":
+                            print(type(raw_resource))
+                            if "valueCodeableConcept" not in raw_resource:
+                                continue
+                            LOGGER.info("--- Observation.value")
+                            raw_code = raw_resource["valueCodeableConcept"]
+                            LOGGER.info(f"Observation.valueCodeableConcept raw_code: {raw_code}")
+                            processed_code = raw_code
+                            processed_display = raw_code.get("text")
+
                         if observation_data_element == "Observation.code":
                             raw_code = raw_resource["code"]
                             processed_code = raw_code
                             processed_display = raw_code.get("text")
+                            if processed_display is None:
+                                LOGGER.info(f'This display is empty: {processed_display} {raw_code}')
+                                processed_display = ''
+
+                        # Observation.component.code will come in with an index
                         elif observation_data_element == "Observation.component.code":
                             if index is None:
                                 LOGGER.warning(f"Index required for Observation.component[index].code but could not be extracted from {location}")
@@ -455,12 +482,11 @@ def load_concepts_from_errors(commit_changes=True):
                             raw_code = raw_resource["component"][index]["code"]
                             processed_code = raw_code
                             processed_display = raw_code.get("text")
-                        elif observation_data_element == "Observation.valueCodeableConcept":
-                            LOGGER.info("--- Observation.valueCodeableConcept")
-                            raw_code = raw_resource["valueCodeableConcept"]
-                            processed_code = raw_code
-                            processed_display = raw_code.get("text")
-                        elif observation_data_element == "Observation.component.valueCodeableConcept":
+
+                        # Observation.component.value will come in with an index
+                        elif observation_data_element == "Observation.component.value":
+                            if 'valueCodeableConcept' not in raw_resource:
+                                continue
                             if index is None:
                                 LOGGER.warning(f"Index required for Observation.component[index].valueCodeableConcept but could not be extracted from {location}")
                                 continue
@@ -470,6 +496,7 @@ def load_concepts_from_errors(commit_changes=True):
                         else:
                             LOGGER.warning(f"Unrecognized location for Observation error: {location}")
 
+                    # Extract codes from the issues for the DocumentReference FHIR ResourceType
                     elif error_service_resource.resource_type in [
                         ResourceType.DOCUMENT_REFERENCE
                     ]:
@@ -489,17 +516,17 @@ def load_concepts_from_errors(commit_changes=True):
                     # todo: @Jon to extend this logic to support all the ContactPoint systems and ContactPoint uses
 
                     # Use the extract_telecom_data helper function to extract the codes from each resource type
-                    # Extract codes from the Patient resource type
+                    # Extract codes for issues from the Patient resource type
                     elif error_service_resource.resource_type == ResourceType.PATIENT:
                         processed_code, processed_display = extract_telecom_data('Patient', location,
                                                                                  raw_resource)
 
-                    # Extract codes from the Practitioner resource type
+                    # Extract codes for issues from the Practitioner resource type
                     elif error_service_resource.resource_type == ResourceType.PRACTITIONER:
                         processed_code, processed_display = extract_telecom_data('Practitioner', location,
                                                                                  raw_resource)
 
-                    # Extract codes from the PractitionerRole resource type
+                    # Extract codes for issues from the PractitionerRole resource type
                     elif error_service_resource.resource_type == ResourceType.PRACTITIONER_ROLE:
                         processed_code, processed_display = extract_telecom_data('PractitionerRole',
                                                                                  location, raw_resource)
@@ -991,10 +1018,10 @@ if __name__ == "__main__":
 
     conn = get_db()
 
-    load_concepts_from_errors(commit_changes=True)  # False for test
+    load_concepts_from_errors(commit_changes=False)  # False for test
     # result = get_outstanding_errors()
     # print(result)
 
-    # conn.rollback()  # uncomment for test
-    conn.commit()  # comment for test
+    conn.rollback()  # uncomment for test
+    # conn.commit()  # comment for test
     conn.close()
