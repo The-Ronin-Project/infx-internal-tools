@@ -20,3 +20,14 @@ def test_concept_map_publish():
     # look in OCI to see the value set and data normalization registry files (open up registry.json to see updates)
 
     # NOTE: Locally restore ValueSet.object_storage_folder_name and DataNormalizationRegistry.object_storage_folder_name
+
+def concept_map_version_value_set():
+    conn = get_db()
+
+    # load_concepts_from_errors(commit_changes=False)
+    # # result = get_outstanding_errors()
+    # # print(result)
+    #
+    # # conn.rollback()  # uncomment for test
+    # conn.commit()  # comment for test
+    conn.close()
