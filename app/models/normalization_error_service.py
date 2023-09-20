@@ -267,6 +267,36 @@ temp_error_data = Table(
 )
 
 
+def extract_telecom_data(resource_type, location, raw_resource):
+    """
+    Helper function for processing fields like Patient.telecom.system and Patient.telecom.use in various FHIR resources.
+    @param resource_type: Patient, Practitioner, PractitionerRole, or Location
+    @param location: Key provided by the issue report identifying the data location of the issue, for example
+    Patient.telecom[0].system is an error on the system value in the first entry in the Patient.telecom list.
+    @param raw_resource: raw data received with the issue report.
+    @return: A code object and display text.
+    """
+    # Define the regular expression patterns for 'system' and 'use'
+    regex_patterns = {
+        'system': re.compile(fr"^{resource_type}\.telecom\[(\d+)\]\.system$"),
+        'use': re.compile(fr"^{resource_type}\.telecom\[(\d+)\]\.use$")
+    }
+
+    # Initialize variables for processed code and display
+    processed_code = None
+    processed_display = None
+
+    # Loop through the keys 'system' and 'use' to find matches
+    for key in ['system', 'use']:
+        match = regex_patterns[key].search(location)
+        if match:
+            list_index = int(match.group(1))
+            raw_code = raw_resource['telecom'][list_index][key]
+            processed_code = raw_code
+            processed_display = raw_code
+
+    return processed_code, processed_display
+
 def load_concepts_from_errors(commit_changes=True):
     """
     Extracts specific concepts from a list of errors and saves them to a custom terminology.
@@ -284,30 +314,6 @@ def load_concepts_from_errors(commit_changes=True):
         3. Deduplicate the codes to avoid redundancy.
         4. Load the unique codes into their respective terminologies.
     """
-
-    # TODO: It seems appropriate to have this as a helper function but we need some overall restructuring
-    def extract_telecom_data(resource_type, location, raw_resource):
-        # Define the regular expression patterns for 'system' and 'use'
-        regex_patterns = {
-            'system': re.compile(fr"^{resource_type}\.telecom\[(\d+)\]\.system$"),
-            'use': re.compile(fr"^{resource_type}\.telecom\[(\d+)\]\.use$")
-        }
-
-        # Initialize variables for processed code and display
-        processed_code = None
-        processed_display = None
-
-        # Loop through the keys 'system' and 'use' to find matches
-        for key in ['system', 'use']:
-            match = regex_patterns[key].search(location)
-            if match:
-                list_index = int(match.group(1))
-                raw_code = raw_resource['telecom'][list_index][key]
-                processed_code = raw_code
-                processed_display = raw_code
-
-        return processed_code, processed_display
-
     # Step 1: Fetch resources that have encountered errors.
     token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
     # client = get_client(token)
@@ -416,57 +422,53 @@ def load_concepts_from_errors(commit_changes=True):
 
             # Walk through all the error service resources
             for error_service_resource in resources:
+                # Get the FHIR resource information from the error resource
+                resource_type = error_service_resource.resource_type
+                raw_resource = json.loads(error_service_resource.resource)
+
                 # The data element where validation is failed is stored in the 'location' on the issue
                 # We need to filter the issues to just the NOV_CONMAP_LOOKUP issues and get the location
                 nov_conmap_issues = error_service_resource.filter_issues_by_type(
                     "NOV_CONMAP_LOOKUP"
                 )
 
-                # In each error service resource, walk through each mapping issue
+                # In each error service resource, walk through each NOV_CONMAP_LOOKUP issue.
                 for issue in nov_conmap_issues:
+
+                    # data_element is the location without any brackets or indices
+                    # ex. if location is 'Patient.telecom[1].system' then data_element is 'Patient.telecom.system'
                     location = issue.location
+                    element = re.sub(r'\[\d+\]', '', location)
+                    match = re.search(r'\[(\d+)\]', location)
+                    # Extract any index that may be present in the location string
+                    index = None
+                    if match is not None:
+                        index = int(match.group(1))
 
-                    # For a given resource type, identify the actual coding which needs to make it into the concept map
-                    raw_resource = json.loads(error_service_resource.resource)
-
-                    # Extract codes from the issues for the condition FHIR ResourceType
-                    if error_service_resource.resource_type in [
-                        ResourceType.CONDITION,
-                    ]:
-                        # CodeableConcept
+                    # Based on resource_type, identify the actual coding which needs to make it into the concept map.
+                    # There is something unique about the handling for every resource_type we support.
+                    # Condition
+                    if resource_type == ResourceType.CONDITION:
+                        # Condition.code is a CodeableConcept
                         raw_code = raw_resource["code"]
                         processed_code = raw_code
                         processed_display = raw_code.get("text")
 
-                    # Extract codes from the issues for the observation FHIR ResourceType
-                    if error_service_resource.resource_type in [
-                        ResourceType.OBSERVATION
-                    ]:
-
-                        # This is for the locations with an index
-                        observation_data_element = re.sub(r'\[\d+\]', '', location)
-                        match = re.search(r'\[(\d+)\]', location)
-                        index = None
-                        if match is not None:
-                            index = int(match.group(1))
-
-                        # if location == "Observation.value":
-                        #     # the only one we want is valuecodableconcept, so if it is not that we will ignore it
-                        #     LOGGER.info(f'The full Observation.value element: {observation_data_element}')
-                        #     LOGGER.info(f'The raw Observation.value resource: {raw_resource}')
-
-                        # This could be stored in observation.value, if so we want to. If this works we want it for both
-                        if location == "Observation.value":
-                            print(type(raw_resource))
+                    # Observation
+                    elif resource_type == ResourceType.OBSERVATION:
+                        # Observation.value is a CodeableConcept
+                        if element == "Observation.value":
                             if "valueCodeableConcept" not in raw_resource:
                                 continue
-                            LOGGER.info("--- Observation.value")
                             raw_code = raw_resource["valueCodeableConcept"]
                             LOGGER.info(f"Observation.valueCodeableConcept raw_code: {raw_code}")
                             processed_code = raw_code
                             processed_display = raw_code.get("text")
 
-                        if observation_data_element == "Observation.code":
+                        # Observation.code is a CodeableConcept
+                        elif element == "Observation.code":
+                            if "code" not in raw_resource:
+                                continue
                             raw_code = raw_resource["code"]
                             processed_code = raw_code
                             processed_display = raw_code.get("text")
@@ -474,21 +476,31 @@ def load_concepts_from_errors(commit_changes=True):
                                 LOGGER.info(f'This display is empty: {processed_display} {raw_code}')
                                 processed_display = ''
 
-                        # Observation.component.code will come in with an index
-                        elif observation_data_element == "Observation.component.code":
+                        # Observation.component.code is a CodeableConcept - the location will come in with an index
+                        elif element == "Observation.component.code":
                             if index is None:
-                                LOGGER.warning(f"Index required for Observation.component[index].code but could not be extracted from {location}")
+                                LOGGER.warning(f"index for Observation.component[index].code not found in {location}")
+                                continue
+                            if (
+                                "component" not in raw_resource or
+                                index not in raw_resource["component"] or
+                                "code" not in raw_resource["component"][index]
+                            ):
                                 continue
                             raw_code = raw_resource["component"][index]["code"]
                             processed_code = raw_code
                             processed_display = raw_code.get("text")
 
-                        # Observation.component.value will come in with an index
-                        elif observation_data_element == "Observation.component.value":
-                            if 'valueCodeableConcept' not in raw_resource:
-                                continue
+                        # Observation.component.value is a CodeableConcept - the location will come in with an index
+                        elif element == "Observation.component.value":
                             if index is None:
-                                LOGGER.warning(f"Index required for Observation.component[index].valueCodeableConcept but could not be extracted from {location}")
+                                LOGGER.warning(f"index for Observation.component[index].value not found in  {location}")
+                                continue
+                            if (
+                                "component" not in raw_resource or
+                                index not in raw_resource["component"] or
+                                "valueCodeableConcept" not in raw_resource["component"][index]
+                            ):
                                 continue
                             raw_code = raw_resource["component"][index]["valueCodeableConcept"]
                             processed_code = raw_code
@@ -496,58 +508,55 @@ def load_concepts_from_errors(commit_changes=True):
                         else:
                             LOGGER.warning(f"Unrecognized location for Observation error: {location}")
 
-                    # Extract codes from the issues for the DocumentReference FHIR ResourceType
-                    elif error_service_resource.resource_type in [
-                        ResourceType.DOCUMENT_REFERENCE
-                    ]:
-                        # CodeableConcept
-                        raw_code = raw_resource["type"]
-                        processed_code = raw_code
-                        processed_display = raw_code.get("text")
+                    # DocumentReference
+                    elif resource_type == ResourceType.DOCUMENT_REFERENCE:
+                        # DocumentReference.type is a CodeableConcept
+                        if element == "DocumentReference.type":
+                            raw_code = raw_resource["type"]
+                            processed_code = raw_code
+                            processed_display = raw_code.get("text")
 
-                    # For appointment, will need to implement for both contact points
-                    elif error_service_resource.resource_type == ResourceType.APPOINTMENT:
-                        if location == "Appointment.status":
-                            # Raw code used for code and display
+                    # Appointment
+                    elif resource_type == ResourceType.APPOINTMENT:
+                        # Appointment.status is a raw code - used for code and display
+                        if element == "Appointment.status":
                             raw_code = raw_resource["status"]
                             processed_code = raw_code
                             processed_display = raw_code
 
-                    # todo: @Jon to extend this logic to support all the ContactPoint systems and ContactPoint uses
-
                     # Use the extract_telecom_data helper function to extract the codes from each resource type
-                    # Extract codes for issues from the Patient resource type
-                    elif error_service_resource.resource_type == ResourceType.PATIENT:
-                        processed_code, processed_display = extract_telecom_data('Patient', location,
-                                                                                 raw_resource)
+                    # Extract codes for issues from all resource types for ContactPoint.system and ContactPoint.use
 
-                    # Extract codes for issues from the Practitioner resource type
-                    elif error_service_resource.resource_type == ResourceType.PRACTITIONER:
-                        processed_code, processed_display = extract_telecom_data('Practitioner', location,
-                                                                                 raw_resource)
+                    # Patient
+                    elif resource_type == ResourceType.PATIENT:
+                        processed_code, processed_display = extract_telecom_data('Patient', location, raw_resource)
 
-                    # Extract codes for issues from the PractitionerRole resource type
-                    elif error_service_resource.resource_type == ResourceType.PRACTITIONER_ROLE:
-                        processed_code, processed_display = extract_telecom_data('PractitionerRole',
-                                                                                 location, raw_resource)
+                    # Practitioner
+                    elif resource_type == ResourceType.PRACTITIONER:
+                        processed_code, processed_display = extract_telecom_data('Practitioner', location, raw_resource)
 
-                    # Extract codes from the Location resource type
-                    elif error_service_resource.resource_type == ResourceType.LOCATION:
-                        processed_code, processed_display = extract_telecom_data('Location',
-                                                                                 location, raw_resource)
+                    # PractitionerRole
+                    elif resource_type == ResourceType.PRACTITIONER_ROLE:
+                        processed_code, processed_display = extract_telecom_data('PractitionerRole', location, raw_resource)
 
+                    # Location
+                    elif resource_type == ResourceType.LOCATION:
+                        processed_code, processed_display = extract_telecom_data('Location', location, raw_resource)
+
+                    # Case not yet implemented
                     else:
                         raise NotImplementedError(
-                            f"Support for extracting codeable concept not implemented for {error_service_resource.resource_type} at location {data_element}"
+                            f"Support not implemented for {resource_type} at location {element}"
                         )
 
                     # Lookup the concept map version used to normalize this type of resource
                     # So that we can then identify the correct terminology to load the new coding to
 
-                    # data_element is the location without any brackets or indices
-                    # ex. if the location is 'Patient.telecom[1].system' then the data_element is 'Patient.telecom.system'
-                    data_element = re.sub(r'\[\d+\]', '', location)
-
+                    # Note that some normalization registry data_element strings need adjustment.
+                    if element == "Observation.value" or element == "Observation.component.value":
+                        data_element = f"{element}CodeableConcept"
+                    else:
+                        data_element = element
                     concept_map_version_for_normalization = (
                         lookup_concept_map_version_for_data_element(
                             data_element=data_element,
