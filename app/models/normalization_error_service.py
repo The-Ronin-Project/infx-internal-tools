@@ -319,18 +319,30 @@ def load_concepts_from_errors(commit_changes=True):
     # client = get_client(token)
     with httpx.Client(timeout=60.0) as client:
         LOGGER.info("Begin import from error service")
+        all_resource_types = [
+            ResourceType.CONDITION,
+            ResourceType.OBSERVATION,
+            ResourceType.DOCUMENT_REFERENCE,
+            ResourceType.LOCATION,
+            ResourceType.APPOINTMENT,
+            ResourceType.PATIENT,
+            ResourceType.PRACTITIONER,
+            ResourceType.PRACTITIONER_ROLE,
+        ]
 
         # Collecting all resources with errors through paginated API calls.
         # resources_with_errors = [] # Moving into loop for batch test
         PAGE_SIZE = 1000  # todo: move to top
-        rest_api_params = {
-            "order": "ASC",
-            "limit": PAGE_SIZE,
-            "issue_type": "NOV_CONMAP_LOOKUP",
-            # Hard code resource_type and organization_id only for testing
-            "resource_type": "Observation",
-            # "organization_id": "apposnd"
-        }
+        rest_api_params = dict(
+            {
+                "order": "ASC",
+                "limit": PAGE_SIZE,
+                "issue_type": "NOV_CONMAP_LOOKUP",
+                # Hard code resource_type and organization_id only for testing
+                # "resource_type": "Observation",
+                # "organization_id": "apposnd"
+            }
+        )
 
         # Continuously fetch resources until all pages have been retrieved.
         all_resources_fetched = False
@@ -357,35 +369,26 @@ def load_concepts_from_errors(commit_changes=True):
             LOGGER.info(f"{len(resources_with_errors)} errors in page")
 
             # Convert API response data to ErrorServiceResource objects.
-            resources = []
+            error_resources = []
             for resource_data in resources_with_errors:
                 organization = Organization(resource_data.get("organization_id"))
 
-                resource_type = None
+                fhir_resource_type = None
                 for resource_type_option in ResourceType:
                     if resource_type_option.value == resource_data.get("resource_type"):
-                        resource_type = resource_type_option
+                        fhir_resource_type = resource_type_option
                         break
 
-                if resource_type not in (
-                    ResourceType.CONDITION,
-                    ResourceType.OBSERVATION,
-                    ResourceType.DOCUMENT_REFERENCE,
-                    ResourceType.LOCATION,
-                    ResourceType.APPOINTMENT,
-                    ResourceType.PATIENT,
-                    ResourceType.PRACTITIONER,
-                    ResourceType.PRACTITIONER_ROLE,
-                ):
+                if fhir_resource_type not in all_resource_types:
                     warnings.warn(
-                        f"Support for the {resource_type} resource type has not been implemented"
+                        f"Support for the {fhir_resource_type} resource type has not been implemented"
                     )
                     continue
 
-                resource = ErrorServiceResource(
+                error_resource = ErrorServiceResource(
                     id=uuid.UUID(resource_data.get("id")),
                     organization=organization,
-                    resource_type=resource_type,
+                    resource_type=fhir_resource_type,
                     resource=resource_data.get("resource"),
                     status=resource_data.get("status"),
                     severity=resource_data.get("severity"),
@@ -401,12 +404,12 @@ def load_concepts_from_errors(commit_changes=True):
                     reprocessed_by=resource_data.get("reprocessed_by"),
                     token=token,
                 )
-                resources.append(resource)
+                error_resources.append(error_resource)
 
-            # Load issues for all resources
+            # Load issues for all error service resources
             async def load_all_issues():
                 async with httpx.AsyncClient() as async_client:
-                    await asyncio.gather(*(resource.load_issues(client=async_client) for resource in resources))
+                    await asyncio.gather(*(error_resource.load_issues(client=async_client) for error_resource in error_resources))
             asyncio.run(load_all_issues())
 
             # Step 2: Extract relevant codes from the resource.
@@ -421,7 +424,7 @@ def load_concepts_from_errors(commit_changes=True):
             error_code_link_data = []
 
             # Walk through all the error service resources
-            for error_service_resource in resources:
+            for error_service_resource in error_resources:
                 # Get the FHIR resource information from the error resource
                 resource_type = error_service_resource.resource_type
                 raw_resource = json.loads(error_service_resource.resource)
