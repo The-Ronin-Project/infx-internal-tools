@@ -197,20 +197,20 @@ def get_concept_map_version_prerelease(version_uuid):
             concept_map_to_json,
             initial_path + f"/prerelease/{concept_map_version.concept_map.uuid}",
             folder="prerelease",
-            content_type="json"
+            content_type="json",
         )  # sends to OCI
         return jsonify(
             concept_map_to_datastore
         )  # returns the serialized metadata posted to OCI
     if request.method == "GET":
         concept_map_from_object_store = get_data_from_oci(
-                oci_root=ConceptMap.object_storage_folder_name,
-                resource_schema_version=ConceptMap.database_schema_version,
-                release_status="prerelease",
-                resource_id=concept_map_version.concept_map.uuid,
-                resource_version=concept_map_version.version,
-                content_type="json",
-                return_content=True,
+            oci_root=ConceptMap.object_storage_folder_name,
+            resource_schema_version=ConceptMap.database_schema_version,
+            release_status="prerelease",
+            resource_id=concept_map_version.concept_map.uuid,
+            resource_version=concept_map_version.version,
+            content_type="json",
+            return_content=True,
         )
         return jsonify(concept_map_from_object_store)  # returns the file from OCI
 
@@ -231,13 +231,13 @@ def get_concept_map_version_published(version_uuid):
 
     if request.method == "GET":
         concept_map_from_object_store = get_data_from_oci(
-                oci_root=ConceptMap.object_storage_folder_name,
-                resource_schema_version=ConceptMap.database_schema_version,
-                release_status="published",
-                resource_id=concept_map_version.concept_map.uuid,
-                resource_version=concept_map_version.version,
-                content_type="json",
-                return_content=True,
+            oci_root=ConceptMap.object_storage_folder_name,
+            resource_schema_version=ConceptMap.database_schema_version,
+            release_status="published",
+            resource_id=concept_map_version.concept_map.uuid,
+            resource_version=concept_map_version.version,
+            content_type="json",
+            return_content=True,
         )
         return jsonify(concept_map_from_object_store)
 
@@ -410,6 +410,14 @@ def full_back_fill_to_simplifier():
     return "Full concept map back fill to Simplifier complete."
 
 
+@concept_maps_blueprint.route(
+    "/ConceptMaps/<string:version_uuid>/concepts_to_assign", methods=["GET"]
+)
+def concepts_for_mapper_assignment(version_uuid):
+    dict_list = get_concepts_for_assignment(version_uuid)
+    response = jsonify(dict_list)
+    return response
+  
 @concept_maps_blueprint.route("/ConceptMaps/map_no_maps", methods=["POST"])
 def new_concept_map_version_map_no_maps():
     previous_version_uuid = request.json.get("previous_version_uuid")

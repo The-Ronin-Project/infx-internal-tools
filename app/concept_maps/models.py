@@ -200,6 +200,7 @@ class ConceptMap:
         target_value_set_uuid (str): The UUID of the target value set used in the concept map.
         most_recent_active_version (str): The UUID of the most recent active version of the concept map.
     """
+
     database_schema_version = 3
     object_storage_folder_name = "ConceptMaps"
 
@@ -1119,7 +1120,7 @@ class ConceptMapVersion:
             concept_map_to_json,
             initial_path + f"/published/{self.concept_map.uuid}",
             folder="published",
-            content_type="json"
+            content_type="json",
         )  # sends to OCI
         self.version_set_status_active()
         self.set_publication_date()
@@ -1127,8 +1128,9 @@ class ConceptMapVersion:
         self.to_simplifier()
         # Publish new version of data normalization registry
         app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
-        app.tasks.resolve_errors_after_concept_map_publish.delay(concept_map_version_uuid=self.uuid)
-
+        app.tasks.resolve_errors_after_concept_map_publish.delay(
+            concept_map_version_uuid=self.uuid
+        )
 
     def to_simplifier(self):
         """
@@ -1185,10 +1187,7 @@ class ConceptMapVersion:
             """
         )
         issues_resources_result = conn.execute(
-            issues_resources_query,
-            {
-                "concept_map_version_uuid": self.uuid
-            }
+            issues_resources_query, {"concept_map_version_uuid": self.uuid}
         )
         issue_uuid_list = []
         resource_uuid_list = []
@@ -1199,12 +1198,11 @@ class ConceptMapVersion:
                 resource_uuid_list.append(resource_uuid)
 
         # Using full paths to avoid circular import from normalization_error_service
-        # Gather the reprocessing calls for each resource_uuid 
+        # Gather the reprocessing calls for each resource_uuid
         app.models.normalization_error_service.reprocess_resources(resource_uuid_list)
 
         # Mark issues resolved - full path avoids circular import
         app.models.normalization_error_service.set_issues_resolved(issue_uuid_list)
-
 
     @classmethod
     def get_active_concept_map_versions(cls) -> List["ConceptMapVersion"]:
@@ -1752,3 +1750,23 @@ def make_author_assigned_mapper(source_concept_uuid, author):
         return "ok"
     else:
         return "Author not found"
+
+
+def get_concepts_for_assignment(version_uuid):
+    conn = get_db()
+    concepts = conn.execute(
+        text(
+            """
+            SELECT *, sc.code as source_code, sc.display as source_display, sc.uuid as source_uuid, pmu.uuid as mapper_uuid, pmu.first_last_name as assigned_mapper, pmu2.uuid as reviewer_uuid, pmu2.first_last_name as assigned_reviewer, ctc.additional_data->>'count_of_resources_affected' as count_of_resources_affected  
+            FROM concept_maps.source_concept sc  
+            LEFT JOIN project_management.user pmu ON pmu.uuid = sc.assigned_mapper  
+            LEFT JOIN project_management.user pmu2 ON sc.assigned_reviewer = pmu2.uuid  
+            LEFT JOIN custom_terminologies.code ctc ON sc.custom_terminology_uuid = ctc.uuid  
+            WHERE sc.concept_map_version_uuid = :version_uuid
+            """
+        ),
+        {"version_uuid": version_uuid},
+    )
+    column_names = concepts.keys()
+    concept_list = [dict(zip(column_names, row)) for row in concepts]
+    return concept_list
