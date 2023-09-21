@@ -9,6 +9,11 @@ from app.errors import BadRequestWithCode
 from app.models.codes import Code
 from app.terminologies.models import load_terminology_version_with_cache
 from app.value_sets.models import ValueSet
+import logging
+
+LOGGER = logging.getLogger()
+
+LOGGER.setLevel("DEBUG")
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -355,6 +360,11 @@ class ConceptMapVersionCreator:
             require_review_for_non_equivalent_relationships (bool): Whether to require review for non-equivalent relationships.
             require_review_no_maps_not_in_target (bool): Whether to require review for no-maps not in the target.
         """
+
+        LOGGER.info("Starting new_version_from_previous with parameters:", previous_version_uuid,
+                     new_source_value_set_version_uuid, new_target_value_set_version_uuid,
+                     require_review_for_non_equivalent_relationships, require_review_no_maps_not_in_target)
+
         # previous_concept_map_version - load using the previous_version_uuid
         concept_map_version = app.concept_maps.models.ConceptMapVersion(previous_version_uuid)
         self.previous_concept_map_version = concept_map_version
@@ -404,10 +414,12 @@ class ConceptMapVersionCreator:
         # Populate the concept_maps.source_concept table with the latest expansion of the new target value set version
         new_source_concepts = self.populate_source_concepts()
 
+        LOGGER.info("Loading previous sources and mappings...")
         # Iterate through the new sources, compare w/ previous, make decisions:
         previous_sources_and_mappings = self.load_all_sources_and_mappings(
             self.previous_concept_map_version.uuid
         )
+        LOGGER.info("Number of previous sources and mappings loaded: %s", len(previous_sources_and_mappings))
 
         # Load and index the new targets
         new_targets_lookup = self.load_all_targets()
@@ -439,6 +451,9 @@ class ConceptMapVersionCreator:
                     source_lookup_key
                 ].get("mappings")
 
+                LOGGER.debug("Number of associated previous mappings: %s", len(previous_mappings))
+                LOGGER.debug(f'These are the previous mappings: {previous_mappings}')
+
                 # Some parts of source concept should always carry forward, regardless
                 new_source_concept.update(
                     comments=previous_source_concept.comments,
@@ -465,6 +480,7 @@ class ConceptMapVersionCreator:
                 else:
                     previous_mapping_context = []
                     for previous_mapping in previous_mappings:
+                        LOGGER.debug("Processing previous mapping: %s", previous_mapping)
                         target_lookup_key = (
                             previous_mapping.target.code,
                             previous_mapping.target.display,
