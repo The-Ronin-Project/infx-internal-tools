@@ -350,51 +350,16 @@ class ConceptMapVersionCreator:
         Args:
             previous_version_uuid (uuid.UUID): The UUID of the previous ConceptMapVersion.
             new_version_description (str): The description of the new ConceptMapVersion.
-            new_source_value_set_version_uuid (uuid.UUID): The UUID of the new source value set version. If there is
-            a more recent active version of this value set, that will be used instead. You may omit this input
-            to use the most recent active version of the current source value set for this concept map.
-            new_target_value_set_version_uuid (uuid.UUID): The UUID of the new target value set version. If there is
-            a more recent active version of this value set, that will be used instead. You may omit this input
-            to use the most recent active version of the current target value set for this concept map.
-            You may omit this input to use the most recent active version of the current target value set.
+            new_source_value_set_version_uuid (uuid.UUID): The UUID of the new source value set version.
+            new_target_value_set_version_uuid (uuid.UUID): The UUID of the new target value set version.
             require_review_for_non_equivalent_relationships (bool): Whether to require review for non-equivalent relationships.
             require_review_no_maps_not_in_target (bool): Whether to require review for no-maps not in the target.
         """
 
-        LOGGER.info("Starting new_version_from_previous with parameters:", previous_version_uuid,
-                     new_source_value_set_version_uuid, new_target_value_set_version_uuid,
-                     require_review_for_non_equivalent_relationships, require_review_no_maps_not_in_target)
-
-        # previous_concept_map_version - load using the previous_version_uuid
-        concept_map_version = app.concept_maps.models.ConceptMapVersion(previous_version_uuid)
-        self.previous_concept_map_version = concept_map_version
-
-        # new_source_value_set_version_uuid - use uuid provided or load most recent concept map.source_value_set_uuid
-        concept_map = app.concept_maps.models.ConceptMap(concept_map_version.concept_map.uuid)
-        if new_source_value_set_version_uuid is None:
-            value_set = app.value_sets.models.ValueSet.load(concept_map.source_value_set_uuid)
-        else:
-            value_set = app.value_sets.models.ValueSetVersion.load(new_source_value_set_version_uuid).value_set
-        new_source_value_set_version = ValueSet.load_most_recent_active_version(value_set.uuid)
-        if new_source_value_set_version is None:
-            raise BadRequestWithCode(
-                "ConceptMap.new_version_from_previous.source_value_set_version",
-                f"There is no active version of source Value Set with UUID: {value_set.uuid}",
-            )
-        self.new_source_value_set_version_uuid = new_source_value_set_version.uuid
-
-        # new_target_value_set_version_uuid - use uuid provided or load most recent concept map.target_value_set_uuid
-        if new_target_value_set_version_uuid is None:
-            value_set = app.value_sets.models.ValueSet.load(concept_map.target_value_set_uuid)
-        else:
-            value_set = app.value_sets.models.ValueSetVersion.load(new_target_value_set_version_uuid).value_set
-        new_target_value_set_version = ValueSet.load_most_recent_active_version(value_set.uuid)
-        if new_target_value_set_version is None:
-            raise BadRequestWithCode(
-                "ConceptMap.new_version_from_previous.target_value_set_version",
-                f"There is no active version of target Value Set with UUID: {value_set.uuid}",
-            )
-        self.new_target_value_set_version_uuid = new_target_value_set_version.uuid
+        # Set up our variables we need to work with
+        self.previous_concept_map_version = app.concept_maps.models.ConceptMapVersion(previous_version_uuid)
+        self.new_source_value_set_version_uuid = new_source_value_set_version_uuid
+        self.new_target_value_set_version_uuid = new_target_value_set_version_uuid
 
         # Open a persistent connection and begin a transaction
         self.conn = get_db()
@@ -424,7 +389,7 @@ class ConceptMapVersionCreator:
         # Load and index the new targets
         new_targets_lookup = self.load_all_targets()
         app.concept_maps.models.ConceptMap.index_targets(
-            self.new_version_uuid, self.new_target_value_set_version_uuid
+            self.new_version_uuid, new_target_value_set_version_uuid
         )
         previous_contexts_list = []
 
@@ -525,6 +490,7 @@ class ConceptMapVersionCreator:
                                 previous_mapping_context, cls=CustomJSONEncoder
                             ),
                         )
+
         # Commit the changes to the database
         self.conn.commit()
         # Return the new concept map version UUID
@@ -552,11 +518,11 @@ class ConceptMapVersionCreator:
         # Iterate through the source uuids that are no maps
         for row in no_maps:
             source_uuid = row[0]
-            source_concept = SourceConcept.load(source_uuid)
+            source_concept = app.SourceConcept.load(source_uuid)
             # Create a new mapping between the source concept and the Ronin_No map terminology
-            mapping = Mapping(
+            mapping = app.Mapping(
                 source=source_concept,
-                relationship=MappingRelationship.load_by_uuid(no_map_relationship_uuid),
+                relationship=app.MappingRelationship.load_by_uuid(no_map_relationship_uuid),
                 target=Code(
                     code=no_map_target_concept_code,
                     display=no_map_target_concept_display,
