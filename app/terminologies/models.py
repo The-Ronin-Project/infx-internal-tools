@@ -7,7 +7,7 @@ from sqlalchemy import text
 from cachetools.func import ttl_cache
 import app.models.codes
 from app.database import get_db
-from app.errors import BadRequestWithCode
+from app.errors import BadRequestWithCode, NotFoundException
 
 
 @ttl_cache()
@@ -104,6 +104,11 @@ class Terminology:
             {"terminology_version_uuid": terminology_version_uuid},
         ).first()
 
+        # When there is no data, do not create an object
+        if term_data is None:
+            raise NotFoundException(f"No data found for terminology version_UUID: {terminology_version_uuid}")
+
+        # Create and return a Terminology object
         return cls(
             uuid=term_data.uuid,
             terminology=term_data.terminology,

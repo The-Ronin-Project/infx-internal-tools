@@ -3,6 +3,7 @@ from celery.schedules import crontab
 from uuid import UUID
 from decouple import config
 
+from app.errors import NotFoundException
 from app.value_sets.models import ValueSetVersion, ValueSet
 import app.concept_maps.models
 import app.concept_maps.versioning_models
@@ -10,11 +11,11 @@ from app.models.normalization_error_service import load_concepts_from_errors
 from app.database import get_db
 
 
-BROKER_HOST = config('CELERY_BROKER_HOST', 'localhost')
-BROKER_PORT = config('CELERY_BROKER_PORT', '5672')
-BROKER_TLS_ENFORCED = bool(config('CELERY_BROKER_TLS_ENFORCED', False))
+BROKER_HOST = config("CELERY_BROKER_HOST", "localhost")
+BROKER_PORT = config("CELERY_BROKER_PORT", "5672")
+BROKER_TLS_ENFORCED = bool(config("CELERY_BROKER_TLS_ENFORCED", False))
 broker_protocol = "rediss" if BROKER_TLS_ENFORCED else "redis"
-BROKER_URL = f'{broker_protocol}://{BROKER_HOST}:{BROKER_PORT}//'
+BROKER_URL = f"{broker_protocol}://{BROKER_HOST}:{BROKER_PORT}//"
 if BROKER_TLS_ENFORCED:
     BROKER_URL += "?ssl_cert_reqs=required"
 
@@ -62,19 +63,32 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
     conn = get_db()
 
     # Step 6: look up source and target value set
+    
+    # Instantiate the concept map object - attributes provide data for a concept map of ANY STATUS
     concept_map = app.concept_maps.models.ConceptMap(concept_map_uuid)  # instantiate object
 
+    # Instantiate the concept map version object - attributes provide data for the most recent version of ANY STATUS
     concept_map_most_recent_version = concept_map.get_most_recent_version(
         active_only=False
     )
 
-    # Get the source and target value set version UUIDs from the most_recent_active_version attribute
+    # Get the source_value_set_version_uuid from the concept map object.
+    # This source_value_set_version_uuid MAY OR MAY NOT be the most recent version, and MAY OR MAY NOT be active.
+    # It is fine b/c every time we use this value, we follow up with load_latest_version() or load_most_recent_version()
     source_value_set_version_uuid = (
         concept_map_most_recent_version.source_value_set_version_uuid
     )
-    target_value_set_version_uuid = (
-        concept_map_most_recent_version.target_value_set_version_uuid
+
+    # Get the target_value_set_uuid from the concept map object.
+    # Use it to get the most recent active version of that target value set, if there is one. There must be one.
+
+    target_value_set = ValueSet.load(concept_map.target_value_set_uuid)
+
+    new_target_value_set_version = (
+        ValueSet.load_most_recent_active_version(target_value_set.uuid)
     )
+    if new_target_value_set_version is None:
+        raise NotFoundException(f"Could not find an active version of target value set with UUID {UUID}")
 
     # Step 7: Create the new value set version
     # Get the most recent version of the terminology
@@ -116,7 +130,7 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
         previous_version_uuid=concept_map_most_recent_version.uuid,
         new_version_description=new_concept_map_version_description,
         new_source_value_set_version_uuid=new_source_value_set_version.uuid,
-        new_target_value_set_version_uuid=target_value_set_version_uuid,
+        new_target_value_set_version_uuid=new_target_value_set_version.uuid,
         require_review_for_non_equivalent_relationships=require_review_for_non_equivalent_relationships,
         require_review_no_maps_not_in_target=require_review_no_maps_not_in_target,
     )

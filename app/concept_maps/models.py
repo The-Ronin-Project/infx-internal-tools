@@ -17,6 +17,7 @@ import app.models.codes
 import app.models.data_ingestion_registry
 import app.value_sets.models
 from app.database import get_db, get_elasticsearch
+from app.errors import NotFoundException
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.models.codes import Code
@@ -589,9 +590,11 @@ class ConceptMapVersion:
         )
         for item in data:
             terminology_version_uuid = item.terminology_version_uuid
-            self.allowed_target_terminologies.append(
-                Terminology.load(terminology_version_uuid)
-            )
+            # if there is a Terminology UUID to load, load the Terminology and add it to the list; otherwise skip
+            if terminology_version_uuid is not None:
+                self.allowed_target_terminologies.append(
+                    Terminology.load(terminology_version_uuid)
+                )
 
     # def generate_self_mappings(self):
     #     """

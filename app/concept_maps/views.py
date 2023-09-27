@@ -247,10 +247,15 @@ def get_concept_map_version_published(version_uuid):
     methods=["POST"],
 )
 def create_new_concept_map_version_from_previous(previous_version_uuid):
+    """
+    @param previous_version_uuid: UUID of the most recent concept map version, regardless of version status.
+    """
     new_version_description = request.json.get("new_version_description")
+    # Callers must input the UUID of the most recent active source value set version.
     new_source_value_set_version_uuid = request.json.get(
         "new_source_value_set_version_uuid"
     )
+    # Callers must input the UUID of the most recent active target value set version.
     new_target_value_set_version_uuid = request.json.get(
         "new_target_value_set_version_uuid"
     )
