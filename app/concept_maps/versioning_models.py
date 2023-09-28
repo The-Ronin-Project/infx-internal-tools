@@ -67,7 +67,7 @@ class ConceptMapVersionCreator:
         new_version_num = self.previous_concept_map_version.version + 1
         # Register the new version in concept_maps.concept_map_version
         concept_map_uuid = self.previous_concept_map_version.concept_map.uuid
-        self.conn.execute(  # CONNECTION
+        self.conn.execute(
             text(
                 """
                 insert into concept_maps.concept_map_version
@@ -98,7 +98,7 @@ class ConceptMapVersionCreator:
             list: A list of new SourceConcept instances.
         """
         # Populate all the sources with a status of pending
-        self.conn.execute(  # SECOND CONNECTION TO DB
+        self.conn.execute(
             text(
                 """
                 insert into concept_maps.source_concept
@@ -145,7 +145,7 @@ class ConceptMapVersionCreator:
             dict: A dictionary containing source concepts and their mappings.
         """
 
-        all_data = self.conn.execute(  # CONNECTION CREATING THE DATA FOR OUR BIG LOOP
+        all_data = self.conn.execute(
             text(
                 """
                 SELECT
@@ -208,7 +208,7 @@ class ConceptMapVersionCreator:
 
         response = {}
 
-        for row in all_data:  # ALL DATA WAS CREATED ABOVE IS THAT CONNECTION OPEN STILL?
+        for row in all_data:
             # In the database, source_concept.system is a terminology_version_uuid, but we want the FHIR URL
             source_system_terminology = load_terminology_version_with_cache(
                 row.source_concept_system
@@ -310,7 +310,7 @@ class ConceptMapVersionCreator:
         Returns:
             dict: A dictionary containing target concepts.
         """
-        target_value_set_expansion = self.conn.execute(  # CONNECTION FOR LOADING TARGETS
+        target_value_set_expansion = self.conn.execute(
             text(
                 """
                 select expansion_member.*, tv.uuid as terminology_uuid from value_sets.expansion_member
@@ -375,7 +375,7 @@ class ConceptMapVersionCreator:
             active_only=False
         )
         if (concept_map_most_recent_version is None or
-                str(concept_map_most_recent_version.uuid) != previous_version_uuid
+                concept_map_most_recent_version.uuid != previous_version_uuid
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.previous_version_uuid",
@@ -388,7 +388,7 @@ class ConceptMapVersionCreator:
             ValueSet.load_most_recent_active_version(source_value_set_version.value_set.uuid)
         )
         if active_source_value_set_version is None or (
-                str(active_source_value_set_version.uuid) != new_source_value_set_version_uuid
+                active_source_value_set_version.uuid != new_source_value_set_version_uuid
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.new_source_value_set_version_uuid",
@@ -398,10 +398,10 @@ class ConceptMapVersionCreator:
         # Validate the input new_target_value_set_version_uuid
         target_value_set_version = app.value_sets.models.ValueSetVersion.load(new_target_value_set_version_uuid)
         active_target_value_set_version = (
-            ValueSet.load_most_recent_active_version(target_value_set_version.value_set.uuid)  # THIS HAS GOT TO BE ANOTHER CONNECTION
+            ValueSet.load_most_recent_active_version(target_value_set_version.value_set.uuid)
         )
         if active_target_value_set_version is None or (
-                str(active_target_value_set_version.uuid) != new_target_value_set_version_uuid
+                active_target_value_set_version.uuid != new_target_value_set_version_uuid
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.new_target_value_set_version_uuid",
@@ -417,31 +417,28 @@ class ConceptMapVersionCreator:
             self.new_source_value_set_version_uuid = new_source_value_set_version_uuid
             self.new_target_value_set_version_uuid = new_target_value_set_version_uuid
 
-            # Open a persistent connection and begin a transaction # IS THIS WHERE IT'S HUNG UP?
-            self.conn = get_db()  # OUR FIRST CONNECTION
+            # Open a persistent connection and begin a transaction
+            self.conn = get_db()
             self.conn.execute(text("begin"))
 
             # Register the new concept map version
             self.new_version_uuid = uuid.uuid4()
-            self.register_new_concept_map_version(  # GOOD: SECOND CONNECTION TO DB (CONNECTS AND CLOSES PROBABLY)
+            self.register_new_concept_map_version(
                 new_version_description=new_version_description
             )
 
             # Populate concept_maps.source_concept table with the latest expansion of the new target value set version
             # Note: populate_source_concepts() calls load_all_sources_and_mappings() with the self.new_version_uuid
-            new_source_concepts = self.populate_source_concepts()  # THIRD CONNECTION (DOES THIS CLOSE?)
+            new_source_concepts = self.populate_source_concepts()
 
-            LOGGER.info("Loading previous sources and mappings...")
             # Iterate through the new sources, compare w/ previous, make decisions:
             previous_sources_and_mappings = self.load_all_sources_and_mappings(
                 self.previous_concept_map_version.uuid
             )
 
-            LOGGER.info("Number of previous sources and mappings loaded: %s", len(previous_sources_and_mappings))
-
             # Load and index the new targets
-            new_targets_lookup = self.load_all_targets()  # 5TH CONNECTION (DOES THIS CLOSE)
-            app.concept_maps.models.ConceptMap.index_targets(  # 6TH CONNECTION (PROBABLY OPENS AND CLOSES)
+            new_targets_lookup = self.load_all_targets()
+            app.concept_maps.models.ConceptMap.index_targets(
                 self.new_version_uuid, new_target_value_set_version_uuid
             )
             previous_contexts_list = []
@@ -469,11 +466,8 @@ class ConceptMapVersionCreator:
                         source_lookup_key
                     ].get("mappings")
 
-                    LOGGER.debug("Number of associated previous mappings: %s", len(previous_mappings))
-                    LOGGER.debug(f'These are the previous mappings: {previous_mappings}')
-
                     # Some parts of source concept should always carry forward, regardless
-                    new_source_concept.update(  # CONNECTING AND UPDATING value_sets.value_set_rule
+                    new_source_concept.update(
                         comments=previous_source_concept.comments,
                         additional_context=previous_source_concept.additional_context,
                         map_status=previous_source_concept.map_status,
@@ -486,7 +480,7 @@ class ConceptMapVersionCreator:
 
                     if not previous_mappings:
                         # Handle no-maps
-                        result = self.process_no_map(  # CONNECTS AND UPDATES
+                        result = self.process_no_map(
                             previous_source_concept,
                             new_source_concept,
                             require_review_no_maps_not_in_target,
@@ -498,7 +492,6 @@ class ConceptMapVersionCreator:
                     else:
                         previous_mapping_context = []
                         for previous_mapping in previous_mappings:
-                            LOGGER.debug("Processing previous mapping: %s", previous_mapping)
                             target_lookup_key = (
                                 previous_mapping.target.code,
                                 previous_mapping.target.display,
