@@ -144,9 +144,6 @@ class ConceptMapVersionCreator:
         Returns:
             dict: A dictionary containing source concepts and their mappings.
         """
-        # todo: should we do it this way?
-        # conn = get_db()
-        # all_data = conn.execute(
 
         all_data = self.conn.execute(
             text(
@@ -183,9 +180,9 @@ class ConceptMapVersionCreator:
                     ctc.depends_on_value,
                     ctc.depends_on_display
                 FROM
-                    concept_maps.source_concept sc
-                LEFT JOIN
                     concept_maps.concept_relationship cr
+                RIGHT JOIN
+                    concept_maps.source_concept sc
                 ON
                     sc.uuid = cr.source_concept_uuid
                 LEFT JOIN
@@ -204,6 +201,7 @@ class ConceptMapVersionCreator:
         # response[
         #     (code, display, system) = {
         #                                 "source_concept": SourceConcept(),
+        #                                 "mappings": [Mapping(), Mapping()]
         #                                 "mappings": [Mapping(), Mapping()]
         #                             }
         # ]
@@ -377,7 +375,7 @@ class ConceptMapVersionCreator:
             active_only=False
         )
         if (concept_map_most_recent_version is None or
-                str(concept_map_most_recent_version.uuid) != previous_version_uuid
+                concept_map_most_recent_version.uuid != previous_version_uuid
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.previous_version_uuid",
@@ -390,7 +388,7 @@ class ConceptMapVersionCreator:
             ValueSet.load_most_recent_active_version(source_value_set_version.value_set.uuid)
         )
         if active_source_value_set_version is None or (
-                str(active_source_value_set_version.uuid) != new_source_value_set_version_uuid
+                active_source_value_set_version.uuid != new_source_value_set_version_uuid
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.new_source_value_set_version_uuid",
@@ -403,7 +401,7 @@ class ConceptMapVersionCreator:
             ValueSet.load_most_recent_active_version(target_value_set_version.value_set.uuid)
         )
         if active_target_value_set_version is None or (
-                str(active_target_value_set_version.uuid) != new_target_value_set_version_uuid
+                active_target_value_set_version.uuid != new_target_value_set_version_uuid
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.new_target_value_set_version_uuid",
@@ -429,15 +427,14 @@ class ConceptMapVersionCreator:
                 new_version_description=new_version_description
             )
 
-            # Populate the concept_maps.source_concept table with the latest expansion of the new target value set version
+            # Populate concept_maps.source_concept table with the latest expansion of the new target value set version
+            # Note: populate_source_concepts() calls load_all_sources_and_mappings() with the self.new_version_uuid
             new_source_concepts = self.populate_source_concepts()
 
-            LOGGER.info("Loading previous sources and mappings...")
             # Iterate through the new sources, compare w/ previous, make decisions:
             previous_sources_and_mappings = self.load_all_sources_and_mappings(
                 self.previous_concept_map_version.uuid
             )
-            LOGGER.info("Number of previous sources and mappings loaded: %s", len(previous_sources_and_mappings))
 
             # Load and index the new targets
             new_targets_lookup = self.load_all_targets()
@@ -469,9 +466,6 @@ class ConceptMapVersionCreator:
                         source_lookup_key
                     ].get("mappings")
 
-                    LOGGER.debug("Number of associated previous mappings: %s", len(previous_mappings))
-                    LOGGER.debug(f'These are the previous mappings: {previous_mappings}')
-
                     # Some parts of source concept should always carry forward, regardless
                     new_source_concept.update(
                         comments=previous_source_concept.comments,
@@ -498,7 +492,6 @@ class ConceptMapVersionCreator:
                     else:
                         previous_mapping_context = []
                         for previous_mapping in previous_mappings:
-                            LOGGER.debug("Processing previous mapping: %s", previous_mapping)
                             target_lookup_key = (
                                 previous_mapping.target.code,
                                 previous_mapping.target.display,
