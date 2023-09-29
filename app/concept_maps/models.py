@@ -990,7 +990,11 @@ class ConceptMapVersion:
 
     def check_formatting(self, concept_map):
         """Checking the formatting for errors before exporting to OCI, we need to make sure the concept map doesn't have
-        any errors, so it will work for the DP concept map UDF, as well as for InterOps"""
+        any errors, so it will work for the DP concept map UDF, as well as for InterOps
+
+        Integrity Check 1: Check that all data in the code field is a JSON string
+        Integrity Check 2: Make sure there are no duplicate targets
+        """
 
         errors = []  # list to hold error messages
 
@@ -999,6 +1003,8 @@ class ConceptMapVersion:
             # Iterate over each dictionary in the 'element' list, with enumerate to keep track of the index
             for index, element in enumerate(group.get('element', [])):
                 # Integrity Check 1: Check that all data in the code field is a JSON string
+                # TODO: Check to make sure that it is a valid code, not just JSON,
+                #  validate that the display matches the code
                 code = element.get('code')
                 if code is not None:
                     try:
@@ -1010,6 +1016,7 @@ class ConceptMapVersion:
                     errors.append(f"'code' key is missing in the element at index {index}")
 
                 # Integrity Check 2: Make sure there are no duplicate targets
+                # TODO: at some point this will need to handle more than one target for some concept maps but not most
                 target_values = set()
                 targets = element.get('target', [])
                 if targets:
