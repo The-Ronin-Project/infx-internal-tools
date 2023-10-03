@@ -17,7 +17,7 @@ import app.models.codes
 import app.models.data_ingestion_registry
 import app.value_sets.models
 from app.database import get_db, get_elasticsearch
-from app.errors import NotFoundException
+from app.errors import BadDataError, NotFoundException
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.models.codes import Code
@@ -1004,6 +1004,7 @@ class ConceptMapVersion:
             for index, element in enumerate(group.get('element', [])):
                 # Integrity Check 1: Check that all data in the code field is a JSON string
                 # TODO: Check to make sure that it is a valid code, not just JSON,
+                # Check if it is a valid codable concept,
                 #  validate that the display matches the code
                 code = element.get('code')
                 if code is not None:
@@ -1012,6 +1013,13 @@ class ConceptMapVersion:
                         json.loads(code)
                     except ValueError:
                         errors.append(f"Invalid JSON string in the code field at element index {index}: {code}")
+                    #
+                    # try:
+                    #     # have defined schema we are expecting
+                    #     pass
+                    # except ValueError:
+                    #     errors.append(f"Code is not formatted as expected at element index {index}: {code}")
+
                 else:
                     errors.append(f"'code' key is missing in the element at index {index}")
 
@@ -1024,7 +1032,7 @@ class ConceptMapVersion:
                         target_code = target.get('code')
                         if target_code:
                             if target_code in target_values:
-                                errors.append(f"Duplicate target found at element index {index}: {target_code}")
+                                errors.append(f"Duplicated target elements found at element index {index}: {target_code}")
                             target_values.add(target_code)
                         else:
                             errors.append(f"'code' key is missing in the target at element index {index}")
@@ -1032,7 +1040,8 @@ class ConceptMapVersion:
                     errors.append(f"'target' key is missing in the element at index {index}")
 
         if errors:
-            raise ValueError("Errors found in Concept Map:\n" + "\n".join(errors))
+            # raise ValueError("Errors found in Concept Map:\n" + "\n".join(errors))
+            raise BadDataError("Errors found in Concept Map:\n" + "\n".join(errors))
 
     def serialize(self, include_internal_info=False):
         pattern = r"[A-Z]([A-Za-z0-9_]){0,254}"  # name transformer
