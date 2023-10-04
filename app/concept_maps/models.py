@@ -1008,17 +1008,23 @@ class ConceptMapVersion:
                 #  validate that the display matches the code
                 code = element.get('code')
                 if code is not None:
-                    try:
-                        # if the 'code' field is not a valid json string, this will raise a ValueError
-                        json.loads(code)
-                    except ValueError:
+                    # If string starts with curly brace
+                    if code :
+                        try:
+                            # check to see if it starts with one of our three possibilities
+                            # if the 'code' field is not a valid json string, this will raise a ValueError
+                            json.loads(code)
+                            #check to see if it starts with
+                        except ValueError:
                         errors.append(f"Invalid JSON string in the code field at element index {index}: {code}")
-                    #
-                    # try:
+                    # If string does not start with a curly brace check if element.code and the element.display match
+                    try:
                     #     # have defined schema we are expecting
-                    #     pass
-                    # except ValueError:
-                    #     errors.append(f"Code is not formatted as expected at element index {index}: {code}")
+                          # check if element.code and the element.display match
+
+                         pass
+                    except ValueError:
+                         errors.append(f"Code is not formatted as expected at element index {index}: {code}")
 
                 else:
                     errors.append(f"'code' key is missing in the element at index {index}")
