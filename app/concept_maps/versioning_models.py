@@ -542,7 +542,7 @@ class ConceptMapVersionCreator:
         except BadRequestWithCode or NotFoundException:
             LOGGER.info(f"create_new_from_previous missing data in concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}")
             self.conn.rollback()
-        except:
+        except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
             LOGGER.info(f"create_new_from_previous unexpected error with concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}")
             self.conn.rollback()
 

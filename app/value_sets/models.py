@@ -1312,6 +1312,8 @@ class ValueSet:
         experimental: bool, specifies if the value set is experimental.
         type: str, the type of the value set.
         synonyms: dict, the synonyms of the value set.
+        database_schema_version (int): The current output schema version for ValueSet JSON files in OCI.
+        object_storage_folder_name (str): "ValueSets" folder name for OCI storage, for easy retrieval by utilities.
 
     Methods:
         __init__(self, uuid, name, title, publisher, contact, description, immutable, experimental, purpose, vs_type, synonyms={}):

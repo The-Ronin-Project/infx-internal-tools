@@ -64,13 +64,17 @@ def update_source_concept(source_concept_uuid):
 @concept_maps_blueprint.route("/ConceptMaps/<string:version_uuid>", methods=["GET"])
 def get_concept_map_version(version_uuid):
     """
-    Retrieve a specific ConceptMap version identified by the version_uuid.
-    Returns the ConceptMap version as JSON data.
+    GET: Retrieve the data for a Concept Map version. The schema version will be the highest of:
+    the current ConceptMap.database_schema_version (such as 3, as in /ConceptMap/v3/published)
+    or the current ConceptMap.next_schema_version (such as 4, as in /ConceptMap/v4/published).
+
+    @param version_uuid: Concept Map version UUID
     """
     include_internal_info = bool(request.values.get("include_internal_info"))
     concept_map_version = ConceptMapVersion(version_uuid)
     concept_map_to_json = concept_map_version.serialize(
-        include_internal_info=include_internal_info
+        include_internal_info=include_internal_info,
+        schema_version=ConceptMap.next_schema_version
     )
     return jsonify(concept_map_to_json)
 
@@ -93,8 +97,12 @@ def index_targets(version_uuid):
 @concept_maps_blueprint.route("/ConceptMaps/", methods=["GET", "POST"])
 def create_initial_concept_map_and_version_one():
     """
-    Create an initial ConceptMap and its first version based on input from the request payload.
-    Returns the newly created ConceptMap as JSON data.
+    GET: Retrieve a draft version of a Concept Map using its version UUID.
+    POST: Create an initial ConceptMap and its first version based on input from the request payload.
+
+    The Concept Map schema version will be the highest of:
+    the current ConceptMap.database_schema_version (such as 3)
+    or the current ConceptMap.next_schema_version (such as 4).
     """
     if request.method == "POST":
         name = request.json.get("name")
@@ -128,8 +136,10 @@ def create_initial_concept_map_and_version_one():
             source_value_set_version_uuid=source_value_set_version_uuid,
             target_value_set_version_uuid=target_value_set_version_uuid,
         )
-        return jsonify(new_cm.serialize())
+        return jsonify(new_cm.serialize(schema_version=ConceptMap.next_schema_version))
+
     elif request.method == "GET":
+
         concept_map_uuid = request.values.get("concept_map_uuid")
         version = request.values.get("version")
         include_internal_info = request.values.get("include_internal_info")
@@ -148,7 +158,8 @@ def create_initial_concept_map_and_version_one():
             return jsonify({"error": "Concept Map Version not found."}, 404)
 
         serialized_concept_map_version = concept_map_version.serialize(
-            include_internal_info=include_internal_info
+            include_internal_info=include_internal_info,
+            schema_version=ConceptMap.next_schema_version
         )
         return jsonify(serialized_concept_map_version)
 
@@ -186,26 +197,52 @@ def get_concept_map_draft(version_uuid):
 )
 def get_concept_map_version_prerelease(version_uuid):
     """
-    Retrieve or store a pre-release version of a Concept Map using its version UUID.
-    If a POST request is made, a new pre-release version is created and stored.
-    If a GET request is made, the pre-release version is retrieved.
+    GET: Retrieve a pre-release version of a Concept Map from OCI. The format schema version will be the highest of:
+    the current ConceptMap.database_schema_version (such as 3, as in /ConceptMap/v3/published)
+    or the current ConceptMap.next_schema_version (such as 4, as in /ConceptMap/v4/published).
+
+    POST: Create a new pre-release version of the Concept Map and store it in OCI.
+    If the current ConceptMap.database_schema_version (such as 3)
+    is different from the current ConceptMap.next_schema_version (such as 4)
+    then both formats are output to OCI in /ConceptMap/v3/published and /ConceptMap/v4/published folders.
+
+    @param version_uuid: Concept Map version UUID
+    @raise BadRequestWithCode if the schema_version is v4 or later and there are no mappings in the concept map.
     """
     concept_map_version = ConceptMapVersion(version_uuid)
+
     if request.method == "POST":
-        concept_map_to_json, initial_path = concept_map_version.prepare_for_oci()
+
+        # output as ConceptMap.database_schema_version, which may be the same as ConceptMap.next_schema_version
+        concept_map_to_json, initial_path = concept_map_version.prepare_for_oci(ConceptMap.database_schema_version)
         concept_map_to_datastore = set_up_object_store(
             concept_map_to_json,
             initial_path + f"/prerelease/{concept_map_version.concept_map.uuid}",
             folder="prerelease",
             content_type="json",
         )  # sends to OCI
+
+        # also output as ConceptMap.next_schema_version, if different from ConceptMap.database_schema_version
+        if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
+            concept_map_to_json, initial_path = concept_map_version.prepare_for_oci(ConceptMap.next_schema_version)
+            concept_map_to_datastore = set_up_object_store(
+                concept_map_to_json,
+                initial_path + f"/prerelease/{concept_map_version.concept_map.uuid}",
+                folder="prerelease",
+                content_type="json",
+            )  # sends to OCI
+
+        #  if the values were different, concept_map_to_datastore was serialized using the higher version last
         return jsonify(
             concept_map_to_datastore
         )  # returns the serialized metadata posted to OCI
+
     if request.method == "GET":
+
+        # get as ConceptMap.next_schema_version, in preference to ConceptMap.database_schema_version if different
         concept_map_from_object_store = get_data_from_oci(
             oci_root=ConceptMap.object_storage_folder_name,
-            resource_schema_version=ConceptMap.database_schema_version,
+            resource_schema_version=str(ConceptMap.next_schema_version),
             release_status="prerelease",
             resource_id=concept_map_version.concept_map.uuid,
             resource_version=concept_map_version.version,
@@ -220,11 +257,20 @@ def get_concept_map_version_prerelease(version_uuid):
 )
 def get_concept_map_version_published(version_uuid):
     """
-    Retrieve or store a published version of a Concept Map using its version UUID.
-    If a POST request is made, a new published version is created and stored.
-    If a GET request is made, the published version is retrieved.
+    GET: Retrieve a published version of a Concept Map from OCI. The schema version will be the highest of:
+    the current ConceptMap.database_schema_version (such as 3, as in /ConceptMap/v3/published)
+    or the current ConceptMap.next_schema_version (such as 4, as in /ConceptMap/v4/published).
+
+    POST: Create a new published version of the Concept Map and store it in OCI.
+    If the current ConceptMap.database_schema_version (such as 3)
+    is different from the current ConceptMap.next_schema_version (such as 4)
+    then both formats are output to OCI in /ConceptMap/v3/published and /ConceptMap/v4/published folders.
+
+    @param version_uuid: Concept Map version UUID
+    @raise BadRequestWithCode if the schema_version is v4 or later and there are no mappings in the concept map.
     """
     concept_map_version = ConceptMapVersion(version_uuid)
+
     if request.method == "POST":
         concept_map_version.publish()
         return "Published"
@@ -232,7 +278,7 @@ def get_concept_map_version_published(version_uuid):
     if request.method == "GET":
         concept_map_from_object_store = get_data_from_oci(
             oci_root=ConceptMap.object_storage_folder_name,
-            resource_schema_version=ConceptMap.database_schema_version,
+            resource_schema_version=str(ConceptMap.next_schema_version),
             release_status="published",
             resource_id=concept_map_version.concept_map.uuid,
             resource_version=concept_map_version.version,

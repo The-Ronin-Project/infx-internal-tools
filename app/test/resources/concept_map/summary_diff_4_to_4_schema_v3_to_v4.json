@@ -1,0 +1,28 @@
+{
+    "resourceType": "ConceptMap",
+    "title": "Apposnd Condition to SNOMED CT",
+    "id": "3704f2b0-7a8c-4455-ab2e-ffbcda91e1e3",
+    "name": "Apposndconditiontosnomedct",
+    "contact": "[{'name': 'Kristine Lynch'}]",
+    "url": "http://projectronin.io/fhir/StructureDefinition/ConceptMap/3704f2b0-7a8c-4455-ab2e-ffbcda91e1e3",
+    "description": "mapping apposnd condition to SNOMED CT",
+    "purpose": "Testing",
+    "publisher": "Project Ronin",
+    "experimental": "False",
+    "status": "retired",
+    "date": "2023-10-01",
+    "version": "4",
+    "extension": {
+        "new_value": "[{'url': 'http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema', 'valueString': '4.0.0'}]",
+        "old_value": "[{'url': 'http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema', 'valueString': '3.0.0'}]"
+    },
+    "meta": "{'lastUpdated': '2023-10-01T06:55:07.852703+00:00'}",
+    "sourceCanonical": {
+        "new_value": "http://projectronin.io/fhir/ValueSet/020d5cb0-193b-4240-b024-005802f860aa",
+        "old_value": "None"
+    },
+    "targetCanonical": {
+        "new_value": "http://projectronin.io/fhir/ValueSet/8b58bcea-82e3-4c09-a7c2-ce7d9e8dad4c",
+        "old_value": "None"
+    }
+}

@@ -4,10 +4,8 @@ from oci.object_storage import ObjectStorageClient
 from werkzeug.exceptions import BadRequest
 import datetime
 import json
-from sqlalchemy import text
 
 from app.errors import NotFoundException
-from app.helpers.db_helper import db_cursor
 
 
 def oci_authentication():
@@ -103,13 +101,17 @@ def set_up_object_store(content, initial_path, folder, content_type):
         path, object_storage_client, bucket_name, namespace
     )
     if not folder_exists:
-        del content["status"]
+        status = content.get("status")
+        if status is not None:
+            del content["status"]
         save_to_object_store(  # another function in this file
             path, object_storage_client, bucket_name, namespace, content
         )
         return content
     elif folder_exists:
-        del content["status"]
+        status = content.get("status")
+        if status is not None:
+            del content["status"]
         if folder == "prerelease":
             save_to_object_store(
                 path, object_storage_client, bucket_name, namespace, content
@@ -146,7 +148,7 @@ def save_to_object_store(
     path, object_storage_client, bucket_name, namespace, content
 ):
     """
-    This function saves the given concept map to the oci infx-shared bucket based on the folder path given
+    This function saves the given item to the oci infx-shared bucket based on the folder path given
     @param path: string path for folder
     @param object_storage_client: oci client
     @param bucket_name: bucket for oci - most cases 'infx-shared'
@@ -200,12 +202,12 @@ def get_data_from_oci(
             return resource.data.content.decode("utf-8")
         else:
             return {
-                "message": f"Found {oci_root} {release_status} UUID: {resource_id} version {resource_version}"
+                "message": f"Found {path} in OCI, but {content_type} is not an expected content-type for this response"
             }
     except oci.exceptions.ServiceError as e:
         if e.status == 404:
             raise NotFoundException(
-                f"Did NOT find the expected {oci_root} {release_status} UUID: {resource_id} version {resource_version}"
+                f"Did not find the expected file /{path} in OCI"
             )
         else:
             raise e

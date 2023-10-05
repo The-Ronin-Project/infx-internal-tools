@@ -69,6 +69,13 @@ class DNRegistryEntry:
 class DataNormalizationRegistry:
     """
     A class representing the Data Normalization Registry containing multiple DNRegistryEntry objects.
+
+    Attributes:
+        object_storage_folder_name (str): "DataNormalizationRegistry" folder name for OCI storage, for easy retrieval.
+        database_schema_version (int): The current output schema version for DataNormalizationRegistry JSON files in OCI
+        object_storage_file_name (str): File name for OCI storage, for easy retrieval during storage and read utilities.
+        object_storage_diff_name (str): Diff file in OCI storage, for easy retrieval during storage and read utilities.
+        entries (list):
     """
     entries: List[DNRegistryEntry] = None
     database_schema_version = 3

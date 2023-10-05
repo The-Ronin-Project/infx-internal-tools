@@ -1,0 +1,214 @@
+[
+    {
+        "0ec6a31d81eab39ebfe1d436fd921475": {
+            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "sourceVersion": "2",
+            "target": "http://loinc.org",
+            "targetVersion": "2.74",
+            "element": {
+                "id": "0ec6a31d81eab39ebfe1d436fd921475",
+                "code": "{No EMR coding array provided, evaluate the display text to determine semantic intent, BSA}",
+                "display": "BSA",
+                "target": [
+                    {
+                        "id": "6f111b70b304613cffee0c43f3aa70d7",
+                        "code": "8277-6",
+                        "display": "Body surface area",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "122ca3e89f4451e6600f960b248f4025": {
+            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "sourceVersion": "2",
+            "target": "http://loinc.org",
+            "targetVersion": "2.74",
+            "element": {
+                "id": "122ca3e89f4451e6600f960b248f4025",
+                "code": "{\"coding\": [{\"code\": \"4991\", \"display\": null, \"system\": \"urn:oid:1.2.840.114350.1.13.412.2.7.5.737384.134\"}], \"text\": \"BLASTO\"}",
+                "display": "BLASTO",
+                "target": [
+                    {
+                        "id": "6b8f422de495c5beca4fe8b0aa37aec6",
+                        "code": "7816-2",
+                        "display": "Blastomyces dermatitidis Ab [Presence] in Serum",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "1b980a4f821f6ac2fee7db3b42753057": {
+            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "sourceVersion": "2",
+            "target": "http://loinc.org",
+            "targetVersion": "2.74",
+            "element": {
+                "id": "1b980a4f821f6ac2fee7db3b42753057",
+                "code": "{\"coding\": [{\"code\": \"708-8\", \"display\": \"Blasts [#/volume] in Blood by Manual count\", \"system\": \"http://loinc.org\"}, {\"code\": \"5111\", \"display\": null, \"system\": \"urn:oid:1.2.840.114350.1.13.412.2.7.5.737384.134\"}], \"text\": \"No EMR display provided, evaluate the coding array to determine semantic intent\"}",
+                "display": "No EMR display provided, evaluate the coding array to determine semantic intent",
+                "target": [
+                    {
+                        "id": "64e83415615d559d13f8b1660e361e0d",
+                        "code": "708-8",
+                        "display": "Blasts [#/volume] in Blood by Manual count",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "1e0c5f63a19b9ac92decf5f27cc1aa77": {
+            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "sourceVersion": "2",
+            "target": "http://loinc.org",
+            "targetVersion": "2.74",
+            "element": {
+                "id": "1e0c5f63a19b9ac92decf5f27cc1aa77",
+                "code": "{\"coding\": [{\"code\": \"5111\", \"display\": null, \"system\": \"urn:oid:1.2.840.114350.1.13.412.2.7.5.737384.134\"}], \"text\": \"No EMR display provided, evaluate the coding array to determine semantic intent\"}",
+                "display": "No EMR display provided, evaluate the coding array to determine semantic intent",
+                "target": [
+                    {
+                        "id": "51892190366774d6751d3200547e0d0a",
+                        "code": "708-8",
+                        "display": "Blasts [#/volume] in Blood by Manual count",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "2e43266c27bddfded6aaad99387854e1": {
+            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "sourceVersion": "2",
+            "target": "http://loinc.org",
+            "targetVersion": "2.74",
+            "element": {
+                "id": "2e43266c27bddfded6aaad99387854e1",
+                "code": "{\"coding\": [{\"code\": \"8016\", \"display\": null, \"system\": \"urn:oid:1.2.840.114350.1.13.412.2.7.5.737384.134\"}], \"text\": \"Vit B12 Binding Capacity-Mayo\"}",
+                "display": "Vit B12 Binding Capacity-Mayo",
+                "target": [
+                    {
+                        "id": "c48872aae0d44dc6c2fc0c5605b7fdeb",
+                        "code": "2171-7",
+                        "display": "Cobalamin (Vitamin B12).unsaturated Binding Capacity [Mass/volume] in Serum or Plasma",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "2e5ce97e1b8ae5a4498b90b1e1992f01": {
+            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "sourceVersion": "2",
+            "target": "http://loinc.org",
+            "targetVersion": "2.74",
+            "element": {
+                "id": "2e5ce97e1b8ae5a4498b90b1e1992f01",
+                "code": "{\"coding\": [{\"code\": \"7352\", \"display\": null, \"system\": \"urn:oid:1.2.840.114350.1.13.412.2.7.5.737384.134\"}], \"text\": \"Sm Auto IgG Ab-Mayo\"}",
+                "display": "Sm Auto IgG Ab-Mayo",
+                "target": [
+                    {
+                        "id": "58d0464c10d5d968347dbbd6654e1254",
+                        "code": "18323-6",
+                        "display": "Smith extractable nuclear IgG Ab [Units/volume] in Serum",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "a34acff0578723ee6c1d034885449308": {
+            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "sourceVersion": "2",
+            "target": "http://loinc.org",
+            "targetVersion": "2.74",
+            "element": {
+                "id": "a34acff0578723ee6c1d034885449308",
+                "code": "{\"coding\": [{\"code\": \"708-8\", \"display\": \"Blasts [#/volume] in Blood by Manual count\", \"system\": \"http://loinc.org\"}, {\"code\": \"5111\", \"display\": null, \"system\": \"urn:oid:1.2.840.114350.1.13.412.2.7.5.737384.134\"}], \"text\": \"null\"}",
+                "display": "Observation resource with coding.coding of[{708-8, Blasts [#/volume] in Blood by Manual count, http://loinc.org}, {5111, null, urn:oid:1.2.840.114350.1.13.412.2.7.5.737384.134}] contains no EMR text, evaluate the coding array to determine semantic intent",
+                "target": [
+                    {
+                        "id": "ca57b15db00e5d57b863cf9c74799e7b",
+                        "code": "709-6",
+                        "display": "Blasts/100 leukocytes in Blood by Manual count",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "ad0a34c99140f14af62dd9aa03e66299": {
+            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "sourceVersion": "2",
+            "target": "http://loinc.org",
+            "targetVersion": "2.74",
+            "element": {
+                "id": "ad0a34c99140f14af62dd9aa03e66299",
+                "code": "{\"coding\": [{\"code\": \"140014\", \"display\": null, \"system\": \"urn:oid:1.2.840.114350.1.13.412.2.7.5.737384.134\"}], \"text\": \"P50 Interpretation\"}",
+                "display": "P50 Interpretation",
+                "target": [
+                    {
+                        "id": "1515753f9db83cde1c2ae0a452e07e86",
+                        "code": "59466-3",
+                        "display": "Hematologist review of results",
+                        "equivalence": "wider",
+                        "comment": "source-is-narrower-than-target"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "c6768cf7f92d075ddcb4ad9e42c0bb00": {
+            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "sourceVersion": "2",
+            "target": "http://loinc.org",
+            "targetVersion": "2.74",
+            "element": {
+                "id": "c6768cf7f92d075ddcb4ad9e42c0bb00",
+                "code": "{\"coding\": [{\"code\": \"140016\", \"display\": null, \"system\": \"urn:oid:1.2.840.114350.1.13.412.2.7.5.737384.134\"}], \"text\": \"P50 Shipping Control Vial\"}",
+                "display": "P50 Shipping Control Vial",
+                "target": [
+                    {
+                        "id": "f31539e115d963112cf1337353e34912",
+                        "code": "74384-9",
+                        "display": "Specimen container [Type]",
+                        "equivalence": "wider",
+                        "comment": "source-is-narrower-than-target"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "ee37f56f75f21a80bec808229021ed28": {
+            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "sourceVersion": "2",
+            "target": "http://loinc.org",
+            "targetVersion": "2.74",
+            "element": {
+                "id": "ee37f56f75f21a80bec808229021ed28",
+                "code": "{\"coding\": [{\"code\": \"5111\", \"display\": null, \"system\": \"urn:oid:1.2.840.114350.1.13.412.2.7.5.737384.134\"}], \"text\": \"null\"}",
+                "display": "Observation resource with coding.coding of[{5111, null, urn:oid:1.2.840.114350.1.13.412.2.7.5.737384.134}] contains no EMR text, evaluate the coding array to determine semantic intent",
+                "target": [
+                    {
+                        "id": "d8970d9ffcd858c0e750d17969513ac2",
+                        "code": "709-6",
+                        "display": "Blasts/100 leukocytes in Blood by Manual count",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    }
+]
