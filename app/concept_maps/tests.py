@@ -73,11 +73,11 @@ def test_serialized_schema_versions():
 
     # Cannot publish, a v4 version with 0 mappings
     with raises(BadRequestWithCode):
-        concept_map_version_2.publish(schema_version=4)
+        concept_map_version_2.publish()
 
     # Cannot store in OCI, a v4 version with 0 mappings
     with raises(BadRequestWithCode):
-        concept_map_version_2.prepare_for_oci(schema_version=4)
+        concept_map_version_2.prepare_for_oci()
 
 def test_diff_mappings_and_metadata():
     """
