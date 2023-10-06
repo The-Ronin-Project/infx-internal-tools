@@ -16,7 +16,7 @@ from sqlalchemy import text
 import app.models.codes
 import app.models.data_ingestion_registry
 from app.database import get_db, get_elasticsearch
-from app.errors import BadRequestWithCode
+from app.errors import BadDataError, BadRequestWithCode, NotFoundException
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.models.codes import Code
@@ -1194,6 +1194,67 @@ class ConceptMapVersion:
             return result.description
         return None
 
+    def check_formatting(self, concept_map):
+        """Checking the formatting for errors before exporting to OCI, we need to make sure the concept map doesn't have
+        any errors, so it will work for the DP concept map UDF, as well as for InterOps
+
+        Integrity Check 1: Check that all data in the code field is a valid string or JSON string
+        Integrity Check 2: Make sure there are no duplicate targets
+        """
+
+        errors = []  # list to hold error messages
+
+        # Iterate over each dictionary in the 'group' list
+        for group in concept_map.get('group', []):
+            # Iterate over each dictionary in the 'element' list, with enumerate to keep track of the index
+            for index, element in enumerate(group.get('element', [])):
+                # Integrity Check 1: Check that all data in the code field is a valid string or JSON string
+                code = element.get('code')
+                if code is not None:
+                    # If string starts with curly brace
+                    if code.startswith('{'):
+                        # If the string starts with either of the valid patterns
+                        if code.startswith(('{\"text\":', '{\"coding\":')):
+                            try:
+                                # Check if the 'code' field is a valid JSON string
+                                json.loads(code)
+                            except ValueError:
+                                errors.append(f"Invalid JSON string in the code field at element index {index}: {code}")
+                        else:
+                            errors.append(f"Code string has an unrecognized pattern at element index {index}: {code}")
+
+                    # TODO: This SHOULD be the way that this works, there are instances where that is not the case
+                    # What are the times when it would be valid for the code to just be a string?
+                    # In the case of this being a string element.code and element.display should match
+                    # else:
+                    #     # If the string doesn't start with a curly brace
+                    #     display = element.get('display')
+                    #     # Check if element.code and the element.display match
+                    #     if code != display:
+                    #         errors.append(f"Code string: {code}, does not match display: {display}, at index {index}")
+
+                else:
+                    errors.append(f"'code' key is missing in the element at index {index}")
+
+                # Integrity Check 2: Make sure there are no duplicate targets
+                # TODO: at some point this will need to handle more than one target for some concept maps but not most
+                target_values = set()
+                targets = element.get('target', [])
+                if targets:
+                    for target in targets:
+                        target_code = target.get('code')
+                        if target_code:
+                            if target_code in target_values:
+                                errors.append(f"Duplicated target elements found at element index {index}: {target_code}")
+                            target_values.add(target_code)
+                        else:
+                            errors.append(f"'code' key is missing in the target at element index {index}")
+                else:
+                    errors.append(f"'target' key is missing in the element at index {index}")
+
+        if errors:
+            raise BadDataError("Errors found in Concept Map:\n" + "\n".join(errors))
+
     def serialize(self, include_internal_info=False, schema_version: int = ConceptMap.next_schema_version):
         """
         Serialize the concept map version
@@ -1300,6 +1361,8 @@ class ConceptMapVersion:
 
         # Serialize
         serialized = self.serialize(include_internal_info=False, schema_version=schema_version)
+        self.check_formatting(serialized)
+        
         if schema_v4_or_later and len(serialized.get("group")) == 0:
             raise BadRequestWithCode(
                 "ConceptMap.prepareForOci.missingMappings",
