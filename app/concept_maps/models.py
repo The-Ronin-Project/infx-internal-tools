@@ -1222,13 +1222,17 @@ class ConceptMapVersion:
                                 errors.append(f"Invalid JSON string in the code field at element index {index}: {code}")
                         else:
                             errors.append(f"Code string has an unrecognized pattern at element index {index}: {code}")
-                    else:
-                        # If the string doesn't start with a curly brace
-                        display = element.get('display')
 
-                        # Check if element.code and the element.display match
-                        if code != display:
-                            errors.append(f"Code string does not match display at element index {index}: {code}")
+                    # TODO: This SHOULD be the way that this works, there are instances where that is not the case
+                    # What are the times when it would be valid for the code to just be a string?
+                    # In the case of this being a string element.code and element.display should match
+                    # else:
+                    #     # If the string doesn't start with a curly brace
+                    #     display = element.get('display')
+                    #     # Check if element.code and the element.display match
+                    #     if code != display:
+                    #         errors.append(f"Code string: {code}, does not match display: {display}, at index {index}")
+
                 else:
                     errors.append(f"'code' key is missing in the element at index {index}")
 
