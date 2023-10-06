@@ -1361,27 +1361,13 @@ class ConceptMapVersion:
         """
 
         # OCI: output as ConceptMap.database_schema_version, which may be the same as ConceptMap.database_schema_version
-        schema_version = ConceptMap.database_schema_version
-        concept_map_to_json, initial_path = self.prepare_for_oci(schema_version)
-        set_up_object_store(
-            concept_map_to_json,
-            initial_path + f"/published/{self.concept_map.uuid}",
-            folder="published",
-            content_type="json",
-        )  # sends to OCI
+        self.send_to_oci(ConceptMap.database_schema_version)
         # write diff to OCI - comment out until we consider storage implications
         # self.diff_versions_and_store_diff(concept_map_to_json, initial_path, schema_version)
 
         # OCI: also output as ConceptMap.next_schema_version, if different from ConceptMap.database_schema_version
         if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
-            schema_version = ConceptMap.next_schema_version
-            concept_map_to_json, initial_path = self.prepare_for_oci(schema_version)
-            set_up_object_store(
-                concept_map_to_json,
-                initial_path + f"/published/{self.concept_map.uuid}",
-                folder="published",
-                content_type="json",
-            )  # sends to OCI
+            self.send_to_oci(ConceptMap.next_schema_version)
             # write diff to OCI - comment out until we consider storage implication
             # self.diff_versions_and_store_diff(concept_map_to_json, initial_path, schema_version)
 
@@ -1397,6 +1383,15 @@ class ConceptMapVersion:
         # Contact the Error Validation Service to resolve any errors fixed by the new concept map
         app.tasks.resolve_errors_after_concept_map_publish.delay(
             concept_map_version_uuid=self.uuid
+        )
+
+    def send_to_oci(self, schema_version):
+        concept_map_to_json, initial_path = self.prepare_for_oci(schema_version)
+        set_up_object_store(
+            concept_map_to_json,
+            initial_path + f"/published/{self.concept_map.uuid}",
+            folder="published",
+            content_type="json",
         )
 
     def diff_versions_and_store_diff(
