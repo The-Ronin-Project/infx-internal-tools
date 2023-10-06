@@ -1,0 +1,214 @@
+[
+    {
+        "0dc053d1487770564ebc1ad4342eb2d0": {
+            "source": "http://projectronin.io/fhir/CodeSystem/apposnd/ConditionCode",
+            "sourceVersion": "1.0",
+            "target": "http://snomed.info/sct",
+            "targetVersion": "2023-03-01",
+            "element": {
+                "id": "0dc053d1487770564ebc1ad4342eb2d0",
+                "code": "{\"coding\": [{\"code\": \"40930008\", \"display\": \"Hypothyroidism (disorder)\", \"system\": \"http://snomed.info/sct\"}, {\"code\": \"244.9\", \"display\": \"Unspecified hypothyroidism\", \"system\": \"http://hl7.org/fhir/sid/icd-9-cm/diagnosis\"}, {\"code\": \"E03.9\", \"display\": \"Unspecified hypothyroidism\", \"system\": \"http://hl7.org/fhir/sid/icd-10-cm\"}], \"text\": \"Unspecified hypothyroidism\"}",
+                "display": "Unspecified hypothyroidism",
+                "target": [
+                    {
+                        "id": "0df9a644b924a8c7a4d640cb3e12c990",
+                        "code": "40930008",
+                        "display": "Hypothyroidism (disorder)",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "39be44032de93d0cf4f43cfb6694506a": {
+            "source": "http://projectronin.io/fhir/CodeSystem/apposnd/ConditionCode",
+            "sourceVersion": "1.0",
+            "target": "http://snomed.info/sct",
+            "targetVersion": "2023-03-01",
+            "element": {
+                "id": "39be44032de93d0cf4f43cfb6694506a",
+                "code": "{\"coding\": [{\"code\": \"59621000\", \"display\": \"Essential hypertension (disorder)\", \"system\": \"http://snomed.info/sct\"}, {\"code\": \"401.9\", \"display\": \"Essential hypertension\", \"system\": \"http://hl7.org/fhir/sid/icd-9-cm/diagnosis\"}, {\"code\": \"I10\", \"display\": \"Essential hypertension\", \"system\": \"http://hl7.org/fhir/sid/icd-10-cm\"}], \"text\": \"Essential hypertension\"}",
+                "display": "Essential hypertension",
+                "target": [
+                    {
+                        "id": "1eb72cc1a18f97652bcaa62baf6cc714",
+                        "code": "59621000",
+                        "display": "Essential hypertension (disorder)",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "5f71394c72d702fc53feb62bedc4c65e": {
+            "source": "http://projectronin.io/fhir/CodeSystem/apposnd/ConditionCode",
+            "sourceVersion": "1.0",
+            "target": "http://snomed.info/sct",
+            "targetVersion": "2023-03-01",
+            "element": {
+                "id": "5f71394c72d702fc53feb62bedc4c65e",
+                "code": "{\"coding\": [{\"code\": \"110483000\", \"display\": \"Tobacco user (finding)\", \"system\": \"http://snomed.info/sct\"}, {\"code\": \"305.1\", \"display\": \"Tobacco use disorder\", \"system\": \"http://hl7.org/fhir/sid/icd-9-cm/diagnosis\"}, {\"code\": \"F17.200\", \"display\": \"Tobacco use disorder\", \"system\": \"http://hl7.org/fhir/sid/icd-10-cm\"}], \"text\": \"Tobacco use disorder\"}",
+                "display": "Tobacco use disorder",
+                "target": [
+                    {
+                        "id": "f49dfb47f2a2ad44a0a3d1f70c03bcd6",
+                        "code": "110483000",
+                        "display": "Tobacco user (finding)",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "6293862dc8053d65f8433612ae7929bd": {
+            "source": "http://projectronin.io/fhir/CodeSystem/apposnd/ConditionCode",
+            "sourceVersion": "1.0",
+            "target": "http://snomed.info/sct",
+            "targetVersion": "2023-03-01",
+            "element": {
+                "id": "6293862dc8053d65f8433612ae7929bd",
+                "code": "{\"coding\": [{\"code\": \"10509002\", \"display\": \"Acute bronchitis (disorder)\", \"system\": \"http://snomed.info/sct\"}, {\"code\": \"466.0\", \"display\": \"Acute bronchitis\", \"system\": \"http://hl7.org/fhir/sid/icd-9-cm/diagnosis\"}, {\"code\": \"J20.9\", \"display\": \"Acute bronchitis\", \"system\": \"http://hl7.org/fhir/sid/icd-10-cm\"}], \"text\": \"Acute bronchitis\"}",
+                "display": "Acute bronchitis",
+                "target": [
+                    {
+                        "id": "f07b9bc44d45f83a485620fb5a94dc96",
+                        "code": "10509002",
+                        "display": "Acute bronchitis (disorder)",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "8e44f0b09143cb821d68da9d8fa21335": {
+            "source": "http://projectronin.io/fhir/CodeSystem/apposnd/ConditionCode",
+            "sourceVersion": "1.0",
+            "target": "http://snomed.info/sct",
+            "targetVersion": "2023-03-01",
+            "element": {
+                "id": "8e44f0b09143cb821d68da9d8fa21335",
+                "code": "{\"coding\": [{\"code\": \"254837009\", \"display\": \"Malignant tumor of breast (disorder)\", \"system\": \"http://snomed.info/sct\"}, {\"code\": \"174.9\", \"display\": \"Malignant neoplasm of breast (CMS/HCC)\", \"system\": \"http://hl7.org/fhir/sid/icd-9-cm/diagnosis\"}, {\"code\": \"C50.919\", \"display\": \"Malignant neoplasm of breast (CMS/HCC)\", \"system\": \"http://hl7.org/fhir/sid/icd-10-cm\"}], \"text\": \"Malignant neoplasm of breast (CMS/HCC)\"}",
+                "display": "Malignant neoplasm of breast (CMS/HCC)",
+                "target": [
+                    {
+                        "id": "cced23f7b2b381241e6c7e0670afd2bb",
+                        "code": "254837009",
+                        "display": "Malignant neoplasm of breast (disorder)",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "ad75d5bdc92aac8b861e62add06a83d1": {
+            "source": "http://projectronin.io/fhir/CodeSystem/apposnd/ConditionCode",
+            "sourceVersion": "1.0",
+            "target": "http://snomed.info/sct",
+            "targetVersion": "2023-03-01",
+            "element": {
+                "id": "ad75d5bdc92aac8b861e62add06a83d1",
+                "code": "{\"coding\": [{\"code\": \"254837009\", \"display\": \"Malignant tumor of breast (disorder)\", \"system\": \"http://snomed.info/sct\"}, {\"code\": \"174.9\", \"display\": \"Breast cancer (CMS/HCC)\", \"system\": \"http://hl7.org/fhir/sid/icd-9-cm/diagnosis\"}, {\"code\": \"C50.919\", \"display\": \"Breast cancer (CMS/HCC)\", \"system\": \"http://hl7.org/fhir/sid/icd-10-cm\"}], \"text\": \"Breast cancer (CMS/HCC)\"}",
+                "display": "Breast cancer (CMS/HCC)",
+                "target": [
+                    {
+                        "id": "6354697baabad039bd89f08f6bc14c5e",
+                        "code": "254837009",
+                        "display": "Malignant neoplasm of breast (disorder)",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "afb01bff82825bc9f11824c9b5a61e3b": {
+            "source": "http://projectronin.io/fhir/CodeSystem/apposnd/ConditionCode",
+            "sourceVersion": "1.0",
+            "target": "http://snomed.info/sct",
+            "targetVersion": "2023-03-01",
+            "element": {
+                "id": "afb01bff82825bc9f11824c9b5a61e3b",
+                "code": "{\"coding\": [{\"code\": \"254837009\", \"display\": \"Malignant tumor of breast (disorder)\", \"system\": \"http://snomed.info/sct\"}, {\"code\": \"174.9\", \"display\": \"Malignant neoplasm of breast, left\", \"system\": \"http://hl7.org/fhir/sid/icd-9-cm/diagnosis\"}, {\"code\": \"C50.912\", \"display\": \"Malignant neoplasm of breast, left\", \"system\": \"http://hl7.org/fhir/sid/icd-10-cm\"}], \"text\": \"Malignant neoplasm of breast, left\"}",
+                "display": "Malignant neoplasm of breast, left",
+                "target": [
+                    {
+                        "id": "1bfd563983307851186a7fdd308e4452",
+                        "code": "254837009",
+                        "display": "Malignant neoplasm of breast (disorder)",
+                        "equivalence": "wider",
+                        "comment": "source-is-narrower-than-target"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "d078f5e3c01072cbddd1c9c87ab233a9": {
+            "source": "http://projectronin.io/fhir/CodeSystem/apposnd/ConditionCode",
+            "sourceVersion": "1.0",
+            "target": "http://snomed.info/sct",
+            "targetVersion": "2023-03-01",
+            "element": {
+                "id": "d078f5e3c01072cbddd1c9c87ab233a9",
+                "code": "{\"coding\": [{\"code\": \"235595009\", \"display\": \"Gastroesophageal reflux disease (disorder)\", \"system\": \"http://snomed.info/sct\"}, {\"code\": \"530.81\", \"display\": \"GERD (gastroesophageal reflux disease)\", \"system\": \"http://hl7.org/fhir/sid/icd-9-cm/diagnosis\"}, {\"code\": \"K21.9\", \"display\": \"GERD (gastroesophageal reflux disease)\", \"system\": \"http://hl7.org/fhir/sid/icd-10-cm\"}], \"text\": \"GERD (gastroesophageal reflux disease)\"}",
+                "display": "GERD (gastroesophageal reflux disease)",
+                "target": [
+                    {
+                        "id": "68326ab3fee2d9c8c5875c9f4bff48f9",
+                        "code": "235595009",
+                        "display": "Gastroesophageal reflux disease (disorder)",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "e8360fb6a384aed69cefc1e776d14f8b": {
+            "source": "http://projectronin.io/fhir/CodeSystem/apposnd/ConditionCode",
+            "sourceVersion": "1.0",
+            "target": "http://snomed.info/sct",
+            "targetVersion": "2023-03-01",
+            "element": {
+                "id": "e8360fb6a384aed69cefc1e776d14f8b",
+                "code": "{\"coding\": [{\"code\": \"254837009\", \"display\": \"Malignant tumor of breast (disorder)\", \"system\": \"http://snomed.info/sct\"}, {\"code\": \"174.9\", \"display\": \"Breast cancer, left (CMS/HCC)\", \"system\": \"http://hl7.org/fhir/sid/icd-9-cm/diagnosis\"}, {\"code\": \"C50.912\", \"display\": \"Breast cancer, left (CMS/HCC)\", \"system\": \"http://hl7.org/fhir/sid/icd-10-cm\"}], \"text\": \"Breast cancer, left (CMS/HCC)\"}",
+                "display": "Breast cancer, left (CMS/HCC)",
+                "target": [
+                    {
+                        "id": "995ec060e0173948d9be51d818c48e41",
+                        "code": "254837009",
+                        "display": "Malignant neoplasm of breast (disorder)",
+                        "equivalence": "wider",
+                        "comment": "source-is-narrower-than-target"
+                    }
+                ]
+            }
+        }
+    },
+    {
+        "f603f3663b61aef6bd7f7309c53d62a8": {
+            "source": "http://projectronin.io/fhir/CodeSystem/apposnd/ConditionCode",
+            "sourceVersion": "1.0",
+            "target": "http://snomed.info/sct",
+            "targetVersion": "2023-03-01",
+            "element": {
+                "id": "f603f3663b61aef6bd7f7309c53d62a8",
+                "code": "{\"coding\": [{\"code\": \"C18.2\", \"display\": null, \"system\": \"http://hl7.org/fhir/sid/icd-10-cm\"}, {\"code\": \"363412000\", \"display\": null, \"system\": \"http://snomed.info/sct\"}], \"text\": \"Malignant neoplasm of ascending colon (CMS/HCC)\"}",
+                "display": "Malignant neoplasm of ascending colon (CMS/HCC)",
+                "target": [
+                    {
+                        "id": "5a8ab95e6906941ad8c94198f850cf93",
+                        "code": "363412000",
+                        "display": "Malignant tumor of ascending colon (disorder)",
+                        "equivalence": "equivalent"
+                    }
+                ]
+            }
+        }
+    }
+]

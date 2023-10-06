@@ -375,7 +375,7 @@ class ConceptMapVersionCreator:
             active_only=False
         )
         if (concept_map_most_recent_version is None or
-                concept_map_most_recent_version.uuid != previous_version_uuid
+                concept_map_most_recent_version.uuid != uuid.UUID(previous_version_uuid)
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.previous_version_uuid",
@@ -388,7 +388,7 @@ class ConceptMapVersionCreator:
             ValueSet.load_most_recent_active_version(source_value_set_version.value_set.uuid)
         )
         if active_source_value_set_version is None or (
-                active_source_value_set_version.uuid != new_source_value_set_version_uuid
+                active_source_value_set_version.uuid != uuid.UUID(new_source_value_set_version_uuid)
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.new_source_value_set_version_uuid",
@@ -401,7 +401,7 @@ class ConceptMapVersionCreator:
             ValueSet.load_most_recent_active_version(target_value_set_version.value_set.uuid)
         )
         if active_target_value_set_version is None or (
-                active_target_value_set_version.uuid != new_target_value_set_version_uuid
+                active_target_value_set_version.uuid != uuid.UUID(new_target_value_set_version_uuid)
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.new_target_value_set_version_uuid",
@@ -542,7 +542,7 @@ class ConceptMapVersionCreator:
         except BadRequestWithCode or NotFoundException:
             LOGGER.info(f"create_new_from_previous missing data in concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}")
             self.conn.rollback()
-        except:
+        except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
             LOGGER.info(f"create_new_from_previous unexpected error with concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}")
             self.conn.rollback()
 

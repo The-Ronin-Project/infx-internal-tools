@@ -16,6 +16,19 @@ from app.value_sets.models import ValueSet
 
 @dataclass
 class Registry:
+    """
+    Class that represents a flexible registry, which lets users create registries for various items as needed. Examples
+    include labs registries for specifying the Ronin order in which to display labs in a panel. Flexible registry
+    artifacts are files in OCI under the "Registries" folder. They have no relationship to the DataNormalizationRegistry
+    which has a separate purpose: list all OCI value sets and concept maps by data_element so consumers can find them.
+
+    Attributes:
+        uuid (str): The UUID of the flexible registry (known to users as simply a "registry")
+        registry_type (str): Registry type may be "labs", "documents", "vitals", or other names as we add them.
+        sorting_enabled (bool): When True, registry lets users specify an order for the entries, as with lab panels.
+        database_schema_version (int): The current output schema version for Registry JSON files in OCI.
+        object_storage_folder_name (str): "Registries" folder name for OCI storage, for easy retrieval by utilities.
+    """
     uuid: uuid.UUID
     title: str
     registry_type: str  # not an enum so users can create new types of registries w/o code change

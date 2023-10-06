@@ -1,0 +1,28 @@
+{
+    "resourceType": "ConceptMap",
+    "title": "MDA Observation to Ronin Observation",
+    "id": "615434d9-7a4f-456d-affe-4c2d87845a37",
+    "name": "Mdaobservationtoroninobservation",
+    "contact": "[{'name': 'Amanda Steffon'}]",
+    "url": "http://projectronin.io/fhir/StructureDefinition/ConceptMap/615434d9-7a4f-456d-affe-4c2d87845a37",
+    "description": "MDAOC observations, Code and componentCode, normalized to standard and/or custom terminologies",
+    "purpose": "The use case of normalizing the data within the data lake using the legacy systems from data platform.",
+    "publisher": "Project Ronin",
+    "experimental": "False",
+    "status": "retired",
+    "date": {
+        "new_value": "None",
+        "old_value": "2023-06-01"
+    },
+    "version": {
+        "new_value": "3",
+        "old_value": "2"
+    },
+    "extension": "[{'url': 'http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema', 'valueString': '4.0.0'}]",
+    "sourceCanonical": "http://projectronin.io/fhir/ValueSet/59dba9ed-7d74-472b-977d-ecc457597baa",
+    "targetCanonical": "http://projectronin.io/fhir/ValueSet/c86bf3d2-b6ba-4f05-83dd-f08c48dcca8a",
+    "meta": {
+        "new_value": null,
+        "old_value": "{'lastUpdated': '2023-06-01T20:45:45.606612+00:00'}"
+    }
+}

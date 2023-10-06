@@ -15,9 +15,8 @@ from sqlalchemy import text
 
 import app.models.codes
 import app.models.data_ingestion_registry
-import app.value_sets.models
 from app.database import get_db, get_elasticsearch
-from app.errors import BadDataError, NotFoundException
+from app.errors import BadDataError, BadRequestWithCode, NotFoundException
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.models.codes import Code
@@ -200,9 +199,18 @@ class ConceptMap:
         source_value_set_uuid (str): The UUID of the source value set used in the concept map.
         target_value_set_uuid (str): The UUID of the target value set used in the concept map.
         most_recent_active_version (str): The UUID of the most recent active version of the concept map.
+        object_storage_folder_name (str): "ConceptMaps" folder name for OCI storage, for easy retrieval by utilities.
+        database_schema_version (int): The current output schema version for concept maps stored as JSON files in OCI.
+        next_schema_version (int): The pending next output schema version number. When database_schema_version and
+            next_schema_version are equal (such as 3 and 3), serialize and publish functions create and store output
+            in OCI for this one schema only (in this case /ConceptMaps/v3). When different (such as 3 and 4), serialize
+            and publish create and store output in OCI for both versions at once (/ConceptMaps/v3 and /ConceptMaps/v4).
+            This supplies consumer teams with OCI files in both formats, until all are able to consume the new schema.
+            To cut off the old schema output, set database_schema_version to the next_schema_version (in this case 4).
     """
 
     database_schema_version = 3
+    next_schema_version = 4
     object_storage_folder_name = "ConceptMaps"
 
     def __init__(self, uuid, load_mappings_for_most_recent_active: bool = True):
@@ -496,6 +504,199 @@ class ConceptMap:
             "settings": self.settings.serialize(),
         }
 
+    @classmethod
+    def diff_mappings_and_metadata(
+        cls,
+        concept_map_uuid,
+        previous_version: int,
+        new_version: int,
+        previous_schema_version: int = None,
+        new_schema_version: int = None
+    ):
+        """
+        Compares concept map versions to assert which mappings were removed and added between versions. For clarity of
+        results, verifies that previous and new are versions of the same map and previous is earlier or the same as new.
+        @param concept_map_uuid: concept map UUID
+        @param previous_version: concept map version number, or 0 for no previous (what is in the new_version now)
+        @param new_version: concept map version number
+        @param previous_schema_version: Serialization format for the previous_version. Caller may input the
+        ConceptMap.database_schema_version (such as 3) or ConceptMap.next_schema_version (such as 4). Default
+        if omitted is ConceptMap.next_schema_version.
+        @param new_schema_version: As for previous_schema_version but applies to the new_version. If new_schema_version
+        is omitted the default is to use previous_schema_version for new_schema_version.
+        @return: dict() identifying added and removed sources and mappings, with compared summaries at top of file.
+        """
+        # Step 1: setup
+        # validate inputs
+        if previous_version > new_version:
+            raise BadRequestWithCode(
+                "ConceptMap.diff.versionsInWrongHistoryOrder",
+                f"Versions {previous_version} (previous) and {new_version} (new) are in the wrong order"
+            )
+        if previous_schema_version is None:
+            previous_schema_version = cls.next_schema_version
+            if new_schema_version is None:
+                new_schema_version = cls.next_schema_version
+        else:
+            if new_schema_version is None:
+                new_schema_version = previous_schema_version
+
+        # initialize outputs
+        new_serialized = dict()
+        new_mappings = dict()
+        previous_serialized = dict()
+        previous_mappings = dict()
+
+        # Step 2: get the previous and new concept map versions
+        if previous_version == 0:
+            previous_concept_map_version = None
+        else:
+            previous_concept_map_version = ConceptMapVersion.load_by_concept_map_uuid_and_version(
+                concept_map_uuid,
+                previous_version
+            )
+            if previous_concept_map_version is None:
+                raise BadRequestWithCode(
+                    "ConceptMap.diff.previousVersionNotAvailable",
+                    f"Unable to load concept previous new version {previous_version}"
+                )
+        new_concept_map_version = ConceptMapVersion.load_by_concept_map_uuid_and_version(
+            concept_map_uuid,
+            new_version
+        )
+        if new_concept_map_version is None:
+            raise BadRequestWithCode(
+                "ConceptMap.diff.newVersionNotAvailable",
+                f"Unable to load concept map new version {new_version}"
+            )
+
+        # Step 3: get mappings for new - organize results by mapping id, and by groups and elements
+        if new_version != 0:
+            new_serialized = new_concept_map_version.serialize(
+                include_internal_info=False,
+                schema_version=new_schema_version
+            )
+        if len(new_serialized) > 0:
+            new_mappings = cls.collect_and_sort_mappings_for_diff(new_serialized)
+
+        # Step 4: get mappings for previous - organize results by mapping id, and by groups and elements
+        if previous_version != 0:
+            previous_serialized = previous_concept_map_version.serialize(
+                include_internal_info=False,
+                schema_version=previous_schema_version
+            )
+        if len(previous_serialized) > 0:
+            previous_mappings = cls.collect_and_sort_mappings_for_diff(previous_serialized)
+
+        # Step 5: collect data for diff output
+        # counts
+        previous_total = len(previous_mappings)
+        new_total = len(new_mappings)
+
+        # removed_codes - order diffs by source and target terminology and target code element
+        modified = dict()
+        unchanged = dict()
+        removed_codes = []
+        for pId in previous_mappings.keys():
+            old = previous_mappings[pId]
+            if pId in new_mappings.keys():
+                new = new_mappings[pId]
+                if new == old:
+                    unchanged.update({pId: old})
+                else:
+                    modified.update({pId: new})
+            else:
+                removed_codes.append({pId: old})
+
+        # added_codes - order diffs by source and target terminology and target code element
+        added_codes = []
+        for nId in new_mappings.keys():
+            new = new_mappings[nId]
+            if nId in previous_mappings.keys():
+                if nId not in modified.keys():
+                    old = previous_mappings[nId]
+                    if new == old:
+                        unchanged.update({nId: old})
+                    else:
+                        modified.update({nId: new})
+            else:
+                added_codes.append({nId: new})
+
+        # sort changes by the unique and immutable mapping id
+        modified_codes = dict()
+        for i in sorted(modified):
+            modified_codes.update({i: modified[i]})
+        unchanged_codes = dict()
+        for i in sorted(unchanged):
+            unchanged_codes.update({i: unchanged[i]})
+
+        # summary_diff (new vs. old)
+        summary = dict()
+        for nKey in new_serialized.keys():
+            if nKey not in ["group"]:  # exclude the mappings
+                new = f"{new_serialized[nKey]}"
+                previous = f"{previous_serialized.get(nKey)}"
+                if previous is not None and (new == previous):
+                    value = new
+                else:
+                    value = {"new_value": new, "old_value": previous}
+                summary.update({nKey: value})
+        for pKey in previous_serialized.keys():
+            if (pKey not in ["group"]) and (pKey not in new_serialized.keys()):
+                previous = f"{previous_serialized[pKey]}"
+                value = {"new_value": None, "old_value": previous}
+                summary.update({pKey: value})
+
+        # Step 6: return diff output
+        return {
+            "summary_diff": summary,
+            "removed_count": len(removed_codes),
+            "added_count": len(added_codes),
+            "modified_count": len(modified_codes),
+            "unchanged_count": len(unchanged_codes),
+            "previous_total": previous_total,
+            "new_total": new_total,
+            "removed_codes": removed_codes,
+            "added_codes": added_codes,
+            "modified_codes": modified_codes,
+            "unchanged_codes": unchanged_codes,
+            "version": new_version,  # supports output to OCI /diff folder
+        }
+
+    @staticmethod
+    def collect_and_sort_mappings_for_diff(serialized):
+        """
+        Collect mapping ids from the data - set up to sort diffs by source and target terminology and target code data
+        @type serialized: object that the caller obtained from ConceptMapVersion.serialize() or get_data_from_oci()
+        @rtype: dict() with mapping ids as keys
+        """
+        mappings = dict()
+        for g in serialized.get("group"):
+            # these 4 values uniquely identify the mapping group that contains these mapping ids
+            source = g.get("source")
+            sourceVersion = g.get("sourceVersion")
+            target = g.get("target")
+            targetVersion = g.get("targetVersion")
+            for e in g.get("element"):
+                # the mapping id is unique in this concept map and across all concept maps
+                mapping_id = e.get("id")
+                mappings.update({
+                    mapping_id: {
+                        "source": source,
+                        "sourceVersion": sourceVersion,
+                        "target": target,
+                        "targetVersion": targetVersion,
+                        "element": e
+                    }
+                })
+        # sort by unique and immutable mapping id - so the display of diffs has consistent order across versions
+        sorted_mappings = dict()
+        for i in sorted(mappings):
+            sorted_mappings.update({
+                i: mappings[i]
+            })
+        return sorted_mappings
+
 
 class ConceptMapVersion:
     def __init__(self, uuid, concept_map=None, load_mappings: bool = True):
@@ -532,6 +733,11 @@ class ConceptMapVersion:
             {"version_uuid": self.uuid},
         ).first()
 
+        if not data:
+            raise BadRequestWithCode(
+                "ConceptMap.diff.versionsInWrongHistoryOrder",
+                f"Unable to load data for concept map version UUID: {self.uuid}"
+            )
         if concept_map is None:
             self.concept_map = ConceptMap(data.concept_map_uuid)
         else:
@@ -1049,7 +1255,19 @@ class ConceptMapVersion:
             # raise ValueError("Errors found in Concept Map:\n" + "\n".join(errors))
             raise BadDataError("Errors found in Concept Map:\n" + "\n".join(errors))
 
-    def serialize(self, include_internal_info=False):
+    def serialize(self, include_internal_info=False, schema_version: int = ConceptMap.next_schema_version):
+        """
+        Serialize the concept map version
+        @param include_internal_info: Caller may set True to include these "internalData" fields in the output:
+        source_value_set_uuid, source_value_set_version_uuid, target_value_set_uuid, target_value_set_version_uuid.
+        @param schema_version: Format to use in serialization. Caller may accept the default, or input a choice between
+        the current ConceptMap.database_schema_version (such as 3) and ConceptMap.next_schema_version (such as 4).
+        @return: object structure representing the concept map and conforming to the specified schema_version
+        """
+        # Prepare according to the version
+        schema_v4_or_later = (schema_version >= 4)
+
+        # Transform the name based on the title
         pattern = r"[A-Z]([A-Za-z0-9_]){0,254}"  # name transformer
         if re.match(pattern, self.concept_map.name):  # name follows pattern use name
             rcdm_name = self.concept_map.name
@@ -1105,7 +1323,7 @@ class ConceptMapVersion:
             "extension": [
                 {
                     "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema",
-                    "valueString": f"{ConceptMap.database_schema_version}.0.0",
+                    "valueString": f"{schema_version}.0.0",
                 }
             ]
             # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and
@@ -1117,6 +1335,9 @@ class ConceptMapVersion:
                     "%Y-%m-%dT%H:%M:%S.%f+00:00"
                 )
             }
+        if schema_v4_or_later:
+            serialized["sourceCanonical"] = f"http://projectronin.io/fhir/ValueSet/{self.concept_map.source_value_set_uuid}"
+            serialized["targetCanonical"] = f"http://projectronin.io/fhir/ValueSet/{self.concept_map.target_value_set_uuid}"
 
         if include_internal_info:
             serialized["internalData"] = {
@@ -1127,9 +1348,28 @@ class ConceptMapVersion:
             }
         return serialized
 
-    def prepare_for_oci(self):
-        serialized = self.serialize()
+    def prepare_for_oci(self, schema_version: int = ConceptMap.next_schema_version):
+        """
+        Prepare the data required to publish a concept map to OCI.
+        @param: schema_version: Format to use in serialization. Caller may accept the default, or input a choice between
+        the current ConceptMap.database_schema_version (such as 3) and ConceptMap.next_schema_version (such as 4).
+        @raise BadRequestWithCode if the schema_version is v4 or later and there are no mappings in the concept map.
+        @return: (serialized, initial_path) provides the serialized object and the correct starting path in OCI storage.
+        """
+        # Prepare according to the version
+        schema_v4_or_later = (schema_version >= 4)
+
+        # Serialize
+        serialized = self.serialize(include_internal_info=False, schema_version=schema_version)
         self.check_formatting(serialized)
+        
+        if schema_v4_or_later and len(serialized.get("group")) == 0:
+            raise BadRequestWithCode(
+                "ConceptMap.prepareForOci.missingMappings",
+                f"ConceptMap schema version 4 or later will not output a ConceptMap with no mappings defined.",
+            )
+
+        # Prepare for OCI
         rcdm_id = serialized.get("id")
         rcdm_url = "http://projectronin.io/ConceptMap/"
         # id will depend on publisher
@@ -1170,39 +1410,92 @@ class ConceptMapVersion:
         serialized.pop("contact")
         serialized.pop("publisher")
         serialized.pop("title")
-        initial_path = f"{ConceptMap.object_storage_folder_name}/v{ConceptMap.database_schema_version}"
+        initial_path = f"{ConceptMap.object_storage_folder_name}/v{schema_version}"
 
         return serialized, initial_path
 
     def publish(self):
         """
         A method to complete the full publication process including pushing to OCI, Simplifier,
-        Normalization Registry and setting status active.
+        Normalization Registry and setting status active. If the current ConceptMap.database_schema_version (such as 3)
+        and ConceptMap.next_schema_version (such as 4). are different, publishes both formats.
+        @raise BadRequestWithCode if the schema_version is v4 or later and there are no mappings in the concept map.
         @return: n/a
         """
-        concept_map_to_json, initial_path = self.prepare_for_oci()
+
+        # OCI: output as ConceptMap.database_schema_version, which may be the same as ConceptMap.database_schema_version
+        schema_version = ConceptMap.database_schema_version
+        concept_map_to_json, initial_path = self.prepare_for_oci(schema_version)
         set_up_object_store(
             concept_map_to_json,
             initial_path + f"/published/{self.concept_map.uuid}",
             folder="published",
             content_type="json",
         )  # sends to OCI
+        # write diff to OCI - comment out until we consider storage implications
+        # self.diff_versions_and_store_diff(concept_map_to_json, initial_path, schema_version)
+
+        # OCI: also output as ConceptMap.next_schema_version, if different from ConceptMap.database_schema_version
+        if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
+            schema_version = ConceptMap.next_schema_version
+            concept_map_to_json, initial_path = self.prepare_for_oci(schema_version)
+            set_up_object_store(
+                concept_map_to_json,
+                initial_path + f"/published/{self.concept_map.uuid}",
+                folder="published",
+                content_type="json",
+            )  # sends to OCI
+            # write diff to OCI - comment out until we consider storage implication
+            # self.diff_versions_and_store_diff(concept_map_to_json, initial_path, schema_version)
+
+        # Follow-up publishing activities
         self.version_set_status_active()
         self.set_publication_date()
         self.retire_and_obsolete_previous_version()
         self.to_simplifier()
+
         # Publish new version of data normalization registry
         app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
+
+        # Contact the Error Validation Service to resolve any errors fixed by the new concept map
         app.tasks.resolve_errors_after_concept_map_publish.delay(
             concept_map_version_uuid=self.uuid
         )
 
+    def diff_versions_and_store_diff(
+        self,
+        concept_map_to_json,
+        initial_path: str,
+        schema_version: int
+    ):
+        """
+        Supports publish() by publishing the diff from the previous version in a sub-folder named /diff
+        """
+        # diff new against previous concept map version
+        new_version = concept_map_to_json["version"]
+        previous_version = new_version - 1
+        concept_map_diff = self.concept_map.diff_mappings_and_metadata(
+            self.concept_map.uuid,
+            previous_version,
+            new_version,
+            schema_version
+        )  # sends to OCI
+        # diff to OCI
+        set_up_object_store(
+            concept_map_diff,
+            initial_path + f"/published/{self.concept_map.uuid}/diff",
+            folder="published",
+            content_type="json",
+        )  # sends to OCI
+
     def to_simplifier(self):
         """
         A method to send a concept map version to
+        This function uses the highest available output format schema (ConceptMap.next_schema_version).
+        @raise BadRequestWithCode if the schema_version is v4 or later and there are no mappings in the concept map.
         @return: n/a
         """
-        concept_map_to_json, initial_path = self.prepare_for_oci()
+        concept_map_to_json, initial_path = self.prepare_for_oci(ConceptMap.next_schema_version)
         resource_id = concept_map_to_json["id"]
         resource_type = concept_map_to_json["resourceType"]  # param for Simplifier
         concept_map_to_json["status"] = "active"  # Simplifier requires status
