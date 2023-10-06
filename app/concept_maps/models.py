@@ -1009,23 +1009,23 @@ class ConceptMapVersion:
                 code = element.get('code')
                 if code is not None:
                     # If string starts with curly brace
-                    if code :
-                        try:
-                            # check to see if it starts with one of our three possibilities
-                            # if the 'code' field is not a valid json string, this will raise a ValueError
-                            json.loads(code)
-                            #check to see if it starts with
-                        except ValueError:
-                        errors.append(f"Invalid JSON string in the code field at element index {index}: {code}")
-                    # If string does not start with a curly brace check if element.code and the element.display match
-                    try:
-                    #     # have defined schema we are expecting
-                          # check if element.code and the element.display match
+                    if code.startswith('{'):  # could also check to see if it starts with a valid text/codeable concept
+                        # If the string starts with either of the valid patterns
+                        if code.startswith(('{\"text\":', '{\"coding\":')):
+                            try:
+                                # Check if the 'code' field is a valid JSON string
+                                json.loads(code)
+                            except ValueError:
+                                errors.append(f"Invalid JSON string in the code field at element index {index}: {code}")
+                        else:
+                            errors.append(f"Code string has an unrecognized pattern at element index {index}: {code}")
+                    else:
+                        # If the string doesn't start with a curly brace
+                        display = element.get('display')
 
-                         pass
-                    except ValueError:
-                         errors.append(f"Code is not formatted as expected at element index {index}: {code}")
-
+                        # Check if element.code and the element.display match
+                        if code != display:
+                            errors.append(f"Code string does not match display at element index {index}: {code}")
                 else:
                     errors.append(f"'code' key is missing in the element at index {index}")
 
