@@ -308,11 +308,5 @@ def test_concept_map_output_to_oci():
     if test_concept_map_version is None:
         print(f"Version with UUID {test_concept_map_version_uuid} is None")
     else:
-        concept_map_to_json, initial_path = test_concept_map_version.prepare_for_oci(schema_version)
-        set_up_object_store(
-            concept_map_to_json,
-            initial_path + f"/published/{test_concept_map_version.concept_map.uuid}",
-            folder="published",
-            content_type="json",
-        )
+        test_concept_map_version.send_to_oci(schema_version)
     # look in OCI to see the value set and data normalization registry files (open up registry.json to see updates)
