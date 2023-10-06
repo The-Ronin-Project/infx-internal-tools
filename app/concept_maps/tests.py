@@ -67,15 +67,15 @@ def test_serialized_schema_versions():
     targetCanonical =  serialized_v4.get("targetCanonical")
     assert targetCanonical == "http://projectronin.io/fhir/ValueSet/8b58bcea-82e3-4c09-a7c2-ce7d9e8dad4c"
 
-    # Cannot write to Simplifier, a concept map with 0 mappings - the current schema (v4) forbids this case
+    # Cannot write to Simplifier, a concept map with 0 mappings - v4 or later forbids this case
     with raises(BadRequestWithCode):
         concept_map_version_2.to_simplifier()
 
-    # Cannot publish, a v4 version with 0 mappings
+    # Cannot publish, a v4 or later version with 0 mappings
     with raises(BadRequestWithCode):
         concept_map_version_2.publish()
 
-    # Cannot store in OCI, a v4 version with 0 mappings
+    # Cannot store in OCI, a v4 or later version with 0 mappings
     with raises(BadRequestWithCode):
         concept_map_version_2.prepare_for_oci()
 
