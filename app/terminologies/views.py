@@ -52,6 +52,11 @@ def create_terminology():
             is_standard,
             fhir_terminology,
         )
+        if new_terminology is None:
+            raise BadRequestWithCode(
+                "Terminology.create",
+                f"Unable to create terminology {terminology} {version} with fhir_uri: {fhir_uri}, is_standard: {is_standard}, new_terminology: {new_terminology}"
+            )
         term = Terminology.serialize(new_terminology)
         return term
 

@@ -9,6 +9,7 @@ from app.errors import BadRequestWithCode
 from app.helpers.oci_helper import set_up_object_store
 
 
+@pytest.mark.skip(reason="Before running locally, comment out 3 lines that call the Error Service in concept_maps/models.py. Then comment out the skip annotation.")
 def test_serialized_schema_versions():
     """
     Functions called by this test do not change data or write to OCI. They serialize data or read from OCI artifacts.
@@ -79,6 +80,8 @@ def test_serialized_schema_versions():
     with raises(BadRequestWithCode):
         concept_map_version_2.prepare_for_oci(schema_version=4)
 
+
+@pytest.mark.skip(reason="Before running locally, comment out 3 lines that call the Error Service in concept_maps/models.py. Then comment out the skip annotation.")
 def test_diff_mappings_and_metadata():
     """
     Functions called by this test do not change data or write to OCI. They serialize data or read from OCI artifacts.

@@ -208,17 +208,32 @@ class ConceptMapVersionCreator:
 
         response = {}
 
+        # Terminology Local cache
+        terminology = dict()
+
         for row in all_data:
             # In the database, source_concept.system is a terminology_version_uuid, but we want the FHIR URL
-            source_system_terminology = load_terminology_version_with_cache(
-                row.source_concept_system
-            )
 
+            # Get the system
+            source_system = row.source_concept_system
+            if source_system is None:
+                raise BadRequestWithCode(
+                    "ConceptMap.loadAllSourcesAndMappings.missingSystem",
+                    f"Concept map version UUID: {concept_map_version_uuid.version}, source concept UUID: {row.source_concept_uuid} has no source system identified"
+                )
+
+            # Get the Terminology
+            if source_system not in terminology.keys():
+                terminology.update({
+                    source_system: load_terminology_version_with_cache(source_system)
+                })
+
+            # Create the SourceConcept
             source_concept = app.concept_maps.models.SourceConcept(
                 uuid=row.source_concept_uuid,
                 code=row.source_concept_code,
                 display=row.source_concept_display,
-                system=source_system_terminology,
+                system=terminology.get(source_system),
                 comments=row.source_concept_comments,
                 additional_context=row.source_concept_additional_context,
                 map_status=row.source_concept_map_status,

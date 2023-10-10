@@ -16,7 +16,7 @@ from sqlalchemy import text
 import app.models.codes
 import app.models.data_ingestion_registry
 from app.database import get_db, get_elasticsearch
-from app.errors import BadDataError, BadRequestWithCode, NotFoundException
+from app.errors import BadDataError, BadRequestWithCode
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.models.codes import Code
@@ -856,12 +856,31 @@ class ConceptMapVersion:
             },
         )
 
+        # Terminology Local cache
+        terminology = dict()
+
         for item in results:
+
+            # Get the system
+            source_system = item.source_system
+            if source_system is None:
+                raise BadRequestWithCode(
+                    "ConceptMap.loadMappings.missingSystem",
+                    f"Concept map UUID: {self.concept_map.uuid} version {self.version} has no source system identified"
+                )
+
+            # Get the Terminology
+            if source_system not in terminology.keys():
+                terminology.update({
+                    source_system: load_terminology_version_with_cache(source_system)
+                })
+
+            # Create the SourceConcept
             source_code = SourceConcept(
                 uuid=item.source_concept_uuid,
                 code=item.source_code,
                 display=item.source_display,
-                system=load_terminology_version_with_cache(item.source_system),
+                system=terminology.get(source_system),
                 comments=item.source_comments,
                 additional_context=item.source_additional_context,
                 map_status=item.source_map_status,
@@ -1252,8 +1271,11 @@ class ConceptMapVersion:
                 else:
                     errors.append(f"'target' key is missing in the element at index {index}")
 
-        if errors:
-            raise BadDataError("Errors found in Concept Map:\n" + "\n".join(errors))
+        if len(errors) > 0:
+            raise BadDataError(
+                code="ConceptMapVersion.checkFormatting",
+                description="Errors found in Concept Map:\n" + "\n".join(errors)
+            )
 
     def serialize(self, include_internal_info=False, schema_version: int = ConceptMap.next_schema_version):
         """
