@@ -350,12 +350,13 @@ class ConceptMapVersionCreator:
         Creates a new ConceptMapVersion based on the previous version.
 
         This method performs the following steps to create the new ConceptMapVersion:
-        1. Set up variables and open a persistent database connection.
-        2. Register the new ConceptMapVersion in the database.
-        3. Populate the source concepts with the latest expansion of the new target value set version.
-        4. Iterate through the new source concepts and compare them with the previous version.
-        5. Process no-maps and mappings with inactive targets, and copy mappings exactly or require review.
-        6. Save the new ConceptMapVersion.
+        1. Perform data integrity checks on the input parameters.
+        2. Set up variables and open a persistent database connection.
+        3. Register the new ConceptMapVersion in the database.
+        4. Populate the source concepts with the latest expansion of the new target value set version.
+        5. Iterate through the new source concepts and compare them with the previous version.
+        6. Handle the cases of new sources, no-maps, mapped_no_maps, mappings with inactive targets, and copy mappings exactly or require review.
+        7. Save the new ConceptMapVersion.
 
         Args:
             previous_version_uuid (uuid.UUID): The UUID of the previous ConceptMapVersion.
@@ -595,6 +596,25 @@ class ConceptMapVersionCreator:
         return self.new_version_uuid
 
     def get_no_map_mappings(self, previous_concept_map_version_uuid):
+        """
+        Retrieves the no-map mappings from the previous concept map version.
+
+        This method fetches the source concepts and their corresponding concept
+        relationship UUIDs from the concept_maps.source_concept and
+        concept_maps.concept_relationship tables that are considered no-map mappings.
+        It then formats the no-map mappings data in a dictionary indexed by the
+        source concept lookup key, which is convenient for use in the
+        new_version_from_previous method.
+
+        Args:
+            previous_concept_map_version_uuid (uuid.UUID): The UUID of the previous
+            concept map version to retrieve the no-map mappings from.
+
+        Returns:
+            dict: A dictionary containing the no-map mappings data indexed by the
+            source concept lookup key. Each value in the dictionary is a dictionary
+            containing the SourceConcept object and the concept_relationship_uuid.
+        """
         no_map_mappings = self.conn.execute(
             text(
                 """    
