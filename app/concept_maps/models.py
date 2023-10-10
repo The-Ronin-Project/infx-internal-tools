@@ -16,7 +16,7 @@ from sqlalchemy import text
 import app.models.codes
 import app.models.data_ingestion_registry
 from app.database import get_db, get_elasticsearch
-from app.errors import BadDataError, BadRequestWithCode
+from app.errors import BadDataError, BadRequestWithCode, NotFoundException
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.models.codes import Code
@@ -248,6 +248,8 @@ class ConceptMap:
             ),
             {"concept_map_uuid": self.uuid},
         ).first()
+        if data is None:
+            raise NotFoundException(f"No Concept Map found with UUID: {self.uuid}")
 
         self.title = data.title
         self.name = data.name

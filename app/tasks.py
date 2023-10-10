@@ -59,7 +59,7 @@ def resolve_errors_after_concept_map_publish(concept_map_version_uuid):
 
 
 @celery_app.task
-def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: UUID):
+def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     conn = get_db()
 
     # Step 6: look up source and target value set
