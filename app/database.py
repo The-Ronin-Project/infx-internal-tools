@@ -119,4 +119,6 @@ def close_db(e=None):
     if db is not None:
         if e is None:
             db.commit()
+        if e is not None:
+            db.rollback()
         db.close()
