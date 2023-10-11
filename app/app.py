@@ -68,6 +68,14 @@ def create_app(script_info=None):
         rollback_and_close_connection_if_open()
         return jsonify({"code": e.code, "message": e.description}), e.http_status_code
 
+    @app.errorhandler(BadDataError)
+    def handle_bad_data_error(e):
+        """
+        Handles BadDataError exceptions by returning a JSON response with the appropriate error code and message.
+        """
+        rollback_and_close_connection_if_open()
+        return jsonify({"code": e.code, "message": e.description}), e.http_status_code
+
     @app.errorhandler(HTTPException)
     def handle_exception(e):
         """
