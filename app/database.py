@@ -100,6 +100,16 @@ def get_elasticsearch():
     )
 
 
+def rollback_and_close_connection_if_open():
+    """
+    Rollback and close the database connection if it exists.
+    """
+    db = g.pop("db", None)
+
+    if db is not None:
+        db.rollback()
+        db.close()
+
 def close_db(e=None):
     """
     Close the database connection if it exists.
@@ -107,5 +117,6 @@ def close_db(e=None):
     db = g.pop("db", None)
 
     if db is not None:
-        db.commit()
+        if e is None:
+            db.commit()
         db.close()
