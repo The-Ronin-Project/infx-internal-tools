@@ -123,8 +123,22 @@ class ConceptMapVersionCreator:
 
         sources_and_mappings = self.load_all_sources_and_mappings(self.new_version_uuid)
 
+        # Extract the 'everything_else' and 'mapped_no_map' dictionaries from the returned value
+        everything_else_sources_and_mappings = sources_and_mappings["everything_else"]
+        mapped_no_map_sources_and_mappings = sources_and_mappings["mapped_no_map"]
+
+        # Extract new source concepts from both dictionaries
         new_sources = []
-        for lookup_key, source_and_mapping in sources_and_mappings.items():
+        for (
+            lookup_key,
+            source_and_mapping,
+        ) in everything_else_sources_and_mappings.items():
+            new_sources.append(source_and_mapping.get("source_concept"))
+
+        for (
+            lookup_key,
+            source_and_mapping,
+        ) in mapped_no_map_sources_and_mappings.items():
             new_sources.append(source_and_mapping.get("source_concept"))
 
         return new_sources
@@ -144,61 +158,65 @@ class ConceptMapVersionCreator:
         Returns:
             dict: A dictionary containing source concepts and their mappings.
         """
-        # Mapped no map constants
-        no_map_relationship_uuid = "dca7c556-82d9-4433-8971-0b7edb9c9661"
-        no_map_target_concept_code = "No map"
-        no_map_target_concept_display = "No matching concept"
-        no_map_target_concept_system_version_uuid = (
-            "93ec9286-17cf-4837-a4dc-218ce3015de6"
-        )
+        mapped_no_map_criteria = {
+            "relationship_code_uuid": "dca7c556-82d9-4433-8971-0b7edb9c9661",
+            "target_concept_code": "No map",
+            "target_concept_display": "No matching concept",
+            "target_concept_system_version_uuid": "93ec9286-17cf-4837-a4dc-218ce3015de6",
+        }
+
+        response = {
+            "mapped_no_map": {},
+            "everything_else": {},
+        }
 
         all_data = self.conn.execute(
             text(
                 """
-                SELECT
-                    sc.uuid AS source_concept_uuid,
-                    sc.code AS source_concept_code,
-                    sc.display AS source_concept_display,
-                    sc.system AS source_concept_system,
-                    sc.comments AS source_concept_comments,
-                    sc.additional_context AS source_concept_additional_context,
-                    sc.map_status AS source_concept_map_status,
-                    sc.concept_map_version_uuid AS source_concept_map_version_uuid,
-                    sc.assigned_mapper AS source_concept_assigned_mapper,
-                    sc.assigned_reviewer AS source_concept_assigned_reviewer,
-                    sc.no_map AS source_concept_no_map,
-                    sc.reason_for_no_map AS source_concept_reason_for_no_map,
-                    sc.mapping_group AS source_concept_mapping_group,
-                    cr.uuid AS concept_relationship_uuid,
-                    cr.target_concept_code AS target_concept_code,
-                    cr.target_concept_display AS target_concept_display,
-                    cr.target_concept_system AS target_concept_system,
-                    cr.mapping_comments AS mapping_comments,
-                    cr.review_status AS review_status,
-                    cr.created_date AS concept_relationship_created_date,
-                    cr.reviewed_date AS concept_relationship_reviewed_date,
-                    cr.author AS concept_relationship_author,
-                    cr.relationship_code_uuid AS concept_relationship_relationship_code_uuid,
-                    cr.target_concept_system_version_uuid AS target_concept_system_version_uuid,
-                    cr.review_comment AS concept_relationship_review_comment,
-                    cr.reviewed_by AS concept_relationship_reviewed_by,
-                    ctc.depends_on_property,
-                    ctc.depends_on_system,
-                    ctc.depends_on_value,
-                    ctc.depends_on_display
-                FROM
-                    concept_maps.concept_relationship cr
-                RIGHT JOIN
-                    concept_maps.source_concept sc
-                ON
-                    sc.uuid = cr.source_concept_uuid
-                LEFT JOIN
-                    custom_terminologies.code ctc
-                ON
-                    sc.custom_terminology_uuid = ctc.uuid
-                WHERE
-                    sc.concept_map_version_uuid = :concept_map_version_uuid
-                """
+                    SELECT
+                        sc.uuid AS source_concept_uuid,
+                        sc.code AS source_concept_code,
+                        sc.display AS source_concept_display,
+                        sc.system AS source_concept_system,
+                        sc.comments AS source_concept_comments,
+                        sc.additional_context AS source_concept_additional_context,
+                        sc.map_status AS source_concept_map_status,
+                        sc.concept_map_version_uuid AS source_concept_map_version_uuid,
+                        sc.assigned_mapper AS source_concept_assigned_mapper,
+                        sc.assigned_reviewer AS source_concept_assigned_reviewer,
+                        sc.no_map AS source_concept_no_map,
+                        sc.reason_for_no_map AS source_concept_reason_for_no_map,
+                        sc.mapping_group AS source_concept_mapping_group,
+                        cr.uuid AS concept_relationship_uuid,
+                        cr.target_concept_code AS target_concept_code,
+                        cr.target_concept_display AS target_concept_display,
+                        cr.target_concept_system AS target_concept_system,
+                        cr.mapping_comments AS mapping_comments,
+                        cr.review_status AS review_status,
+                        cr.created_date AS concept_relationship_created_date,
+                        cr.reviewed_date AS concept_relationship_reviewed_date,
+                        cr.author AS concept_relationship_author,
+                        cr.relationship_code_uuid AS concept_relationship_relationship_code_uuid,
+                        cr.target_concept_system_version_uuid AS target_concept_system_version_uuid,
+                        cr.review_comment AS concept_relationship_review_comment,
+                        cr.reviewed_by AS concept_relationship_reviewed_by,
+                        ctc.depends_on_property,
+                        ctc.depends_on_system,
+                        ctc.depends_on_value,
+                        ctc.depends_on_display
+                    FROM
+                        concept_maps.concept_relationship cr
+                    RIGHT JOIN
+                        concept_maps.source_concept sc
+                    ON
+                        sc.uuid = cr.source_concept_uuid
+                    LEFT JOIN
+                        custom_terminologies.code ctc
+                    ON
+                        sc.custom_terminology_uuid = ctc.uuid
+                    WHERE
+                        sc.concept_map_version_uuid = :concept_map_version_uuid
+                    """
             ),
             {"concept_map_version_uuid": concept_map_version_uuid},
         )
@@ -215,18 +233,6 @@ class ConceptMapVersionCreator:
 
         # Terminology Local cache
         terminology = dict()
-
-        mapped_no_map_criteria = {
-            "relationship_code_uuid": no_map_relationship_uuid,
-            "target_concept_code": no_map_target_concept_code,
-            "target_concept_display": no_map_target_concept_display,
-            "target_concept_system_version_uuid": no_map_target_concept_system_version_uuid,
-        }
-
-        response = {
-            "mapped_no_map": {},
-            "everything_else": {},
-        }
 
         for row in all_data:
             # In the database, source_concept.system is a terminology_version_uuid, but we want the FHIR URL
@@ -245,16 +251,23 @@ class ConceptMapVersionCreator:
                 )
 
             is_mapped_no_map = (
-                row.concept_relationship_relationship_code_uuid
-                == mapped_no_map_criteria["relationship_code_uuid"]
-                and row.target_concept_code
-                == mapped_no_map_criteria["target_concept_code"]
-                and row.target_concept_display
-                == mapped_no_map_criteria["target_concept_display"]
-                and row.target_concept_system_version_uuid
-                == mapped_no_map_criteria["target_concept_system_version_uuid"]
+                (
+                    str(row.concept_relationship_relationship_code_uuid)
+                    == mapped_no_map_criteria["relationship_code_uuid"]
+                )
+                and (
+                    row.target_concept_code
+                    == mapped_no_map_criteria["target_concept_code"]
+                )
+                and (
+                    row.target_concept_display
+                    == mapped_no_map_criteria["target_concept_display"]
+                )
+                and (
+                    str(row.target_concept_system_version_uuid)
+                    == mapped_no_map_criteria["target_concept_system_version_uuid"]
+                )
             )
-            print(f"is_mapped_no_map: {is_mapped_no_map}, row: {row}")
 
             # Create the SourceConcept
             source_concept = app.concept_maps.models.SourceConcept(
@@ -329,7 +342,10 @@ class ConceptMapVersionCreator:
                 source_concept.depends_on_value,
             )
 
-            group_key = "mapped_no_map" if is_mapped_no_map else "everything_else"
+            if is_mapped_no_map:
+                group_key = "mapped_no_map"
+            else:
+                group_key = "everything_else"
 
             if lookup_key not in response[group_key]:
                 response[group_key][lookup_key] = {
@@ -426,10 +442,9 @@ class ConceptMapVersionCreator:
             active_only=False
         )
 
-        if (concept_map_most_recent_version is None or
-                str(concept_map_most_recent_version.uuid) != str(previous_version_uuid)
-
-        ):
+        if concept_map_most_recent_version is None or str(
+            concept_map_most_recent_version.uuid
+        ) != str(previous_version_uuid):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.previous_version_uuid",
                 f"Input concept map version with UUID {previous_version_uuid} is not the most recent version",
@@ -443,7 +458,8 @@ class ConceptMapVersionCreator:
             source_value_set_version.value_set.uuid
         )
         if active_source_value_set_version is None or (
-                str(active_source_value_set_version.uuid) != str(new_source_value_set_version_uuid)
+            str(active_source_value_set_version.uuid)
+            != str(new_source_value_set_version_uuid)
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.new_source_value_set_version_uuid",
@@ -458,7 +474,8 @@ class ConceptMapVersionCreator:
             target_value_set_version.value_set.uuid
         )
         if active_target_value_set_version is None or (
-                str(active_target_value_set_version.uuid) != str(new_target_value_set_version_uuid)
+            str(active_target_value_set_version.uuid)
+            != str(new_target_value_set_version_uuid)
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.new_target_value_set_version_uuid",
@@ -487,10 +504,12 @@ class ConceptMapVersionCreator:
             )
 
             # Populate concept_maps.source_concept table with the latest expansion of the new target value set version
-            # Note: populate_source_concepts() calls load_all_sources_and_mappings() with the self.new_version_uuid
+            # Note: populate_source_concepts() calls load_all_sources_and_mappings() with the self.new_version_uuid.
+            # This first time call to load_all_sources_and_mappings will have none in all the concept relationship columns.
             new_source_concepts = self.populate_source_concepts()
 
             # Iterate through the new sources, compare w/ previous, make decisions:
+            # This second call to load_all_sources_and_mappings should HAVE values in the concept relationship columns.
             previous_sources_and_mappings = self.load_all_sources_and_mappings(
                 self.previous_concept_map_version.uuid
             )
@@ -509,6 +528,7 @@ class ConceptMapVersionCreator:
             previous_contexts_list = []
 
             for new_source_concept in new_source_concepts:
+                logging.info(f"Processing new source concept: {new_source_concept}")
                 # For each new_source_concept, create a source_lookup_key tuple using the source concept's properties
                 source_lookup_key = (
                     new_source_concept.code,
@@ -525,6 +545,7 @@ class ConceptMapVersionCreator:
                     # (i.e., the source concept is new and not present in the previous version),
                     # add the new_source_concept to the novel_sources list.
                     self.novel_sources.append(new_source_concept)
+                    logging.info(f"New source concept added: {new_source_concept}")
 
                 else:
                     # If the source_lookup_key is found in previous_sources_and_mappings
@@ -547,8 +568,9 @@ class ConceptMapVersionCreator:
                         reason_for_no_map=previous_source_concept.reason_for_no_map,
                         mapping_group=previous_source_concept.mapping_group,
                     )
-
-                    # if not previous_mappings: THINK ABOUT THIS>>>ALL SHOULD BE MAPPED SO NO NEED CORRECT?
+                    logging.debug(
+                        f"New source concept updated with previous information: {new_source_concept}"
+                    )
 
                     if source_lookup_key in mapped_no_map_lookup:
                         # If the source_lookup_key is found in mapped_no_map_lookup, handle the mapped_no_maps case:
@@ -576,6 +598,9 @@ class ConceptMapVersionCreator:
                             )
                             if result is not None:
                                 previous_contexts_list.append(result)
+                                logging.info(
+                                    f"Processed no_map case for source concept: {new_source_concept}"
+                                )
                         else:
                             # d. Otherwise copy the previous mapping exactly using the copy_mapping_exact method with the new_target_code set to "No map"
                             # Mapped no map constants
@@ -592,11 +617,17 @@ class ConceptMapVersionCreator:
                                 new_target_code=no_map_code.code,
                                 previous_mapping=previous_mapping,
                             )
+                            logging.info(
+                                f"Copied previous mapping exactly for source concept: {new_source_concept}"
+                            )
 
                     else:
                         # If none of the above conditions match, it means the source concept has regular mappings in the previous version:
                         # a. Initialize an empty list previous_mapping_context to store the previous context data for the source concept.
                         previous_mapping_context = []
+                        logging.debug(
+                            f"Processing regular mappings for source concept: {new_source_concept}"
+                        )
                         for previous_mapping in previous_mappings:
                             #  b. Iterate through the previous_mappings:
                             # i. Create a target_lookup_key tuple using the target concept's properties (code, display, system) from the previous_mapping.
@@ -674,92 +705,6 @@ class ConceptMapVersionCreator:
 
         # Return the new concept map version UUID
         return self.new_version_uuid
-
-    def get_no_map_mappings(self, previous_concept_map_version_uuid):
-        """
-        Retrieves the no-map mappings from the previous concept map version.
-
-        This method fetches the source concepts and their corresponding concept
-        relationship UUIDs from the concept_maps.source_concept and
-        concept_maps.concept_relationship tables that are considered no-map mappings.
-        It then formats the no-map mappings data in a dictionary indexed by the
-        source concept lookup key, which is convenient for use in the
-        new_version_from_previous method.
-
-        Args:
-            previous_concept_map_version_uuid (uuid.UUID): The UUID of the previous
-            concept map version to retrieve the no-map mappings from.
-
-        Returns:
-            dict: A dictionary containing the no-map mappings data indexed by the
-            source concept lookup key. Each value in the dictionary is a dictionary
-            containing the SourceConcept object and the concept_relationship_uuid.
-        """
-        # Mapped no map constants
-        no_map_relationship_uuid = "dca7c556-82d9-4433-8971-0b7edb9c9661"
-        no_map_target_concept_code = "No map"
-        no_map_target_concept_display = "No matching concept"
-        no_map_target_system_version_uuid = "93ec9286-17cf-4837-a4dc-218ce3015de6"
-
-        no_map_mappings = self.conn.execute(
-            text(
-                """    
-                SELECT sc.*, cr.uuid as concept_relationship_uuid  
-                FROM concept_maps.source_concept sc    
-                JOIN concept_maps.concept_relationship cr    
-                ON sc.uuid = cr.source_concept_uuid    
-                WHERE cr.relationship_code_uuid = :no_map_relationship_uuid    
-                AND cr.target_concept_code = :no_map_target_concept_code    
-                AND cr.target_concept_display = :no_map_target_concept_display    
-                AND cr.target_concept_system_version_uuid = :no_map_target_system_version_uuid    
-                AND sc.concept_map_version_uuid = :previous_concept_map_version_uuid    
-                """
-            ),
-            {
-                "no_map_relationship_uuid": no_map_relationship_uuid,
-                "no_map_target_concept_code": no_map_target_concept_code,
-                "no_map_target_concept_display": no_map_target_concept_display,
-                "no_map_target_system_version_uuid": no_map_target_system_version_uuid,
-                "previous_concept_map_version_uuid": previous_concept_map_version_uuid,
-            },
-        ).fetchall()
-
-        mapped_no_maps = {}
-        for row in no_map_mappings:
-            source_system_terminology = load_terminology_version_with_cache(row.system)
-
-            source_concept = app.concept_maps.models.SourceConcept(
-                uuid=row.uuid,
-                code=row.code,
-                display=row.display,
-                system=source_system_terminology,
-                comments=row.comments,
-                additional_context=row.additional_context,
-                map_status=row.map_status,
-                assigned_mapper=row.assigned_mapper,
-                assigned_reviewer=row.assigned_reviewer,
-                no_map=row.no_map,
-                reason_for_no_map=row.reason_for_no_map,
-                mapping_group=row.mapping_group,
-                concept_map_version_uuid=row.concept_map_version_uuid,
-            )
-
-            lookup_key = (
-                source_concept.code_object,
-                source_concept.display,
-                source_concept.system.fhir_uri,
-                source_concept.depends_on_display,
-                source_concept.depends_on_property,
-                source_concept.depends_on_system,
-                source_concept.depends_on_value,
-            )
-
-            mapped_no_maps[lookup_key] = {
-                "source_concept": source_concept,
-                "concept_relationship_uuid": row.concept_relationship_uuid,
-            }
-
-        return mapped_no_maps
 
     def create_no_map_mappings(self, new_concept_map_version):
         """
