@@ -144,6 +144,13 @@ class ConceptMapVersionCreator:
         Returns:
             dict: A dictionary containing source concepts and their mappings.
         """
+        # Mapped no map constants
+        no_map_relationship_uuid = "dca7c556-82d9-4433-8971-0b7edb9c9661"
+        no_map_target_concept_code = "No map"
+        no_map_target_concept_display = "No matching concept"
+        no_map_target_concept_system_version_uuid = (
+            "93ec9286-17cf-4837-a4dc-218ce3015de6"
+        )
 
         all_data = self.conn.execute(
             text(
@@ -195,6 +202,7 @@ class ConceptMapVersionCreator:
             ),
             {"concept_map_version_uuid": concept_map_version_uuid},
         )
+        print("all_data:", list(all_data))
 
         # Create a dict that lets you lookup a source and get both it's source_concept data and mappings
         # For example:
@@ -208,17 +216,54 @@ class ConceptMapVersionCreator:
 
         response = {}
 
+        # Terminology Local cache
+        terminology = dict()
+
+        mapped_no_map_criteria = {
+            "relationship_code_uuid": no_map_relationship_uuid,
+            "target_concept_code": no_map_target_concept_code,
+            "target_concept_display": no_map_target_concept_display,
+            "target_concept_system_version_uuid": no_map_target_concept_system_version_uuid,
+        }
+
+        response = {
+            "mapped_no_map": {},
+            "everything_else": {},
+        }
+
         for row in all_data:
             # In the database, source_concept.system is a terminology_version_uuid, but we want the FHIR URL
-            source_system_terminology = load_terminology_version_with_cache(
-                row.source_concept_system
+            # Get the system
+            source_system = row.source_concept_system
+            if source_system is None:
+                raise BadRequestWithCode(
+                    "ConceptMap.loadAllSourcesAndMappings.missingSystem",
+                    f"Concept map version UUID: {concept_map_version_uuid.version}, source concept UUID: {row.source_concept_uuid} has no source system identified",
+                )
+
+            # Get the Terminology
+            if source_system not in terminology.keys():
+                terminology.update(
+                    {source_system: load_terminology_version_with_cache(source_system)}
+                )
+
+            is_mapped_no_map = (
+                row.concept_relationship_relationship_code_uuid
+                == mapped_no_map_criteria["relationship_code_uuid"]
+                and row.target_concept_code
+                == mapped_no_map_criteria["target_concept_code"]
+                and row.target_concept_display
+                == mapped_no_map_criteria["target_concept_display"]
+                and row.target_concept_system_version_uuid
+                == mapped_no_map_criteria["target_concept_system_version_uuid"]
             )
+            print(f"is_mapped_no_map: {is_mapped_no_map}, row: {row}")
 
             source_concept = app.concept_maps.models.SourceConcept(
                 uuid=row.source_concept_uuid,
                 code=row.source_concept_code,
                 display=row.source_concept_display,
-                system=source_system_terminology,
+                system=terminology.get(source_system),
                 comments=row.source_concept_comments,
                 additional_context=row.source_concept_additional_context,
                 map_status=row.source_concept_map_status,
@@ -286,18 +331,19 @@ class ConceptMapVersionCreator:
                 source_concept.depends_on_value,
             )
 
-            if lookup_key not in response:
-                response[lookup_key] = {
+            group_key = "mapped_no_map" if is_mapped_no_map else "everything_else"
+
+            if lookup_key not in response[group_key]:
+                response[group_key][lookup_key] = {
                     "source_concept": source_concept,
                     "mappings": [],
                 }
 
                 if mapping is not None:
-                    response[lookup_key]["mappings"].append(mapping)
+                    response[group_key][lookup_key]["mappings"].append(mapping)
 
             else:
-                # Multiple rows for the same source means multiple mappings, so we need to append that
-                response[lookup_key]["mappings"].append(mapping)
+                response[group_key][lookup_key]["mappings"].append(mapping)
 
         return response
 
@@ -353,9 +399,9 @@ class ConceptMapVersionCreator:
         1. Perform data integrity checks on the input parameters.
         2. Set up variables and open a persistent database connection.
         3. Register the new ConceptMapVersion in the database.
-        4. Populate the source concepts with the latest expansion of the new target value set version.
+        4. Populate the source concepts with the latest expansion of the new source value set version.
         5. Iterate through the new source concepts and compare them with the previous version.
-        6. Handle the cases of new sources, mapped_no_maps, mappings with inactive targets, and copy mappings exactly or require review.
+        6. Handle the cases of new sources, mapped no maps, mappings with inactive targets, and copy mappings exactly or require review.
         7. Save the new ConceptMapVersion.
 
         Args:
@@ -451,10 +497,12 @@ class ConceptMapVersionCreator:
             previous_sources_and_mappings = self.load_all_sources_and_mappings(
                 self.previous_concept_map_version.uuid
             )
-
-            mapped_no_maps_lookup = self.get_no_map_mappings(
-                self.previous_concept_map_version.uuid
-            )
+            mapped_no_map_lookup = previous_sources_and_mappings["mapped_no_map"]
+            everything_else_lookup = previous_sources_and_mappings["everything_else"]
+            all_previous_sources_and_mappings = {
+                **mapped_no_map_lookup,
+                **everything_else_lookup,
+            }
 
             # Load and index the new targets
             new_targets_lookup = self.load_all_targets()
@@ -475,7 +523,7 @@ class ConceptMapVersionCreator:
                     new_source_concept.depends_on_value,
                 )
 
-                if source_lookup_key not in previous_sources_and_mappings:
+                if source_lookup_key not in all_previous_sources_and_mappings:
                     # If the source_lookup_key is not found in previous_sources_and_mappings
                     # (i.e., the source concept is new and not present in the previous version),
                     # add the new_source_concept to the novel_sources list.
@@ -484,17 +532,31 @@ class ConceptMapVersionCreator:
                 else:
                     # If the source_lookup_key is found in previous_sources_and_mappings
                     # Retrieve the previous_source_concept and its previous_mappings from previous_sources_and_mappings using the source_lookup_key
-                    previous_source_concept = previous_sources_and_mappings[
+                    previous_source_concept = all_previous_sources_and_mappings[
                         source_lookup_key
                     ].get("source_concept")
-                    previous_mappings = previous_sources_and_mappings[
+                    previous_mappings = all_previous_sources_and_mappings[
                         source_lookup_key
                     ].get("mappings")
 
-                    if source_lookup_key in mapped_no_maps_lookup:
-                        # If the source_lookup_key is found in mapped_no_maps_lookup, handle the mapped_no_maps case:
-                        # a.Retrieve the previous_mapping_data and the previous_concept_relationship_uuid from mapped_no_maps_lookup using the source_lookup_key
-                        previous_mapping_data = mapped_no_maps_lookup[source_lookup_key]
+                    # Some parts of source concept should always carry forward, regardless
+                    new_source_concept.update(
+                        comments=previous_source_concept.comments,
+                        additional_context=previous_source_concept.additional_context,
+                        map_status=previous_source_concept.map_status,
+                        assigned_mapper=previous_source_concept.assigned_mapper,
+                        assigned_reviewer=previous_source_concept.assigned_reviewer,
+                        no_map=previous_source_concept.no_map,
+                        reason_for_no_map=previous_source_concept.reason_for_no_map,
+                        mapping_group=previous_source_concept.mapping_group,
+                    )
+
+                    # if not previous_mappings: THINK ABOUT THIS>>>ALL SHOULD BE MAPPED SO NO NEED CORRECT?
+
+                    if source_lookup_key in mapped_no_map_lookup:
+                        # If the source_lookup_key is found in mapped_no_map_lookup, handle the mapped_no_maps case:
+                        # a.Retrieve the previous_mapping_data and the previous_concept_relationship_uuid from mapped_no_map_lookup using the source_lookup_key
+                        previous_mapping_data = mapped_no_map_lookup[source_lookup_key]
                         # b. Load the previous_mapping using the previous_concept_relationship_uuid
                         previous_concept_relationship_uuid = previous_mapping_data[
                             "concept_relationship_uuid"
@@ -541,19 +603,7 @@ class ConceptMapVersionCreator:
                             )
 
                     else:
-                        # Update the new_source_concept with some properties from the previous_source_concept
-                        # that should always carry forward, regardless of the mappings
-                        new_source_concept.update(
-                            comments=previous_source_concept.comments,
-                            additional_context=previous_source_concept.additional_context,
-                            map_status=previous_source_concept.map_status,
-                            assigned_mapper=previous_source_concept.assigned_mapper,
-                            assigned_reviewer=previous_source_concept.assigned_reviewer,
-                            no_map=previous_source_concept.no_map,
-                            reason_for_no_map=previous_source_concept.reason_for_no_map,
-                            mapping_group=previous_source_concept.mapping_group,
-                        )
-                        # If none of the above conditions match, it means the source concept has mappings in the previous version:
+                        # If none of the above conditions match, it means the source concept has regular mappings in the previous version:
                         # a. Initialize an empty list previous_mapping_context to store the previous context data for the source concept.
                         previous_mapping_context = []
                         for previous_mapping in previous_mappings:
@@ -759,12 +809,12 @@ class ConceptMapVersionCreator:
                     ),
                 ),
                 mapping_comments="mapped no map",
-                author=None,  # Add the author of the mapping, if required
-                review_status="reviewed",  # Add the review_status of the mapping, if required
-                created_date=None,  # Add the created_date of the mapping, if required
-                reviewed_date=None,  # Add the reviewed_date of the mapping, if required
-                review_comment=None,  # Add the review_comment of the mapping, if required
-                reviewed_by=None,  # Add the reviewed_by of the mapping, if required
+                author=None,
+                review_status="reviewed",
+                created_date=None,
+                reviewed_date=None,
+                review_comment=None,
+                reviewed_by=None,
             )
 
             mapping.save()
