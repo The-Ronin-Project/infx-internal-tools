@@ -259,6 +259,7 @@ class ConceptMapVersionCreator:
             )
             print(f"is_mapped_no_map: {is_mapped_no_map}, row: {row}")
 
+            # Create the SourceConcept
             source_concept = app.concept_maps.models.SourceConcept(
                 uuid=row.source_concept_uuid,
                 code=row.source_concept_code,
@@ -427,9 +428,10 @@ class ConceptMapVersionCreator:
         concept_map_most_recent_version = concept_map.get_most_recent_version(
             active_only=False
         )
-        if (
-            concept_map_most_recent_version is None
-            or concept_map_most_recent_version.uuid != uuid.UUID(previous_version_uuid)
+
+        if (concept_map_most_recent_version is None or
+                str(concept_map_most_recent_version.uuid) != str(previous_version_uuid)
+
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.previous_version_uuid",
@@ -444,8 +446,7 @@ class ConceptMapVersionCreator:
             source_value_set_version.value_set.uuid
         )
         if active_source_value_set_version is None or (
-            active_source_value_set_version.uuid
-            != uuid.UUID(new_source_value_set_version_uuid)
+                str(active_source_value_set_version.uuid) != str(new_source_value_set_version_uuid)
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.new_source_value_set_version_uuid",
@@ -460,8 +461,7 @@ class ConceptMapVersionCreator:
             target_value_set_version.value_set.uuid
         )
         if active_target_value_set_version is None or (
-            active_target_value_set_version.uuid
-            != uuid.UUID(new_target_value_set_version_uuid)
+                str(active_target_value_set_version.uuid) != str(new_target_value_set_version_uuid)
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.new_target_value_set_version_uuid",

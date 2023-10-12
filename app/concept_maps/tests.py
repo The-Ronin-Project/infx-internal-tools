@@ -9,6 +9,7 @@ from app.errors import BadRequestWithCode
 from app.helpers.oci_helper import set_up_object_store
 
 
+@pytest.mark.skip(reason="Before running locally, comment out 3 lines that call the Error Service in concept_maps/models.py. Then comment out the skip annotation.")
 def test_serialized_schema_versions():
     """
     Functions called by this test do not change data or write to OCI. They serialize data or read from OCI artifacts.
@@ -67,18 +68,20 @@ def test_serialized_schema_versions():
     targetCanonical =  serialized_v4.get("targetCanonical")
     assert targetCanonical == "http://projectronin.io/fhir/ValueSet/8b58bcea-82e3-4c09-a7c2-ce7d9e8dad4c"
 
-    # Cannot write to Simplifier, a concept map with 0 mappings - the current schema (v4) forbids this case
+    # Cannot write to Simplifier, a concept map with 0 mappings - v4 or later forbids this case
     with raises(BadRequestWithCode):
         concept_map_version_2.to_simplifier()
 
-    # Cannot publish, a v4 version with 0 mappings
+    # Cannot publish, a v4 or later version with 0 mappings
     with raises(BadRequestWithCode):
-        concept_map_version_2.publish(schema_version=4)
+        concept_map_version_2.publish()
 
-    # Cannot store in OCI, a v4 version with 0 mappings
+    # Cannot store in OCI, a v4 or later version with 0 mappings
     with raises(BadRequestWithCode):
-        concept_map_version_2.prepare_for_oci(schema_version=4)
+        concept_map_version_2.prepare_for_oci()
 
+
+@pytest.mark.skip(reason="Before running locally, comment out 3 lines that call the Error Service in concept_maps/models.py. Then comment out the skip annotation.")
 def test_diff_mappings_and_metadata():
     """
     Functions called by this test do not change data or write to OCI. They serialize data or read from OCI artifacts.
@@ -308,11 +311,5 @@ def test_concept_map_output_to_oci():
     if test_concept_map_version is None:
         print(f"Version with UUID {test_concept_map_version_uuid} is None")
     else:
-        concept_map_to_json, initial_path = test_concept_map_version.prepare_for_oci(schema_version)
-        set_up_object_store(
-            concept_map_to_json,
-            initial_path + f"/published/{test_concept_map_version.concept_map.uuid}",
-            folder="published",
-            content_type="json",
-        )
+        test_concept_map_version.send_to_oci(schema_version)
     # look in OCI to see the value set and data normalization registry files (open up registry.json to see updates)
