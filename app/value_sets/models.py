@@ -15,6 +15,7 @@ from collections import defaultdict
 from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
 
+from app.errors import NotFoundException, BadDataError
 from app.helpers.oci_helper import set_up_object_store
 
 from app.models.codes import Code
@@ -1986,7 +1987,7 @@ class ValueSet:
         most_recent_version = ValueSetVersion.load(highest_version.get("uuid"))
         if most_recent_version.contains_content_from_terminology(
             new_terminology_version_uuid
-        ):
+        ):  # safely returns True or False
             return "already_updated"
 
         # Check to see if it's active (we will not auto-update pending value sets still being worked on)
@@ -2316,9 +2317,16 @@ class RuleGroup:
             expansion_report += f"\nProcessing rules for terminology {terminology.name} version {terminology.version}\n"
 
             rules = self.rules.get(terminology)
+            errors = []  # list to hold error messages
 
             for rule in rules:
-                rule.execute()
+                try:
+                    rule.execute()
+                except BadRequest as e:
+                    if e.code == 400:
+                        errors.append(f"{e.description}")
+                    else:
+                        raise e
 
             include_rules = [x for x in rules if x.include is True]
             exclude_rules = [x for x in rules if x.include is False]
@@ -2371,6 +2379,11 @@ class RuleGroup:
                     for x in terminology_set
                 ]
             )
+            expansion_report += "\nErrors\n\n"
+            if len(errors) == 0:
+                expansion_report += "(None)\n"
+            else:
+                expansion_report += "\n".join(errors) + "\n"
             expansion_report += "\n"
 
         return self.expansion, expansion_report
@@ -3325,6 +3338,9 @@ class ValueSetVersion:
         )
 
     def contains_content_from_terminology(self, terminology_version_uuid):
+        """
+        Safely returns True or False
+        """
         self.expand()
 
         # Check for rules
@@ -3334,14 +3350,18 @@ class ValueSetVersion:
                     return True
 
         # Check expansion for codes
-        terminology = Terminology.load(terminology_version_uuid)
-        for code in self.expansion:
-            if (
-                code.system == terminology.fhir_uri
-                and code.version == terminology.version
-            ):
-                return True
+        try:
+            terminology = Terminology.load(terminology_version_uuid)
+            for code in self.expansion:
+                if (
+                    code.system == terminology.fhir_uri
+                    and code.version == terminology.version
+                ):
+                    return True
+        except NotFoundException:
+            pass
 
+        # Nothing from this terminology
         return False
 
     def lookup_terminologies_in_value_set_version(self) -> List[Terminology]:

@@ -85,11 +85,12 @@ class Code:
                     system, version
                 )
             )
-            self.terminology_version = (
-                app.terminologies.models.load_terminology_version_with_cache(
-                    self.terminology_version_uuid
+            if self.terminology_version_uuid is not None:
+                self.terminology_version = (
+                    app.terminologies.models.load_terminology_version_with_cache(
+                        self.terminology_version_uuid
+                    )
                 )
-            )
 
         if (
             self.terminology_version_uuid is None

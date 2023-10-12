@@ -12,7 +12,7 @@ import app.registries.views as registry_views
 import app.tasks as tasks
 import app.terminologies.views as terminology_views
 import app.value_sets.views as value_set_views
-from app.database import close_db
+from app.database import close_db, rollback_and_close_connection_if_open
 from app.errors import BadRequestWithCode, NotFoundException
 from app.helpers.structlog import config_structlog, common_handler
 from app.models.data_ingestion_registry import (
@@ -65,6 +65,15 @@ def create_app(script_info=None):
         """
         Handles BadRequestWithCode exceptions by returning a JSON response with the appropriate error code and message.
         """
+        rollback_and_close_connection_if_open()
+        return jsonify({"code": e.code, "message": e.description}), e.http_status_code
+
+    @app.errorhandler(BadDataError)
+    def handle_bad_data_error(e):
+        """
+        Handles BadDataError exceptions by returning a JSON response with the appropriate error code and message.
+        """
+        rollback_and_close_connection_if_open()
         return jsonify({"code": e.code, "message": e.description}), e.http_status_code
 
     @app.errorhandler(HTTPException)
@@ -72,11 +81,13 @@ def create_app(script_info=None):
         """
         Handles general HTTPExceptions by returning a JSON response with the appropriate error message and status code.
         """
+        rollback_and_close_connection_if_open()
         logger.critical(e.description, stack_info=True)
         return jsonify({"message": e.description}), e.code
 
     @app.errorhandler(NotFoundException)
     def handle_not_found(e):
+        rollback_and_close_connection_if_open()
         return jsonify({"message": e.message}), 404
 
     # UseCase Endpoints

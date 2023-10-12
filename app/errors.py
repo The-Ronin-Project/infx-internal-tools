@@ -13,6 +13,13 @@ class NotFoundException(Exception):
         self.message = message
 
 
+class BadDataError(BadRequest):
+    def __init__(self, code, description, http_status_code=409):
+        self.code = code
+        self.description = description
+        self.http_status_code = http_status_code
+
+
 class TerminologyExpiredError(Exception):
     pass
 

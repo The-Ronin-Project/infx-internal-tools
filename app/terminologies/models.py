@@ -94,7 +94,7 @@ class Terminology:
         """
 
         conn = get_db()
-        term_data = conn.execute(
+        data = conn.execute(
             text(
                 """
                 select * from terminology_versions
@@ -102,11 +102,12 @@ class Terminology:
                 """
             ),
             {"terminology_version_uuid": terminology_version_uuid},
-        ).first()
+        )
 
         # When there is no data, do not create an object
-        if term_data is None:
-            raise NotFoundException(f"No data found for terminology version_UUID: {terminology_version_uuid}")
+        if data is None:
+            raise NotFoundException(f"No data found for terminology version UUID: {terminology_version_uuid}")
+        term_data = data.first()
 
         # Create and return a Terminology object
         return cls(
@@ -127,7 +128,7 @@ class Terminology:
     @classmethod
     def load_by_fhir_uri_and_version(cls, fhir_uri: str, version: str):
         terminology_version_uuid = terminology_version_uuid_lookup(fhir_uri, version)
-        if terminology_version_uuid:
+        if terminology_version_uuid is not None:
             return cls.load(terminology_version_uuid)
 
     @classmethod
