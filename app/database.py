@@ -7,7 +7,7 @@ from decouple import config
 SQL_ALCHEMY_ENGINE = create_engine(
     f"postgresql://{config('DATABASE_USER', default='')}@{config('DATABASE_HOST', default='')}:{config('DATABASE_PASSWORD', default='')}@{config('DATABASE_HOST', default='')}/{config('DATABASE_NAME', default='')}",
     connect_args={"sslmode": "require"},
-    pool_size=3,
+    pool_size=5,
     max_overflow=0,
 )
 

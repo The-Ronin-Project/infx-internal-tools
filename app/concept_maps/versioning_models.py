@@ -202,7 +202,6 @@ class ConceptMapVersionCreator:
             ),
             {"concept_map_version_uuid": concept_map_version_uuid},
         )
-        print("all_data:", list(all_data))
 
         # Create a dict that lets you lookup a source and get both it's source_concept data and mappings
         # For example:
@@ -213,8 +212,6 @@ class ConceptMapVersionCreator:
         #                                 "mappings": [Mapping(), Mapping()]
         #                             }
         # ]
-
-        response = {}
 
         # Terminology Local cache
         terminology = dict()
@@ -582,14 +579,8 @@ class ConceptMapVersionCreator:
                         else:
                             # d. Otherwise copy the previous mapping exactly using the copy_mapping_exact method with the new_target_code set to "No map"
                             # Mapped no map constants
-                            no_map_relationship_uuid = (
-                                "dca7c556-82d9-4433-8971-0b7edb9c9661"
-                            )
                             no_map_target_concept_code = "No map"
                             no_map_target_concept_display = "No matching concept"
-                            no_map_target_system_version_uuid = (
-                                "93ec9286-17cf-4837-a4dc-218ce3015de6"
-                            )
 
                             no_map_code = app.concept_maps.models.Code(
                                 code=no_map_target_concept_code,
