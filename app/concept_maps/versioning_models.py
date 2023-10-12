@@ -483,26 +483,13 @@ class ConceptMapVersionCreator:
 
                 else:
                     # If the source_lookup_key is found in previous_sources_and_mappings
-                    # a. Retrieve the previous_source_concept and its previous_mappings from previous_sources_and_mappings using the source_lookup_key
+                    # Retrieve the previous_source_concept and its previous_mappings from previous_sources_and_mappings using the source_lookup_key
                     previous_source_concept = previous_sources_and_mappings[
                         source_lookup_key
                     ].get("source_concept")
                     previous_mappings = previous_sources_and_mappings[
                         source_lookup_key
                     ].get("mappings")
-
-                    # b. Update the new_source_concept with some properties from the previous_source_concept
-                    # that should always carry forward, regardless of the mappings
-                    new_source_concept.update(
-                        comments=previous_source_concept.comments,
-                        additional_context=previous_source_concept.additional_context,
-                        map_status=previous_source_concept.map_status,
-                        assigned_mapper=previous_source_concept.assigned_mapper,
-                        assigned_reviewer=previous_source_concept.assigned_reviewer,
-                        no_map=previous_source_concept.no_map,
-                        reason_for_no_map=previous_source_concept.reason_for_no_map,
-                        mapping_group=previous_source_concept.mapping_group,
-                    )
 
                     if source_lookup_key in mapped_no_maps_lookup:
                         # If the source_lookup_key is found in mapped_no_maps_lookup, handle the mapped_no_maps case:
@@ -521,7 +508,7 @@ class ConceptMapVersionCreator:
                             and previous_source_concept.reason_for_no_map
                             == "Not in target code system"
                         ):
-                            # c. when require_review_no_maps_not_in_target is True
+                            # c. when require_review is True and reason "Not in target code system"
                             result = self.process_no_map(
                                 previous_source_concept,
                                 new_source_concept,
@@ -554,6 +541,18 @@ class ConceptMapVersionCreator:
                             )
 
                     else:
+                        # Update the new_source_concept with some properties from the previous_source_concept
+                        # that should always carry forward, regardless of the mappings
+                        new_source_concept.update(
+                            comments=previous_source_concept.comments,
+                            additional_context=previous_source_concept.additional_context,
+                            map_status=previous_source_concept.map_status,
+                            assigned_mapper=previous_source_concept.assigned_mapper,
+                            assigned_reviewer=previous_source_concept.assigned_reviewer,
+                            no_map=previous_source_concept.no_map,
+                            reason_for_no_map=previous_source_concept.reason_for_no_map,
+                            mapping_group=previous_source_concept.mapping_group,
+                        )
                         # If none of the above conditions match, it means the source concept has mappings in the previous version:
                         # a. Initialize an empty list previous_mapping_context to store the previous context data for the source concept.
                         previous_mapping_context = []
@@ -705,9 +704,13 @@ class ConceptMapVersionCreator:
             )
 
             lookup_key = (
-                source_concept.code,
+                source_concept.code_object,
                 source_concept.display,
                 source_concept.system.fhir_uri,
+                source_concept.depends_on_display,
+                source_concept.depends_on_property,
+                source_concept.depends_on_system,
+                source_concept.depends_on_value,
             )
 
             mapped_no_maps[lookup_key] = {
