@@ -545,7 +545,6 @@ class ConceptMapVersionCreator:
                     # (i.e., the source concept is new and not present in the previous version),
                     # add the new_source_concept to the novel_sources list.
                     self.novel_sources.append(new_source_concept)
-                    logging.info(f"New source concept added: {new_source_concept}")
 
                 else:
                     # If the source_lookup_key is found in previous_sources_and_mappings
@@ -568,21 +567,15 @@ class ConceptMapVersionCreator:
                         reason_for_no_map=previous_source_concept.reason_for_no_map,
                         mapping_group=previous_source_concept.mapping_group,
                     )
-                    logging.debug(
-                        f"New source concept updated with previous information: {new_source_concept}"
-                    )
 
                     if source_lookup_key in mapped_no_map_lookup:
                         # If the source_lookup_key is found in mapped_no_map_lookup, handle the mapped_no_maps case:
-                        # a.Retrieve the previous_mapping_data and the previous_concept_relationship_uuid from mapped_no_map_lookup using the source_lookup_key
+                        # a. Retrieve the previous_mapping_data and the previous_concept_relationship_uuid from mapped_no_map_lookup using the source_lookup_key
                         previous_mapping_data = mapped_no_map_lookup[source_lookup_key]
                         # b. Load the previous_mapping using the previous_concept_relationship_uuid
-                        previous_concept_relationship_uuid = previous_mapping_data[
-                            "concept_relationship_uuid"
-                        ]
-                        previous_mapping = app.concept_maps.models.Mapping.load(
-                            previous_concept_relationship_uuid
-                        )
+                        mapping = previous_mapping_data["mappings"][0]
+                        concept_relationship_uuid = mapping.relationship.uuid
+                        previous_mapping = mapping
 
                         if (
                             require_review_no_maps_not_in_target
@@ -598,36 +591,38 @@ class ConceptMapVersionCreator:
                             )
                             if result is not None:
                                 previous_contexts_list.append(result)
-                                logging.info(
-                                    f"Processed no_map case for source concept: {new_source_concept}"
-                                )
                         else:
-                            # d. Otherwise copy the previous mapping exactly using the copy_mapping_exact method with the new_target_code set to "No map"
+                            # d. Otherwise, copy the previous mapping exactly using the copy_mapping_exact method with the new_target_code set to "No map"
                             # Mapped no map constants
                             no_map_target_concept_code = "No map"
                             no_map_target_concept_display = "No matching concept"
-
-                            no_map_code = app.concept_maps.models.Code(
-                                code=no_map_target_concept_code,
-                                display=no_map_target_concept_display,
+                            no_map_system = "http://projectronin.io/fhir/CodeSystem/ronin/nomap"  # would rather not have this but needed for Code
+                            no_map_version = (
+                                "1.0"  # would rather not have this but needed for Code
                             )
+                            try:
+                                no_map_code = app.concept_maps.models.Code(
+                                    code=no_map_target_concept_code,
+                                    display=no_map_target_concept_display,
+                                    system=no_map_system,
+                                    version=no_map_version,
+                                )
+                            except Exception as e:
+                                logging.error(
+                                    f"Error occurred while creating no_map_code: {e}"
+                                )
+                                raise
 
-                            self.copy_mapping_exact(
+                            self.copy_mapping_exact(  # I believe the issue is here
                                 new_source_concept=new_source_concept,
                                 new_target_code=no_map_code.code,
                                 previous_mapping=previous_mapping,
-                            )
-                            logging.info(
-                                f"Copied previous mapping exactly for source concept: {new_source_concept}"
                             )
 
                     else:
                         # If none of the above conditions match, it means the source concept has regular mappings in the previous version:
                         # a. Initialize an empty list previous_mapping_context to store the previous context data for the source concept.
                         previous_mapping_context = []
-                        logging.debug(
-                            f"Processing regular mappings for source concept: {new_source_concept}"
-                        )
                         for previous_mapping in previous_mappings:
                             #  b. Iterate through the previous_mappings:
                             # i. Create a target_lookup_key tuple using the target concept's properties (code, display, system) from the previous_mapping.
@@ -690,8 +685,8 @@ class ConceptMapVersionCreator:
                                 ),
                             )
 
-            # Commit the changes to the database
-            self.conn.commit()
+                # Commit the changes to the database
+                self.conn.commit()
         except BadRequestWithCode or NotFoundException:
             LOGGER.info(
                 f"create_new_from_previous missing data in concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
