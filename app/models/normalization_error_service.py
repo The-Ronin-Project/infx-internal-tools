@@ -37,7 +37,9 @@ AUTH_URL = config("DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default="")
 
 LOGGER = logging.getLogger()
 
-LOGGER.setLevel("INFO")
+# INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
+# processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded.
+LOGGER.setLevel("WARNING")
 
 # Create a console handler and add it to the logger if it doesn't have any handlers
 if not LOGGER.hasHandlers():
@@ -318,7 +320,7 @@ def load_concepts_from_errors(commit_changes=True):
     token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
     # client = get_client(token)
     with httpx.Client(timeout=60.0) as client:
-        LOGGER.info("Begin import from error service")
+        LOGGER.warning("Begin import from error service")
         all_resource_types = [
             ResourceType.CONDITION,
             ResourceType.OBSERVATION,
@@ -366,7 +368,7 @@ def load_concepts_from_errors(commit_changes=True):
             else:
                 last_uuid = response[-1].get("id")
                 rest_api_params["after"] = last_uuid
-            LOGGER.info(f"{len(resources_with_errors)} errors in page")
+            LOGGER.warning(f"{len(resources_with_errors)} errors in page")
 
             # Convert API response data to ErrorServiceResource objects.
             error_resources = []
@@ -703,7 +705,7 @@ def load_concepts_from_errors(commit_changes=True):
             for terminology_version_uuid, code_list in deduped_codes_by_terminology.items():
                 terminology = Terminology.load(terminology_version_uuid)
 
-                LOGGER.info(
+                LOGGER.warning(
                     f"Loading {len(code_list)} new codes to terminology {terminology.terminology} version {terminology.version}"
                 )
                 terminology.load_new_codes_to_terminology(
@@ -779,7 +781,7 @@ def load_concepts_from_errors(commit_changes=True):
             if commit_changes:
                 conn.commit()
 
-        LOGGER.info("Loading data from error service to custom terminologies complete")
+        LOGGER.warning("Loading data from error service to custom terminologies complete")
 
 
 @ttl_cache()
@@ -792,7 +794,7 @@ def lookup_concept_map_version_for_data_element(
     :param organization:
     :return:
     """
-    LOGGER.info(
+    LOGGER.warning(
         f"Checking registry for concept map entry for data element: {data_element} and organization: {organization.id}")
     # Load the data normalization registry
     registry = app.models.data_ingestion_registry.DataNormalizationRegistry()  # Full path avoids circular import
@@ -1029,11 +1031,11 @@ if __name__ == "__main__":
 
     # todo: clean out altogether, when temporary error load task is not needed
     # comment out the next 2 lines for merges and for normal use; uncomment when running the temporary error load task
-    # load_concepts_from_errors(commit_changes=True)
-    # conn.commit()
+    load_concepts_from_errors(commit_changes=True)
+    conn.commit()
 
     # uncomment the next 2 lines for merges and for normal use; comment out when running the temporary error load task
-    load_concepts_from_errors(commit_changes=False)
-    conn.rollback()
+    # load_concepts_from_errors(commit_changes=False)
+    # conn.rollback()
 
     conn.close()
