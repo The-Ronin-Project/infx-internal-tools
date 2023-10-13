@@ -324,7 +324,9 @@ class Terminology:
         most_recent_terminology = self.load_latest_version()
 
         # Then check if the effective date has not yet passed
-        if datetime.date.today() <= most_recent_terminology.effective_end:
+        if most_recent_terminology.effective_end is None or (
+                datetime.date.today() <= most_recent_terminology.effective_end
+        ):
             return most_recent_terminology
 
         # We need to create a new version
