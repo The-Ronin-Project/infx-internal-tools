@@ -464,7 +464,6 @@ def load_concepts_from_errors(commit_changes=True):
                             if "valueCodeableConcept" not in raw_resource:
                                 continue
                             raw_code = raw_resource["valueCodeableConcept"]
-                            LOGGER.info(f"Observation.valueCodeableConcept raw_code: {raw_code}")
                             processed_code = raw_code
                             processed_display = raw_code.get("text")
 
@@ -476,13 +475,11 @@ def load_concepts_from_errors(commit_changes=True):
                             processed_code = raw_code
                             processed_display = raw_code.get("text")
                             if processed_display is None:
-                                LOGGER.info(f'This display is empty: {processed_display} {raw_code}')
                                 processed_display = ''
 
                         # Observation.component.code is a CodeableConcept - the location will come in with an index
                         elif element == "Observation.component.code":
                             if index is None:
-                                LOGGER.warning(f"index for Observation.component[index].code not found in {location}")
                                 continue
                             if (
                                 "component" not in raw_resource or
@@ -497,7 +494,6 @@ def load_concepts_from_errors(commit_changes=True):
                         # Observation.component.value is a CodeableConcept - the location will come in with an index
                         elif element == "Observation.component.value":
                             if index is None:
-                                LOGGER.warning(f"index for Observation.component[index].value not found in  {location}")
                                 continue
                             if (
                                 "component" not in raw_resource or
@@ -568,9 +564,7 @@ def load_concepts_from_errors(commit_changes=True):
                     )
 
                     if concept_map_version_for_normalization is None:
-                        warnings.warn(
-                            f"Unable to process issue with ID:{issue.id} for resource with ID:{error_service_resource.id} because no appropriate registry entry was found"
-                        )
+                        # We already messaged that the concept map for this resource and issue is missing
                         continue
 
                     # Inside the concept map version, we'll extract the source value set
