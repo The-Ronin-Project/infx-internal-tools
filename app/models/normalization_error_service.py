@@ -474,8 +474,6 @@ def load_concepts_from_errors(commit_changes=True):
                             raw_code = raw_resource["code"]
                             processed_code = raw_code
                             processed_display = raw_code.get("text")
-                            if processed_display is None:
-                                processed_display = ''
 
                         # Observation.component.code is a CodeableConcept - the location will come in with an index
                         elif element == "Observation.component.code":
@@ -600,6 +598,8 @@ def load_concepts_from_errors(commit_changes=True):
                     )
 
                     new_code_uuid = uuid.uuid4()
+                    if processed_display is None:
+                        processed_display = ''
                     new_code = Code(
                         code=processed_code,
                         display=processed_display,
