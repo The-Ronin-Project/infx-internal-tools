@@ -1031,11 +1031,11 @@ if __name__ == "__main__":
 
     # todo: clean out altogether, when temporary error load task is not needed
     # comment out the next 2 lines for merges and for normal use; uncomment when running the temporary error load task
-    load_concepts_from_errors(commit_changes=True)
-    conn.commit()
+    # load_concepts_from_errors(commit_changes=True)
+    # conn.commit()
 
     # uncomment the next 2 lines for merges and for normal use; comment out when running the temporary error load task
-    # load_concepts_from_errors(commit_changes=False)
-    # conn.rollback()
+    load_concepts_from_errors(commit_changes=False)
+    conn.rollback()
 
     conn.close()
