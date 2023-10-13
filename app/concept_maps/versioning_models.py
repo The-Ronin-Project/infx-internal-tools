@@ -570,11 +570,10 @@ class ConceptMapVersionCreator:
 
                     if source_lookup_key in mapped_no_map_lookup:
                         # If the source_lookup_key is found in mapped_no_map_lookup, handle the mapped_no_maps case:
-                        # a. Retrieve the previous_mapping_data and the previous_concept_relationship_uuid from mapped_no_map_lookup using the source_lookup_key
+                        # a. Retrieve the previous_mapping_data from mapped_no_map_lookup using the source_lookup_key
                         previous_mapping_data = mapped_no_map_lookup[source_lookup_key]
-                        # b. Load the previous_mapping using the previous_concept_relationship_uuid
+                        # b. get the previous_mapping
                         mapping = previous_mapping_data["mappings"][0]
-                        concept_relationship_uuid = mapping.relationship.uuid
                         previous_mapping = mapping
 
                         if (
@@ -596,10 +595,10 @@ class ConceptMapVersionCreator:
                             # Mapped no map constants
                             no_map_target_concept_code = "No map"
                             no_map_target_concept_display = "No matching concept"
-                            no_map_system = "http://projectronin.io/fhir/CodeSystem/ronin/nomap"  # would rather not have this but needed for Code
-                            no_map_version = (
-                                "1.0"  # would rather not have this but needed for Code
+                            no_map_system = (
+                                "http://projectronin.io/fhir/CodeSystem/ronin/nomap"
                             )
+                            no_map_version = "1.0"
                             try:
                                 no_map_code = app.concept_maps.models.Code(
                                     code=no_map_target_concept_code,
@@ -613,7 +612,7 @@ class ConceptMapVersionCreator:
                                 )
                                 raise
 
-                            self.copy_mapping_exact(  # I believe the issue is here
+                            self.copy_mapping_exact(
                                 new_source_concept=new_source_concept,
                                 new_target_code=no_map_code.code,
                                 previous_mapping=previous_mapping,
