@@ -342,23 +342,6 @@ def create_app(script_info=None):
 
     @app.route("/data_normalization/outstanding_mapping_rows", methods=["GET"])
     def outstanding_errors():
-        # incremental_load_concept_map = concept_maps_models.ConceptMap(
-        #     "ae61ee9b-3f55-4d3c-96e7-8c7194b53767"
-        # )
-        # organization = Organization(id="ronin")
-        # registry = DataNormalizationRegistry()
-        # registry.entries = [
-        #     DNRegistryEntry(
-        #         resource_type="Condition",
-        #         data_element="Condition.code",
-        #         tenant_id=organization.id,
-        #         source_extension_url="",
-        #         registry_uuid="",
-        #         registry_entry_type="concept_map",
-        #         profile_url="",
-        #         concept_map=incremental_load_concept_map,
-        #     )
-        # ]
         errors = get_outstanding_errors()
         return jsonify(errors)
 

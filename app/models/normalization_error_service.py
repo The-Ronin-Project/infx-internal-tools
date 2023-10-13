@@ -961,16 +961,19 @@ def get_outstanding_errors(
             """
         )
     )
-    return [
-        {
-            "concept_map_title": row.concept_map_title,
-            "concept_map_uuid": row.concept_map_uuid,
-            "latest_concept_map_version_uuid": row.latest_concept_map_version_uuid,
-            "outstanding_code_count": row.code_count,
-            "oldest_new_code_date": row.oldest_new_code_date,
-        }
-        for row in results
-    ]
+    list_result = []
+    for row in results:
+        if row.code_count > 0:
+            list_result.append(
+                {
+                    "concept_map_title": row.concept_map_title,
+                    "concept_map_uuid": row.concept_map_uuid,
+                    "latest_concept_map_version_uuid": row.latest_concept_map_version_uuid,
+                    "outstanding_code_count": row.code_count,
+                    "oldest_new_code_date": row.oldest_new_code_date,
+                }
+          )
+    return list_result
 
 
 def set_issues_resolved(issue_uuid_list):
@@ -1031,17 +1034,12 @@ if __name__ == "__main__":
     conn = get_db()
 
     # todo: clean out altogether, when temporary error load task is not needed
-    # uncomment this 1 line when running the temporary error load task
-    # comment out this 1 line for normal pytest use on local machine
+    # comment out the next 2 lines for merges and for normal use; uncomment when running the temporary error load task
     # load_concepts_from_errors(commit_changes=True)
+    # conn.commit()
 
-    # comment out these 2 lines when running the temporary error load task
-    # uncomment these 2 lines for normal pytest use on local machine
+    # uncomment the next 2 lines for merges and for normal use; comment out when running the temporary error load task
     load_concepts_from_errors(commit_changes=False)
     conn.rollback()
-
-    # uncomment this 1 line when running the temporary error load task
-    # comment out this 1 line for normal pytest use on local machine
-    # conn.commit()
 
     conn.close()
