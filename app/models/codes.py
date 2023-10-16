@@ -350,4 +350,4 @@ class Code:
                 self.additional_data[key] = unjsoned_list[:5]
             except Exception as e:
                 LOGGER.warning(f"Unable to load additional data: {key}")
-                raise e   # temporary: will define an error if needed
+                raise e
