@@ -34,6 +34,7 @@ CLIENT_ID = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_ID", default="")
 CLIENT_SECRET = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_SECRET", default="")
 AUTH_AUDIENCE = config("DATA_NORMALIZATION_ERROR_SERVICE_AUDIENCE", default="")
 AUTH_URL = config("DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default="")
+PAGE_SIZE = 1000
 
 LOGGER = logging.getLogger()
 
@@ -121,14 +122,14 @@ async def make_post_request_async(token, client: httpx.AsyncClient, base_url, ap
 class ResourceType(Enum):
     OBSERVATION = "Observation"
     CONDITION = "Condition"
-    MEDICATION = "Medication"
+    # MEDICATION = "Medication"
     LOCATION = "Location"
     PATIENT = "Patient"
     PRACTITIONER = "Practitioner"
     PRACTITIONER_ROLE = "PractitionerRole"  # For both use and system
     APPOINTMENT = "Appointment"
     DOCUMENT_REFERENCE = "DocumentReference"
-    TELECOM_USE = "Practitioner.telecom.use"  # Only in for testing until we have a real data type live
+    # TELECOM_USE = "Practitioner.telecom.use"  # Only in for testing until we have a real data type live
 
 
 @dataclass
@@ -299,7 +300,13 @@ def extract_telecom_data(resource_type, location, raw_resource):
 
     return processed_code, processed_display
 
-def load_concepts_from_errors(commit_changes=True):
+
+def load_concepts_from_errors(
+        commit_changes=True,
+        page_size: int = None,
+        organization_id: str = None,
+        resource_type: str = None,
+):
     """
     Extracts specific concepts from a list of errors and saves them to a custom terminology.
 
@@ -307,8 +314,32 @@ def load_concepts_from_errors(commit_changes=True):
     these concepts by the originating organization and type of resource they pertain to. The
     results are saved back to the appropriate custom terminology.
 
+    A daily run inputs no values and gets all organization_ids and resource_types using the default HTTP GET page_size.
+
+    Here is a sample test output log limited by input values for page_size, organization_id, and resource_type:
+    ```
+    Begin import from error service
+    50 errors in page
+    Checking registry for concept map entry for data element: Appointment.status and organization: apposnd
+    Loading 3 new codes to terminology apposnd_appointmentstatus version 2
+    50 errors in page
+    Loading 4 new codes to terminology apposnd_appointmentstatus version 2
+    50 errors in page
+    Loading 4 new codes to terminology apposnd_appointmentstatus version 2
+    500 errors in page
+    Loading 3 new codes to terminology apposnd_appointmentstatus version 2
+    41 errors in page
+    Loading 2 new codes to terminology apposnd_appointmentstatus version 2
+    Loading data from error service to custom terminologies complete
+
+    Process finished with exit code 0
+    ```
+
     Parameters:
         commit_changes (bool, optional): Whether or not to commit after each batch
+        page_size (int, optional): HTTP GET page size, if empty, use the default PAGE_SIZE
+        organization_id (str): If non-empty, get errors only for the organization_id listed; if empty, get all available
+        resource_type (str): If non-empty, get errors only for the ResourceType enum string listed; if empty, get all
 
     Procedure:
         1. Fetch resources that have encountered errors.
@@ -316,35 +347,30 @@ def load_concepts_from_errors(commit_changes=True):
         3. Deduplicate the codes to avoid redundancy.
         4. Load the unique codes into their respective terminologies.
     """
+    # Step 0: Validate input
+    if page_size is None:
+        page_size = PAGE_SIZE
+    if resource_type is not None and (resource_type not in [r.value for r in ResourceType]):
+        LOGGER.warning(f"Support for the {resource_type} resource type has not been implemented")
+        return
+
     # Step 1: Fetch resources that have encountered errors.
     token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
-    # client = get_client(token)
     with httpx.Client(timeout=60.0) as client:
         LOGGER.warning("Begin import from error service")
-        all_resource_types = [
-            ResourceType.CONDITION,
-            ResourceType.OBSERVATION,
-            ResourceType.DOCUMENT_REFERENCE,
-            ResourceType.LOCATION,
-            ResourceType.APPOINTMENT,
-            ResourceType.PATIENT,
-            ResourceType.PRACTITIONER,
-            ResourceType.PRACTITIONER_ROLE,
-        ]
 
         # Collecting all resources with errors through paginated API calls.
-        # resources_with_errors = [] # Moving into loop for batch test
-        PAGE_SIZE = 1000  # todo: move to top
         rest_api_params = dict(
             {
                 "order": "ASC",
-                "limit": PAGE_SIZE,
+                "limit": page_size,
                 "issue_type": "NOV_CONMAP_LOOKUP",
-                # Hard code resource_type and organization_id only for testing
-                # "resource_type": "Observation",
-                # "organization_id": "apposnd"
             }
         )
+        if resource_type is not None:
+            rest_api_params.update({"resource_type": resource_type})
+        if organization_id is not None:
+            rest_api_params.update({"organization_id": organization_id})
 
         # Continuously fetch resources until all pages have been retrieved.
         all_resources_fetched = False
@@ -357,12 +383,11 @@ def load_concepts_from_errors(commit_changes=True):
                 api_url="/resources",
                 params=rest_api_params,
             )
-            # resources_with_errors.extend(response)
             resources_with_errors = response
 
             length_of_response = len(response)
 
-            if length_of_response < PAGE_SIZE:
+            if length_of_response < page_size:
                 all_resources_fetched = True
 
             else:
@@ -376,13 +401,14 @@ def load_concepts_from_errors(commit_changes=True):
                 organization = Organization(resource_data.get("organization_id"))
 
                 fhir_resource_type = None
+                fhir_resource_value = resource_data.get("resource_type")
                 for resource_type_option in ResourceType:
-                    if resource_type_option.value == resource_data.get("resource_type"):
+                    if resource_type_option.value == fhir_resource_value:
                         fhir_resource_type = resource_type_option
                         break
 
-                if fhir_resource_type not in all_resource_types:
-                    warnings.warn(
+                if fhir_resource_type is None:
+                    LOGGER.warning(
                         f"Support for the {fhir_resource_type} resource type has not been implemented"
                     )
                     continue
@@ -632,20 +658,18 @@ def load_concepts_from_errors(commit_changes=True):
                         )
 
                     # Assemble additionalData from the raw resource.
-                    # This is where we'll extract unit, value, valueQuantity, and referenceRange if available
+                    # This is where we'll extract unit, value, referenceRange, and value[x] if available
                     resource_json = json.loads(error_service_resource.resource)
-                    unit = resource_json.get("unit")
-                    value = resource_json.get("value")
-                    value_quantity = resource_json.get("valueQuantity")
-                    reference_range = resource_json.get("referenceRange")
-
-                    if unit or value or value_quantity or reference_range:
-                        new_code.add_examples_to_additional_data(
-                            unit=unit,
-                            value=value,
-                            value_quantity=value_quantity,
-                            reference_range=reference_range,
-                        )
+                    new_code.add_examples_to_additional_data(
+                        unit=resource_json.get("unit"),
+                        value=resource_json.get("value"),
+                        reference_range=resource_json.get("referenceRange"),
+                        value_quantity=resource_json.get("valueQuantity"),
+                        value_boolean=resource_json.get("valueBoolean"),
+                        value_string=resource_json.get("valueString"),
+                        value_date_time=resource_json.get("valueDateTime"),
+                        value_codeable_concept=resource_json.get("valueCodeableConcept"),
+                    )
 
                     if terminology_to_load_to.uuid in new_codes_to_deduplicate_by_terminology:
                         new_codes_to_deduplicate_by_terminology[
@@ -688,11 +712,23 @@ def load_concepts_from_errors(commit_changes=True):
                                     value=current_duplicate.additional_data.get(
                                         "example_value"
                                     ),
+                                    reference_range=current_duplicate.additional_data.get(
+                                        "example_reference_range"
+                                    ),
                                     value_quantity=current_duplicate.additional_data.get(
                                         "example_value_quantity"
                                     ),
-                                    reference_range=current_duplicate.additional_data.get(
-                                        "example_reference_range"
+                                    value_boolean=current_duplicate.additional_data.get(
+                                        "example_value_boolean"
+                                    ),
+                                    value_string=current_duplicate.additional_data.get(
+                                        "example_value_string"
+                                    ),
+                                    value_date_time=current_duplicate.additional_data.get(
+                                        "example_value_date_time"
+                                    ),
+                                    value_codeable_concept=current_duplicate.additional_data.get(
+                                        "example_codeable_concept"
                                     ),
                                 )
                         deduped_codes.append(merged_code)
@@ -836,7 +872,7 @@ def lookup_concept_map_version_for_data_element(
 
     # If nothing is found, raise an appropriate error
     if concept_map_version is None:
-        warnings.warn(f"No appropriate registry entry found for organization: {organization.id} and data element: {data_element}")
+        LOGGER.warning(f"No appropriate registry entry found for organization: {organization.id} and data element: {data_element}")
         return None
 
     return concept_map_version
@@ -1030,12 +1066,12 @@ if __name__ == "__main__":
     conn = get_db()
 
     # todo: clean out altogether, when temporary error load task is not needed
-    # comment out the next 2 lines for merges and for normal use; uncomment when running the temporary error load task
-    # load_concepts_from_errors(commit_changes=True)
-    # conn.commit()
+    # comment out the next 2 commands for merges and normal use; uncomment when running the temporary error load task
+    load_concepts_from_errors(commit_changes=True)
+    conn.commit()
 
-    # uncomment the next 2 lines for merges and for normal use; comment out when running the temporary error load task
-    load_concepts_from_errors(commit_changes=False)
-    conn.rollback()
+    # uncomment the next 2 commands for merges and normal use; comment out when running the temporary error load task
+    # load_concepts_from_errors(commit_changes=False)
+    # conn.rollback()
 
     conn.close()
