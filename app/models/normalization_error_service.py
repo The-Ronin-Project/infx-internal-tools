@@ -364,7 +364,6 @@ def load_concepts_from_errors(
     input_fhir_resource = requested_resource_type
 
     try:
-
         # Step 1: Fetch resources that have encountered errors.
         token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
         with httpx.Client(timeout=60.0) as client:
@@ -756,6 +755,7 @@ def load_concepts_from_errors(
                     LOGGER.warning(
                         f"Loading {len(code_list)} new codes to terminology {terminology.terminology} version {terminology.version}"
                     )
+
                     terminology.load_new_codes_to_terminology(
                         code_list, on_conflict_do_nothing=True
                     )
