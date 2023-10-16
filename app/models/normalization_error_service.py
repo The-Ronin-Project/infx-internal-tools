@@ -195,9 +195,16 @@ class ErrorServiceResource:
                 api_url=f"/resources/{self.id}/issues",
                 params={},
             )
+        # If an error occurs on one resource, skip it
         except httpx.ConnectError:
-            # If an error occurs on one resource, skip it
-            LOGGER.warning("httpx.ConnectError; skipping resource for load")
+            LOGGER.warning(
+                f"httpx.ConnectError, skipping load: issue {self.id} resource {self.resource_type} for organization {self.organization.id}"
+            )
+            return None
+        except:
+            LOGGER.warning(
+                f"Unknown Error, skipping load: issue {self.id} resource {self.resource_type} for organization {self.organization.id}"
+            )
             return None
 
         # Instantiate ErrorServiceIssue
