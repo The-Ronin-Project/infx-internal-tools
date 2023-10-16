@@ -12,8 +12,6 @@ from app.errors import BadRequestWithCode
 
 # INTERNAL_TOOLS_BASE_URL = "https://infx-internal.prod.projectronin.io"
 
-LOGGER = logging.getLogger()
-
 class Code:
     """
     This class represents a code object used for encoding and maintaining information about a specific concept or term within a coding system or terminology. It provides a way to manage various attributes related to the code and the coding system it belongs to.
@@ -333,21 +331,17 @@ class Code:
         Per-example helper for add_examples_to_additional_data()
         """
         if example is not None:
-            try:
-                if key not in self.additional_data:
-                    self.additional_data[key] = []
-                if isinstance(example, list):
-                    self.additional_data[key].extend(example)
-                else:
-                    self.additional_data[key].append(example)
+            if key not in self.additional_data:
+                self.additional_data[key] = []
+            if isinstance(example, list):
+                self.additional_data[key].extend(example)
+            else:
+                self.additional_data[key].append(example)
 
-                json_list = []
-                for x in self.additional_data[key]:
-                    if x is not None:
-                        json_list.append(json.dumps(x))
-                deduplicated_list = list(set(json_list))
-                unjsoned_list = [json.loads(x) for x in deduplicated_list]
-                self.additional_data[key] = unjsoned_list[:5]
-            except Exception as e:
-                LOGGER.warning(f"Unable to load additional data: {key}")
-                raise e
+            json_list = []
+            for x in self.additional_data[key]:
+                if x is not None:
+                    json_list.append(json.dumps(x))
+            deduplicated_list = list(set(json_list))
+            unjsoned_list = [json.loads(x) for x in deduplicated_list]
+            self.additional_data[key] = unjsoned_list[:5]
