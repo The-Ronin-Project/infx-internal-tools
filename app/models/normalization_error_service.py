@@ -755,7 +755,6 @@ def load_concepts_from_errors(
                     LOGGER.warning(
                         f"Loading {len(code_list)} new codes to terminology {terminology.terminology} version {terminology.version}"
                     )
-
                     terminology.load_new_codes_to_terminology(
                         code_list, on_conflict_do_nothing=True
                     )
