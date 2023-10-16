@@ -304,8 +304,8 @@ def extract_telecom_data(resource_type, location, raw_resource):
 def load_concepts_from_errors(
         commit_changes=True,
         page_size: int = None,
-        organization_id: str = None,
-        resource_type: str = None,
+        requested_organization_id: str = None,
+        requested_resource_type: str = None,
 ):
     """
     Extracts specific concepts from a list of errors and saves them to a custom terminology.
@@ -338,8 +338,8 @@ def load_concepts_from_errors(
     Parameters:
         commit_changes (bool, optional): Whether or not to commit after each batch
         page_size (int, optional): HTTP GET page size, if empty, use the default PAGE_SIZE
-        organization_id (str): If non-empty, get errors only for the organization_id listed; if empty, get all available
-        resource_type (str): If non-empty, get errors only for the ResourceType enum string listed; if empty, get all
+        requested_organization_id (str): If non-empty, get errors only for the organization_id listed; if empty, get all
+        requested_resource_type (str): Get errors only for the ResourceType enum string listed; if empty, get all
 
     Procedure:
         1. Fetch resources that have encountered errors.
@@ -350,474 +350,475 @@ def load_concepts_from_errors(
     # Step 0: Validate input
     if page_size is None:
         page_size = PAGE_SIZE
-    if resource_type is not None and (resource_type not in [r.value for r in ResourceType]):
-        LOGGER.warning(f"Support for the {resource_type} resource type has not been implemented")
+    if requested_resource_type is not None and (requested_resource_type not in [r.value for r in ResourceType]):
+        LOGGER.warning(f"Support for the {requested_resource_type} resource type has not been implemented")
         return
+    organization_id = requested_organization_id
+    input_fhir_resource = requested_resource_type
 
-    # Step 1: Fetch resources that have encountered errors.
-    token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
-    with httpx.Client(timeout=60.0) as client:
-        LOGGER.warning("Begin import from error service")
+    try:
 
-        # Collecting all resources with errors through paginated API calls.
-        rest_api_params = dict(
-            {
-                "order": "ASC",
-                "limit": page_size,
-                "issue_type": "NOV_CONMAP_LOOKUP",
-            }
-        )
-        if resource_type is not None:
-            rest_api_params.update({"resource_type": resource_type})
-        if organization_id is not None:
-            rest_api_params.update({"organization_id": organization_id})
+        # Step 1: Fetch resources that have encountered errors.
+        token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
+        with httpx.Client(timeout=60.0) as client:
+            LOGGER.warning("Begin import from error service")
 
-        # Continuously fetch resources until all pages have been retrieved.
-        all_resources_fetched = False
-        while all_resources_fetched is False:
-            # Retrieve the first page of resources
-            response = make_get_request(
-                token=token,
-                client=client,
-                base_url=DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL,
-                api_url="/resources",
-                params=rest_api_params,
+            # Collecting all resources with errors through paginated API calls.
+            rest_api_params = dict(
+                {
+                    "order": "ASC",
+                    "limit": page_size,
+                    "issue_type": "NOV_CONMAP_LOOKUP",
+                }
             )
-            resources_with_errors = response
+            if input_fhir_resource is not None:
+                rest_api_params.update({"resource_type": input_fhir_resource})
+            if organization_id is not None:
+                rest_api_params.update({"organization_id": organization_id})
 
-            length_of_response = len(response)
-
-            if length_of_response < page_size:
-                all_resources_fetched = True
-
-            else:
-                last_uuid = response[-1].get("id")
-                rest_api_params["after"] = last_uuid
-            LOGGER.warning(f"{len(resources_with_errors)} errors in page")
-
-            # Convert API response data to ErrorServiceResource objects.
-            error_resources = []
-            for resource_data in resources_with_errors:
-                organization = Organization(resource_data.get("organization_id"))
-
-                fhir_resource_type = None
-                fhir_resource_value = resource_data.get("resource_type")
-                for resource_type_option in ResourceType:
-                    if resource_type_option.value == fhir_resource_value:
-                        fhir_resource_type = resource_type_option
-                        break
-
-                if fhir_resource_type is None:
-                    LOGGER.warning(
-                        f"Support for the {fhir_resource_type} resource type has not been implemented"
-                    )
-                    continue
-
-                error_resource = ErrorServiceResource(
-                    id=uuid.UUID(resource_data.get("id")),
-                    organization=organization,
-                    resource_type=fhir_resource_type,
-                    resource=resource_data.get("resource"),
-                    status=resource_data.get("status"),
-                    severity=resource_data.get("severity"),
-                    create_dt_tm=convert_string_to_datetime_or_none(
-                        resource_data.get("create_dt_tm")
-                    ),
-                    update_dt_tm=convert_string_to_datetime_or_none(
-                        resource_data.get("update_dt_tm")
-                    ),
-                    reprocess_dt_tm=convert_string_to_datetime_or_none(
-                        resource_data.get("reprocess_dt_tm")
-                    ),
-                    reprocessed_by=resource_data.get("reprocessed_by"),
+            # Continuously fetch resources until all pages have been retrieved.
+            all_resources_fetched = False
+            while all_resources_fetched is False:
+                # Retrieve the first page of resources
+                response = make_get_request(
                     token=token,
+                    client=client,
+                    base_url=DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL,
+                    api_url="/resources",
+                    params=rest_api_params,
                 )
-                error_resources.append(error_resource)
+                resources_with_errors = response
 
-            # Load issues for all error service resources
-            async def load_all_issues():
-                async with httpx.AsyncClient() as async_client:
-                    await asyncio.gather(*(error_resource.load_issues(client=async_client) for error_resource in error_resources))
-            asyncio.run(load_all_issues())
+                length_of_response = len(response)
 
-            # Step 2: Extract relevant codes from the resource.
-            # For specific resource types, we may need to read the issue to
-            # determine where in the resource the failure occurred.
+                if length_of_response < page_size:
+                    all_resources_fetched = True
 
-            # Initialize a dictionary to hold codes that need deduplication, grouped by terminology.
-            # Key: terminology_version_uuid, Value: list containing the codes to load to that terminology
-            new_codes_to_deduplicate_by_terminology = {}
+                else:
+                    last_uuid = response[-1].get("id")
+                    rest_api_params["after"] = last_uuid
+                LOGGER.warning(f"{len(resources_with_errors)} errors in page")
 
-            # Create a list to put the data linking codes back to the issues/errors they came from
-            error_code_link_data = []
+                # Convert API response data to ErrorServiceResource objects.
+                error_resources = []
+                for resource_data in resources_with_errors:
+                    organization = Organization(resource_data.get("organization_id"))
+                    organization_id = organization.id
 
-            # Walk through all the error service resources
-            for error_service_resource in error_resources:
-                # Get the FHIR resource information from the error resource
-                resource_type = error_service_resource.resource_type
-                raw_resource = json.loads(error_service_resource.resource)
+                    fhir_resource_type = None
+                    for resource_type_option in ResourceType:
+                        if resource_type_option.value == resource_data.get("resource_type"):
+                            fhir_resource_type = resource_type_option
+                            input_fhir_resource = resource_type_option.value
+                            break
 
-                # The data element where validation is failed is stored in the 'location' on the issue
-                # We need to filter the issues to just the NOV_CONMAP_LOOKUP issues and get the location
-                nov_conmap_issues = error_service_resource.filter_issues_by_type(
-                    "NOV_CONMAP_LOOKUP"
-                )
+                    if fhir_resource_type is None:
+                        LOGGER.warning(
+                            f"Support for the {fhir_resource_type} resource type has not been implemented"
+                        )
+                        continue
 
-                # In each error service resource, walk through each NOV_CONMAP_LOOKUP issue.
-                for issue in nov_conmap_issues:
+                    error_resource = ErrorServiceResource(
+                        id=uuid.UUID(resource_data.get("id")),
+                        organization=organization,
+                        resource_type=fhir_resource_type,
+                        resource=resource_data.get("resource"),
+                        status=resource_data.get("status"),
+                        severity=resource_data.get("severity"),
+                        create_dt_tm=convert_string_to_datetime_or_none(
+                            resource_data.get("create_dt_tm")
+                        ),
+                        update_dt_tm=convert_string_to_datetime_or_none(
+                            resource_data.get("update_dt_tm")
+                        ),
+                        reprocess_dt_tm=convert_string_to_datetime_or_none(
+                            resource_data.get("reprocess_dt_tm")
+                        ),
+                        reprocessed_by=resource_data.get("reprocessed_by"),
+                        token=token,
+                    )
+                    error_resources.append(error_resource)
 
-                    # data_element is the location without any brackets or indices
-                    # ex. if location is 'Patient.telecom[1].system' then data_element is 'Patient.telecom.system'
-                    location = issue.location
-                    element = re.sub(r'\[\d+\]', '', location)
-                    match = re.search(r'\[(\d+)\]', location)
-                    # Extract any index that may be present in the location string
-                    index = None
-                    if match is not None:
-                        index = int(match.group(1))
+                # Load issues for all error service resources
+                async def load_all_issues():
+                    async with httpx.AsyncClient() as async_client:
+                        await asyncio.gather(*(error_resource.load_issues(client=async_client) for error_resource in error_resources))
+                asyncio.run(load_all_issues())
 
-                    # Based on resource_type, identify the actual coding which needs to make it into the concept map.
-                    # There is something unique about the handling for every resource_type we support.
-                    # Condition
-                    if resource_type == ResourceType.CONDITION:
-                        # Condition.code is a CodeableConcept
-                        raw_code = raw_resource["code"]
-                        processed_code = raw_code
-                        processed_display = raw_code.get("text")
+                # Step 2: Extract relevant codes from the resource.
+                # For specific resource types, we may need to read the issue to
+                # determine where in the resource the failure occurred.
 
-                    # Observation
-                    elif resource_type == ResourceType.OBSERVATION:
-                        # Observation.value is a CodeableConcept
-                        if element == "Observation.value":
-                            if "valueCodeableConcept" not in raw_resource:
-                                continue
-                            raw_code = raw_resource["valueCodeableConcept"]
-                            processed_code = raw_code
-                            processed_display = raw_code.get("text")
+                # Initialize a dictionary to hold codes that need deduplication, grouped by terminology.
+                # Key: terminology_version_uuid, Value: list containing the codes to load to that terminology
+                new_codes_to_deduplicate_by_terminology = {}
 
-                        # Observation.code is a CodeableConcept
-                        elif element == "Observation.code":
-                            if "code" not in raw_resource:
-                                continue
+                # Create a list to put the data linking codes back to the issues/errors they came from
+                error_code_link_data = []
+
+                # Walk through all the error service resources
+                for error_service_resource in error_resources:
+                    # Get the FHIR resource information from the error resource
+                    resource_type = error_service_resource.resource_type
+                    raw_resource = json.loads(error_service_resource.resource)
+
+                    # The data element where validation is failed is stored in the 'location' on the issue
+                    # We need to filter the issues to just the NOV_CONMAP_LOOKUP issues and get the location
+                    nov_conmap_issues = error_service_resource.filter_issues_by_type(
+                        "NOV_CONMAP_LOOKUP"
+                    )
+
+                    # In each error service resource, walk through each NOV_CONMAP_LOOKUP issue.
+                    for issue in nov_conmap_issues:
+
+                        # data_element is the location without any brackets or indices
+                        # ex. if location is 'Patient.telecom[1].system' then data_element is 'Patient.telecom.system'
+                        location = issue.location
+                        element = re.sub(r'\[\d+\]', '', location)
+                        match = re.search(r'\[(\d+)\]', location)
+                        # Extract any index that may be present in the location string
+                        index = None
+                        if match is not None:
+                            index = int(match.group(1))
+
+                        # Based on resource_type, identify the actual coding which needs to make it into the concept map.
+                        # There is something unique about the handling for every resource_type we support.
+                        # Condition
+                        if resource_type == ResourceType.CONDITION:
+                            # Condition.code is a CodeableConcept
                             raw_code = raw_resource["code"]
                             processed_code = raw_code
                             processed_display = raw_code.get("text")
 
-                        # Observation.component.code is a CodeableConcept - the location will come in with an index
-                        elif element == "Observation.component.code":
-                            if index is None:
-                                continue
-                            if (
-                                "component" not in raw_resource or
-                                index not in raw_resource["component"] or
-                                "code" not in raw_resource["component"][index]
-                            ):
-                                continue
-                            raw_code = raw_resource["component"][index]["code"]
-                            processed_code = raw_code
-                            processed_display = raw_code.get("text")
+                        # Observation
+                        elif resource_type == ResourceType.OBSERVATION:
+                            # Observation.value is a CodeableConcept
+                            if element == "Observation.value":
+                                if "valueCodeableConcept" not in raw_resource:
+                                    continue
+                                raw_code = raw_resource["valueCodeableConcept"]
+                                processed_code = raw_code
+                                processed_display = raw_code.get("text")
 
-                        # Observation.component.value is a CodeableConcept - the location will come in with an index
-                        elif element == "Observation.component.value":
-                            if index is None:
-                                continue
-                            if (
-                                "component" not in raw_resource or
-                                index not in raw_resource["component"] or
-                                "valueCodeableConcept" not in raw_resource["component"][index]
-                            ):
-                                continue
-                            raw_code = raw_resource["component"][index]["valueCodeableConcept"]
-                            processed_code = raw_code
-                            processed_display = raw_code.get("text")
+                            # Observation.code is a CodeableConcept
+                            elif element == "Observation.code":
+                                if "code" not in raw_resource:
+                                    continue
+                                raw_code = raw_resource["code"]
+                                processed_code = raw_code
+                                processed_display = raw_code.get("text")
+
+                            # Observation.component.code is a CodeableConcept - the location will come in with an index
+                            elif element == "Observation.component.code":
+                                if index is None:
+                                    continue
+                                if (
+                                    "component" not in raw_resource or
+                                    index not in raw_resource["component"] or
+                                    "code" not in raw_resource["component"][index]
+                                ):
+                                    continue
+                                raw_code = raw_resource["component"][index]["code"]
+                                processed_code = raw_code
+                                processed_display = raw_code.get("text")
+
+                            # Observation.component.value is a CodeableConcept - the location will come in with an index
+                            elif element == "Observation.component.value":
+                                if index is None:
+                                    continue
+                                if (
+                                    "component" not in raw_resource or
+                                    index not in raw_resource["component"] or
+                                    "valueCodeableConcept" not in raw_resource["component"][index]
+                                ):
+                                    continue
+                                raw_code = raw_resource["component"][index]["valueCodeableConcept"]
+                                processed_code = raw_code
+                                processed_display = raw_code.get("text")
+                            else:
+                                LOGGER.warning(f"Unrecognized location for Observation error: {location}")
+
+                        # DocumentReference
+                        elif resource_type == ResourceType.DOCUMENT_REFERENCE:
+                            # DocumentReference.type is a CodeableConcept
+                            if element == "DocumentReference.type":
+                                raw_code = raw_resource["type"]
+                                processed_code = raw_code
+                                processed_display = raw_code.get("text")
+
+                        # Appointment
+                        elif resource_type == ResourceType.APPOINTMENT:
+                            # Appointment.status is a raw code - used for code and display
+                            if element == "Appointment.status":
+                                raw_code = raw_resource["status"]
+                                processed_code = raw_code
+                                processed_display = raw_code
+
+                        # Use the extract_telecom_data helper function to extract the codes from each resource type
+                        # Extract codes for issues from all resource types for ContactPoint.system and ContactPoint.use
+
+                        # Patient
+                        elif resource_type == ResourceType.PATIENT:
+                            processed_code, processed_display = extract_telecom_data('Patient', location, raw_resource)
+
+                        # Practitioner
+                        elif resource_type == ResourceType.PRACTITIONER:
+                            processed_code, processed_display = extract_telecom_data('Practitioner', location, raw_resource)
+
+                        # PractitionerRole
+                        elif resource_type == ResourceType.PRACTITIONER_ROLE:
+                            processed_code, processed_display = extract_telecom_data('PractitionerRole', location, raw_resource)
+
+                        # Location
+                        elif resource_type == ResourceType.LOCATION:
+                            processed_code, processed_display = extract_telecom_data('Location', location, raw_resource)
+
+                        # Case not yet implemented
                         else:
-                            LOGGER.warning(f"Unrecognized location for Observation error: {location}")
+                            raise NotImplementedError(
+                                f"Support not implemented for {resource_type} at location {element}"
+                            )
 
-                    # DocumentReference
-                    elif resource_type == ResourceType.DOCUMENT_REFERENCE:
-                        # DocumentReference.type is a CodeableConcept
-                        if element == "DocumentReference.type":
-                            raw_code = raw_resource["type"]
-                            processed_code = raw_code
-                            processed_display = raw_code.get("text")
+                        # Lookup the concept map version used to normalize this type of resource
+                        # So that we can then identify the correct terminology to load the new coding to
 
-                    # Appointment
-                    elif resource_type == ResourceType.APPOINTMENT:
-                        # Appointment.status is a raw code - used for code and display
-                        if element == "Appointment.status":
-                            raw_code = raw_resource["status"]
-                            processed_code = raw_code
-                            processed_display = raw_code
-
-                    # Use the extract_telecom_data helper function to extract the codes from each resource type
-                    # Extract codes for issues from all resource types for ContactPoint.system and ContactPoint.use
-
-                    # Patient
-                    elif resource_type == ResourceType.PATIENT:
-                        processed_code, processed_display = extract_telecom_data('Patient', location, raw_resource)
-
-                    # Practitioner
-                    elif resource_type == ResourceType.PRACTITIONER:
-                        processed_code, processed_display = extract_telecom_data('Practitioner', location, raw_resource)
-
-                    # PractitionerRole
-                    elif resource_type == ResourceType.PRACTITIONER_ROLE:
-                        processed_code, processed_display = extract_telecom_data('PractitionerRole', location, raw_resource)
-
-                    # Location
-                    elif resource_type == ResourceType.LOCATION:
-                        processed_code, processed_display = extract_telecom_data('Location', location, raw_resource)
-
-                    # Case not yet implemented
-                    else:
-                        raise NotImplementedError(
-                            f"Support not implemented for {resource_type} at location {element}"
+                        # Note that some normalization registry data_element strings need adjustment.
+                        if element == "Observation.value" or element == "Observation.component.value":
+                            data_element = f"{element}CodeableConcept"
+                        else:
+                            data_element = element
+                        concept_map_version_for_normalization = (
+                            lookup_concept_map_version_for_data_element(
+                                data_element=data_element,
+                                organization=error_service_resource.organization,
+                            )
                         )
 
-                    # Lookup the concept map version used to normalize this type of resource
-                    # So that we can then identify the correct terminology to load the new coding to
+                        if concept_map_version_for_normalization is None:
+                            # We already messaged that the concept map for this resource and issue is missing
+                            continue
 
-                    # Note that some normalization registry data_element strings need adjustment.
-                    if element == "Observation.value" or element == "Observation.component.value":
-                        data_element = f"{element}CodeableConcept"
-                    else:
-                        data_element = element
-                    concept_map_version_for_normalization = (
-                        lookup_concept_map_version_for_data_element(
-                            data_element=data_element,
-                            organization=error_service_resource.organization,
+                        # Inside the concept map version, we'll extract the source value set
+                        source_value_set_uuid = (
+                            concept_map_version_for_normalization.concept_map.source_value_set_uuid
+                        )
+                        most_recent_active_source_value_set_version = (
+                            app.value_sets.models.ValueSet.load_most_recent_active_version_with_cache(
+                                source_value_set_uuid
+                            )
+                        )
+                        most_recent_active_source_value_set_version.expand(no_repeat=True)
+
+                        # Identify the terminology inside the source value set
+                        terminologies_in_source_value_set = (
+                            most_recent_active_source_value_set_version.lookup_terminologies_in_value_set_version()
+                        )
+
+                        if len(terminologies_in_source_value_set) > 1:
+                            raise Exception(
+                                "There should only be a single source terminology for a concept map used in data normalization"
+                            )
+                        if len(terminologies_in_source_value_set) == 0:
+                            raise Exception(
+                                f"No terminologies in source value set {most_recent_active_source_value_set_version.uuid}"
+                            )
+
+                        current_terminology_version = terminologies_in_source_value_set[0]
+
+                        #  The custom terminology may have already passed its effective end date, so we might need to create a new version
+                        terminology_to_load_to = (
+                            current_terminology_version.version_to_load_new_content_to()
+                        )
+
+                        new_code_uuid = uuid.uuid4()
+                        if processed_display is None:
+                            processed_display = ''
+                        new_code = Code(
+                            code=processed_code,
+                            display=processed_display,
+                            system=None,
+                            version=None,
+                            terminology_version_uuid=terminology_to_load_to.uuid,
+                            custom_terminology_code_uuid=new_code_uuid,
+                        )
+
+                        # Save the data linking this code back to its original error
+                        # After de-duplication, we will look them up and insert them to the table
+                        for issue_id in error_service_resource.issue_ids:
+                            error_code_link_data.append(
+                                {
+                                    "issue_uuid": issue_id,
+                                    "resource_uuid": error_service_resource.id,
+                                    "status": "pending",
+                                    "code": json.dumps(new_code.code) if type(new_code.code) == dict else new_code.code,
+                                    "display": new_code.display,
+                                    "terminology_version_uuid": terminology_to_load_to.uuid,
+                                    # Note: no currently supported resource requires the dependsOn data
+                                    # but its part of the unique constraint to look up a row, so we include it
+                                    "depends_on_property": "",
+                                    "depends_on_system": "",
+                                    "depends_on_value": "",
+                                    "depends_on_display": ""
+                                }
+                            )
+
+                        # Assemble additionalData from the raw resource.
+                        # This is where we'll extract unit, value, referenceRange, and value[x] if available
+                        resource_json = json.loads(error_service_resource.resource)
+                        new_code.add_examples_to_additional_data(
+                            unit=resource_json.get("unit"),
+                            value=resource_json.get("value"),
+                            reference_range=resource_json.get("referenceRange"),
+                            value_quantity=resource_json.get("valueQuantity"),
+                            value_boolean=resource_json.get("valueBoolean"),
+                            value_string=resource_json.get("valueString"),
+                            value_date_time=resource_json.get("valueDateTime"),
+                            value_codeable_concept=resource_json.get("valueCodeableConcept"),
+                        )
+
+                        if terminology_to_load_to.uuid in new_codes_to_deduplicate_by_terminology:
+                            new_codes_to_deduplicate_by_terminology[
+                                terminology_to_load_to.uuid
+                            ].append(new_code)
+                        else:
+                            new_codes_to_deduplicate_by_terminology[terminology_to_load_to.uuid] = [
+                                new_code
+                            ]
+
+                # Step 3: Deduplicate the codes to avoid redundant data.
+                deduped_codes_by_terminology = {}
+
+                # Loop through codes, identify duplicates, and merge them.
+                for (
+                    terminology_uuid,
+                    new_codes_to_deduplicate,
+                ) in new_codes_to_deduplicate_by_terminology.items():
+                    # Store duplicates in a dictionary with lists
+                    dedup_dict = {}
+                    for code in new_codes_to_deduplicate:
+                        if code in dedup_dict:
+                            dedup_dict[code].append(code)
+                        else:
+                            dedup_dict[code] = [code]
+
+                    # Merge duplicates
+                    deduped_codes = []
+                    for duplicates in dedup_dict.values():
+                        if len(duplicates) > 1:
+                            merged_code = duplicates[0]
+                            for i in range(1, len(duplicates)):
+                                current_duplicate = duplicates[i]
+                                # Merge in duplicates
+                                if current_duplicate.additional_data is not None:
+                                    merged_code.add_examples_to_additional_data(
+                                        unit=current_duplicate.additional_data.get(
+                                            "example_unit"
+                                        ),
+                                        value=current_duplicate.additional_data.get(
+                                            "example_value"
+                                        ),
+                                        reference_range=current_duplicate.additional_data.get(
+                                            "example_reference_range"
+                                        ),
+                                        value_quantity=current_duplicate.additional_data.get(
+                                            "example_value_quantity"
+                                        ),
+                                        value_boolean=current_duplicate.additional_data.get(
+                                            "example_value_boolean"
+                                        ),
+                                        value_string=current_duplicate.additional_data.get(
+                                            "example_value_string"
+                                        ),
+                                        value_date_time=current_duplicate.additional_data.get(
+                                            "example_value_date_time"
+                                        ),
+                                        value_codeable_concept=current_duplicate.additional_data.get(
+                                            "example_codeable_concept"
+                                        ),
+                                    )
+                            deduped_codes.append(merged_code)
+                        else:
+                            deduped_codes.append(duplicates[0])
+
+                    deduped_codes_by_terminology[terminology_uuid] = deduped_codes
+
+                # Step 4: Load the deduplicated codes into their respective terminologies.
+                for terminology_version_uuid, code_list in deduped_codes_by_terminology.items():
+                    terminology = Terminology.load(terminology_version_uuid)
+
+                    LOGGER.warning(
+                        f"Loading {len(code_list)} new codes to terminology {terminology.terminology} version {terminology.version}"
+                    )
+                    terminology.load_new_codes_to_terminology(
+                        code_list, on_conflict_do_nothing=True
+                    )
+
+                # Step 5: Save the IDs of the original errors and link back to the codes
+                conn = get_db()
+                if error_code_link_data:
+                    # Create a temporary table and insert the data to it
+                    conn.execute(
+                        text(
+                            """
+                            CREATE TEMP TABLE temp_error_data (
+                                code text,
+                                display text,
+                                terminology_version_uuid UUID,
+                                depends_on_system text,
+                                depends_on_property text,
+                                depends_on_display text,
+                                depends_on_value text,
+                                issue_uuid UUID,
+                                resource_uuid UUID,
+                                status text
+                            )
+                            """
                         )
                     )
 
-                    if concept_map_version_for_normalization is None:
-                        # We already messaged that the concept map for this resource and issue is missing
-                        continue
+                    # Optimized bulk insert
+                    conn.execute(temp_error_data.insert(), error_code_link_data)
 
-                    # Inside the concept map version, we'll extract the source value set
-                    source_value_set_uuid = (
-                        concept_map_version_for_normalization.concept_map.source_value_set_uuid
+                    # Insert from the temporary table, allowing the database to batch lookups
+                    conn.execute(
+                        text(
+                            """
+                            INSERT INTO custom_terminologies.error_service_issue
+                                (custom_terminology_code_uuid, issue_uuid, status, resource_uuid)
+                            SELECT c.uuid, t.issue_uuid, t.status, t.resource_uuid
+                            FROM temp_error_data t
+                            JOIN custom_terminologies.code c 
+                            ON c.code = t.code 
+                                AND c.display = t.display 
+                                AND c.terminology_version_uuid = t.terminology_version_uuid
+                                AND c.depends_on_system = t.depends_on_system
+                                AND c.depends_on_property = t.depends_on_property
+                                AND c.depends_on_display = t.depends_on_display
+                                AND c.depends_on_value = t.depends_on_value
+                        ON CONFLICT do nothing
+                        """
                     )
-                    most_recent_active_source_value_set_version = (
-                        app.value_sets.models.ValueSet.load_most_recent_active_version_with_cache(
-                            source_value_set_uuid
-                        )
-                    )
-                    most_recent_active_source_value_set_version.expand(no_repeat=True)
-
-                    # Identify the terminology inside the source value set
-                    terminologies_in_source_value_set = (
-                        most_recent_active_source_value_set_version.lookup_terminologies_in_value_set_version()
-                    )
-
-                    if len(terminologies_in_source_value_set) > 1:
-                        raise Exception(
-                            "There should only be a single source terminology for a concept map used in data normalization"
-                        )
-                    if len(terminologies_in_source_value_set) == 0:
-                        raise Exception(
-                            f"No terminologies in source value set {most_recent_active_source_value_set_version.uuid}"
-                        )
-
-                    current_terminology_version = terminologies_in_source_value_set[0]
-
-                    #  The custom terminology may have already passed its effective end date, so we might need to create a new version
-                    terminology_to_load_to = (
-                        current_terminology_version.version_to_load_new_content_to()
-                    )
-
-                    new_code_uuid = uuid.uuid4()
-                    if processed_display is None:
-                        processed_display = ''
-                    new_code = Code(
-                        code=processed_code,
-                        display=processed_display,
-                        system=None,
-                        version=None,
-                        terminology_version_uuid=terminology_to_load_to.uuid,
-                        custom_terminology_code_uuid=new_code_uuid,
-                    )
-
-                    # Save the data linking this code back to its original error
-                    # After de-duplication, we will look them up and insert them to the table
-                    for issue_id in error_service_resource.issue_ids:
-                        error_code_link_data.append(
-                            {
-                                "issue_uuid": issue_id,
-                                "resource_uuid": error_service_resource.id,
-                                "status": "pending",
-                                "code": json.dumps(new_code.code) if type(new_code.code) == dict else new_code.code,
-                                "display": new_code.display,
-                                "terminology_version_uuid": terminology_to_load_to.uuid,
-                                # Note: no currently supported resource requires the dependsOn data
-                                # but its part of the unique constraint to look up a row, so we include it
-                                "depends_on_property": "",
-                                "depends_on_system": "",
-                                "depends_on_value": "",
-                                "depends_on_display": ""
-                            }
-                        )
-
-                    # Assemble additionalData from the raw resource.
-                    # This is where we'll extract unit, value, referenceRange, and value[x] if available
-                    resource_json = json.loads(error_service_resource.resource)
-                    new_code.add_examples_to_additional_data(
-                        unit=resource_json.get("unit"),
-                        value=resource_json.get("value"),
-                        reference_range=resource_json.get("referenceRange"),
-                        value_quantity=resource_json.get("valueQuantity"),
-                        value_boolean=resource_json.get("valueBoolean"),
-                        value_string=resource_json.get("valueString"),
-                        value_date_time=resource_json.get("valueDateTime"),
-                        value_codeable_concept=resource_json.get("valueCodeableConcept"),
-                    )
-
-                    if terminology_to_load_to.uuid in new_codes_to_deduplicate_by_terminology:
-                        new_codes_to_deduplicate_by_terminology[
-                            terminology_to_load_to.uuid
-                        ].append(new_code)
-                    else:
-                        new_codes_to_deduplicate_by_terminology[terminology_to_load_to.uuid] = [
-                            new_code
-                        ]
-
-            # Step 3: Deduplicate the codes to avoid redundant data.
-            deduped_codes_by_terminology = {}
-
-            # Loop through codes, identify duplicates, and merge them.
-            for (
-                terminology_uuid,
-                new_codes_to_deduplicate,
-            ) in new_codes_to_deduplicate_by_terminology.items():
-                # Store duplicates in a dictionary with lists
-                dedup_dict = {}
-                for code in new_codes_to_deduplicate:
-                    if code in dedup_dict:
-                        dedup_dict[code].append(code)
-                    else:
-                        dedup_dict[code] = [code]
-
-                # Merge duplicates
-                deduped_codes = []
-                for duplicates in dedup_dict.values():
-                    if len(duplicates) > 1:
-                        merged_code = duplicates[0]
-                        for i in range(1, len(duplicates)):
-                            current_duplicate = duplicates[i]
-                            # Merge in duplicates
-                            if current_duplicate.additional_data is not None:
-                                merged_code.add_examples_to_additional_data(
-                                    unit=current_duplicate.additional_data.get(
-                                        "example_unit"
-                                    ),
-                                    value=current_duplicate.additional_data.get(
-                                        "example_value"
-                                    ),
-                                    reference_range=current_duplicate.additional_data.get(
-                                        "example_reference_range"
-                                    ),
-                                    value_quantity=current_duplicate.additional_data.get(
-                                        "example_value_quantity"
-                                    ),
-                                    value_boolean=current_duplicate.additional_data.get(
-                                        "example_value_boolean"
-                                    ),
-                                    value_string=current_duplicate.additional_data.get(
-                                        "example_value_string"
-                                    ),
-                                    value_date_time=current_duplicate.additional_data.get(
-                                        "example_value_date_time"
-                                    ),
-                                    value_codeable_concept=current_duplicate.additional_data.get(
-                                        "example_codeable_concept"
-                                    ),
-                                )
-                        deduped_codes.append(merged_code)
-                    else:
-                        deduped_codes.append(duplicates[0])
-
-                deduped_codes_by_terminology[terminology_uuid] = deduped_codes
-
-            # Step 4: Load the deduplicated codes into their respective terminologies.
-            for terminology_version_uuid, code_list in deduped_codes_by_terminology.items():
-                terminology = Terminology.load(terminology_version_uuid)
-
-                LOGGER.warning(
-                    f"Loading {len(code_list)} new codes to terminology {terminology.terminology} version {terminology.version}"
                 )
-                terminology.load_new_codes_to_terminology(
-                    code_list, on_conflict_do_nothing=True
-                )
 
-            # Step 5: Save the IDs of the original errors and link back to the codes
-            conn = get_db()
-            if error_code_link_data:
-                # Create a temporary table and insert the data to it
+                # Delete the temporary table
                 conn.execute(
                     text(
                         """
-                        CREATE TEMP TABLE temp_error_data (
-                            code text,
-                            display text,
-                            terminology_version_uuid UUID,
-                            depends_on_system text,
-                            depends_on_property text,
-                            depends_on_display text,
-                            depends_on_value text,
-                            issue_uuid UUID,
-                            resource_uuid UUID,
-                            status text
-                        )
+                        DROP TABLE IF EXISTS temp_error_data
                         """
                     )
                 )
 
-                # # SQL template for insertion
-                # insert_sql = text(
-                #     """
-                #     INSERT INTO temp_error_data
-                #     (code, display, terminology_version_uuid, depends_on_system, depends_on_property, depends_on_display, depends_on_value, issue_uuid, status)
-                #     VALUES
-                #     (:code, :display, :terminology_version_uuid, :depends_on_system, :depends_on_property, :depends_on_display, :depends_on_value, :issue_uuid, :status)
-                #     """
-                # )
+                if commit_changes:
+                    conn.commit()
 
-                # Optimized bulk insert
-                conn.execute(temp_error_data.insert(), error_code_link_data)
+    except Exception as e:
+        LOGGER.error(
+            f"Task halted by exception at resource type: {input_fhir_resource} for organization: {organization_id}"
+        )
+        raise e
 
-                # Insert from the temporary table, allowing the database to batch lookups
-                conn.execute(
-                    text(
-                        """
-                        INSERT INTO custom_terminologies.error_service_issue
-                            (custom_terminology_code_uuid, issue_uuid, status, resource_uuid)
-                        SELECT c.uuid, t.issue_uuid, t.status, t.resource_uuid
-                        FROM temp_error_data t
-                        JOIN custom_terminologies.code c 
-                        ON c.code = t.code 
-                            AND c.display = t.display 
-                            AND c.terminology_version_uuid = t.terminology_version_uuid
-                            AND c.depends_on_system = t.depends_on_system
-                            AND c.depends_on_property = t.depends_on_property
-                            AND c.depends_on_display = t.depends_on_display
-                            AND c.depends_on_value = t.depends_on_value
-                    ON CONFLICT do nothing
-                    """
-                )
-            )
-
-            # Delete the temporary table
-            conn.execute(
-                text(
-                    """
-                    DROP TABLE IF EXISTS temp_error_data
-                    """
-                )
-            )
-
-            if commit_changes:
-                conn.commit()
-
-        LOGGER.warning("Loading data from error service to custom terminologies complete")
+    LOGGER.warning("Loading data from error service to custom terminologies complete")
 
 
 @ttl_cache()

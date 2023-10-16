@@ -1,6 +1,7 @@
 import datetime
 import uuid
 import json
+import logging
 from app.database import get_db
 from sqlalchemy import text
 import app.terminologies.models
@@ -11,6 +12,7 @@ from app.errors import BadRequestWithCode
 
 # INTERNAL_TOOLS_BASE_URL = "https://infx-internal.prod.projectronin.io"
 
+LOGGER = logging.getLogger()
 
 class Code:
     """
@@ -331,14 +333,21 @@ class Code:
         Per-example helper for add_examples_to_additional_data()
         """
         if example is not None:
-            if key not in self.additional_data:
-                self.additional_data[key] = []
-            if isinstance(example, list):
-                self.additional_data[key].extend(example)
-            else:
-                self.additional_data[key].append(example)
+            try:
+                if key not in self.additional_data:
+                    self.additional_data[key] = []
+                if isinstance(example, list):
+                    self.additional_data[key].extend(example)
+                else:
+                    self.additional_data[key].append(example)
 
-            json_list = [json.dumps(x) for x in self.additional_data[key]]
-            deduplicated_list = list(set(json_list))
-            unjsoned_list = [json.loads(x) for x in deduplicated_list]
-            self.additional_data[key] = unjsoned_list[:5]
+                json_list = []
+                for x in self.additional_data[key]:
+                    if x is not None:
+                        json_list.append(json.dumps(x))
+                deduplicated_list = list(set(json_list))
+                unjsoned_list = [json.loads(x) for x in deduplicated_list]
+                self.additional_data[key] = unjsoned_list[:5]
+            except Exception as e:
+                LOGGER.warning(f"Unable to load additional data: {key}")
+                raise e   # temporary: will define an error if needed
