@@ -413,8 +413,8 @@ class Terminology:
         conn.execute(
             text(
                 """
-                Insert into custom_terminologies.code(code, display, terminology_version_uuid, additional_data, depends_on_value, depends_on_display, depends_on_property, depends_on_system)
-                select code, display, :version_uuid, additional_data, depends_on_value, depends_on_display, depends_on_property, depends_on_system
+                Insert into custom_terminologies.code(code, display, terminology_version_uuid, additional_data, depends_on_value, depends_on_display, depends_on_property, depends_on_system, created_date)
+                select code, display, :version_uuid, additional_data, depends_on_value, depends_on_display, depends_on_property, depends_on_system, created_date
                 from custom_terminologies.code
                 where terminology_version_uuid = :previous_version_uuid
                 """
