@@ -121,10 +121,22 @@ class ConceptMapVersionCreator:
             },
         )
 
-        sources_and_mappings = self.load_all_sources_and_mappings(self.new_version_uuid)
+        mapped_no_map_lookup, all_mappings_lookup = self.load_all_sources_and_mappings(
+            self.new_version_uuid
+        )
 
+        # Extract new source concepts from both dictionaries
         new_sources = []
-        for lookup_key, source_and_mapping in sources_and_mappings.items():
+        for (
+            lookup_key,
+            source_and_mapping,
+        ) in all_mappings_lookup.items():
+            new_sources.append(source_and_mapping.get("source_concept"))
+
+        for (
+            lookup_key,
+            source_and_mapping,
+        ) in mapped_no_map_lookup.items():
             new_sources.append(source_and_mapping.get("source_concept"))
 
         return new_sources
@@ -144,54 +156,63 @@ class ConceptMapVersionCreator:
         Returns:
             dict: A dictionary containing source concepts and their mappings.
         """
+        mapped_no_map_criteria = {
+            "relationship_code_uuid": "dca7c556-82d9-4433-8971-0b7edb9c9661",
+            "target_concept_code": "No map",
+            "target_concept_display": "No matching concept",
+            "target_concept_system_version_uuid": "93ec9286-17cf-4837-a4dc-218ce3015de6",
+        }
+
+        mapped_no_map = {}
+        all_mappings = {}
 
         all_data = self.conn.execute(
             text(
                 """
-                SELECT
-                    sc.uuid AS source_concept_uuid,
-                    sc.code AS source_concept_code,
-                    sc.display AS source_concept_display,
-                    sc.system AS source_concept_system,
-                    sc.comments AS source_concept_comments,
-                    sc.additional_context AS source_concept_additional_context,
-                    sc.map_status AS source_concept_map_status,
-                    sc.concept_map_version_uuid AS source_concept_map_version_uuid,
-                    sc.assigned_mapper AS source_concept_assigned_mapper,
-                    sc.assigned_reviewer AS source_concept_assigned_reviewer,
-                    sc.no_map AS source_concept_no_map,
-                    sc.reason_for_no_map AS source_concept_reason_for_no_map,
-                    sc.mapping_group AS source_concept_mapping_group,
-                    cr.uuid AS concept_relationship_uuid,
-                    cr.target_concept_code AS target_concept_code,
-                    cr.target_concept_display AS target_concept_display,
-                    cr.target_concept_system AS target_concept_system,
-                    cr.mapping_comments AS mapping_comments,
-                    cr.review_status AS review_status,
-                    cr.created_date AS concept_relationship_created_date,
-                    cr.reviewed_date AS concept_relationship_reviewed_date,
-                    cr.author AS concept_relationship_author,
-                    cr.relationship_code_uuid AS concept_relationship_relationship_code_uuid,
-                    cr.target_concept_system_version_uuid AS target_concept_system_version_uuid,
-                    cr.review_comment AS concept_relationship_review_comment,
-                    cr.reviewed_by AS concept_relationship_reviewed_by,
-                    ctc.depends_on_property,
-                    ctc.depends_on_system,
-                    ctc.depends_on_value,
-                    ctc.depends_on_display
-                FROM
-                    concept_maps.concept_relationship cr
-                RIGHT JOIN
-                    concept_maps.source_concept sc
-                ON
-                    sc.uuid = cr.source_concept_uuid
-                LEFT JOIN
-                    custom_terminologies.code ctc
-                ON
-                    sc.custom_terminology_uuid = ctc.uuid
-                WHERE
-                    sc.concept_map_version_uuid = :concept_map_version_uuid
-                """
+                    SELECT
+                        sc.uuid AS source_concept_uuid,
+                        sc.code AS source_concept_code,
+                        sc.display AS source_concept_display,
+                        sc.system AS source_concept_system,
+                        sc.comments AS source_concept_comments,
+                        sc.additional_context AS source_concept_additional_context,
+                        sc.map_status AS source_concept_map_status,
+                        sc.concept_map_version_uuid AS source_concept_map_version_uuid,
+                        sc.assigned_mapper AS source_concept_assigned_mapper,
+                        sc.assigned_reviewer AS source_concept_assigned_reviewer,
+                        sc.no_map AS source_concept_no_map,
+                        sc.reason_for_no_map AS source_concept_reason_for_no_map,
+                        sc.mapping_group AS source_concept_mapping_group,
+                        cr.uuid AS concept_relationship_uuid,
+                        cr.target_concept_code AS target_concept_code,
+                        cr.target_concept_display AS target_concept_display,
+                        cr.target_concept_system AS target_concept_system,
+                        cr.mapping_comments AS mapping_comments,
+                        cr.review_status AS review_status,
+                        cr.created_date AS concept_relationship_created_date,
+                        cr.reviewed_date AS concept_relationship_reviewed_date,
+                        cr.author AS concept_relationship_author,
+                        cr.relationship_code_uuid AS concept_relationship_relationship_code_uuid,
+                        cr.target_concept_system_version_uuid AS target_concept_system_version_uuid,
+                        cr.review_comment AS concept_relationship_review_comment,
+                        cr.reviewed_by AS concept_relationship_reviewed_by,
+                        ctc.depends_on_property,
+                        ctc.depends_on_system,
+                        ctc.depends_on_value,
+                        ctc.depends_on_display
+                    FROM
+                        concept_maps.concept_relationship cr
+                    RIGHT JOIN
+                        concept_maps.source_concept sc
+                    ON
+                        sc.uuid = cr.source_concept_uuid
+                    LEFT JOIN
+                        custom_terminologies.code ctc
+                    ON
+                        sc.custom_terminology_uuid = ctc.uuid
+                    WHERE
+                        sc.concept_map_version_uuid = :concept_map_version_uuid
+                    """
             ),
             {"concept_map_version_uuid": concept_map_version_uuid},
         )
@@ -206,27 +227,43 @@ class ConceptMapVersionCreator:
         #                             }
         # ]
 
-        response = {}
-
         # Terminology Local cache
         terminology = dict()
 
         for row in all_data:
             # In the database, source_concept.system is a terminology_version_uuid, but we want the FHIR URL
-
             # Get the system
             source_system = row.source_concept_system
             if source_system is None:
                 raise BadRequestWithCode(
                     "ConceptMap.loadAllSourcesAndMappings.missingSystem",
-                    f"Concept map version UUID: {concept_map_version_uuid.version}, source concept UUID: {row.source_concept_uuid} has no source system identified"
+                    f"Concept map version UUID: {concept_map_version_uuid.version}, source concept UUID: {row.source_concept_uuid} has no source system identified",
                 )
 
             # Get the Terminology
             if source_system not in terminology.keys():
-                terminology.update({
-                    source_system: load_terminology_version_with_cache(source_system)
-                })
+                terminology.update(
+                    {source_system: load_terminology_version_with_cache(source_system)}
+                )
+
+            is_mapped_no_map = (
+                (
+                    str(row.concept_relationship_relationship_code_uuid)
+                    == mapped_no_map_criteria["relationship_code_uuid"]
+                )
+                and (
+                    row.target_concept_code
+                    == mapped_no_map_criteria["target_concept_code"]
+                )
+                and (
+                    row.target_concept_display
+                    == mapped_no_map_criteria["target_concept_display"]
+                )
+                and (
+                    str(row.target_concept_system_version_uuid)
+                    == mapped_no_map_criteria["target_concept_system_version_uuid"]
+                )
+            )
 
             # Create the SourceConcept
             source_concept = app.concept_maps.models.SourceConcept(
@@ -253,8 +290,10 @@ class ConceptMapVersionCreator:
 
             # Check if the row has a mapping: when debugging, target values are in 1-based positions ~15, 16, 17, 24
             if row.target_concept_code is not None:
-                mapping_relationship = app.concept_maps.models.MappingRelationship.load_by_uuid(
-                    row.concept_relationship_relationship_code_uuid
+                mapping_relationship = (
+                    app.concept_maps.models.MappingRelationship.load_by_uuid(
+                        row.concept_relationship_relationship_code_uuid
+                    )
                 )
 
                 # if target_concept_system_version_uuid (position ~24) is None here, that is fine: do not load when None
@@ -299,20 +338,33 @@ class ConceptMapVersionCreator:
                 source_concept.depends_on_value,
             )
 
-            if lookup_key not in response:
-                response[lookup_key] = {
-                    "source_concept": source_concept,
-                    "mappings": [],
-                }
+            if is_mapped_no_map:
+                if lookup_key not in mapped_no_map:
+                    mapped_no_map[lookup_key] = {
+                        "source_concept": source_concept,
+                        "mappings": [],
+                    }
 
-                if mapping is not None:
-                    response[lookup_key]["mappings"].append(mapping)
+                    if mapping is not None:
+                        mapped_no_map[lookup_key]["mappings"].append(mapping)
+
+                else:
+                    mapped_no_map[lookup_key]["mappings"].append(mapping)
 
             else:
-                # Multiple rows for the same source means multiple mappings, so we need to append that
-                response[lookup_key]["mappings"].append(mapping)
+                if lookup_key not in all_mappings:
+                    all_mappings[lookup_key] = {
+                        "source_concept": source_concept,
+                        "mappings": [],
+                    }
 
-        return response
+                    if mapping is not None:
+                        all_mappings[lookup_key]["mappings"].append(mapping)
+
+                else:
+                    all_mappings[lookup_key]["mappings"].append(mapping)
+
+        return mapped_no_map, all_mappings
 
     def load_all_targets(self):
         """
@@ -363,12 +415,13 @@ class ConceptMapVersionCreator:
         Creates a new ConceptMapVersion based on the previous version.
 
         This method performs the following steps to create the new ConceptMapVersion:
-        1. Set up variables and open a persistent database connection.
-        2. Register the new ConceptMapVersion in the database.
-        3. Populate the source concepts with the latest expansion of the new target value set version.
-        4. Iterate through the new source concepts and compare them with the previous version.
-        5. Process no-maps and mappings with inactive targets, and copy mappings exactly or require review.
-        6. Save the new ConceptMapVersion.
+        1. Perform data integrity checks on the input parameters.
+        2. Set up variables and open a persistent database connection.
+        3. Register the new ConceptMapVersion in the database.
+        4. Populate the source concepts with the latest expansion of the new source value set version.
+        5. Iterate through the new source concepts and compare them with the previous version.
+        6. Handle the cases of new sources, mapped no maps, mappings with inactive targets, and copy mappings exactly or require review.
+        7. Save the new ConceptMapVersion.
 
         Args:
             previous_version_uuid (uuid.UUID): The UUID of the previous ConceptMapVersion.
@@ -384,43 +437,54 @@ class ConceptMapVersionCreator:
 
         # Data integrity checks
         # make sure the previous version is the latest version; we don't want to version anything but the latest ever
-        input_previous_concept_map_version = app.concept_maps.models.ConceptMapVersion(previous_version_uuid)
-        concept_map = app.concept_maps.models.ConceptMap(input_previous_concept_map_version.concept_map.uuid)
+        input_previous_concept_map_version = app.concept_maps.models.ConceptMapVersion(
+            previous_version_uuid
+        )
+        concept_map = app.concept_maps.models.ConceptMap(
+            input_previous_concept_map_version.concept_map.uuid
+        )
         concept_map_most_recent_version = concept_map.get_most_recent_version(
             active_only=False
         )
-        if (concept_map_most_recent_version is None or
-                str(concept_map_most_recent_version.uuid) != str(previous_version_uuid)
-        ):
+
+        if concept_map_most_recent_version is None or str(
+            concept_map_most_recent_version.uuid
+        ) != str(previous_version_uuid):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.previous_version_uuid",
-                f"Input concept map version with UUID {previous_version_uuid} is not the most recent version"
+                f"Input concept map version with UUID {previous_version_uuid} is not the most recent version",
             )
 
         # Validate the input new_source_value_set_version_uuid
-        source_value_set_version = app.value_sets.models.ValueSetVersion.load(new_source_value_set_version_uuid)
-        active_source_value_set_version = (
-            ValueSet.load_most_recent_active_version(source_value_set_version.value_set.uuid)
+        source_value_set_version = app.value_sets.models.ValueSetVersion.load(
+            new_source_value_set_version_uuid
+        )
+        active_source_value_set_version = ValueSet.load_most_recent_active_version(
+            source_value_set_version.value_set.uuid
         )
         if active_source_value_set_version is None or (
-                str(active_source_value_set_version.uuid) != str(new_source_value_set_version_uuid)
+            str(active_source_value_set_version.uuid)
+            != str(new_source_value_set_version_uuid)
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.new_source_value_set_version_uuid",
-                f"Input source value set with UUID {new_source_value_set_version_uuid} is not the most recent active"
+                f"Input source value set with UUID {new_source_value_set_version_uuid} is not the most recent active",
             )
 
         # Validate the input new_target_value_set_version_uuid
-        target_value_set_version = app.value_sets.models.ValueSetVersion.load(new_target_value_set_version_uuid)
-        active_target_value_set_version = (
-            ValueSet.load_most_recent_active_version(target_value_set_version.value_set.uuid)
+        target_value_set_version = app.value_sets.models.ValueSetVersion.load(
+            new_target_value_set_version_uuid
+        )
+        active_target_value_set_version = ValueSet.load_most_recent_active_version(
+            target_value_set_version.value_set.uuid
         )
         if active_target_value_set_version is None or (
-                str(active_target_value_set_version.uuid) != str(new_target_value_set_version_uuid)
+            str(active_target_value_set_version.uuid)
+            != str(new_target_value_set_version_uuid)
         ):
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.new_target_value_set_version_uuid",
-                f"Input target value set with UUID {new_target_value_set_version_uuid} is not the most recent active"
+                f"Input target value set with UUID {new_target_value_set_version_uuid} is not the most recent active",
             )
 
         # todo: dated April 2023: do we want to re-expand the value_sets being passed in? Or put some data integrity checks to ensure the expansion is already done?
@@ -428,7 +492,9 @@ class ConceptMapVersionCreator:
         # Create new version from previous
         try:
             # Set up our variables we need to work with
-            self.previous_concept_map_version = app.concept_maps.models.ConceptMapVersion(previous_version_uuid)
+            self.previous_concept_map_version = (
+                app.concept_maps.models.ConceptMapVersion(previous_version_uuid)
+            )
             self.new_source_value_set_version_uuid = new_source_value_set_version_uuid
             self.new_target_value_set_version_uuid = new_target_value_set_version_uuid
 
@@ -442,14 +508,23 @@ class ConceptMapVersionCreator:
                 new_version_description=new_version_description
             )
 
-            # Populate concept_maps.source_concept table with the latest expansion of the new target value set version
-            # Note: populate_source_concepts() calls load_all_sources_and_mappings() with the self.new_version_uuid
+            # Populate concept_maps.source_concept table with the latest expansion of the new source value set version
+            # Note: populate_source_concepts() calls load_all_sources_and_mappings() with the self.new_version_uuid.
+            # This first time call to load_all_sources_and_mappings will have none in all the concept relationship columns.
             new_source_concepts = self.populate_source_concepts()
 
             # Iterate through the new sources, compare w/ previous, make decisions:
-            previous_sources_and_mappings = self.load_all_sources_and_mappings(
+            # This second call to load_all_sources_and_mappings should HAVE values in the concept relationship columns.
+            (
+                mapped_no_map_lookup,
+                all_mappings_lookup,
+            ) = self.load_all_sources_and_mappings(
                 self.previous_concept_map_version.uuid
             )
+            all_previous_sources_and_mappings = {
+                **mapped_no_map_lookup,
+                **all_mappings_lookup,
+            }
 
             # Load and index the new targets
             new_targets_lookup = self.load_all_targets()
@@ -459,6 +534,8 @@ class ConceptMapVersionCreator:
             previous_contexts_list = []
 
             for new_source_concept in new_source_concepts:
+                logging.info(f"Processing new source concept: {new_source_concept}")
+                # For each new_source_concept, create a source_lookup_key tuple using the source concept's properties
                 source_lookup_key = (
                     new_source_concept.code,
                     new_source_concept.display,
@@ -469,15 +546,19 @@ class ConceptMapVersionCreator:
                     new_source_concept.depends_on_value,
                 )
 
-                if source_lookup_key not in previous_sources_and_mappings:
-                    # Handle the case of a new source w/ no related previous one
+                if source_lookup_key not in all_previous_sources_and_mappings:
+                    # If the source_lookup_key is not found in previous_sources_and_mappings
+                    # (i.e. the source concept is new and not present in the previous version),
+                    # add the new_source_concept to the novel_sources list.
                     self.novel_sources.append(new_source_concept)
 
                 else:
-                    previous_source_concept = previous_sources_and_mappings[
+                    # If the source_lookup_key is found in previous_sources_and_mappings
+                    # Retrieve the previous_source_concept and its previous_mappings from previous_sources_and_mappings using the source_lookup_key
+                    previous_source_concept = all_previous_sources_and_mappings[
                         source_lookup_key
                     ].get("source_concept")
-                    previous_mappings = previous_sources_and_mappings[
+                    previous_mappings = all_previous_sources_and_mappings[
                         source_lookup_key
                     ].get("mappings")
 
@@ -493,20 +574,58 @@ class ConceptMapVersionCreator:
                         mapping_group=previous_source_concept.mapping_group,
                     )
 
-                    if not previous_mappings:
-                        # Handle no-maps
-                        result = self.process_no_map(
-                            previous_source_concept,
-                            new_source_concept,
-                            require_review_no_maps_not_in_target,
-                            previous_contexts_list,
-                        )
-                        if result is not None:
-                            previous_contexts_list.append(result)
+                    if source_lookup_key in mapped_no_map_lookup:
+                        # If the source_lookup_key is found in mapped_no_map_lookup, handle the mapped_no_maps case:
+                        # a. Retrieve the previous_mapping_data from mapped_no_map_lookup using the source_lookup_key
+                        previous_mapping_data = mapped_no_map_lookup[source_lookup_key]
+                        # b. get the previous_mapping
+                        mapping = previous_mapping_data["mappings"][0]
+                        previous_mapping = mapping
+
+                        if (
+                            require_review_no_maps_not_in_target
+                            and previous_source_concept.reason_for_no_map
+                            == "Not in target code system"
+                        ):
+                            # c. when require_review is True and reason "Not in target code system"
+                            result = self.process_no_map(
+                                previous_source_concept,
+                                new_source_concept,
+                                require_review_no_maps_not_in_target,
+                                previous_contexts_list,
+                            )
+                            if result is not None:
+                                previous_contexts_list.append(result)
+                        else:
+                            # d. Otherwise, copy the previous mapping exactly using the copy_mapping_exact method with the new_target_code set to "No map"
+                            # Mapped no map constants
+                            no_map_target_concept_code = "No map"
+                            no_map_target_concept_display = "No matching concept"
+                            no_map_system = (
+                                "http://projectronin.io/fhir/CodeSystem/ronin/nomap"
+                            )
+                            no_map_version = "1.0"
+
+                            no_map_code = app.concept_maps.models.Code(
+                                code=no_map_target_concept_code,
+                                display=no_map_target_concept_display,
+                                system=no_map_system,
+                                version=no_map_version,
+                            )
+
+                            self.copy_mapping_exact(
+                                new_source_concept=new_source_concept,
+                                new_target_code=no_map_code,
+                                previous_mapping=previous_mapping,
+                            )
 
                     else:
+                        # If none of the above conditions match, it means the source concept has regular mappings in the previous version:
+                        # a. Initialize an empty list previous_mapping_context to store the previous context data for the source concept.
                         previous_mapping_context = []
                         for previous_mapping in previous_mappings:
+                            #  b. Iterate through the previous_mappings:
+                            # i. Create a target_lookup_key tuple using the target concept's properties (code, display, system) from the previous_mapping.
                             target_lookup_key = (
                                 previous_mapping.target.code,
                                 previous_mapping.target.display,
@@ -514,18 +633,31 @@ class ConceptMapVersionCreator:
                             )
 
                             if target_lookup_key not in new_targets_lookup:
-                                # Append previous context to list in case multiple mappings which need to save it
+                                # ii. If the target_lookup_key is not found in new_targets_lookup, it means the target concept is inactive.
+                                # Process the inactive target mapping using the process_inactive_target_mapping method
+                                # and append the result to the previous_mapping_context.
+
                                 previous_context_for_row = (
                                     self.process_inactive_target_mapping(
                                         new_source_concept=new_source_concept,
                                         previous_mapping=previous_mapping,
                                     )
                                 )
-                                previous_mapping_context.append(previous_context_for_row)
+                                previous_mapping_context.append(
+                                    previous_context_for_row
+                                )
                             else:
-                                new_target_concept = new_targets_lookup[target_lookup_key]
+                                # iii. If the target_lookup_key is found in new_targets_lookup, retrieve the new_target_concept from the new_targets_lookup
+                                # Then, based on the relationship display and the require_review_for_non_equivalent_relationships parameter,
+                                # either copy the previous mapping exactly using copy_mapping_exact, or require review and use copy_mapping_require_review.
+                                new_target_concept = new_targets_lookup[
+                                    target_lookup_key
+                                ]
 
-                                if previous_mapping.relationship.display == "Equivalent":
+                                if (
+                                    previous_mapping.relationship.display
+                                    == "Equivalent"
+                                ):
                                     self.copy_mapping_exact(
                                         new_source_concept=new_source_concept,
                                         new_target_code=new_target_concept,
@@ -544,21 +676,26 @@ class ConceptMapVersionCreator:
                                             new_target_code=new_target_concept,
                                             previous_mapping=previous_mapping,
                                         )
+                        # After iterating through the previous_mappings, if there's any data in the previous_mapping_context,
+                        # update the new_source_concept with the previous version context by converting the previous_mapping_context to a JSON string.
                         if previous_mapping_context:
-                            # If previous context needs to be written to the source, do it after the loop so we have it all
                             new_source_concept.update(
                                 previous_version_context=json.dumps(
                                     previous_mapping_context, cls=CustomJSONEncoder
                                 ),
                             )
 
-            # Commit the changes to the database
-            self.conn.commit()
+                # Commit the changes to the database
+                self.conn.commit()
         except BadRequestWithCode or NotFoundException:
-            LOGGER.info(f"create_new_from_previous missing data in concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}")
+            LOGGER.info(
+                f"create_new_from_previous missing data in concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
+            )
             self.conn.rollback()
         except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
-            LOGGER.info(f"create_new_from_previous unexpected error with concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}")
+            LOGGER.info(
+                f"create_new_from_previous unexpected error with concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
+            )
             self.conn.rollback()
 
         # Return the new concept map version UUID
@@ -586,11 +723,13 @@ class ConceptMapVersionCreator:
         # Iterate through the source uuids that are no maps
         for row in no_maps:
             source_uuid = row[0]
-            source_concept = app.SourceConcept.load(source_uuid)
+            source_concept = app.concept_maps.models.SourceConcept.load(source_uuid)
             # Create a new mapping between the source concept and the Ronin_No map terminology
-            mapping = app.Mapping(
+            mapping = app.concept_maps.models.Mapping(
                 source=source_concept,
-                relationship=app.MappingRelationship.load_by_uuid(no_map_relationship_uuid),
+                relationship=app.concept_maps.models.MappingRelationship.load_by_uuid(
+                    no_map_relationship_uuid
+                ),
                 target=Code(
                     code=no_map_target_concept_code,
                     display=no_map_target_concept_display,
@@ -601,12 +740,12 @@ class ConceptMapVersionCreator:
                     ),
                 ),
                 mapping_comments="mapped no map",
-                author=None,  # Add the author of the mapping, if required
-                review_status="reviewed",  # Add the review_status of the mapping, if required
-                created_date=None,  # Add the created_date of the mapping, if required
-                reviewed_date=None,  # Add the reviewed_date of the mapping, if required
-                review_comment=None,  # Add the review_comment of the mapping, if required
-                reviewed_by=None,  # Add the reviewed_by of the mapping, if required
+                author=None,
+                review_status="reviewed",
+                created_date=None,
+                reviewed_date=None,
+                review_comment=None,
+                reviewed_by=None,
             )
 
             mapping.save()
@@ -624,7 +763,7 @@ class ConceptMapVersionCreator:
         Processes a source concept with explicit no maps from the previous version.
 
         This method checks if a review is required for no-maps not in the target.
-        If a review is required, it sets the map_status of the new source concept to 'pending'
+        If a review is required, it sets the map_status of the new source concept to 'ready for review'
         and adds the previous context to the previous_contexts_list. If not, it takes no action.
 
         Args:
@@ -653,7 +792,7 @@ class ConceptMapVersionCreator:
                 previous_version_context=json.dumps(
                     previous_contexts_list, cls=CustomJSONEncoder
                 ),
-                map_status="no map",
+                map_status="ready for review",
             )
             return previous_context
         return None
@@ -672,7 +811,9 @@ class ConceptMapVersionCreator:
         #     )
 
     def process_inactive_target_mapping(
-        self, new_source_concept: "app.concept_maps.models.SourceConcept", previous_mapping: "app.concept_maps.models.Mapping"
+        self,
+        new_source_concept: "app.concept_maps.models.SourceConcept",
+        previous_mapping: "app.concept_maps.models.Mapping",
     ):
         """
         Processes a mapping with an inactive target.
