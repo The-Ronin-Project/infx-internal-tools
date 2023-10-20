@@ -1,32 +1,30 @@
+import asyncio
 import datetime
 import json
-import uuid
-import re
-from uuid import UUID
-from typing import Dict, Tuple, List, Optional
-from enum import Enum
-from dataclasses import dataclass
-
-from cachetools.func import ttl_cache
-import warnings
 import logging
-import asyncio
+import re
+import uuid
+from dataclasses import dataclass
+from enum import Enum
+from typing import Dict, List, Optional
 
-from decouple import config
-# import requests
 import httpx
+from cachetools.func import ttl_cache
+from decouple import config
+from httpx import ReadTimeout
 from sqlalchemy import text, Table, Column, MetaData, Text, bindparam
 from sqlalchemy.dialects.postgresql import UUID as UUID_column_type
+from werkzeug.exceptions import BadRequest
 
 import app
-from app.database import get_db
-from app.models.models import Organization
-from app.models.codes import Code
-from app.terminologies.models import Terminology
+import app.concept_maps.models
 import app.models.data_ingestion_registry
 import app.value_sets.models
-import app.concept_maps.models
+from app.models.codes import Code
+from app.models.models import Organization
+from app.terminologies.models import Terminology
 
+DATABASE_HOST = config("DATABASE_HOST", default="")
 DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL = config(
     "DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL", default=""
 )
@@ -188,12 +186,12 @@ class ErrorServiceResource:
         # If an error occurs on one resource, skip it
         except httpx.ConnectError:
             LOGGER.warning(
-                f"httpx.ConnectError, skipping load: Error Service Resource ID: {self.id} {self.resource_type.value} issue(s) for organization {self.organization.id}"
+                f"httpx.ConnectError, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
             return None
         except:
             LOGGER.warning(
-                f"Unknown Error, skipping load: Error Service Resource ID: {self.id} {self.resource_type.value} issue(s) for organization {self.organization.id}"
+                f"Unknown Error, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
             return None
 
@@ -344,21 +342,53 @@ def load_concepts_from_errors(
         3. Deduplicate the codes to avoid redundancy.
         4. Load the unique codes into their respective terminologies.
     """
-    # Step 0: Validate input
+    # Step 0: Initialize and setup
     if page_size is None:
         page_size = PAGE_SIZE
     if requested_resource_type is not None and (requested_resource_type not in [r.value for r in ResourceType]):
         LOGGER.warning(f"Support for the {requested_resource_type} resource type has not been implemented")
         return
+
+    # Logging variables
     organization_id = requested_organization_id
     input_fhir_resource = requested_resource_type
+    error_service_resource_id = None
+    error_service_issue_id = None
     time_start = datetime.datetime.now()
+    previous_time = datetime.datetime.now()
+    zero = datetime.timedelta(0)
+    all_loop_average = zero
+    all_loop_total = zero
+    all_loop_count = 0
+    all_skip_count = 0
+    step_1_total = zero
+    step_2_total = zero
+    step_1_average = zero
+    step_2_average = zero
+
+    # Start logging
+    LOGGER.warning(
+        f"Begin import from error service at local time {time_start}\n" +
+        f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n" +
+        f"  Load to:   {DATABASE_HOST}\n\n" +
+        f"Main loop:\n"
+    )
+
+    # Local caches
+    # todo: study why ttl_cache, or other caching strategies, did not stop repeat loads from happening
+    data_normalization_registry = dict()
+    source_value_set = dict()
+    terminology_for_value_set = dict()
+    terminology_version = dict()
+
+    # Resources we have already processed in this environment
+    environment = get_environment_from_service_url(DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL)
+    error_service_resource_ids = get_all_unresolved_validation(environment)
 
     try:
         # Step 1: Fetch resources that have encountered errors.
         token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
         with httpx.Client(timeout=60.0) as client:
-            LOGGER.warning("Begin import from error service")
 
             # Collecting all resources with errors through paginated API calls.
             rest_api_params = dict(
@@ -366,6 +396,7 @@ def load_concepts_from_errors(
                     "order": "ASC",
                     "limit": page_size,
                     "issue_type": "NOV_CONMAP_LOOKUP",
+                    "status": "REPORTED",  # exclude these status values: IGNORED - ADDRESSING - REPROCESSED - CORRECTED
                 }
             )
             if input_fhir_resource is not None:
@@ -394,7 +425,13 @@ def load_concepts_from_errors(
                 else:
                     last_uuid = response[-1].get("id")
                     rest_api_params["after"] = last_uuid
-                LOGGER.warning(f"{len(resources_with_errors)} errors in page")
+
+                current_time = datetime.datetime.now()
+                since_last_time = current_time - previous_time
+                previous_time = current_time
+                loop_total = since_last_time
+                step_1 = since_last_time
+                step_1_total += since_last_time
 
                 # Convert API response data to ErrorServiceResource objects.
                 error_resources = []
@@ -413,10 +450,19 @@ def load_concepts_from_errors(
                         LOGGER.warning(
                             f"Support for the {fhir_resource_type} resource type has not been implemented"
                         )
+                        all_skip_count += 1
+                        continue
+
+                    # See if we processed this error_service_resource_id in the past; if so, it is being addressed. If
+                    # the way we addressed the case for error_service_resource_id did not successfully fix it, the case
+                    # will reoccur in Interops, and will arrive at this function with a new error_service_resource_id
+                    error_service_resource_id = resource_data.get("id")
+                    if error_service_resource_id in error_service_resource_ids:
+                        all_skip_count += 1
                         continue
 
                     error_resource = ErrorServiceResource(
-                        id=uuid.UUID(resource_data.get("id")),
+                        id=uuid.UUID(error_service_resource_id),
                         organization=organization,
                         resource_type=fhir_resource_type,
                         resource=resource_data.get("resource"),
@@ -445,6 +491,12 @@ def load_concepts_from_errors(
                 # Step 2: Extract relevant codes from the resource.
                 # For specific resource types, we may need to read the issue to
                 # determine where in the resource the failure occurred.
+                current_time = datetime.datetime.now()
+                since_last_time = current_time - previous_time
+                previous_time = current_time
+                loop_total += since_last_time
+                step_2 = since_last_time
+                step_2_total += since_last_time
 
                 # Initialize a dictionary to hold codes that need deduplication, grouped by terminology.
                 # Key: terminology_version_uuid, Value: list containing the codes to load to that terminology
@@ -467,6 +519,8 @@ def load_concepts_from_errors(
 
                     # In each error service resource, walk through each NOV_CONMAP_LOOKUP issue.
                     for issue in nov_conmap_issues:
+                        # save for logging
+                        error_service_issue_id = str(issue.id)
 
                         # data_element is the location without any brackets or indices
                         # ex. if location is 'Patient.telecom[1].system' then data_element is 'Patient.telecom.system'
@@ -572,9 +626,11 @@ def load_concepts_from_errors(
 
                         # Case not yet implemented
                         else:
-                            raise NotImplementedError(
-                                f"Support not implemented for {resource_type} at location {element}"
+                            LOGGER.warning(
+                                f"Support for the {fhir_resource_type} resource type at location {element} has not been implemented"
                             )
+                            all_skip_count += 1
+                            continue
 
                         # Lookup the concept map version used to normalize this type of resource
                         # So that we can then identify the correct terminology to load the new coding to
@@ -584,13 +640,22 @@ def load_concepts_from_errors(
                             data_element = f"{element}CodeableConcept"
                         else:
                             data_element = element
-                        concept_map_version_for_normalization = (
-                            lookup_concept_map_version_for_data_element(
-                                data_element=data_element,
-                                organization=error_service_resource.organization,
-                            )
-                        )
 
+                        # Get the concept_map_version_for_normalization
+                        registry_key = f"{organization.id} {data_element}"
+                        if registry_key not in data_normalization_registry.keys():
+                            concept_map_version_for_normalization = (
+                                lookup_concept_map_version_for_data_element(
+                                    data_element=data_element,
+                                    organization=error_service_resource.organization,
+                                )
+                            )
+                            data_normalization_registry.update({
+                                registry_key: concept_map_version_for_normalization
+                            })
+
+                        # Is the concept_map_version_for_normalization valid?
+                        concept_map_version_for_normalization = data_normalization_registry[registry_key]
                         if concept_map_version_for_normalization is None:
                             # We already messaged that the concept map for this resource and issue is missing
                             continue
@@ -599,28 +664,56 @@ def load_concepts_from_errors(
                         source_value_set_uuid = (
                             concept_map_version_for_normalization.concept_map.source_value_set_uuid
                         )
-                        most_recent_active_source_value_set_version = (
-                            app.value_sets.models.ValueSet.load_most_recent_active_version_with_cache(
-                                source_value_set_uuid
-                            )
-                        )
-                        most_recent_active_source_value_set_version.expand(no_repeat=True)
+                        if source_value_set_uuid not in source_value_set.keys():
+                            try:
+                                most_recent_active_source_value_set_version = (
+                                    app.value_sets.models.ValueSet.load_most_recent_active_version_with_cache(
+                                        source_value_set_uuid
+                                    )
+                                )
+                                most_recent_active_source_value_set_version.expand(no_repeat=True)
+                                source_value_set.update({
+                                    source_value_set_uuid: most_recent_active_source_value_set_version
+                                })
+                            except BadRequest:
+                                source_value_set.update({
+                                    source_value_set_uuid: None
+                                })
+                                LOGGER.warning(
+                                    f"No active published version of ValueSet with UUID: {source_value_set_uuid}"
+                                )
+                                all_skip_count += 1
+                                continue
+
+                        # Is the most_recent_active_source_value_set_version valid?
+                        most_recent_active_source_value_set_version = source_value_set[source_value_set_uuid]
+                        if most_recent_active_source_value_set_version is None:
+                            # We messaged the first time we encountered the issue, do not repeat message
+                            continue
 
                         # Identify the terminology inside the source value set
-                        terminologies_in_source_value_set = (
-                            most_recent_active_source_value_set_version.lookup_terminologies_in_value_set_version()
-                        )
-
-                        if len(terminologies_in_source_value_set) > 1:
-                            raise Exception(
-                                "There should only be a single source terminology for a concept map used in data normalization"
-                            )
-                        if len(terminologies_in_source_value_set) == 0:
-                            raise Exception(
-                                f"No terminologies in source value set {most_recent_active_source_value_set_version.uuid}"
+                        if source_value_set_uuid not in terminology_version.keys():
+                            terminologies_in_source_value_set = (
+                                most_recent_active_source_value_set_version.lookup_terminologies_in_value_set_version()
                             )
 
-                        current_terminology_version = terminologies_in_source_value_set[0]
+                            if len(terminologies_in_source_value_set) > 1:
+                                raise Exception(
+                                    "There should only be a single source terminology for a concept map used in data normalization"
+                                )
+                            if len(terminologies_in_source_value_set) == 0:
+                                raise Exception(
+                                    f"No terminologies in source value set {most_recent_active_source_value_set_version.uuid}"
+                                )
+
+                            current_terminology_version = terminologies_in_source_value_set[0]
+                            terminology_for_value_set.update({
+                                source_value_set_uuid: current_terminology_version
+                            })
+                            terminology_version.update({
+                                str(current_terminology_version.uuid): current_terminology_version
+                            })
+                        current_terminology_version = terminology_for_value_set[source_value_set_uuid]
 
                         #  The custom terminology may have already passed its effective end date, so we might need to create a new version
                         terminology_to_load_to = (
@@ -646,9 +739,10 @@ def load_concepts_from_errors(
                                 {
                                     "issue_uuid": issue_id,
                                     "resource_uuid": error_service_resource.id,
+                                    "environment": environment,
                                     "status": "pending",
-                                    "code": json.dumps(new_code.code) if type(new_code.code) == dict else new_code.code,
-                                    "display": new_code.display,
+                                    "code": json.dumps(processed_code) if type(processed_code) == dict else processed_code,
+                                    "display": processed_display,
                                     "terminology_version_uuid": terminology_to_load_to.uuid,
                                     # Note: no currently supported resource requires the dependsOn data
                                     # but its part of the unique constraint to look up a row, so we include it
@@ -741,83 +835,129 @@ def load_concepts_from_errors(
 
                 # Step 4: Load the deduplicated codes into their respective terminologies.
                 for terminology_version_uuid, code_list in deduped_codes_by_terminology.items():
-                    terminology = Terminology.load(terminology_version_uuid)
+                    if terminology_version_uuid not in terminology_version.keys():
+                        terminology = Terminology.load_from_cache(terminology_version_uuid)
+                        terminology_version.update({
+                            terminology_version_uuid: terminology
+                        })
+                    terminology = terminology_version[terminology_version_uuid]
 
-                    LOGGER.warning(
-                        f"Loading {len(code_list)} new codes to terminology {terminology.terminology} version {terminology.version}"
-                    )
-                    terminology.load_new_codes_to_terminology(
-                        code_list, on_conflict_do_nothing=True
-                    )
+                    if len(code_list) > 0:
+                        LOGGER.warning(
+                            f"Loading {len(code_list)} new codes to terminology " +
+                            f"{terminology.terminology} version {terminology.version}"
+                        )
+                        terminology.load_new_codes_to_terminology(
+                            code_list, on_conflict_do_nothing=True
+                        )
 
                 # Step 5: Save the IDs of the original errors and link back to the codes
                 conn = get_db()
-                if error_code_link_data:
-                    # Create a temporary table and insert the data to it
-                    conn.execute(
-                        text(
-                            """
-                            CREATE TEMP TABLE temp_error_data (
-                                code text,
-                                display text,
-                                terminology_version_uuid UUID,
-                                depends_on_system text,
-                                depends_on_property text,
-                                depends_on_display text,
-                                depends_on_value text,
-                                issue_uuid UUID,
-                                resource_uuid UUID,
-                                status text
+                try:
+                    if error_code_link_data:
+                        # Create a temporary table and insert the data to it
+                        conn.execute(
+                            text(
+                                """
+                                CREATE TEMP TABLE temp_error_data (
+                                    code text,
+                                    display text,
+                                    terminology_version_uuid UUID,
+                                    depends_on_system text,
+                                    depends_on_property text,
+                                    depends_on_display text,
+                                    depends_on_value text,
+                                    issue_uuid UUID,
+                                    resource_uuid UUID,
+                                    environment text,
+                                    status text
+                                )
+                                """
                             )
+                        )
+
+                        # Optimized bulk insert
+                        conn.execute(temp_error_data.insert(), error_code_link_data)
+
+                        # Insert from the temporary table, allowing the database to batch lookups
+                        conn.execute(
+                            text(
+                                """
+                                INSERT INTO custom_terminologies.error_service_issue
+                                    (custom_terminology_code_uuid, issue_uuid, environment, status, resource_uuid)
+                                SELECT c.uuid, t.issue_uuid, t.environment, t.status, t.resource_uuid
+                                FROM temp_error_data t
+                                JOIN custom_terminologies.code c 
+                                ON c.code = t.code 
+                                    AND c.display = t.display 
+                                    AND c.terminology_version_uuid = t.terminology_version_uuid
+                                    AND c.depends_on_system = t.depends_on_system
+                                    AND c.depends_on_property = t.depends_on_property
+                                    AND c.depends_on_display = t.depends_on_display
+                                    AND c.depends_on_value = t.depends_on_value
+                            ON CONFLICT do nothing
                             """
                         )
                     )
 
-                    # Optimized bulk insert
-                    conn.execute(temp_error_data.insert(), error_code_link_data)
-
-                    # Insert from the temporary table, allowing the database to batch lookups
+                    # Delete the temporary table
                     conn.execute(
                         text(
                             """
-                            INSERT INTO custom_terminologies.error_service_issue
-                                (custom_terminology_code_uuid, issue_uuid, status, resource_uuid)
-                            SELECT c.uuid, t.issue_uuid, t.status, t.resource_uuid
-                            FROM temp_error_data t
-                            JOIN custom_terminologies.code c 
-                            ON c.code = t.code 
-                                AND c.display = t.display 
-                                AND c.terminology_version_uuid = t.terminology_version_uuid
-                                AND c.depends_on_system = t.depends_on_system
-                                AND c.depends_on_property = t.depends_on_property
-                                AND c.depends_on_display = t.depends_on_display
-                                AND c.depends_on_value = t.depends_on_value
-                        ON CONFLICT do nothing
-                        """
+                            DROP TABLE IF EXISTS temp_error_data
+                            """
+                        )
                     )
+
+                    if commit_changes:
+                        conn.commit()
+                except:
+                    conn.rollback()
+
+                current_time = datetime.datetime.now()
+                since_last_time = current_time - previous_time
+                previous_time = current_time
+                loop_total += since_last_time
+                all_loop_total += loop_total
+                all_loop_count += 1
+                LOGGER.warning(
+                    f"  {len(resources_with_errors)} errors received and loaded in {step_1}\n" +
+                    f"  {len(new_codes_to_deduplicate_by_terminology)} new codes found and deduplicated in {step_2}\n" +
+                    f"  at local time {current_time}, loop duration {loop_total}"
                 )
 
-                # Delete the temporary table
-                conn.execute(
-                    text(
-                        """
-                        DROP TABLE IF EXISTS temp_error_data
-                        """
-                    )
-                )
-
-                if commit_changes:
-                    conn.commit()
-
-    except Exception as e:
-        LOGGER.error(
-            f"Task halted by exception at resource type: {input_fhir_resource} for organization: {organization_id}"
+    except ReadTimeout as rt:
+        LOGGER.warning(
+            f"""\nTask halted by ReadTimeout: {rt.message if hasattr(rt, "message") else ""}\n""" +
+            f"  on: {rt.request.method} {rt.request.url}\n"+
+            f"  at: {datetime.datetime.now()}\n\n\n"
         )
-        raise e
-
-    time_end = datetime.datetime.now()
-    time_elapsed = time_end - time_start
-    LOGGER.warning(f"Loading data from error service to custom terminologies complete, time: {time_elapsed}")
+    except Exception as e:
+        LOGGER.warning(
+            f"\nTask halted by exception at Data Normalization Error Service " +
+            f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} " +
+            f"while processing {input_fhir_resource} for organization: {organization_id}\n" +
+            f"Exception may reflect a general, temporary problem, such as another service being unavailable.\n\n" +
+            f"Details:\n\n" +
+            f"""{e.__class__.__name__}: {e.message if hasattr(e, "message") else ""}\n\n{e}\n\n"""
+        )
+    finally:
+        time_end = datetime.datetime.now()
+        time_elapsed = time_end - time_start
+        if all_loop_count > 0:
+            all_loop_average = all_loop_total / all_loop_count
+            step_1_average = step_1_total / all_loop_count
+            step_2_average = step_2_total / all_loop_count
+        LOGGER.warning(
+            f"\nDONE at local time {time_end}, duration {time_elapsed}\n" +
+            f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n" +
+            f"  Load to:   {DATABASE_HOST}\n\n" +
+            f"Main loop skipped {all_skip_count} times (repeated report or FHIR resource not supported).\n" +
+            f"Main loop ran {all_loop_count} times:\n" +
+            f"  Average loop duration: {all_loop_average}\n" +
+            f"  Average time to receive and load errors from service: {step_1_average}\n" +
+            f"  Average time to extract, deduplicate, and load codes into terminologies: {step_2_average}\n\n\n"
+        )
 
 
 @ttl_cache()
@@ -876,6 +1016,21 @@ def lookup_concept_map_version_for_data_element(
         return None
 
     return concept_map_version
+
+
+def get_environment_from_service_url(url: str):
+    """
+    Extract the environment value from a service's URL string, such as: https://interop-validation.stage.projectronin.io
+    @return "dev" or "stage" or "prod" or "" if nothing found
+    """
+    if ".dev." in url:
+        return "dev"
+    elif ".stage." in url:
+        return "stage"
+    elif ".prod." in url:
+        return "prod"
+    else:
+        return ""
 
 
 def get_outstanding_errors(
@@ -1008,6 +1163,33 @@ def get_outstanding_errors(
     return list_result
 
 
+def get_all_unresolved_validation(environment: str):
+    """
+    Identify all open Data Validation Service resources with unresolved issues
+    @param environment - "dev", "stage", or "prod"
+    @return resource_uuid_list - lists of str identifying uuids for validation resources with unresolved issues
+    """
+    conn = get_db()
+    issues_resources = conn.execute(
+        text(
+            """
+            SELECT DISTINCT e.resource_uuid FROM 
+            custom_terminologies.error_service_issue as e
+            WHERE e.status <> 'resolved' and e.environment = :environment
+            """
+        ),
+        {
+            "environment": environment,
+        }
+    )
+    resource_uuid_list = []
+    for row in issues_resources:
+        resource_uuid = row.resource_uuid
+        if resource_uuid is not None:
+            resource_uuid_list.append(str(resource_uuid))
+    return resource_uuid_list
+
+
 def set_issues_resolved(issue_uuid_list):
     """
     Assign an Informatics custom_terminologies.error_service_issue the final status of 'resolved'.
@@ -1056,7 +1238,9 @@ async def reprocess_resource(resource_uuid, token, client):
         )
     except httpx.ConnectError:
         # If an error occurs on one resource, skip it
-        LOGGER.warning("httpx.ConnectError; skipping resource for reprocess")
+        LOGGER.warning(
+            f"httpx.ConnectError, skipping load: Error Service Resource ID: {resource_uuid}"
+        )
         return None
 
 
@@ -1077,9 +1261,12 @@ if __name__ == "__main__":
     conn = get_db()
 
     # todo: clean out altogether, when temporary error load task is not needed
-    # comment out the next 2 commands for merges and normal use; uncomment when running the temporary error load task
-    # load_concepts_from_errors(commit_changes=True)
-    # conn.commit()
+    # comment out the next 5 lines for merges and normal use; uncomment when running the temporary error load task
+    # try:
+    #     load_concepts_from_errors(commit_changes=True)
+    #     conn.commit()
+    # except Exception:
+    #     conn.rollback()
 
     # uncomment the next 2 commands for merges and normal use; comment out when running the temporary error load task
     load_concepts_from_errors(commit_changes=False)

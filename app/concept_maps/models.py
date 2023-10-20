@@ -801,7 +801,7 @@ class ConceptMapVersion:
             # if there is a Terminology UUID to load, load the Terminology and add it to the list; otherwise skip
             if terminology_version_uuid is not None:
                 self.allowed_target_terminologies.append(
-                    Terminology.load(terminology_version_uuid)
+                    Terminology.load_from_cache(terminology_version_uuid)
                 )
 
     # def generate_self_mappings(self):
@@ -859,6 +859,7 @@ class ConceptMapVersion:
         )
 
         # Terminology Local cache
+        # todo: study why ttl_cache, or other caching strategies, did not stop repeat loads from happening
         terminology = dict()
 
         for item in results:

@@ -228,6 +228,7 @@ class ConceptMapVersionCreator:
         # ]
 
         # Terminology Local cache
+        # todo: study why ttl_cache, or other caching strategies, did not stop repeat loads from happening
         terminology = dict()
 
         for row in all_data:
