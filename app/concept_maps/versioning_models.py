@@ -121,24 +121,22 @@ class ConceptMapVersionCreator:
             },
         )
 
-        sources_and_mappings = self.load_all_sources_and_mappings(self.new_version_uuid)
-
-        # Extract the 'everything_else' and 'mapped_no_map' dictionaries from the returned value
-        everything_else_sources_and_mappings = sources_and_mappings["everything_else"]
-        mapped_no_map_sources_and_mappings = sources_and_mappings["mapped_no_map"]
+        mapped_no_map_lookup, all_mappings_lookup = self.load_all_sources_and_mappings(
+            self.new_version_uuid
+        )
 
         # Extract new source concepts from both dictionaries
         new_sources = []
         for (
             lookup_key,
             source_and_mapping,
-        ) in everything_else_sources_and_mappings.items():
+        ) in all_mappings_lookup.items():
             new_sources.append(source_and_mapping.get("source_concept"))
 
         for (
             lookup_key,
             source_and_mapping,
-        ) in mapped_no_map_sources_and_mappings.items():
+        ) in mapped_no_map_lookup.items():
             new_sources.append(source_and_mapping.get("source_concept"))
 
         return new_sources
@@ -165,10 +163,8 @@ class ConceptMapVersionCreator:
             "target_concept_system_version_uuid": "93ec9286-17cf-4837-a4dc-218ce3015de6",
         }
 
-        response = {
-            "mapped_no_map": {},
-            "everything_else": {},
-        }
+        mapped_no_map = {}
+        all_mappings = {}
 
         all_data = self.conn.execute(
             text(
@@ -343,23 +339,32 @@ class ConceptMapVersionCreator:
             )
 
             if is_mapped_no_map:
-                group_key = "mapped_no_map"
+                if lookup_key not in mapped_no_map:
+                    mapped_no_map[lookup_key] = {
+                        "source_concept": source_concept,
+                        "mappings": [],
+                    }
+
+                    if mapping is not None:
+                        mapped_no_map[lookup_key]["mappings"].append(mapping)
+
+                else:
+                    mapped_no_map[lookup_key]["mappings"].append(mapping)
+
             else:
-                group_key = "everything_else"
+                if lookup_key not in all_mappings:
+                    all_mappings[lookup_key] = {
+                        "source_concept": source_concept,
+                        "mappings": [],
+                    }
 
-            if lookup_key not in response[group_key]:
-                response[group_key][lookup_key] = {
-                    "source_concept": source_concept,
-                    "mappings": [],
-                }
+                    if mapping is not None:
+                        all_mappings[lookup_key]["mappings"].append(mapping)
 
-                if mapping is not None:
-                    response[group_key][lookup_key]["mappings"].append(mapping)
+                else:
+                    all_mappings[lookup_key]["mappings"].append(mapping)
 
-            else:
-                response[group_key][lookup_key]["mappings"].append(mapping)
-
-        return response
+        return mapped_no_map, all_mappings
 
     def load_all_targets(self):
         """
@@ -503,21 +508,22 @@ class ConceptMapVersionCreator:
                 new_version_description=new_version_description
             )
 
-            # Populate concept_maps.source_concept table with the latest expansion of the new target value set version
+            # Populate concept_maps.source_concept table with the latest expansion of the new source value set version
             # Note: populate_source_concepts() calls load_all_sources_and_mappings() with the self.new_version_uuid.
             # This first time call to load_all_sources_and_mappings will have none in all the concept relationship columns.
             new_source_concepts = self.populate_source_concepts()
 
             # Iterate through the new sources, compare w/ previous, make decisions:
             # This second call to load_all_sources_and_mappings should HAVE values in the concept relationship columns.
-            previous_sources_and_mappings = self.load_all_sources_and_mappings(
+            (
+                mapped_no_map_lookup,
+                all_mappings_lookup,
+            ) = self.load_all_sources_and_mappings(
                 self.previous_concept_map_version.uuid
             )
-            mapped_no_map_lookup = previous_sources_and_mappings["mapped_no_map"]
-            everything_else_lookup = previous_sources_and_mappings["everything_else"]
             all_previous_sources_and_mappings = {
                 **mapped_no_map_lookup,
-                **everything_else_lookup,
+                **all_mappings_lookup,
             }
 
             # Load and index the new targets
@@ -542,7 +548,7 @@ class ConceptMapVersionCreator:
 
                 if source_lookup_key not in all_previous_sources_and_mappings:
                     # If the source_lookup_key is not found in previous_sources_and_mappings
-                    # (i.e., the source concept is new and not present in the previous version),
+                    # (i.e. the source concept is new and not present in the previous version),
                     # add the new_source_concept to the novel_sources list.
                     self.novel_sources.append(new_source_concept)
 
@@ -599,33 +605,19 @@ class ConceptMapVersionCreator:
                                 "http://projectronin.io/fhir/CodeSystem/ronin/nomap"
                             )
                             no_map_version = "1.0"
-                            try:
-                                no_map_code = app.concept_maps.models.Code(
-                                    code=no_map_target_concept_code,
-                                    display=no_map_target_concept_display,
-                                    system=no_map_system,
-                                    version=no_map_version,
-                                )
-                            except Exception as e:
-                                logging.error(
-                                    f"Error occurred while creating no_map_code: {e}"
-                                )
-                                raise
 
-                            logging.info(
-                                f"Calling copy_mapping_exact with previous_mapping: {previous_mapping}"
+                            no_map_code = app.concept_maps.models.Code(
+                                code=no_map_target_concept_code,
+                                display=no_map_target_concept_display,
+                                system=no_map_system,
+                                version=no_map_version,
                             )
-                            try:
-                                self.copy_mapping_exact(
-                                    new_source_concept=new_source_concept,
-                                    new_target_code=no_map_code,
-                                    previous_mapping=previous_mapping,
-                                )
-                            except Exception as e:
-                                logging.error(
-                                    f"Error occurred while calling copy_mapping_exact: {e}"
-                                )
-                                raise
+
+                            self.copy_mapping_exact(
+                                new_source_concept=new_source_concept,
+                                new_target_code=no_map_code,
+                                previous_mapping=previous_mapping,
+                            )
 
                     else:
                         # If none of the above conditions match, it means the source concept has regular mappings in the previous version:
