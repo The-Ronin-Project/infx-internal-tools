@@ -612,11 +612,20 @@ class ConceptMapVersionCreator:
                                 )
                                 raise
 
-                            self.copy_mapping_exact(
-                                new_source_concept=new_source_concept,
-                                new_target_code=no_map_code.code,
-                                previous_mapping=previous_mapping,
+                            logging.info(
+                                f"Calling copy_mapping_exact with previous_mapping: {previous_mapping}"
                             )
+                            try:
+                                self.copy_mapping_exact(
+                                    new_source_concept=new_source_concept,
+                                    new_target_code=no_map_code,
+                                    previous_mapping=previous_mapping,
+                                )
+                            except Exception as e:
+                                logging.error(
+                                    f"Error occurred while calling copy_mapping_exact: {e}"
+                                )
+                                raise
 
                     else:
                         # If none of the above conditions match, it means the source concept has regular mappings in the previous version:
