@@ -38,16 +38,6 @@ PAGE_SIZE = 1000
 
 LOGGER = logging.getLogger()
 
-# INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
-# processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded.
-LOGGER.setLevel("WARNING")
-
-# Create a console handler and add it to the logger if it doesn't have any handlers
-if not LOGGER.hasHandlers():
-    ch = logging.StreamHandler()
-    LOGGER.addHandler(ch)
-
-
 def get_token(url: str, client_id: str, client_secret: str, audience: str) -> str:
     """
     Fetches a token from Auth0.
@@ -1072,6 +1062,17 @@ async def reprocess_resource(resource_uuid, token, client):
 
 if __name__ == "__main__":
     from app.database import get_db
+
+    # Moved logging setup to here so it does not run in main program and cause duplicate logs
+
+    # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
+    # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded.
+    LOGGER.setLevel("WARNING")
+
+    # Create a console handler and add it to the logger if it doesn't have any handlers
+    if not LOGGER.hasHandlers():
+        ch = logging.StreamHandler()
+        LOGGER.addHandler(ch)
 
     conn = get_db()
 
