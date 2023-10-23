@@ -1,4 +1,4 @@
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, InternalServerError
 
 
 class BadRequestWithCode(BadRequest):
@@ -13,10 +13,11 @@ class NotFoundException(Exception):
         self.message = message
 
 
-class BadDataError(BadRequest):
-    def __init__(self, code, description, http_status_code=409):
+class BadDataError(InternalServerError):
+    def __init__(self, code, description, errors, http_status_code=409):
         self.code = code
         self.description = description
+        self.errors = errors
         self.http_status_code = http_status_code
 
 
