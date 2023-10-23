@@ -1274,9 +1274,13 @@ class ConceptMapVersion:
                     errors.append(f"'target' key is missing in the element at index {index}")
 
         if len(errors) > 0:
+            errors_str = '\n'.join([f"  - {error}" for error in errors])
+            formatted_errors = f"Errors:\n{errors_str}"
+
             raise BadDataError(
                 code="ConceptMapVersion.checkFormatting",
-                description="Errors found in Concept Map:\n" + "\n".join(errors)
+                description="Formatting Errors found in ConceptMap, INFX Systems Team has been notified via DataDog",
+                errors=formatted_errors
             )
 
     def serialize(self, include_internal_info=False, schema_version: int = ConceptMap.next_schema_version):
