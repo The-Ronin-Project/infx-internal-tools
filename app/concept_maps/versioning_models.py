@@ -281,10 +281,11 @@ class ConceptMapVersionCreator:
                 reason_for_no_map=row.source_concept_reason_for_no_map,
                 mapping_group=row.source_concept_mapping_group,
                 concept_map_version_uuid=row.source_concept_map_version_uuid,
-                depends_on_system=row.depends_on_system,
-                depends_on_property=row.depends_on_property,
-                depends_on_value=row.depends_on_value,
-                depends_on_display=row.depends_on_display,
+                # Matching behavior relies on depends on data defaulting to '' instead of null
+                depends_on_system=row.depends_on_system if row.depends_on_system is not None else '',
+                depends_on_property=row.depends_on_property if row.depends_on_property is not None else '',
+                depends_on_value=row.depends_on_value if row.depends_on_value is not None else '',
+                depends_on_display=row.depends_on_display if row.depends_on_value is not None else '',
             )
 
             mapping = None
@@ -686,8 +687,8 @@ class ConceptMapVersionCreator:
                                 ),
                             )
 
-                # Commit the changes to the database
-                self.conn.commit()
+            # Commit the changes to the database
+            self.conn.commit()
         except BadRequestWithCode or NotFoundException:
             LOGGER.info(
                 f"create_new_from_previous missing data in concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
