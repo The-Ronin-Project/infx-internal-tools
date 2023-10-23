@@ -23,6 +23,7 @@ import app.value_sets.models
 from app.models.codes import Code
 from app.models.models import Organization
 from app.terminologies.models import Terminology
+from app.database import get_db
 
 DATABASE_HOST = config("DATABASE_HOST", default="")
 DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL = config(
