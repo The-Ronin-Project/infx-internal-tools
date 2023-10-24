@@ -340,9 +340,11 @@ def create_app(script_info=None):
         convert_last_update = DataNormalizationRegistry.convert_gmt_time(last_update)
         return convert_last_update
 
-    @deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
     @app.route("/data_normalization/actions/load_outstanding_errors_to_custom_terminologies", methods=["POST"])
     def trigger_load_outstanding_errors_to_custom_terminologies():
+        """
+        Trigger the error validation load process via an API call.
+        """
         tasks.load_outstanding_errors_to_custom_terminologies.apply_async()
         return "Started"
 
@@ -360,12 +362,14 @@ def create_app(script_info=None):
         tasks.load_outstanding_codes_to_new_concept_map_version(concept_map_uuid)
         return "OK"
 
-    @deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
     @app.route(
         "/data_normalization/actions/resolve_issues_for_concept_map_version",
         methods=["POST"],
     )
     def resolve_issues_for_concept_map_version():
+        """
+        We resolve automatically when a new concept map version is published, but we also we need an API for manual runs
+        """
         concept_map_version_uuid = request.json.get("concept_map_version_uuid")
         concept_map_version = concept_map_models.ConceptMapVersion(concept_map_version_uuid)
         concept_map_version.resolve_error_service_issues()
