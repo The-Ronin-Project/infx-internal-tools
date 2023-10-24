@@ -11,28 +11,6 @@ import app.tasks
 from app.database import get_db
 
 
-# def generate_sample_concepts():
-#     """
-#     Each time the test is run, sample data needs to be created.
-#     We will use 'Test Concept [timestamp]' as the display, so it's unique every time.
-#     Generate two sample concepts, put them in a list
-#     :return:
-#     """
-#     concept1 = Concept(
-#         display=f"Test Concept {datetime.datetime.now()}",
-#         code="test_concept_1",
-#         system="http://projectronin.io/fhir/CodeSystem/mock/condition",
-#         version="1.0",
-#     )
-#     concept2 = Concept(
-#         display=f"Test Concept {datetime.datetime.now() + datetime.timedelta(seconds=1)}",
-#         code="test_concept_2",
-#         system="http://projectronin.io/fhir/CodeSystem/mock/condition",
-#         version="1.0",
-#     )
-#     return [concept1, concept2]
-
-
 def generate_mock_error_resources():
     # Load the error template
     with open("sample_normalization_error.json") as sample_normalization_error_file:

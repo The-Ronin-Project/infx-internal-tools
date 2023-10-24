@@ -57,19 +57,6 @@ def get_token(url: str, client_id: str, client_secret: str, audience: str) -> st
     return token
 
 
-# def get_client(token) -> requests.Session:
-#     """
-#     Configure the client for the error normalization service.
-#     """
-#     headers: dict[str, str] = {
-#         "Authorization": f"Bearer {token}",
-#         "content-type": "application/json",
-#     }
-#     session = requests.Session()
-#     session.headers.update(headers)
-#     return session
-
-
 def convert_string_to_datetime_or_none(input_string):
     if input_string is None:
         return None

@@ -1,3 +1,4 @@
+from deprecated.classic import deprecated
 from flask import Blueprint, request, jsonify
 import dataclasses
 
@@ -13,6 +14,8 @@ def create_terminology():
     Create a new terminology with the provided parameters, such as terminology name, version, effective start and end dates,
     FHIR URI, standard status, and FHIR terminology.
     """
+
+    # Did not find a use of this GET API endpoint from Retool. Not aware of a need to offer a GET API.
     if request.method == "GET":
         fhir_uri = request.values.get("fhir_uri")
         version = request.values.get("version")
@@ -33,6 +36,7 @@ def create_terminology():
 
         return jsonify(terminology.serialize())
 
+    # POST is called from Retool.
     if request.method == "POST":
         terminology = request.json.get("terminology")
         version = request.json.get("version")
@@ -110,6 +114,7 @@ def create_code():
         return "Complete"
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @terminologies_blueprint.route(
     "/terminology/<terminology_version_uuid>", methods=["GET"]
 )
@@ -143,37 +148,6 @@ def get_terminology(terminology_version_uuid):
             },
         }
     )
-
-
-# @app.route("/terminology/new_version/", methods=["POST"])
-# def create_new_term_version():
-#     """
-#     Create a new terminology version with the provided parameters, such as terminology name, version, FHIR URI,
-#     effective start and end dates, previous version UUID, standard status, and FHIR terminology.
-#     """
-#     if request.method == "POST":
-#         terminology = request.json.get("terminology")
-#         version = request.json.get("version")
-#         fhir_uri = request.json.get("fhir_uri")
-#         effective_start = request.json.get("effective_start")
-#         effective_end = request.json.get("effective_end")
-#         if effective_end == "":
-#             effective_end = None
-#         previous_version_uuid = request.json.get("previous_version_uuid")
-#         is_standard = request.json.get("is_standard")
-#         fhir_terminology = request.json.get("fhir_terminology")
-#         new_terminology_version = Terminology.create_new_terminology(
-#             previous_version_uuid,
-#             terminology,
-#             version,
-#             fhir_uri,
-#             is_standard,
-#             fhir_terminology,
-#             effective_start,
-#             effective_end,
-#         )
-#         new_term_version = Terminology.serialize(new_terminology_version)
-#         return new_term_version
 
 
 @terminologies_blueprint.route(

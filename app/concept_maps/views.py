@@ -4,6 +4,7 @@ import string
 
 from uuid import uuid4
 
+from deprecated.classic import deprecated
 from flask import Blueprint, jsonify, request, make_response
 
 from werkzeug.exceptions import BadRequest
@@ -18,6 +19,7 @@ from app.errors import NotFoundException
 concept_maps_blueprint = Blueprint("concept_maps", __name__)
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route(
     "/SourceConcepts/<string:source_concept_uuid>", methods=["PATCH"]
 )
@@ -33,34 +35,7 @@ def update_source_concept(source_concept_uuid):
     return jsonify(source_concept.serialize())
 
 
-# # Concept Map Endpoints
-# @app.route("/ConceptMaps/actions/new_version_from_previous", methods=["POST"])
-# def new_cm_version_from_previous():
-#     """
-#     Create a new ConceptMap version based on a previous version.
-#     Takes input from the request payload.
-#     Returns a status message.
-#     """
-#     previous_version_uuid = request.json.get("previous_version_uuid")
-#     new_version_description = request.json.get("new_version_description")
-#     new_version_num = request.json.get("new_version_num")
-#     new_source_value_set_version_uuid = request.json.get(
-#         "new_source_value_set_version_uuid"
-#     )
-#     new_target_value_set_version_uuid = request.json.get(
-#         "new_target_value_set_version_uuid"
-#     )
-#
-#     new_version = ConceptMap.new_version_from_previous(
-#         previous_version_uuid=previous_version_uuid,
-#         new_version_description=new_version_description,
-#         new_version_num=new_version_num,
-#         new_source_value_set_version_uuid=new_source_value_set_version_uuid,
-#         new_target_value_set_version_uuid=new_target_value_set_version_uuid,
-#     )
-#     return "OK"
-
-
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route("/ConceptMaps/<string:version_uuid>", methods=["GET"])
 def get_concept_map_version(version_uuid):
     """
@@ -79,6 +54,7 @@ def get_concept_map_version(version_uuid):
     return jsonify(concept_map_to_json)
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route(
     "/ConceptMaps/<string:version_uuid>/actions/index", methods=["POST"]
 )
@@ -94,6 +70,7 @@ def index_targets(version_uuid):
     return "OK"
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route("/ConceptMaps/", methods=["GET", "POST"])
 def create_initial_concept_map_and_version_one():
     """
@@ -192,6 +169,7 @@ def get_concept_map_draft(version_uuid):
     return output
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route(
     "/ConceptMaps/<string:version_uuid>/prerelease", methods=["GET", "POST"]
 )
@@ -324,6 +302,7 @@ def create_new_concept_map_version_from_previous(previous_version_uuid):
     return "Created", 201
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route("/ConceptMapSuggestions/", methods=["POST"])
 def mapping_suggestion():
     """
@@ -442,6 +421,7 @@ def update_mapping_relationship():
     return jsonify({"message": "Successfully updated mapping relationship(s)"})
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route(
     "/ConceptMaps/<string:version_uuid>/simplifier", methods=["POST"]
 )
@@ -454,6 +434,7 @@ def push_concept_map_version_to_simplifier(version_uuid):
     return "Successfully pushed to simplifier", 200
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route("/ConceptMaps/simplifier/back_fill", methods=["POST"])
 def full_back_fill_to_simplifier():
     tasks.back_fill_concept_maps_to_simplifier.delay()

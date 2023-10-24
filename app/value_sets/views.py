@@ -1,4 +1,6 @@
 from io import StringIO
+
+from deprecated.classic import deprecated
 from flask import Blueprint, request, jsonify, Response
 from app.helpers.oci_helper import get_data_from_oci
 from app.value_sets.models import *
@@ -28,9 +30,12 @@ def get_all_value_sets_metadata():
     GET: Returns a list of metadata for all ValueSets.
     POST: Creates a new ValueSet and returns its metadata.
     """
+    # Did not find a use of this GET API endpoint from Retool. Not aware of a need to offer a GET API.
     if request.method == "GET":
         active_only = False if request.values.get("active_only") == "false" else True
         return jsonify(ValueSet.load_all_value_set_metadata(active_only))
+
+    # This POST API endpoint is used by Retool.
     if request.method == "POST":
         name = request.json.get("name")
         title = request.json.get("title")
@@ -176,6 +181,7 @@ def duplicate_value_set_and_version(identifier):
     return str(duplicated_value_set_uuid), 201
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/<string:identifier>/actions/perform_terminology_update",
     methods=["POST"],
@@ -198,6 +204,7 @@ def perform_terminology_update_for_value_set(identifier):
     return jsonify(result)
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/<string:value_set_uuid>/versions/<string:version_uuid>/rules/update_terminology",
     methods=["POST"],
@@ -215,6 +222,7 @@ def update_terminology_version_of_rules_in_value_set(value_set_uuid, version_uui
     return "OK"
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSetRules/<string:rule_uuid>",
     methods=["PATCH"],
@@ -227,6 +235,7 @@ def update_single_rule(rule_uuid):
     return "OK"
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/<string:value_set_uuid>/versions/<string:version_uuid>",
     methods=["PATCH"],
@@ -239,6 +248,7 @@ def version_status_update(value_set_uuid, version_uuid):
     return "OK"
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route("/ValueSets/all/")
 def get_all_value_sets():
     """Returns a list of all ValueSets with their expanded content, filtered by status."""
@@ -250,6 +260,7 @@ def get_all_value_sets():
     return jsonify(serialized)
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route("/ValueSets/<string:identifier>/versions/")
 def get_value_set_versions(identifier):
     """Returns a list of metadata for all versions of a specified ValueSet."""
@@ -257,6 +268,7 @@ def get_value_set_versions(identifier):
     return jsonify(ValueSet.load_version_metadata(uuid))
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Function uses the wrong arguments for ValueSet.load")
 @value_sets_blueprint.route(
     "/ValueSets/<string:identifier>/versions/new", methods=["POST"]
 )
@@ -272,6 +284,7 @@ def create_new_vs_version(identifier):
     return str(new_version_uuid), 201
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route("/ValueSets/<string:value_set_uuid>", methods=["DELETE"])
 def delete_value_set(value_set_uuid):
     """Deletes a ValueSet and returns a 'Deleted' confirmation."""
@@ -280,15 +293,7 @@ def delete_value_set(value_set_uuid):
     return "Deleted", 200
 
 
-# @app.route('/ValueSets/<string:value_set_uuid>/versions/<string:vs_version_uuid>', methods=['DELETE'])
-# def delete_vs_version(value_set_uuid, vs_version_uuid):
-#     vs_version = ValueSetVersion.load(vs_version_uuid)
-#     if str(vs_version.value_set.uuid) != str(value_set_uuid):
-#         raise BadRequest(f"{vs_version_uuid} is not a version of value set with uuid {value_set_uuid}")
-#     vs_version.delete()
-#     return "Deleted", 200
-
-
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/<string:value_set_uuid>/versions/<string:vs_version_uuid>/explicitly_included_codes/",
     methods=["POST", "GET"],
@@ -318,6 +323,7 @@ def explicitly_included_code_to_vs_version(value_set_uuid, vs_version_uuid):
         return "Created", 201
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route("/ValueSets/<string:identifier>/most_recent_active_version")
 def get_most_recent_version(identifier):
     """Returns the most recent active version"""
@@ -327,6 +333,7 @@ def get_most_recent_version(identifier):
     return jsonify(version.serialize())
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route("/ValueSets/expansions/<string:expansion_uuid>/report")
 def load_expansion_report(expansion_uuid):
     """
@@ -355,6 +362,7 @@ def process_rule_set():
     return jsonify(result)
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/diff",
     methods=["GET"],
@@ -372,6 +380,7 @@ def diff_new_version_against_previous():
     return jsonify(diff)
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/<string:version_uuid>/prerelease", methods=["GET", "POST"]
 )
@@ -450,6 +459,7 @@ def get_value_set_version_published(version_uuid):
         return jsonify(value_set_from_object_store)
 
 
+@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/<string:version_uuid>/simplifier", methods=["POST"]
 )

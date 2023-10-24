@@ -804,23 +804,6 @@ class ConceptMapVersion:
                     Terminology.load_from_cache(terminology_version_uuid)
                 )
 
-    # def generate_self_mappings(self):
-    #     """
-    #     if self_map flag in db is true, generate the self_mappings here
-    #     :rtype: mappings dictionary
-    #     """
-    #     if self.concept_map.include_self_map is True:
-    #         for target_terminology in self.allowed_target_terminologies:
-    #             target_terminology.load_content()
-    #             for code in target_terminology.codes:
-    #                 self.mappings[code] = [
-    #                     Mapping(
-    #                         source=code,
-    #                         relationship=MappingRelationship.load_by_code("equivalent"),
-    #                         target=code,  # self is equivalent to self
-    #                         mapping_comments="Auto-generated self map",
-    #                     )
-    #                 ]
 
     def load_mappings(self):
         conn = get_db()

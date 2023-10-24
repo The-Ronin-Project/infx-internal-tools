@@ -214,42 +214,6 @@ class Code:
             depends_on_system=code_data.depends_on_system,
         )
 
-    # todo: likely deprecated, verify and remove
-    # @classmethod
-    # def load_concept_map_source_concept(cls, source_code_uuid):
-    #     """
-    #     This class method is used to load a source concept from a concept map using its unique identifier (UUID). It retrieves the source concept data from the database and initializes a new instance of the Code class with the fetched data.
-    #
-    #     Args:
-    #     source_code_uuid (str): The unique identifier (UUID) of the source concept to be loaded.
-    #
-    #     Returns:
-    #     Code: An instance of the Code class, initialized with the data fetched from the database.
-    #
-    #     Usage:
-    #     To load a source concept from a concept map by its UUID, use the following syntax:
-    #     source_concept = Code.load_concept_map_source_concept(source_code_uuid)
-    #     """
-    #     conn = get_db()
-    #
-    #     source_data = conn.execute(
-    #         text(
-    #             """
-    #             select system as terminology_version_uuid, * from concept_maps.source_concept
-    #             where uuid=:source_concept_uuid
-    #             """
-    #         ),
-    #         {"source_concept_uuid": source_code_uuid},
-    #     ).first()
-    #
-    #     return cls(
-    #         uuid=source_data.uuid,
-    #         system=None,
-    #         version=None,
-    #         code=source_data.code,
-    #         display=source_data.display,
-    #         terminology_version_uuid=source_data.terminology_version_uuid,
-    #     )
 
     def serialize(self, with_system_and_version=True, with_system_name=False):
         """

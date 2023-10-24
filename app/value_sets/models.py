@@ -479,35 +479,6 @@ class ICD10CMRule(VSRule):
 
 
 class SNOMEDRule(VSRule):
-    # # Deprecating because we prefer ECL
-    # def direct_child(self):
-    #   conn = get_db()
-    #   query = ""
-
-    #   if self.property == 'concept':
-    #     # Lookup UUIDs for provided codes
-    #     codes = self.value.split(',')
-
-    #     # Get all descendants of the provided codes through a recursive query
-    #     query = """
-    #     select * from snomedct.relationship_f rel
-    #     join snomedct.description_f descr
-    #     on descr.conceptid=rel.sourceid
-    #     and descr.typeid='900000000000003001'
-    #     where destinationid in :codes
-    #     and rel.typeid='116680003'
-    #     """
-    #     # See link for tutorial in recursive queries: https://www.cybertec-postgresql.com/en/recursive-queries-postgresql/
-
-    #   results_data = conn.execute(
-    #     text(
-    #       query
-    #     ).bindparams(bindparam('codes', expanding=True)), {
-    #       'codes': codes
-    #     }
-    #   )
-    #   results = [Code(self.fhir_system, self.terminology_version, x.conceptid, x.term) for x in results_data]
-    #   self.results = set(results)
 
     def concept_in(self):
         conn = get_db()
@@ -2820,63 +2791,6 @@ class ValueSetVersion:
         result = last_modified_query.first()
         return result.timestamp
 
-    # def delete(self):
-    #  """
-    #   Deleting a value set version is only allowed if it was only in draft status and never published--typically if it was created in error.
-    #   Once a value set version has been published, it must be kept indefinitely.
-    #  """
-    #   # Make sure value set is eligible for deletion
-    #   if self.status != 'pending':
-    #     raise BadRequest('ValueSet version is not eligible for deletion because its status is not `pending`')
-
-    #   # Identify any expansions, delete their contents, then delete the expansions themselves
-    #   conn = get_db()
-    #   conn.execute(
-    #     text(
-    #        """
-    #       delete from value_sets.expansion_member
-    #       where expansion_uuid in
-    #       (select uuid from value_sets.expansion
-    #       where vs_version_uuid=:vs_version_uuid)
-    #        """
-    #     ), {
-    #       'vs_version_uuid': self.uuid
-    #     }
-    #   )
-
-    #   conn.execute(
-    #     text(
-    #       """ delete from value_sets.expansion
-    #       where vs_version_uuid=:vs_version_uuid
-    #       """
-    #     ), {
-    #       'vs_version_uuid': self.uuid
-    #     }
-    #   )
-
-    #   # Delete associated rules for value set version
-    #   conn.execute(
-    #     text(
-    #       """
-    #       delete from value_sets.value_set_rule
-    #       where value_set_version=:vs_version_uuid
-    #       """
-    #     ), {
-    #       'vs_version_uuid': self.uuid
-    #     }
-    #   )
-
-    #   # Delete value set version
-    #   conn.execute(
-    #     text(
-    #       """
-    #       delete from value_sets.value_set_version
-    #       where uuid=:vs_version_uuid
-    #       """
-    #     ), {
-    #       'vs_version_uuid': self.uuid
-    #     }
-    #   )
 
     def serialize_include(self):
         if self.value_set.type == "extensional":
