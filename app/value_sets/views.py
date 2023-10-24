@@ -30,7 +30,7 @@ def get_all_value_sets_metadata():
     GET: Returns a list of metadata for all ValueSets.
     POST: Creates a new ValueSet and returns its metadata.
     """
-    # Did not find a use of this GET API endpoint from Retool. Not aware of a need to offer a GET API.
+    # Required. We maintain appropriate GET endpoints for each resource type.
     if request.method == "GET":
         active_only = False if request.values.get("active_only") == "false" else True
         return jsonify(ValueSet.load_all_value_set_metadata(active_only))
@@ -181,12 +181,14 @@ def duplicate_value_set_and_version(identifier):
     return str(duplicated_value_set_uuid), 201
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/<string:identifier>/actions/perform_terminology_update",
     methods=["POST"],
 )
 def perform_terminology_update_for_value_set(identifier):
+    """
+    Used in terminology update interface.
+    """
     old_terminology_version_uuid = request.json.get("old_terminology_version_uuid")
     new_terminology_version_uuid = request.json.get("new_terminology_version_uuid")
     new_value_set_effective_start = request.json.get("new_value_set_effective_start")
@@ -204,13 +206,15 @@ def perform_terminology_update_for_value_set(identifier):
     return jsonify(result)
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/<string:value_set_uuid>/versions/<string:version_uuid>/rules/update_terminology",
     methods=["POST"],
 )
 def update_terminology_version_of_rules_in_value_set(value_set_uuid, version_uuid):
-    """Updates the terminology version of rules in the specified ValueSet version."""
+    """
+    Updates the terminology version of rules in the specified ValueSet version.
+    Used in terminology update interface.
+    """
     old_terminology_version_uuid = request.json.get("old_terminology_version_uuid")
     new_terminology_version_uuid = request.json.get("new_terminology_version_uuid")
 
@@ -222,36 +226,41 @@ def update_terminology_version_of_rules_in_value_set(value_set_uuid, version_uui
     return "OK"
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSetRules/<string:rule_uuid>",
     methods=["PATCH"],
 )
 def update_single_rule(rule_uuid):
-    """Updates the terminology version of a single ValueSet rule."""
+    """
+    Updates the terminology version of a single ValueSet rule in the terminology update interface.
+    """
     new_terminology_version_uuid = request.json.get("new_terminology_version_uuid")
     rule = VSRule.load(rule_uuid)
     rule.update(new_terminology_version_uuid)
     return "OK"
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/<string:value_set_uuid>/versions/<string:version_uuid>",
     methods=["PATCH"],
 )
 def version_status_update(value_set_uuid, version_uuid):
-    """Updates the status of a ValueSet version."""
+    """
+    Used in terminology update interface.
+    Updates the status of a ValueSet version.
+    """
     new_status = request.json.get("status")
     vs_version = ValueSetVersion.load(version_uuid)
     vs_version.update(status=new_status)
     return "OK"
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route("/ValueSets/all/")
 def get_all_value_sets():
-    """Returns a list of all ValueSets with their expanded content, filtered by status."""
+    """
+    Returns a list of all ValueSets with their expanded content, filtered by status.
+    """
+    # todo: the /all part should not be necessary. We will come back to this when we do our next update to ValueSets.
     status = request.values.get("status").split(",")
     value_sets = ValueSet.load_all_value_sets_by_status(status)
     for x in value_sets:
@@ -260,21 +269,21 @@ def get_all_value_sets():
     return jsonify(serialized)
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route("/ValueSets/<string:identifier>/versions/")
 def get_value_set_versions(identifier):
-    """Returns a list of metadata for all versions of a specified ValueSet."""
+    """
+    Returns a list of metadata for all versions of a specified ValueSet.
+    """
     uuid = ValueSet.name_to_uuid(identifier)
     return jsonify(ValueSet.load_version_metadata(uuid))
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Function uses the wrong arguments for ValueSet.load")
 @value_sets_blueprint.route(
     "/ValueSets/<string:identifier>/versions/new", methods=["POST"]
 )
-def create_new_vs_version(identifier):
+def create_new_vs_version(value_set_uuid):
     """Creates a new version of a specified ValueSet and returns its UUID."""
-    value_set = ValueSet.load(identifier)
+    value_set = ValueSet.load(value_set_uuid)
     effective_start = request.json.get("effective_start")
     effective_end = request.json.get("effective_end")
     description = request.json.get("description")
@@ -284,16 +293,17 @@ def create_new_vs_version(identifier):
     return str(new_version_uuid), 201
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route("/ValueSets/<string:value_set_uuid>", methods=["DELETE"])
 def delete_value_set(value_set_uuid):
-    """Deletes a ValueSet and returns a 'Deleted' confirmation."""
+    """
+    Deletes a ValueSet and returns a 'Deleted' confirmation. Not used in the Retool UI.
+    """
+    # todo: revisit the question of if we will allow deletes.
     value_set = ValueSet.load(value_set_uuid)
     value_set.delete()
     return "Deleted", 200
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/<string:value_set_uuid>/versions/<string:vs_version_uuid>/explicitly_included_codes/",
     methods=["POST", "GET"],
@@ -323,17 +333,17 @@ def explicitly_included_code_to_vs_version(value_set_uuid, vs_version_uuid):
         return "Created", 201
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route("/ValueSets/<string:identifier>/most_recent_active_version")
 def get_most_recent_version(identifier):
-    """Returns the most recent active version"""
+    """
+    Returns the most recent active version
+    """
     uuid = ValueSet.name_to_uuid(identifier)
     version = ValueSet.load_most_recent_active_version(uuid)
     version.expand()
     return jsonify(version.serialize())
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route("/ValueSets/expansions/<string:expansion_uuid>/report")
 def load_expansion_report(expansion_uuid):
     """
@@ -362,7 +372,6 @@ def process_rule_set():
     return jsonify(result)
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/diff",
     methods=["GET"],
@@ -380,7 +389,7 @@ def diff_new_version_against_previous():
     return jsonify(diff)
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
+@deprecated("Has not been used to date. Deprecated but retained for debugging or any internal use within Systems.")
 @value_sets_blueprint.route(
     "/ValueSets/<string:version_uuid>/prerelease", methods=["GET", "POST"]
 )
@@ -459,11 +468,13 @@ def get_value_set_version_published(version_uuid):
         return jsonify(value_set_from_object_store)
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @value_sets_blueprint.route(
     "/ValueSets/<string:version_uuid>/simplifier", methods=["POST"]
 )
 def push_value_set_version_to_simplifier(version_uuid):
+    """
+    This API is required for manually publishing to Simplifier.
+    """
     force_new = request.values.get("force_new") == "true"
     vs_version = ValueSetVersion.load(version_uuid)
     vs_version.expand(force_new=force_new)

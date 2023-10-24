@@ -15,7 +15,7 @@ def create_terminology():
     FHIR URI, standard status, and FHIR terminology.
     """
 
-    # Did not find a use of this GET API endpoint from Retool. Not aware of a need to offer a GET API.
+    # Required. We maintain appropriate GET endpoints for each resource type.
     if request.method == "GET":
         fhir_uri = request.values.get("fhir_uri")
         version = request.values.get("version")
@@ -114,11 +114,14 @@ def create_code():
         return "Complete"
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @terminologies_blueprint.route(
     "/terminology/<terminology_version_uuid>", methods=["GET"]
 )
 def get_terminology(terminology_version_uuid):
+    """
+    Required. We maintain appropriate GET endpoints for each resource type.
+    This will be used in Retool as we deprecate the old direct database queries.
+    """
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 10))
 

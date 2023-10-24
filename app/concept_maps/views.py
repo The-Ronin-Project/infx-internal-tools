@@ -19,12 +19,12 @@ from app.errors import NotFoundException
 concept_maps_blueprint = Blueprint("concept_maps", __name__)
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route(
     "/SourceConcepts/<string:source_concept_uuid>", methods=["PATCH"]
 )
 def update_source_concept(source_concept_uuid):
     """
+    Used to update the assignment of a mapping row from one person to another. This is an essential feature.
     Update the comments field of a source concept identified by the source_concept_uuid.
     Returns a status message.
     """
@@ -35,13 +35,15 @@ def update_source_concept(source_concept_uuid):
     return jsonify(source_concept.serialize())
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route("/ConceptMaps/<string:version_uuid>", methods=["GET"])
 def get_concept_map_version(version_uuid):
     """
     GET: Retrieve the data for a Concept Map version. The schema version will be the highest of:
     the current ConceptMap.database_schema_version (such as 3, as in /ConceptMap/v3/published)
     or the current ConceptMap.next_schema_version (such as 4, as in /ConceptMap/v4/published).
+
+    Required. We maintain appropriate GET endpoints for each resource type.
+    This will be used in Retool as we deprecate the old direct database queries.
 
     @param version_uuid: Concept Map version UUID
     """
@@ -54,7 +56,6 @@ def get_concept_map_version(version_uuid):
     return jsonify(concept_map_to_json)
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route(
     "/ConceptMaps/<string:version_uuid>/actions/index", methods=["POST"]
 )
@@ -62,6 +63,8 @@ def index_targets(version_uuid):
     """
     Index the targets of a ConceptMap version identified by the version_uuid.
     Returns a status message.
+
+    Used via Postman for manually re-indexing a concept map when there's issues w/ the index.
     """
     target_value_set_version_uuid = request.json.get("target_value_set_version_uuid")
     ConceptMap.index_targets(
@@ -70,7 +73,6 @@ def index_targets(version_uuid):
     return "OK"
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route("/ConceptMaps/", methods=["GET", "POST"])
 def create_initial_concept_map_and_version_one():
     """
@@ -80,6 +82,9 @@ def create_initial_concept_map_and_version_one():
     The Concept Map schema version will be the highest of:
     the current ConceptMap.database_schema_version (such as 3)
     or the current ConceptMap.next_schema_version (such as 4).
+
+    Required. We maintain appropriate GET endpoints for each resource type.
+    This will be used in Retool as we deprecate the old direct database queries.
     """
     if request.method == "POST":
         name = request.json.get("name")
@@ -169,7 +174,7 @@ def get_concept_map_draft(version_uuid):
     return output
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
+@deprecated("Has not been used to date. Deprecated but retained for debugging or any internal use within Systems.")
 @concept_maps_blueprint.route(
     "/ConceptMaps/<string:version_uuid>/prerelease", methods=["GET", "POST"]
 )
@@ -302,7 +307,7 @@ def create_new_concept_map_version_from_previous(previous_version_uuid):
     return "Created", 201
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
+@deprecated("We have moved away from the ConceptMapSuggestions paradigm.")
 @concept_maps_blueprint.route("/ConceptMapSuggestions/", methods=["POST"])
 def mapping_suggestion():
     """
@@ -421,11 +426,13 @@ def update_mapping_relationship():
     return jsonify({"message": "Successfully updated mapping relationship(s)"})
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route(
     "/ConceptMaps/<string:version_uuid>/simplifier", methods=["POST"]
 )
 def push_concept_map_version_to_simplifier(version_uuid):
+    """
+    This API is required for manually publishing to Simplifier.
+    """
     uuid_obj = uuid.UUID(version_uuid)  # cast as uuid
     concept_map_version = ConceptMapVersion(uuid=uuid_obj)  # instantiate object
     # check for active status error if false
@@ -434,9 +441,11 @@ def push_concept_map_version_to_simplifier(version_uuid):
     return "Successfully pushed to simplifier", 200
 
 
-@deprecated("Did not find a use of this API endpoint from Retool. Not aware of a need to offer an API.")
 @concept_maps_blueprint.route("/ConceptMaps/simplifier/back_fill", methods=["POST"])
 def full_back_fill_to_simplifier():
+    """
+    This API is required for manually publishing to Simplifier.
+    """
     tasks.back_fill_concept_maps_to_simplifier.delay()
 
     return "Full concept map back fill to Simplifier complete."
