@@ -1,5 +1,7 @@
 from io import StringIO
 from flask import Blueprint, request, jsonify, Response
+
+from app.errors import BadRequestWithCode
 from app.helpers.oci_helper import get_data_from_oci
 from app.value_sets.models import *
 from app.models.use_case import (
@@ -118,7 +120,13 @@ def handle_linked_use_cases(value_set_uuid):
 
     """
     if request.method == "GET":
-        return jsonify(load_use_case_by_value_set_uuid(value_set_uuid))
+        if value_set_uuid == "null":
+            raise BadRequestWithCode(
+                "ValueSet.load_use_case_by_value_set_uuid.requiresValidUuid",
+                f"A value set uuid must be provided to use the GET linked_use_cases endpoint",
+            )
+        else:
+            return jsonify(load_use_case_by_value_set_uuid(value_set_uuid))
 
     if request.method == "POST":
         delete_all_use_cases_for_value_set(value_set_uuid)
@@ -390,19 +398,19 @@ def get_value_set_version_prerelease(version_uuid):
             value_set_to_json,
             initial_path + f"/prerelease/{vs_version.value_set.uuid}",
             folder="prerelease",
-            content_type="json"
+            content_type="json",
         )  # sends to OCI
         return jsonify(value_set_to_datastore)
     if request.method == "GET":
         value_set_from_object_store = get_data_from_oci(
-                ValueSet.object_storage_folder_name,
-                ValueSet.database_schema_version,
-                release_status="prerelease",
-                resource_id=vs_version.value_set.uuid,
-                resource_version=vs_version.version,
-                content_type="json",
-                return_content=True,
-            )
+            ValueSet.object_storage_folder_name,
+            ValueSet.database_schema_version,
+            release_status="prerelease",
+            resource_id=vs_version.value_set.uuid,
+            resource_version=vs_version.version,
+            content_type="json",
+            return_content=True,
+        )
         return jsonify(value_set_from_object_store)
 
 
