@@ -3,6 +3,7 @@ from io import StringIO
 from uuid import uuid4
 
 import structlog
+from deprecated.classic import deprecated
 from flask import Flask, jsonify, request, Response
 from werkzeug.exceptions import HTTPException
 
@@ -201,9 +202,13 @@ def create_app(script_info=None):
         The "teams" field should contain a list of team objects to be linked to the use case.
         Each team object should have the following fields: "name" (the name of the team), "slack_channel" (the slack channel of the team), and "team_uuid" (the UUID of the team).
         """
+
+        # GET is called from Retool.
         if request.method == "GET":
             use_case_uuid = request.values.get("use_case_uuid")
             return jsonify(get_teams_by_use_case(use_case_uuid))
+
+        # Did not find a use of this POST API endpoint from Retool.
         if request.method == "POST":
             use_case_uuid = request.json.get("use_case_uuid")
             delete_all_teams_for_a_use_case(use_case_uuid)
@@ -337,6 +342,9 @@ def create_app(script_info=None):
 
     @app.route("/data_normalization/actions/load_outstanding_errors_to_custom_terminologies", methods=["POST"])
     def trigger_load_outstanding_errors_to_custom_terminologies():
+        """
+        Trigger the error validation load process via an API call.
+        """
         tasks.load_outstanding_errors_to_custom_terminologies.apply_async()
         return "Started"
 
@@ -359,6 +367,9 @@ def create_app(script_info=None):
         methods=["POST"],
     )
     def resolve_issues_for_concept_map_version():
+        """
+        We resolve automatically when a new concept map version is published, but we also we need an API for manual runs
+        """
         concept_map_version_uuid = request.json.get("concept_map_version_uuid")
         concept_map_version = concept_map_models.ConceptMapVersion(concept_map_version_uuid)
         concept_map_version.resolve_error_service_issues()
