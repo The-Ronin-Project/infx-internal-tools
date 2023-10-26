@@ -1,3 +1,4 @@
+import csv
 import datetime
 import json
 from dataclasses import dataclass, field
@@ -479,7 +480,6 @@ class ICD10CMRule(VSRule):
 
 
 class SNOMEDRule(VSRule):
-
     def concept_in(self):
         conn = get_db()
         query = """
@@ -709,7 +709,6 @@ class LOINCRule(VSRule):
         conn = get_db()
 
         converted_query = text(query).bindparams(bindparam("value", expanding=True))
-
         results_data = conn.execute(
             converted_query,
             {
@@ -738,12 +737,12 @@ class LOINCRule(VSRule):
         """
         new_value = self.value
         if new_value[:1] == "{" and new_value[-1:] == "}":
-            new_value = new_value[1:]
-            new_value = new_value[:-1]
-        new_value = new_value.split(",")
-        new_value = [(x[1:] if x[:1] == '"' else x) for x in new_value]
-        new_value = [(x[:-1] if x[-1:] == '"' else x) for x in new_value]
-        return new_value
+            new_value = new_value[1:-1]
+
+        # Using csv.reader to handle commas inside quotes
+        reader = csv.reader([new_value])
+        for row in reader:
+            return row
 
     def code_rule(self):
         query = """
@@ -758,7 +757,6 @@ class LOINCRule(VSRule):
     def display_rule(self):
         # Cannot use "ilike any(...)" because thats Postgres specific
         conn = get_db()
-
         query = f"""
     select * from loinc.code
     where lower(long_common_name) like '{self.split_value[0].lower()}'"""
@@ -2790,7 +2788,6 @@ class ValueSetVersion:
         )
         result = last_modified_query.first()
         return result.timestamp
-
 
     def serialize_include(self):
         if self.value_set.type == "extensional":
