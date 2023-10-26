@@ -1302,6 +1302,7 @@ class ValueSet:
             Loads all value sets metadata from the database.
 
     """
+
     database_schema_version = 2
     object_storage_folder_name = "ValueSets"
 
@@ -1353,7 +1354,6 @@ class ValueSet:
         self.synonyms = synonyms
         self.primary_use_case = primary_use_case
         self.secondary_use_cases = secondary_use_cases
-
 
     @classmethod
     def create(
@@ -2977,9 +2977,10 @@ class ValueSetVersion:
             rcdm_id = re.sub("([a-z])([A-Z])", r"\1-\2", rcdm_id).lower()
             rcdm_url = "http://hl7.org/fhir/ValueSet/"
 
-        if (
-            self.status == "pending"
-        ):  # has a required binding (translate pending to draft)
+        if self.status in {
+            "pending",
+            "reviewed",
+        }:  # has a required binding (translate pending, reviewed to draft)
             rcdm_status = "draft"
         else:
             rcdm_status = self.status
@@ -3046,7 +3047,9 @@ class ValueSetVersion:
         serialized.pop("immutable")
         serialized.pop("contact")
         serialized.pop("publisher")
-        initial_path = f"{ValueSet.object_storage_folder_name}/v{ValueSet.database_schema_version}"
+        initial_path = (
+            f"{ValueSet.object_storage_folder_name}/v{ValueSet.database_schema_version}"
+        )
 
         return serialized, initial_path
 
@@ -3062,7 +3065,7 @@ class ValueSetVersion:
             value_set_to_json,
             initial_path + f"/published/{value_set_uuid}",
             folder="published",
-            content_type="json"
+            content_type="json",
         )  # sending to OCI
         resource_type = "ValueSet"  # param for Simplifier
         value_set_to_json_copy["status"] = "active"
