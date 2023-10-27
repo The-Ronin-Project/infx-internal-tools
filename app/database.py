@@ -1,6 +1,7 @@
 from flask import current_app, g, has_request_context
 from sqlalchemy import create_engine
 from elasticsearch import Elasticsearch
+from opensearchpy import OpenSearch
 from decouple import config
 
 # Create an SQL Alchemy engine instance for connecting to the Postgres database.
@@ -84,19 +85,21 @@ def get_db():
         return db.get_connection()
 
 
-def get_elasticsearch():
+def get_opensearch():
     """
     Retrieve the Elasticsearch instance for the application.
     If not already connected, connect to the Elasticsearch server using the provided configuration.
     """
     if has_request_context():
-        if "es" not in g:
-            g.es = Elasticsearch(
-                f"https://{config('ELASTICSEARCH_USER')}:{config('ELASTICSEARCH_PASSWORD')}@{config('ELASTICSEARCH_HOST')}/"
+        if "opensearch" not in g:
+            g.opensearch = OpenSearch(
+                f"http://{config('OPENSEARCH_USER')}:{config('OPENSEARCH_PASSWORD')}@{config('OPENSEARCH_HOST')}/",
+                verify_certs=False,
             )
-        return g.es
-    return Elasticsearch(
-        f"https://{config('ELASTICSEARCH_USER')}:{config('ELASTICSEARCH_PASSWORD')}@{config('ELASTICSEARCH_HOST')}/"
+        return g.opensearch
+    return OpenSearch(
+        f"http://{config('OPENSEARCH_USER')}:{config('OPENSEARCH_PASSWORD')}@{config('OPENSEARCH_HOST')}/",
+        verify_certs=False,
     )
 
 
@@ -109,6 +112,7 @@ def rollback_and_close_connection_if_open():
     if db is not None:
         db.rollback()
         db.close()
+
 
 def close_db(e=None):
     """

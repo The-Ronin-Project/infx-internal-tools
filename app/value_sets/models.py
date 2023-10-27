@@ -24,7 +24,8 @@ import app.concept_maps.models
 import app.models.data_ingestion_registry
 
 from app.terminologies.models import Terminology
-from app.database import get_db, get_elasticsearch
+
+from app.database import get_db  # , get_elasticsearch
 from flask import current_app
 from app.helpers.simplifier_helper import publish_to_simplifier
 
@@ -479,7 +480,6 @@ class ICD10CMRule(VSRule):
 
 
 class SNOMEDRule(VSRule):
-
     def concept_in(self):
         conn = get_db()
         query = """
@@ -1065,32 +1065,32 @@ class CPTRule(VSRule):
         ]
         self.results = set(results)
 
-    def display_regex(self):
-        """Process CPT rules where property=display and operator=regex, where we are string matching to displays"""
-        es = get_elasticsearch()
-
-        results = es.search(
-            query={
-                "simple_query_string": {
-                    "fields": ["display"],
-                    "query": self.value,
-                }
-            },
-            index="cpt_codes",
-            size=MAX_ES_SIZE,
-        )
-
-        search_results = [x.get("_source") for x in results.get("hits").get("hits")]
-        final_results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.get("code"),
-                x.get("display"),
-            )
-            for x in search_results
-        ]
-        self.results = set(final_results)
+    # def display_regex(self):
+    #     """Process CPT rules where property=display and operator=regex, where we are string matching to displays"""
+    #     es = get_elasticsearch()
+    #
+    #     results = es.search(
+    #         query={
+    #             "simple_query_string": {
+    #                 "fields": ["display"],
+    #                 "query": self.value,
+    #             }
+    #         },
+    #         index="cpt_codes",
+    #         size=MAX_ES_SIZE,
+    #     )
+    #
+    #     search_results = [x.get("_source") for x in results.get("hits").get("hits")]
+    #     final_results = [
+    #         Code(
+    #             self.fhir_system,
+    #             self.terminology_version.version,
+    #             x.get("code"),
+    #             x.get("display"),
+    #         )
+    #         for x in search_results
+    #     ]
+    #     self.results = set(final_results)
 
     def include_entire_code_system(self):
         """
@@ -1302,6 +1302,7 @@ class ValueSet:
             Loads all value sets metadata from the database.
 
     """
+
     database_schema_version = 2
     object_storage_folder_name = "ValueSets"
 
@@ -1353,7 +1354,6 @@ class ValueSet:
         self.synonyms = synonyms
         self.primary_use_case = primary_use_case
         self.secondary_use_cases = secondary_use_cases
-
 
     @classmethod
     def create(
@@ -2791,7 +2791,6 @@ class ValueSetVersion:
         result = last_modified_query.first()
         return result.timestamp
 
-
     def serialize_include(self):
         if self.value_set.type == "extensional":
             keys = self.extensional_codes.keys()
@@ -3046,7 +3045,9 @@ class ValueSetVersion:
         serialized.pop("immutable")
         serialized.pop("contact")
         serialized.pop("publisher")
-        initial_path = f"{ValueSet.object_storage_folder_name}/v{ValueSet.database_schema_version}"
+        initial_path = (
+            f"{ValueSet.object_storage_folder_name}/v{ValueSet.database_schema_version}"
+        )
 
         return serialized, initial_path
 
@@ -3062,7 +3063,7 @@ class ValueSetVersion:
             value_set_to_json,
             initial_path + f"/published/{value_set_uuid}",
             folder="published",
-            content_type="json"
+            content_type="json",
         )  # sending to OCI
         resource_type = "ValueSet"  # param for Simplifier
         value_set_to_json_copy["status"] = "active"
