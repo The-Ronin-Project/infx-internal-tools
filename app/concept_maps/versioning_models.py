@@ -655,9 +655,6 @@ class ConceptMapVersionCreator:
                             )
 
                             if target_lookup_key not in new_targets_lookup:
-                                logging.info(
-                                    f"Inactive target mapping: {new_source_concept}"
-                                )
                                 # ii. If the target_lookup_key is not found in new_targets_lookup, it means the target concept is inactive.
                                 # Process the inactive target mapping using the process_inactive_target_mapping method
                                 # and append the result to the previous_mapping_context.
@@ -683,9 +680,6 @@ class ConceptMapVersionCreator:
                                     previous_mapping.relationship.display
                                     == "Equivalent"
                                 ):
-                                    logging.info(
-                                        f"Equivalent mapping: {new_source_concept}"
-                                    )
                                     self.copy_mapping_exact(
                                         new_source_concept=new_source_concept,
                                         new_target_code=new_target_concept,
@@ -693,9 +687,6 @@ class ConceptMapVersionCreator:
                                     )
                                 else:
                                     if require_review_for_non_equivalent_relationships:
-                                        logging.info(
-                                            f"Non-equivalent mapping requiring review: {new_source_concept}"
-                                        )
                                         self.copy_mapping_require_review(
                                             new_source_concept=new_source_concept,
                                             new_target_concept=new_target_concept,
@@ -723,13 +714,9 @@ class ConceptMapVersionCreator:
                 f"create_new_from_previous missing data in concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
             )
             self.conn.rollback()
-        # except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
-        #     LOGGER.info(
-        #         f"create_new_from_previous unexpected error with concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
-        #     )
-        #     self.conn.rollback()
-        except Exception as e:  # Catch the general Exception to log the details
-            LOGGER.error(f"Exception details: {str(e)}")
+
+        except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
+
             LOGGER.info(
                 f"create_new_from_previous unexpected error with concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
             )
