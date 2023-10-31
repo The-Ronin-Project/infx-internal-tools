@@ -542,10 +542,8 @@ class ConceptMapVersionCreator:
                 self.new_version_uuid, new_target_value_set_version_uuid
             )
             previous_contexts_list = []
-            logging.info(f"Total new source concepts: {len(new_source_concepts)}")
 
             for new_source_concept in new_source_concepts:
-                logging.info(f"Processing new source concept: {new_source_concept}")
                 # For each new_source_concept, create a source_lookup_key tuple using the source concept's properties
                 source_lookup_key = (
                     new_source_concept.code,
@@ -558,7 +556,6 @@ class ConceptMapVersionCreator:
                 )
 
                 if source_lookup_key not in all_previous_sources_and_mappings:
-                    logging.info(f"Novel source: {new_source_concept}")
                     # If the source_lookup_key is not found in previous_sources_and_mappings
                     # (i.e. the source concept is new and not present in the previous version),
                     # add the new_source_concept to the novel_sources list.
@@ -587,8 +584,6 @@ class ConceptMapVersionCreator:
                     )
 
                     if source_lookup_key in mapped_no_map_lookup:
-                        logging.info(f"Mapped no map: {new_source_concept}")
-
                         # If the source_lookup_key is found in mapped_no_map_lookup, handle the mapped_no_maps case:
                         # a. Retrieve the previous_mapping_data from mapped_no_map_lookup using the source_lookup_key
                         previous_mapping_data = mapped_no_map_lookup[source_lookup_key]
@@ -596,12 +591,25 @@ class ConceptMapVersionCreator:
                         mapping = previous_mapping_data["mappings"][0]
                         previous_mapping = mapping
 
-                        if (
+                        if require_review_for_non_equivalent_relationships:
+                            no_map_version = "1.0"
+                            no_map_target_concept = app.concept_maps.models.Code(
+                                code=previous_mapping.target.code,
+                                display=previous_mapping.target.display,
+                                system=previous_mapping.target.system,
+                                version=no_map_version,
+                            )
+                            self.copy_mapping_require_review(
+                                new_source_concept=new_source_concept,
+                                new_target_concept=no_map_target_concept,
+                                previous_mapping=previous_mapping,
+                            )
+                        elif (
                             require_review_no_maps_not_in_target
                             and previous_source_concept.reason_for_no_map
                             == "Not in target code system"
                         ):
-                            # c. when require_review is True and reason "Not in target code system"
+                            # when require_review is True and reason "Not in target code system"
                             result = self.process_no_map(
                                 previous_source_concept,
                                 new_source_concept,
