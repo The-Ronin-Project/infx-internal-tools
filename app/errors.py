@@ -45,6 +45,11 @@ class TerminologyIsStandardError(Exception):
     pass
 
 
+class TerminologyNotFoundError(Exception):
+    def __init__(self, message):
+        self.message = message
+
+
 class TerminologyIsFHIRError(Exception):
     pass
 
