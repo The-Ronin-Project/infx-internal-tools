@@ -304,6 +304,8 @@ def create_app(script_info=None):
     def data_ingestion_registry():
         """
         Retrieve the data ingestion registry, which contains metadata about data sources and their ingestion processes.
+        If more than one data output schema version is active during a transition between output schema versions,
+        the registry is returned using the more recent of the two schema versions.
         """
         if request.method == "GET":
             from_oci = request.values.get("from_oci")

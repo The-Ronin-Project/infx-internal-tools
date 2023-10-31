@@ -4,16 +4,21 @@ import pytest
 from _pytest.python_api import raises
 
 from app.concept_maps.models import ConceptMap, ConceptMapVersion
-from app.concept_maps.views import get_concept_map_version_prerelease
 from app.errors import BadRequestWithCode
-from app.helpers.oci_helper import set_up_object_store
 
 
-@pytest.mark.skip(reason="Before running locally, comment out 3 lines that call the Error Service in concept_maps/models.py. Then comment out the skip annotation.")
+@pytest.mark.skip(
+    reason="External calls: Reads from the database. To run on a local dev machine, comment out this 'skip' " +
+        "annotation. To support future test automation, any external calls must be mocked."
+)
 def test_serialized_schema_versions():
     """
-    Functions called by this test do not change data or write to OCI. They serialize data or read from OCI artifacts.
+    Functions called by this test do not change data or write to OCI. They serialize data found in the database.
     If the data changes, results may change. The selected test cases are not expected to change often.
+
+    This test does not call any outside services other than the database.
+    Note: This test calls some functions that WOULD call to outside services, such as Simplifier or OCI,
+    but each of these test cases triggers an exception on purpose, so the callout does not occur.
 
     Test Cases:
         Serialize a version as v3 and test that it has no items that are in v4 only.
@@ -80,8 +85,15 @@ def test_serialized_schema_versions():
     with raises(BadRequestWithCode):
         concept_map_version_2.prepare_for_oci()
 
+    # Convenience: Can set a breakpoint at this line when done stepping and want to ensure it reaches the end cleanly.
+    assert True
 
-@pytest.mark.skip(reason="Before running locally, comment out 3 lines that call the Error Service in concept_maps/models.py. Then comment out the skip annotation.")
+
+@pytest.mark.skip(
+    reason="External calls: Reads from the database, calls Error Service. To run on a local dev machine, comment out " +
+        "a call to resolve_errors_after_concept_map_publish in concept_maps/models.py and comment out this 'skip' " +
+        "annotation. To support future test automation, any external calls must be mocked."
+)
 def test_diff_mappings_and_metadata():
     """
     Functions called by this test do not change data or write to OCI. They serialize data or read from OCI artifacts.
@@ -298,15 +310,18 @@ def test_diff_mappings_and_metadata():
     assert result.get("version") == 5
 
 
-@pytest.mark.skip(reason="this writes to OCI product folders so we must mock OCI instead")
+@pytest.mark.skip(
+    reason="External calls: Reads from the database, writes to the OCI data store. This is a utility, not a test." +
+        "Do not write out to the database or write out to OCI data store, from tests. "
+)
 def test_concept_map_output_to_oci():
     """
-    Rough test for developers, not a unit test or codecov test (yet).
+    Not a test. Really a tool for developers to push content to OCI for urgent reasons.
     """
     # schema_version = ConceptMap.database_schema_version
     schema_version = ConceptMap.next_schema_version
 
-    test_concept_map_version_uuid = "(insert value here)"
+    test_concept_map_version_uuid = "(insert value here)"  # Always merge using this invalid value, to prevent accidents
     test_concept_map_version = ConceptMapVersion(test_concept_map_version_uuid)
     if test_concept_map_version is None:
         print(f"Version with UUID {test_concept_map_version_uuid} is None")

@@ -1435,7 +1435,7 @@ class ConceptMapVersion:
         @return: n/a
         """
 
-        # OCI: output as ConceptMap.database_schema_version, which may be the same as ConceptMap.database_schema_version
+        # OCI: output as ConceptMap.database_schema_version, which may be the same as ConceptMap.next_schema_version
         self.send_to_oci(ConceptMap.database_schema_version)
         # write diff to OCI - comment out until we consider storage implications
         # self.diff_versions_and_store_diff(concept_map_to_json, initial_path, schema_version)

@@ -7,6 +7,8 @@ from typing import List, Dict, Tuple, Optional, Any
 import re
 import requests
 import concurrent.futures
+
+from psycopg2 import DatabaseError
 from sqlalchemy import text, MetaData, Table, Column, String, Row
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -1302,6 +1304,7 @@ class ValueSet:
     """
 
     database_schema_version = 2
+    # todo: when ready, add a ValueSet.next_schema_version as we have for ConceptMap and DataNormalizationRegistry
     object_storage_folder_name = "ValueSets"
 
     def __init__(
@@ -1728,12 +1731,18 @@ class ValueSet:
                 limit 1
                 """
             )
-        results = conn.execute(query, {"uuid": uuid})
+        try:
+            results = conn.execute(query, {"uuid": uuid})
+        except DatabaseError:
+            raise NotFoundException (
+                f"Database unavailable while seeking ValueSet with UUID: {uuid}"
+            )
         recent_version = results.first()
         if recent_version is None:
-            raise BadRequest(
-                f"No active published version of ValueSet with UUID: {uuid}"
-            )
+            message = f"No published version of ValueSet with UUID: {uuid}"
+            if active_only:
+                message = f"No active published version of ValueSet with UUID: {uuid}"
+            raise BadRequest(message)
         return ValueSetVersion.load(recent_version.uuid)
 
     def duplicate_vs(
