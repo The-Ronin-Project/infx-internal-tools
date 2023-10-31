@@ -108,7 +108,7 @@ class DataNormalizationRegistry:
         entries (list):
     """
     entries: List[DNRegistryEntry] = None
-    database_schema_version = 3
+    database_schema_version = 4
     next_schema_version = 4
     object_storage_folder_name = "DataNormalizationRegistry"
     object_storage_file_name = "registry.json"

@@ -209,7 +209,7 @@ class ConceptMap:
             To cut off the old schema output, set database_schema_version to the next_schema_version (in this case 4).
     """
 
-    database_schema_version = 3
+    database_schema_version = 4
     next_schema_version = 4
     object_storage_folder_name = "ConceptMaps"
 

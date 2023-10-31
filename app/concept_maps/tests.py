@@ -318,13 +318,22 @@ def test_concept_map_output_to_oci():
     """
     Not a test. Really a tool for developers to push content to OCI for urgent reasons.
     """
+    # Use this line when schema versions are the same; otherwise comment out
     # schema_version = ConceptMap.database_schema_version
+
+    # Use this line when schema versions are different; otherwise comment out
     schema_version = ConceptMap.next_schema_version
 
-    test_concept_map_version_uuid = "(insert value here)"  # Always merge using this invalid value, to prevent accidents
+    # "Apposnd Conditions to SNOMED CT"
+    concept_map_uuid = "3704f2b0-7a8c-4455-ab2e-ffbcda91e1e3"
+    version = 4
+
+    # Get the concept map
+    test_concept_map_version = ConceptMapVersion.load_by_concept_map_uuid_and_version(concept_map_uuid, version)
+    test_concept_map_version_uuid = str(test_concept_map_version.uuid)
     test_concept_map_version = ConceptMapVersion(test_concept_map_version_uuid)
     if test_concept_map_version is None:
-        print(f"Version with UUID {test_concept_map_version_uuid} is None")
+        print(f"Unable to load Version {version} of Concept Map with UUID: {concept_map_uuid}")
     else:
         test_concept_map_version.send_to_oci(schema_version)
     # look in OCI to see the value set and data normalization registry files (open up registry.json to see updates)
