@@ -130,6 +130,8 @@ class Terminology:
         terminology_version_uuid = terminology_version_uuid_lookup(fhir_uri, version)
         if terminology_version_uuid is not None:
             return cls.load(terminology_version_uuid)
+        if terminology_version_uuid is None:
+            raise NotFoundException(f"No terminology is found with the provided fhir_uir{fhir_uri} and version:{version}")
 
     @classmethod
     @ttl_cache()
