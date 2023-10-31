@@ -282,10 +282,18 @@ class ConceptMapVersionCreator:
                 mapping_group=row.source_concept_mapping_group,
                 concept_map_version_uuid=row.source_concept_map_version_uuid,
                 # Matching behavior relies on depends on data defaulting to '' instead of null
-                depends_on_system=row.depends_on_system if row.depends_on_system is not None else '',
-                depends_on_property=row.depends_on_property if row.depends_on_property is not None else '',
-                depends_on_value=row.depends_on_value if row.depends_on_value is not None else '',
-                depends_on_display=row.depends_on_display if row.depends_on_value is not None else '',
+                depends_on_system=row.depends_on_system
+                if row.depends_on_system is not None
+                else "",
+                depends_on_property=row.depends_on_property
+                if row.depends_on_property is not None
+                else "",
+                depends_on_value=row.depends_on_value
+                if row.depends_on_value is not None
+                else "",
+                depends_on_display=row.depends_on_display
+                if row.depends_on_value is not None
+                else "",
             )
 
             mapping = None
@@ -534,6 +542,7 @@ class ConceptMapVersionCreator:
                 self.new_version_uuid, new_target_value_set_version_uuid
             )
             previous_contexts_list = []
+            logging.info(f"Total new source concepts: {len(new_source_concepts)}")
 
             for new_source_concept in new_source_concepts:
                 logging.info(f"Processing new source concept: {new_source_concept}")
@@ -549,6 +558,7 @@ class ConceptMapVersionCreator:
                 )
 
                 if source_lookup_key not in all_previous_sources_and_mappings:
+                    logging.info(f"Novel source: {new_source_concept}")
                     # If the source_lookup_key is not found in previous_sources_and_mappings
                     # (i.e. the source concept is new and not present in the previous version),
                     # add the new_source_concept to the novel_sources list.
@@ -577,6 +587,8 @@ class ConceptMapVersionCreator:
                     )
 
                     if source_lookup_key in mapped_no_map_lookup:
+                        logging.info(f"Mapped no map: {new_source_concept}")
+
                         # If the source_lookup_key is found in mapped_no_map_lookup, handle the mapped_no_maps case:
                         # a. Retrieve the previous_mapping_data from mapped_no_map_lookup using the source_lookup_key
                         previous_mapping_data = mapped_no_map_lookup[source_lookup_key]
@@ -635,6 +647,9 @@ class ConceptMapVersionCreator:
                             )
 
                             if target_lookup_key not in new_targets_lookup:
+                                logging.info(
+                                    f"Inactive target mapping: {new_source_concept}"
+                                )
                                 # ii. If the target_lookup_key is not found in new_targets_lookup, it means the target concept is inactive.
                                 # Process the inactive target mapping using the process_inactive_target_mapping method
                                 # and append the result to the previous_mapping_context.
@@ -660,6 +675,9 @@ class ConceptMapVersionCreator:
                                     previous_mapping.relationship.display
                                     == "Equivalent"
                                 ):
+                                    logging.info(
+                                        f"Equivalent mapping: {new_source_concept}"
+                                    )
                                     self.copy_mapping_exact(
                                         new_source_concept=new_source_concept,
                                         new_target_code=new_target_concept,
@@ -667,6 +685,9 @@ class ConceptMapVersionCreator:
                                     )
                                 else:
                                     if require_review_for_non_equivalent_relationships:
+                                        logging.info(
+                                            f"Non-equivalent mapping requiring review: {new_source_concept}"
+                                        )
                                         self.copy_mapping_require_review(
                                             new_source_concept=new_source_concept,
                                             new_target_concept=new_target_concept,
@@ -694,7 +715,13 @@ class ConceptMapVersionCreator:
                 f"create_new_from_previous missing data in concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
             )
             self.conn.rollback()
-        except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
+        # except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
+        #     LOGGER.info(
+        #         f"create_new_from_previous unexpected error with concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
+        #     )
+        #     self.conn.rollback()
+        except Exception as e:  # Catch the general Exception to log the details
+            LOGGER.error(f"Exception details: {str(e)}")
             LOGGER.info(
                 f"create_new_from_previous unexpected error with concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
             )
@@ -777,10 +804,17 @@ class ConceptMapVersionCreator:
         Returns:
             dict: A dictionary containing the previous context if a review is required, otherwise None.
         """
+        logging.info(
+            f"Checking process_no_map conditions for source: {previous_source_concept.uuid}"
+        )
         if (
             require_review_no_maps_not_in_target
             and previous_source_concept.reason_for_no_map == "Not in target code system"
         ):
+            logging.info(
+                f"Processing no_map for source: {previous_source_concept.uuid}"
+            )
+
             # Set map_status back to 'no map' so the user reviews whether a no-map is still appropriate
             previous_context = {
                 "reason": "previous no-map",
@@ -912,7 +946,7 @@ class ConceptMapVersionCreator:
 
         # Explicitly over-write the review status to set it back to needing review
         new_mapping = app.concept_maps.models.Mapping(
-            source=source_code,
+            source=new_source_concept,
             relationship=relationship,
             target=target_code,
             mapping_comments=previous_mapping.mapping_comments,
