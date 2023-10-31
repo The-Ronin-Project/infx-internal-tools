@@ -1236,6 +1236,7 @@ async def reprocess_resource(resource_uuid, token, client):
 
 
 if __name__ == "__main__":
+    # todo: clean out this method altogether, when a temporary, manual error load task is not needed.
     from app.database import get_db
 
     # Moved logging setup to here so it does not run in main program and cause duplicate logs
@@ -1249,18 +1250,14 @@ if __name__ == "__main__":
         ch = logging.StreamHandler()
         LOGGER.addHandler(ch)
 
+    # Per our usual practice, open a DatabaseHandler, that database calls within load_concepts_from_errors will re-use
     conn = get_db()
 
-    # todo: clean out altogether, when temporary error load task is not needed
-    # comment out the next 5 lines for merges and normal use; uncomment when running the temporary error load task
-    # try:
-    #     load_concepts_from_errors(commit_changes=True)
-    #     conn.commit()
-    # except Exception:
-    #     conn.rollback()
+    # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
+    # load_concepts_from_errors(commit_changes=True)
 
-    # uncomment the next 2 commands for merges and normal use; comment out when running the temporary error load task
+    # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
     load_concepts_from_errors(commit_changes=False)
-    conn.rollback()
 
+    # load_concepts_from_errors ran rollback() and commit() where and as needed; now ask the DatabaseHandler to close()
     conn.close()
