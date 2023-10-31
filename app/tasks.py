@@ -93,9 +93,12 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     # Step 7: Create the new value set version
     # Get the most recent version of the terminology
     source_value_set_version = ValueSetVersion.load(source_value_set_version_uuid)
-    terminology_in_source_value_set = (
-        source_value_set_version.lookup_terminologies_in_value_set_version()
-    )
+    try:
+        terminology_in_source_value_set = (
+            source_value_set_version.lookup_terminologies_in_value_set_version()
+        )
+    except NotFoundException as e:
+        raise e
     source_terminology = terminology_in_source_value_set[0]
     source_terminology = source_terminology.load_latest_version()
 

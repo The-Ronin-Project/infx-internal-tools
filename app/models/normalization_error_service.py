@@ -7,6 +7,8 @@ import uuid
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
+import traceback
+import sys
 
 import httpx
 from cachetools.func import ttl_cache
@@ -926,9 +928,10 @@ def load_concepts_from_errors(
             f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} " +
             f"while processing {input_fhir_resource} for organization: {organization_id}\n" +
             f"Exception may reflect a general, temporary problem, such as another service being unavailable.\n\n" +
-            f"Details:\n\n" +
-            f"""{e.__class__.__name__}: {e.message if hasattr(e, "message") else ""}\n\n{e}\n\n"""
+            f"""{e.__class__.__name__}: {e.message if hasattr(e, "message") else ""}\n{e}\n"""
         )
+        # A full stack trace is necessary to pinpoint issues triggered by frequently used constructs like terminologies
+        traceback.print_exception(*sys.exc_info())
     finally:
         time_end = datetime.datetime.now()
         time_elapsed = time_end - time_start
