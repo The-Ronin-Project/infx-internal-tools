@@ -499,6 +499,12 @@ class ConceptMapVersionCreator:
 
         # todo: dated April 2023: do we want to re-expand the value_sets being passed in? Or put some data integrity checks to ensure the expansion is already done?
 
+        # Mapped no map constants
+        no_map_target_concept_code = "No map"
+        no_map_target_concept_display = "No matching concept"
+        no_map_system = "http://projectronin.io/fhir/CodeSystem/ronin/nomap"
+        no_map_version = "1.0"
+
         # Create new version from previous
         try:
             # Set up our variables we need to work with
@@ -592,7 +598,7 @@ class ConceptMapVersionCreator:
                         previous_mapping = mapping
 
                         if require_review_for_non_equivalent_relationships:
-                            no_map_version = "1.0"
+                            # c. check for require_review_for_non_equivalent_relationships is True
                             no_map_target_concept = app.concept_maps.models.Code(
                                 code=previous_mapping.target.code,
                                 display=previous_mapping.target.display,
@@ -609,7 +615,7 @@ class ConceptMapVersionCreator:
                             and previous_source_concept.reason_for_no_map
                             == "Not in target code system"
                         ):
-                            # when require_review is True and reason "Not in target code system"
+                            # d. check for require_review is True and reason "Not in target code system"
                             result = self.process_no_map(
                                 previous_source_concept,
                                 new_source_concept,
@@ -619,15 +625,7 @@ class ConceptMapVersionCreator:
                             if result is not None:
                                 previous_contexts_list.append(result)
                         else:
-                            # d. Otherwise, copy the previous mapping exactly using the copy_mapping_exact method with the new_target_code set to "No map"
-                            # Mapped no map constants
-                            no_map_target_concept_code = "No map"
-                            no_map_target_concept_display = "No matching concept"
-                            no_map_system = (
-                                "http://projectronin.io/fhir/CodeSystem/ronin/nomap"
-                            )
-                            no_map_version = "1.0"
-
+                            # e. Otherwise, copy the previous mapping exactly using the copy_mapping_exact method with the new_target_code set to "No map"
                             no_map_code = app.concept_maps.models.Code(
                                 code=no_map_target_concept_code,
                                 display=no_map_target_concept_display,
