@@ -797,17 +797,10 @@ class ConceptMapVersionCreator:
         Returns:
             dict: A dictionary containing the previous context if a review is required, otherwise None.
         """
-        logging.info(
-            f"Checking process_no_map conditions for source: {previous_source_concept.uuid}"
-        )
         if (
             require_review_no_maps_not_in_target
             and previous_source_concept.reason_for_no_map == "Not in target code system"
         ):
-            logging.info(
-                f"Processing no_map for source: {previous_source_concept.uuid}"
-            )
-
             # Set map_status back to 'no map' so the user reviews whether a no-map is still appropriate
             previous_context = {
                 "reason": "previous no-map",
