@@ -750,7 +750,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where loinc_num in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -767,7 +767,7 @@ class LOINCRule(VSRule):
             for item in self.split_value[1:]:
                 query += f""" or lower(long_common_name) like {item} """
 
-        query += """ and status = 'ACTIVE'
+        query += """ and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -790,7 +790,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where method_typ in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -800,7 +800,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where time_aspct in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -810,7 +810,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where system in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -820,7 +820,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where component in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -830,7 +830,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where scale_typ in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -840,7 +840,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where property in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -850,7 +850,7 @@ class LOINCRule(VSRule):
         query = """
             select * from loinc.code
             where classtype in :value
-            and status = 'ACTIVE'
+            and in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
             and terminology_version_uuid=:terminology_version_uuid
             order by long_common_name
             """
@@ -860,7 +860,7 @@ class LOINCRule(VSRule):
         query = """
             select * from loinc.code
             where order_obs in :value
-            and status = 'ACTIVE'
+            and in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
             and terminology_version_uuid=:terminology_version_uuid
             order by long_common_name
             """
@@ -1734,7 +1734,7 @@ class ValueSet:
         try:
             results = conn.execute(query, {"uuid": uuid})
         except DatabaseError:
-            raise NotFoundException (
+            raise NotFoundException(
                 f"Database unavailable while seeking ValueSet with UUID: {uuid}"
             )
         recent_version = results.first()
@@ -3310,14 +3310,12 @@ class ValueSetVersion:
             )
             if terminology is None:
                 raise NotFoundException(
-                    f"No Terminology code was found with code system FHIR URI {code.system} " +
-                    f" at code Version {code.version} when loading codes for the Value Set with UUID: " +
-                    f"{self.value_set.uuid} and name: {self.value_set.title} at Value Set Version {self.version}"
+                    f"No Terminology code was found with code system FHIR URI {code.system} "
+                    + f" at code Version {code.version} when loading codes for the Value Set with UUID: "
+                    + f"{self.value_set.uuid} and name: {self.value_set.title} at Value Set Version {self.version}"
                 )
             if key not in terminologies:
-                terminologies[
-                    key
-                ] = terminology
+                terminologies[key] = terminology
 
         return list(terminologies.values())
 
