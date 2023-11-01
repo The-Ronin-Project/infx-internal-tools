@@ -753,7 +753,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where loinc_num in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -770,7 +770,7 @@ class LOINCRule(VSRule):
             for item in self.split_value[1:]:
                 query += f""" or lower(long_common_name) like {item} """
 
-        query += """ and status = 'ACTIVE'
+        query += """ and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -793,7 +793,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where method_typ in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -803,7 +803,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where time_aspct in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -813,7 +813,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where system in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -823,7 +823,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where component in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -833,7 +833,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where scale_typ in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -843,7 +843,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where property in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -853,7 +853,7 @@ class LOINCRule(VSRule):
         query = """
             select * from loinc.code
             where classtype in :value
-            and status = 'ACTIVE'
+            and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
             and terminology_version_uuid=:terminology_version_uuid
             order by long_common_name
             """
@@ -863,7 +863,7 @@ class LOINCRule(VSRule):
         query = """
             select * from loinc.code
             where order_obs in :value
-            and status = 'ACTIVE'
+            and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
             and terminology_version_uuid=:terminology_version_uuid
             order by long_common_name
             """
