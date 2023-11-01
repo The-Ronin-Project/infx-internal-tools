@@ -735,11 +735,14 @@ class LOINCRule(VSRule):
         ReTool saves arrays like this: {"Alpha-1-Fetoprotein","Alpha-1-Fetoprotein Ab","Alpha-1-Fetoprotein.tumor marker"}
         Sometimes, we also save arrays like this: Alpha-1-Fetoprotein,Alpha-1-Fetoprotein Ab,Alpha-1-Fetoprotein.tumor marker
 
-        This function will handle both formats and output a python list of strings
+        This function will handle both formats also, newline character sequences  (LF, CR, and CRLF) by replacing them with a space, and output a python list of strings
         """
         new_value = self.value
         if new_value[:1] == "{" and new_value[-1:] == "}":
             new_value = new_value[1:-1]
+
+            # Replace newline characters with a space
+        new_value = new_value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
 
         # Using csv.reader to handle commas inside quotes
         reader = csv.reader([new_value])
@@ -1734,7 +1737,7 @@ class ValueSet:
         try:
             results = conn.execute(query, {"uuid": uuid})
         except DatabaseError:
-            raise NotFoundException (
+            raise NotFoundException(
                 f"Database unavailable while seeking ValueSet with UUID: {uuid}"
             )
         recent_version = results.first()
@@ -3310,14 +3313,12 @@ class ValueSetVersion:
             )
             if terminology is None:
                 raise NotFoundException(
-                    f"No Terminology code was found with code system FHIR URI {code.system} " +
-                    f" at code Version {code.version} when loading codes for the Value Set with UUID: " +
-                    f"{self.value_set.uuid} and name: {self.value_set.title} at Value Set Version {self.version}"
+                    f"No Terminology code was found with code system FHIR URI {code.system} "
+                    + f" at code Version {code.version} when loading codes for the Value Set with UUID: "
+                    + f"{self.value_set.uuid} and name: {self.value_set.title} at Value Set Version {self.version}"
                 )
             if key not in terminologies:
-                terminologies[
-                    key
-                ] = terminology
+                terminologies[key] = terminology
 
         return list(terminologies.values())
 
