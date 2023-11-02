@@ -3320,7 +3320,7 @@ class ValueSetVersion:
                         key
                     ] = Terminology.load_by_fhir_uri_and_version_from_cache(fhir_uri=code.system, version= code.version)
                 except NotFoundException:
-                    raise DataIntegrityError(f"No terminology found with fhir_uri:{code.system} and version:{code.version}")
+                    raise DataIntegrityError(f"No terminology found with fhir_uri:{code.system} and version:{code.version}. This caused a failure to look up terminologies in the value set: {self.value_set.title} version: {self.version}")
 
         return list(terminologies.values())
 
