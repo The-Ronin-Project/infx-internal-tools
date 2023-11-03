@@ -735,11 +735,14 @@ class LOINCRule(VSRule):
         ReTool saves arrays like this: {"Alpha-1-Fetoprotein","Alpha-1-Fetoprotein Ab","Alpha-1-Fetoprotein.tumor marker"}
         Sometimes, we also save arrays like this: Alpha-1-Fetoprotein,Alpha-1-Fetoprotein Ab,Alpha-1-Fetoprotein.tumor marker
 
-        This function will handle both formats and output a python list of strings
+        This function will handle both formats also, newline character sequences  (LF, CR, and CRLF) by replacing them with a space, and output a python list of strings
         """
         new_value = self.value
         if new_value[:1] == "{" and new_value[-1:] == "}":
             new_value = new_value[1:-1]
+
+            # Replace newline characters with a space
+        new_value = new_value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
 
         # Using csv.reader to handle commas inside quotes
         reader = csv.reader([new_value])
@@ -750,7 +753,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where loinc_num in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -767,7 +770,7 @@ class LOINCRule(VSRule):
             for item in self.split_value[1:]:
                 query += f""" or lower(long_common_name) like {item} """
 
-        query += """ and status = 'ACTIVE'
+        query += """ and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -790,7 +793,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where method_typ in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -800,7 +803,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where time_aspct in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -810,7 +813,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where system in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -820,7 +823,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where component in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -830,7 +833,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where scale_typ in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -840,7 +843,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where property in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -850,7 +853,7 @@ class LOINCRule(VSRule):
         query = """
             select * from loinc.code
             where classtype in :value
-            and status = 'ACTIVE'
+            and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
             and terminology_version_uuid=:terminology_version_uuid
             order by long_common_name
             """
@@ -860,7 +863,7 @@ class LOINCRule(VSRule):
         query = """
             select * from loinc.code
             where order_obs in :value
-            and status = 'ACTIVE'
+            and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
             and terminology_version_uuid=:terminology_version_uuid
             order by long_common_name
             """
