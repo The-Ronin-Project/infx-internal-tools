@@ -1004,7 +1004,7 @@ class CPTRule(VSRule):
                 return input_array
             elif type(input_array) == str:
                 return json.loads(input_array)
-        except:
+        except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
             return self.parse_cpt_retool_array(input_array)
 
     def parse_code_number_and_letter(self, code):
@@ -2010,7 +2010,7 @@ class ValueSet:
         most_recent_version.expand()
         try:
             new_value_set_version.expand(force_new=True)
-        except Exception as e:
+        except Exception as e:  # uncaught exceptions can be so costly, a 'bare except' is fine, despite PEP 8: E722
             return "failed_to_expand"
 
         # Get the diff between the two value set versions

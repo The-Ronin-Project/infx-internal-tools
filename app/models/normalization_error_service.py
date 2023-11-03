@@ -22,6 +22,7 @@ import app
 import app.concept_maps.models
 import app.models.data_ingestion_registry
 import app.value_sets.models
+from app.helpers.message_helper import message_stack_trace
 from app.models.codes import Code
 from app.models.models import Organization
 from app.terminologies.models import Terminology
@@ -179,7 +180,7 @@ class ErrorServiceResource:
                 f"httpx.ConnectError, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
             return None
-        except:
+        except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
             LOGGER.warning(
                 f"Unknown Error, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
@@ -901,7 +902,7 @@ def load_concepts_from_errors(
 
                     if commit_changes:
                         conn.commit()
-                except:
+                except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
                     conn.rollback()
 
                 current_time = datetime.datetime.now()
@@ -922,13 +923,13 @@ def load_concepts_from_errors(
             f"  on: {rt.request.method} {rt.request.url}\n"+
             f"  at: {datetime.datetime.now()}\n\n\n"
         )
-    except Exception as e:
+    except Exception as e:  # uncaught exceptions can be so costly, that a 'bare except' is fine, despite PEP 8: E722
         LOGGER.warning(
             f"\nTask halted by exception at Data Normalization Error Service " +
             f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} " +
             f"while processing {input_fhir_resource} for organization: {organization_id}\n" +
             f"Exception may reflect a general, temporary problem, such as another service being unavailable.\n\n" +
-            f"""{e.__class__.__name__}: {e.message if hasattr(e, "message") else ""}\n{e}\n"""
+            message_stack_trace(e)
         )
         # A full stack trace is necessary to pinpoint issues triggered by frequently used constructs like terminologies
         traceback.print_exception(*sys.exc_info())
@@ -1254,10 +1255,10 @@ if __name__ == "__main__":
     conn = get_db()
 
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    # load_concepts_from_errors(commit_changes=True)
+    load_concepts_from_errors(commit_changes=True)
 
     # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
-    load_concepts_from_errors(commit_changes=False)
+    # load_concepts_from_errors(commit_changes=False)
 
     # load_concepts_from_errors ran rollback() and commit() where and as needed; now ask the DatabaseHandler to close()
     conn.close()

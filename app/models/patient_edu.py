@@ -98,7 +98,7 @@ class ExternalResource:
 
         try:
             ExternalResource.retrieve_language_code(language_code)
-        except Exception as error:
+        except Exception as error:  # uncaught exceptions can be so costly, a 'bare except' is fine, despite PEP 8: E722
             return f"Cannot import external resource. Language code not found: {error}"
 
         table_query = {"name": "resource_version", "schema": "patient_education"}
