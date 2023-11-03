@@ -1,4 +1,4 @@
-def message_stack_trace(e: Exception) -> str:
+def message_exception_summary(e: Exception) -> str:
     """
     Based on the input Exception object, provide a stack trace as text.
     A full stack trace is necessary to pinpoint issues triggered by frequently used constructs like terminologies.

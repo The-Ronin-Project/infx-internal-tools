@@ -22,7 +22,7 @@ import app
 import app.concept_maps.models
 import app.models.data_ingestion_registry
 import app.value_sets.models
-from app.helpers.message_helper import message_stack_trace
+from app.helpers.message_helper import message_exception_summary
 from app.models.codes import Code
 from app.models.models import Organization
 from app.terminologies.models import Terminology
@@ -929,7 +929,7 @@ def load_concepts_from_errors(
             f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} " +
             f"while processing {input_fhir_resource} for organization: {organization_id}\n" +
             f"Exception may reflect a general, temporary problem, such as another service being unavailable.\n\n" +
-            message_stack_trace(e)
+            message_exception_summary(e)
         )
         # A full stack trace is necessary to pinpoint issues triggered by frequently used constructs like terminologies
         traceback.print_exception(*sys.exc_info())
