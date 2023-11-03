@@ -1255,10 +1255,10 @@ if __name__ == "__main__":
     conn = get_db()
 
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    load_concepts_from_errors(commit_changes=True)
+    # load_concepts_from_errors(commit_changes=True)
 
     # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
-    # load_concepts_from_errors(commit_changes=False)
+    load_concepts_from_errors(commit_changes=False)
 
     # load_concepts_from_errors ran rollback() and commit() where and as needed; now ask the DatabaseHandler to close()
     conn.close()
