@@ -1734,7 +1734,7 @@ class ValueSet:
         try:
             results = conn.execute(query, {"uuid": uuid})
         except DatabaseError:
-            raise NotFoundException (
+            raise NotFoundException(
                 f"Database unavailable while seeking ValueSet with UUID: {uuid}"
             )
         recent_version = results.first()
@@ -3305,22 +3305,18 @@ class ValueSetVersion:
 
         for code in self.expansion:
             key = (code.system, code.version)
-            terminology = Terminology.load_by_fhir_uri_and_version_from_cache(
-                fhir_uri=code.system, version=code.version
-            )
-            if terminology is None:
-                raise NotFoundException(
-                    f"No Terminology code was found with code system FHIR URI {code.system} " +
-                    f" at code Version {code.version} when loading codes for the Value Set with UUID: " +
-                    f"{self.value_set.uuid} and name: {self.value_set.title} at Value Set Version {self.version}"
+            try:
+                terminology = Terminology.load_by_fhir_uri_and_version_from_cache(
+                    fhir_uri=code.system, version=code.version
+                )
+            except NotFoundException:
+                raise DataIntegrityError(
+                    f"No terminology found with fhir_uri: {code.system} and version: {code.version}."
+                    + f" This caused a failure to look up terminologies in the value set: {self.value_set.title}"
+                    + f" version: {self.version} "
                 )
             if key not in terminologies:
-                try:
-                    terminologies[
-                        key
-                    ] = Terminology.load_by_fhir_uri_and_version_from_cache(fhir_uri=code.system, version= code.version)
-                except NotFoundException:
-                    raise DataIntegrityError(f"No terminology found with fhir_uri:{code.system} and version:{code.version}. This caused a failure to look up terminologies in the value set: {self.value_set.title} version: {self.version}")
+                terminologies[key] = terminology
 
         return list(terminologies.values())
 

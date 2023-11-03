@@ -134,7 +134,7 @@ class Terminology:
             return cls.load(terminology_version_uuid)
         if terminology_version_uuid is None:
             raise NotFoundException(
-                f"No terminology is found with the provided fhir_uir:{fhir_uri} and version:{version}"
+                f"No terminology is found with the provided fhir_uri: {fhir_uri} and version: {version}"
             )
 
     @classmethod
