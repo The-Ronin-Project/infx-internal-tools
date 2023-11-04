@@ -12,7 +12,7 @@ def db_cursor(func):
             conn.execute("BEGIN")
             transaction = func(conn, *args)
             conn.execute("COMMIT")
-        except Exception as error:
+        except Exception as error:  # uncaught exceptions can be so costly, a 'bare except' is fine, despite PEP 8: E722
             conn.execute("ROLLBACK")
             raise error
         return transaction
