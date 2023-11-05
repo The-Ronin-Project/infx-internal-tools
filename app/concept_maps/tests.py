@@ -370,10 +370,9 @@ def concept_map_output_for_schema(schema_version: int):
             test_group = None
             for group in serialized_concept_map["group"]:
                 if group.get("target") == "http://loinc.org":
-                    elements = []
                     for element in group["element"]:
                         if element["target"][0].get("code") == "11433-0":
-                            elements.append(element)
+                            elements = [element]
                             break
                     test_group = {"element": elements}
                     break
