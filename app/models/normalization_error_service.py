@@ -15,6 +15,7 @@ import httpx
 import pytest
 from cachetools.func import ttl_cache
 from decouple import config
+from deprecated.classic import deprecated
 from httpx import ReadTimeout
 from sqlalchemy import text, Table, Column, MetaData, Text, bindparam
 from sqlalchemy.dialects.postgresql import UUID as UUID_column_type
@@ -1266,6 +1267,10 @@ if __name__ == "__main__":
     conn.close()
 
 
+@deprecated(
+    "This one-time repair function has been used already. "
+    + "Posting it in a PR as an example of a pattern we probably need for the purge task."
+)
 @pytest.mark.skip(
     reason="External calls: Reads from the database, writes to the database. This is a utility, not a test." +
            "Do not write out to the database or write out to OCI data store, from tests. "
