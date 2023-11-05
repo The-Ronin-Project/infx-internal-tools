@@ -310,21 +310,54 @@ def test_diff_mappings_and_metadata():
     assert result.get("version") == 5
 
 
-@pytest.mark.skip(
-    reason="External calls: Reads from the database, writes to the OCI data store. This is a utility, not a test." +
-        "Do not write out to the database or write out to OCI data store, from tests. "
-)
-def test_concept_map_output_to_oci():
+# @pytest.mark.skip(
+#     reason="External calls: Calls helper that reads from the database. To run on a local dev machine, comment out " +
+#         "this 'skip' annotation. To support future test automation, any external calls must be mocked."
+# )
+def test_concept_map_output():
     """
-    Not a test. Really a tool for developers to push content to OCI for urgent reasons.
+    Test that the ConceptMap current and/or next schema version is correctly defined in the ConceptMap class right now.
+    Then run the concept_map_output_for_schema test for each version (only once, if they are the same number right now).
     """
-    # schema_version = ConceptMap.database_schema_version
-    schema_version = ConceptMap.next_schema_version
+    assert ConceptMap.database_schema_version == 3
+    assert ConceptMap.next_schema_version == 4
+    concept_map_output_for_schema(ConceptMap.database_schema_version)
+    if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
+        concept_map_output_for_schema(ConceptMap.next_schema_version)
 
-    test_concept_map_version_uuid = "(insert value here)"  # Always merge using this invalid value, to prevent accidents
+
+def concept_map_output_for_schema(schema_version: int):
+    """
+    Helper function for test_concept_map_output.
+    @param schema_version: current and/or next schema version for ConceptMap as input by test_concept_map_output().
+    """
+    test_concept_map_version_uuid = "316f6438-6197-4bb0-a932-ed6c48d2a860"  # this map has dependsOn; many others do not
     test_concept_map_version = ConceptMapVersion(test_concept_map_version_uuid)
     if test_concept_map_version is None:
         print(f"Version with UUID {test_concept_map_version_uuid} is None")
     else:
-        test_concept_map_version.send_to_oci(schema_version)
-    # look in OCI to see the value set and data normalization registry files (open up registry.json to see updates)
+        with (open(f"../test/resources/concept_map/serialized_v{schema_version}.json") as serialized_json):
+            (serialized_concept_map, initial_path) = test_concept_map_version.prepare_for_oci(schema_version)
+            assert initial_path == f"ConceptMaps/v{schema_version}"
+
+            # remove time stamp of "now" which cannot match timestamp in any other output
+            del serialized_concept_map["date"]
+
+            # limit output size and avoid issues from random code order and code ids: omit all but 1 group and 1 element
+            test_group = None
+            for group in serialized_concept_map["group"]:
+                if group.get("target") == "http://loinc.org":
+                    elements = []
+                    for element in group["element"]:
+                        if element["target"][0].get("code") == "11433-0":
+                            elements.append(element)
+                            break
+                    test_group = {"element": elements}
+                    break
+            del serialized_concept_map["group"]
+            serialized_concept_map["group"] = [test_group]
+
+            # read the comparison file and compare the output
+            test_file = serialized_json.read()
+            serialized_test = json.loads(test_file)
+            assert serialized_concept_map == serialized_test
