@@ -328,7 +328,7 @@ def concept_map_output_to_oci(schema_version: int):
     Helper function for test_concept_map_output_to_oci.
     @param schema_version: current and/or next schema version for ConceptMap as input by test_concept_map_output().
     """
-    test_concept_map_version_uuid = "(insert the version uuid here)"   # use this invalid value when merging this file
+    test_concept_map_version_uuid = "(insert the version uuid here)"   # use this invalid value on purpose when merging
     test_concept_map_version = ConceptMapVersion(test_concept_map_version_uuid)
     if test_concept_map_version is None:
         print(f"Version with UUID {test_concept_map_version_uuid} is None")
