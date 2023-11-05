@@ -337,13 +337,16 @@ def concept_map_output_for_schema(schema_version: int):
         print(f"Version with UUID {test_concept_map_version_uuid} is None")
     else:
         with (open(f"../test/resources/concept_map/serialized_v{schema_version}.json") as serialized_json):
+            # call the output function we are testing
             (serialized_concept_map, initial_path) = test_concept_map_version.prepare_for_oci(schema_version)
+
+            # is the OCI path correct?
             assert initial_path == f"ConceptMaps/v{schema_version}"
 
-            # remove time stamp of "now" which cannot match timestamp in any other output
+            # remove timestamp of "now" because it cannot match the timestamp of any other output sample
             del serialized_concept_map["date"]
 
-            # limit output size and avoid issues from random code order and code ids: omit all but 1 group and 1 element
+            # limit output size and avoid issues from random code order and code ids: cut all but 1 group and 1 element
             test_group = None
             for group in serialized_concept_map["group"]:
                 if group.get("target") == "http://loinc.org":
@@ -357,7 +360,9 @@ def concept_map_output_for_schema(schema_version: int):
             del serialized_concept_map["group"]
             serialized_concept_map["group"] = [test_group]
 
-            # read the comparison file and compare the output
+            # read the string from the comparison file and call json.loads() to load it as an object
             test_file = serialized_json.read()
             serialized_test = json.loads(test_file)
+
+            # compare serialized concept map object with the object loaded from the file string
             assert serialized_concept_map == serialized_test
