@@ -1276,7 +1276,7 @@ def test_norm_registry_null_environments():
     Repeat test_norm_registry_null_environments() in each environment until there are no results to the first query.
     This function offers a useful pattern for using GET /resources/:resource_uuid to see whether a particular resource
     still exists on the Data Ingestion Error Validation Service. The pattern is that if a JSONDecodeError is raised
-    while processing this GET it is because it returned an empty string. GET does that when the resource is not found.
+    by this GET it is because it returned an empty string. This particular GET does that when the resource is not found.
     """
     from app.database import get_db
     conn = get_db()
