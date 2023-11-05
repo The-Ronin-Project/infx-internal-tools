@@ -329,7 +329,7 @@ def test_concept_map_output_to_oci():
         test_concept_map_version.send_to_oci(schema_version)
     # look in OCI to see the value set and data normalization registry files (open up registry.json to see updates)
 
-    
+
 @pytest.mark.skip(
     reason="External calls: Calls helper that reads from the database. To run on a local dev machine, comment out " +
         "this 'skip' annotation. To support future test automation, any external calls must be mocked."
@@ -366,7 +366,7 @@ def concept_map_output_for_schema(schema_version: int):
             # remove timestamp of "now" because it cannot match the timestamp of any other output sample
             del serialized_concept_map["date"]
 
-            # limit output size and avoid issues from random code order and code ids: cut all but 1 group and 1 element
+            # limit output file size and avoid issues from random element order: cut all but 1 group and 1 element
             test_group = None
             for group in serialized_concept_map["group"]:
                 if group.get("target") == "http://loinc.org":
