@@ -310,10 +310,30 @@ def test_diff_mappings_and_metadata():
     assert result.get("version") == 5
 
 
-# @pytest.mark.skip(
-#     reason="External calls: Calls helper that reads from the database. To run on a local dev machine, comment out " +
-#         "this 'skip' annotation. To support future test automation, any external calls must be mocked."
-# )
+@pytest.mark.skip(
+    reason="External calls: Reads from the database, writes to the OCI data store. This is a utility, not a test." +
+        "Do not write out to the database or write out to OCI data store, from tests. "
+)
+def test_concept_map_output_to_oci():
+    """
+    Not a test. Really a tool for developers to push content to OCI for urgent reasons.
+    """
+    # schema_version = ConceptMap.database_schema_version
+    schema_version = ConceptMap.next_schema_version
+
+    test_concept_map_version_uuid = "(insert value here)"  # Always merge using this invalid value, to prevent accidents
+    test_concept_map_version = ConceptMapVersion(test_concept_map_version_uuid)
+    if test_concept_map_version is None:
+        print(f"Version with UUID {test_concept_map_version_uuid} is None")
+    else:
+        test_concept_map_version.send_to_oci(schema_version)
+    # look in OCI to see the value set and data normalization registry files (open up registry.json to see updates)
+
+    
+@pytest.mark.skip(
+    reason="External calls: Calls helper that reads from the database. To run on a local dev machine, comment out " +
+        "this 'skip' annotation. To support future test automation, any external calls must be mocked."
+)
 def test_concept_map_output():
     """
     Test that the ConceptMap current and/or next schema version is correctly defined in the ConceptMap class right now.
