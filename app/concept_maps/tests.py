@@ -318,17 +318,17 @@ def test_concept_map_output_to_oci():
     """
     Not a test. Really a tool for developers to push content to OCI for urgent reasons.
     """
-    concept_map_output_to_oci(ConceptMap.database_schema_version)
+    test_concept_map_version_uuid = "(insert the version uuid here)"  # use this invalid value on purpose when merging
+    concept_map_output_to_oci(test_concept_map_version_uuid, ConceptMap.database_schema_version)
     if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
-        concept_map_output_to_oci(ConceptMap.next_schema_version)
+        concept_map_output_to_oci(test_concept_map_version_uuid, ConceptMap.next_schema_version)
 
 
-def concept_map_output_to_oci(schema_version: int):
+def concept_map_output_to_oci(test_concept_map_version_uuid: str, schema_version: int):
     """
     Helper function for test_concept_map_output_to_oci.
     @param schema_version: current and/or next schema version for ConceptMap as input by test_concept_map_output().
     """
-    test_concept_map_version_uuid = "(insert the version uuid here)"   # use this invalid value on purpose when merging
     test_concept_map_version = ConceptMapVersion(test_concept_map_version_uuid)
     if test_concept_map_version is None:
         print(f"Version with UUID {test_concept_map_version_uuid} is None")
