@@ -1268,8 +1268,7 @@ if __name__ == "__main__":
 
 
 @deprecated(
-    "This one-time repair function has been used already. "
-    + "Posting it in a PR as an example of a pattern we probably need for the purge task."
+    "This one-time repair function has been used already. Retaining it as an example of a few code patterns."
 )
 @pytest.mark.skip(
     reason="External calls: Reads from the database, writes to the database. This is a utility, not a test." +
@@ -1293,7 +1292,6 @@ def test_norm_registry_null_environments():
     results = conn.execute(
         text(query)
     )
-    print("\nResource UUIDs:")
     environment = get_environment_from_service_url(DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL)
     environment_uuid_list = []
     for row in results:
