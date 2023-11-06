@@ -304,6 +304,8 @@ def create_app(script_info=None):
     def data_ingestion_registry():
         """
         Retrieve the data ingestion registry, which contains metadata about data sources and their ingestion processes.
+        If more than one data output schema version is active during a transition between output schema versions,
+        the registry is returned using the more recent of the two schema versions.
         """
         if request.method == "GET":
             from_oci = request.values.get("from_oci")
@@ -358,9 +360,17 @@ def create_app(script_info=None):
         methods=["POST"],
     )
     def load_outstanding_codes_to_new_concept_map_version():
+        message = "Concept Map was not found during a request to load outstanding codes"
         concept_map_uuid = request.json.get("concept_map_uuid")
-        tasks.load_outstanding_codes_to_new_concept_map_version(concept_map_uuid)
-        return "OK"
+        if concept_map_uuid is None:
+            message = "No Concept Map UUID was supplied during a request to load outstanding codes"
+        else:
+            try:
+                tasks.load_outstanding_codes_to_new_concept_map_version(concept_map_uuid)
+                message = "OK"
+            except NotFoundException as e:
+                message = e.message
+        return message
 
     @app.route(
         "/data_normalization/actions/resolve_issues_for_concept_map_version",

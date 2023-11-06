@@ -34,6 +34,7 @@ class Registry:
     registry_type: str  # not an enum so users can create new types of registries w/o code change
     sorting_enabled: bool
     database_schema_version = 1
+    # todo: when ready, add a Registry.next_schema_version as we have for ConceptMap and DataNormalizationRegistry
     object_storage_folder_name = "Registries"
 
     def __post_init__(cls):

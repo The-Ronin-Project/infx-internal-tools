@@ -1,3 +1,4 @@
+import csv
 import datetime
 import json
 from dataclasses import dataclass, field
@@ -6,6 +7,8 @@ from typing import List, Dict, Tuple, Optional, Any
 import re
 import requests
 import concurrent.futures
+
+from psycopg2 import DatabaseError
 from sqlalchemy import text, MetaData, Table, Column, String, Row
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -15,7 +18,7 @@ from collections import defaultdict
 from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
 
-from app.errors import NotFoundException, BadDataError
+from app.errors import NotFoundException, BadDataError, DataIntegrityError
 from app.helpers.oci_helper import set_up_object_store
 
 from app.models.codes import Code
@@ -709,7 +712,6 @@ class LOINCRule(VSRule):
         conn = get_db()
 
         converted_query = text(query).bindparams(bindparam("value", expanding=True))
-
         results_data = conn.execute(
             converted_query,
             {
@@ -734,22 +736,25 @@ class LOINCRule(VSRule):
         ReTool saves arrays like this: {"Alpha-1-Fetoprotein","Alpha-1-Fetoprotein Ab","Alpha-1-Fetoprotein.tumor marker"}
         Sometimes, we also save arrays like this: Alpha-1-Fetoprotein,Alpha-1-Fetoprotein Ab,Alpha-1-Fetoprotein.tumor marker
 
-        This function will handle both formats and output a python list of strings
+        This function will handle both formats also, newline character sequences  (LF, CR, and CRLF) by replacing them with a space, and output a python list of strings
         """
         new_value = self.value
         if new_value[:1] == "{" and new_value[-1:] == "}":
-            new_value = new_value[1:]
-            new_value = new_value[:-1]
-        new_value = new_value.split(",")
-        new_value = [(x[1:] if x[:1] == '"' else x) for x in new_value]
-        new_value = [(x[:-1] if x[-1:] == '"' else x) for x in new_value]
-        return new_value
+            new_value = new_value[1:-1]
+
+            # Replace newline characters with a space
+        new_value = new_value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+
+        # Using csv.reader to handle commas inside quotes
+        reader = csv.reader([new_value])
+        for row in reader:
+            return row
 
     def code_rule(self):
         query = """
     select * from loinc.code
     where loinc_num in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -758,7 +763,6 @@ class LOINCRule(VSRule):
     def display_rule(self):
         # Cannot use "ilike any(...)" because thats Postgres specific
         conn = get_db()
-
         query = f"""
     select * from loinc.code
     where lower(long_common_name) like '{self.split_value[0].lower()}'"""
@@ -767,7 +771,7 @@ class LOINCRule(VSRule):
             for item in self.split_value[1:]:
                 query += f""" or lower(long_common_name) like {item} """
 
-        query += """ and status = 'ACTIVE'
+        query += """ and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -790,7 +794,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where method_typ in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -800,7 +804,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where time_aspct in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -810,7 +814,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where system in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -820,7 +824,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where component in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -830,7 +834,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where scale_typ in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -840,7 +844,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where property in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -850,7 +854,7 @@ class LOINCRule(VSRule):
         query = """
             select * from loinc.code
             where classtype in :value
-            and status = 'ACTIVE'
+            and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
             and terminology_version_uuid=:terminology_version_uuid
             order by long_common_name
             """
@@ -860,7 +864,7 @@ class LOINCRule(VSRule):
         query = """
             select * from loinc.code
             where order_obs in :value
-            and status = 'ACTIVE'
+            and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
             and terminology_version_uuid=:terminology_version_uuid
             order by long_common_name
             """
@@ -1001,7 +1005,7 @@ class CPTRule(VSRule):
                 return input_array
             elif type(input_array) == str:
                 return json.loads(input_array)
-        except:
+        except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
             return self.parse_cpt_retool_array(input_array)
 
     def parse_code_number_and_letter(self, code):
@@ -1304,6 +1308,7 @@ class ValueSet:
     """
 
     database_schema_version = 2
+    # todo: when ready, add a ValueSet.next_schema_version as we have for ConceptMap and DataNormalizationRegistry
     object_storage_folder_name = "ValueSets"
 
     def __init__(
@@ -1730,12 +1735,18 @@ class ValueSet:
                 limit 1
                 """
             )
-        results = conn.execute(query, {"uuid": uuid})
+        try:
+            results = conn.execute(query, {"uuid": uuid})
+        except DatabaseError:
+            raise NotFoundException(
+                f"Database unavailable while seeking ValueSet with UUID: {uuid}"
+            )
         recent_version = results.first()
         if recent_version is None:
-            raise BadRequest(
-                f"No active published version of ValueSet with UUID: {uuid}"
-            )
+            message = f"No published version of ValueSet with UUID: {uuid}"
+            if active_only:
+                message = f"No active published version of ValueSet with UUID: {uuid}"
+            raise BadRequest(message)
         return ValueSetVersion.load(recent_version.uuid)
 
     def duplicate_vs(
@@ -2000,7 +2011,7 @@ class ValueSet:
         most_recent_version.expand()
         try:
             new_value_set_version.expand(force_new=True)
-        except Exception as e:
+        except Exception as e:  # uncaught exceptions can be so costly, a 'bare except' is fine, despite PEP 8: E722
             return "failed_to_expand"
 
         # Get the diff between the two value set versions
@@ -2976,9 +2987,10 @@ class ValueSetVersion:
             rcdm_id = re.sub("([a-z])([A-Z])", r"\1-\2", rcdm_id).lower()
             rcdm_url = "http://hl7.org/fhir/ValueSet/"
 
-        if (
-            self.status == "pending"
-        ):  # has a required binding (translate pending to draft)
+        if self.status in {
+            "pending",
+            "reviewed",
+        }:  # has a required binding (translate pending, reviewed to draft)
             rcdm_status = "draft"
         else:
             rcdm_status = self.status
@@ -3297,12 +3309,18 @@ class ValueSetVersion:
 
         for code in self.expansion:
             key = (code.system, code.version)
-            if key not in terminologies:
-                terminologies[
-                    key
-                ] = Terminology.load_by_fhir_uri_and_version_from_cache(
+            try:
+                terminology = Terminology.load_by_fhir_uri_and_version_from_cache(
                     fhir_uri=code.system, version=code.version
                 )
+            except NotFoundException:
+                raise DataIntegrityError(
+                    f"No terminology found with fhir_uri: {code.system} and version: {code.version}."
+                    + f" This caused a failure to look up terminologies in the value set: {self.value_set.title}"
+                    + f" version: {self.version} "
+                )
+            if key not in terminologies:
+                terminologies[key] = terminology
 
         return list(terminologies.values())
 

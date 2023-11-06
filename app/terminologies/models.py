@@ -106,7 +106,9 @@ class Terminology:
 
         # When there is no data, do not create an object
         if data is None:
-            raise NotFoundException(f"No data found for terminology version UUID: {terminology_version_uuid}")
+            raise NotFoundException(
+                f"No data found for terminology version UUID: {terminology_version_uuid}"
+            )
         term_data = data.first()
 
         # Create and return a Terminology object
@@ -130,6 +132,10 @@ class Terminology:
         terminology_version_uuid = terminology_version_uuid_lookup(fhir_uri, version)
         if terminology_version_uuid is not None:
             return cls.load(terminology_version_uuid)
+        if terminology_version_uuid is None:
+            raise NotFoundException(
+                f"No terminology is found with the provided fhir_uri: {fhir_uri} and version: {version}"
+            )
 
     @classmethod
     @ttl_cache()
@@ -325,7 +331,7 @@ class Terminology:
 
         # Then check if the effective date has not yet passed
         if most_recent_terminology.effective_end is None or (
-                datetime.date.today() <= most_recent_terminology.effective_end
+            datetime.date.today() <= most_recent_terminology.effective_end
         ):
             return most_recent_terminology
 
