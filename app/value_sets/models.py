@@ -18,7 +18,7 @@ from collections import defaultdict
 from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
 
-from app.errors import NotFoundException, BadDataError
+from app.errors import NotFoundException, BadDataError, DataIntegrityError
 from app.helpers.oci_helper import set_up_object_store
 
 from app.models.codes import Code
@@ -3308,14 +3308,15 @@ class ValueSetVersion:
 
         for code in self.expansion:
             key = (code.system, code.version)
-            terminology = Terminology.load_by_fhir_uri_and_version_from_cache(
-                fhir_uri=code.system, version=code.version
-            )
-            if terminology is None:
-                raise NotFoundException(
-                    f"No Terminology code was found with code system FHIR URI {code.system} "
-                    + f" at code Version {code.version} when loading codes for the Value Set with UUID: "
-                    + f"{self.value_set.uuid} and name: {self.value_set.title} at Value Set Version {self.version}"
+            try:
+                terminology = Terminology.load_by_fhir_uri_and_version_from_cache(
+                    fhir_uri=code.system, version=code.version
+                )
+            except NotFoundException:
+                raise DataIntegrityError(
+                    f"No terminology found with fhir_uri: {code.system} and version: {code.version}."
+                    + f" This caused a failure to look up terminologies in the value set: {self.value_set.title}"
+                    + f" version: {self.version} "
                 )
             if key not in terminologies:
                 terminologies[key] = terminology
