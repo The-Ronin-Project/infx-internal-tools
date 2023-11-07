@@ -1155,6 +1155,31 @@ def get_outstanding_errors(
     return list_result
 
 
+def update_loaded_concepts_count(concept_map_version_uuid, loaded_count):
+    # Assuming get_db() manages connection pooling or session management
+    conn = get_db()
+    try:
+        conn.execute(
+            text(
+                """
+                UPDATE concept_maps.concept_map
+                SET count_loaded_concepts = :loaded_count
+                WHERE uuid = :concept_map_version_uuid
+                """
+            ),
+            {
+                "concept_map_version_uuid": concept_map_version_uuid,
+                "loaded_count": loaded_count
+            }
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def get_all_unresolved_validation(environment: str):
     """
     Identify all open Data Validation Service resources with unresolved issues

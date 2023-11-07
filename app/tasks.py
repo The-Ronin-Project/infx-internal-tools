@@ -7,7 +7,7 @@ from app.errors import NotFoundException
 from app.value_sets.models import ValueSetVersion, ValueSet
 import app.concept_maps.models
 import app.concept_maps.versioning_models
-from app.models.normalization_error_service import load_concepts_from_errors
+from app.models.normalization_error_service import load_concepts_from_errors, get_outstanding_errors, update_loaded_concepts_count
 from app.database import get_db
 
 
@@ -61,6 +61,21 @@ def resolve_errors_after_concept_map_publish(concept_map_version_uuid):
 @celery_app.task
 def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     conn = get_db()
+
+    # Update the count_loaded_concepts column.
+    # Retrieve the outstanding errors
+    outstanding_errors = get_outstanding_errors()
+    # Find the entry for the current concept_map_uuid, if it exists
+    current_outstanding_error = next(
+        (error for error in outstanding_errors if error['concept_map_uuid'] == concept_map_uuid), None)
+
+    if current_outstanding_error:
+        # Call the update function with the loaded count and concept_map_version_uuid
+        update_loaded_concepts_count(
+            conn,
+            current_outstanding_error['latest_concept_map_version_uuid'],
+            current_outstanding_error['outstanding_code_count']
+        )
 
     # Step 6: look up source and target value set
     
