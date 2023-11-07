@@ -12,7 +12,6 @@ import traceback
 import sys
 
 import httpx
-import pytest
 from cachetools.func import ttl_cache
 from decouple import config
 from deprecated.classic import deprecated
@@ -1270,11 +1269,7 @@ if __name__ == "__main__":
 @deprecated(
     "This one-time repair function has been used already. Retaining it as an example of a few code patterns."
 )
-@pytest.mark.skip(
-    reason="External calls: Reads from the database, writes to the database. This is a utility, not a test." +
-           "Do not write out to the database or write out to OCI data store, from tests. "
-)
-def test_norm_registry_null_environments():
+def _test_norm_registry_null_environments():
     """
     Not a test. Really a tool for developers to perform a one-time correction in the error_service_issue table.
     Repeat test_norm_registry_null_environments() in each environment until there are no results to the first query.
