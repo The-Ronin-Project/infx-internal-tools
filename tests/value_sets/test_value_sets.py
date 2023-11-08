@@ -17,7 +17,6 @@ class ValueSetTests(unittest.TestCase):
         """
         Expand the 'Automated Testing Value Set' value set and verify the outputs
         """
-        # ToDo: add better, more stable rules to this
         value_set_version_uuid = "58e792d9-1264-4f18-b16e-6292cb7ca597"
         value_set_version = app.value_sets.models.ValueSetVersion.load(
             value_set_version_uuid
