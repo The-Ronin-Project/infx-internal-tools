@@ -24,6 +24,7 @@ import app
 import app.concept_maps.models
 import app.models.data_ingestion_registry
 import app.value_sets.models
+from app.errors import BadDataError
 from app.helpers.message_helper import message_exception_summary
 from app.models.codes import Code
 from app.models.models import Organization
@@ -187,9 +188,16 @@ class ErrorServiceResource:
                 f"httpx.ConnectError, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
             return None
-        except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
+        except BadDataError:
             LOGGER.warning(
-                f"Unknown Error, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
+                f"BadDataError, skipping load: details logged at first occurrence: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
+            )
+            return None
+        except Exception as e:  # uncaught exceptions are so costly, a 'bare except' is acceptable, despite PEP 8: E722
+            intro = f"Unknown Error, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
+            info = "".join(traceback.format_exception(*sys.exc_info()))
+            LOGGER.warning(
+                f"{intro}\n{message_exception_summary(e)}\n{info}"
             )
             return None
 
@@ -376,6 +384,7 @@ def load_concepts_from_errors(
         + f"  Load to:   {DATABASE_HOST}\n\n"
         + f"Main loop:\n"
     )
+    tenant_load_json_format_error_reported = []
 
     # Local caches
     # todo: study why ttl_cache, or other caching strategies, did not stop repeat loads from happening
@@ -522,7 +531,21 @@ def load_concepts_from_errors(
                 for error_service_resource in error_resources:
                     # Get the FHIR resource information from the error resource
                     resource_type = error_service_resource.resource_type
-                    raw_resource = json.loads(error_service_resource.resource)
+                    try:
+                        raw_resource = json.loads(error_service_resource.resource)
+                    except Exception as e:
+                        intro = f"Error loading {fhir_resource_type} for {organization_id}: 1 report for 1+ cases"
+                        if intro not in tenant_load_json_format_error_reported:
+                            error_code = "NormalizationErrorService.load_concepts_from_errors"
+                            info = "".join(traceback.format_exception(*sys.exc_info()))
+                            summary = message_exception_summary(e)
+                            LOGGER.warning(f"\n{error_code}\n{intro}\n{summary}\n{info}\n")
+                            tenant_load_json_format_error_reported.append(intro)
+                            raise BadDataError(
+                                code=error_code,
+                                description=intro,
+                                errors=summary
+                            )
 
                     # The data element where validation is failed is stored in the 'location' on the issue
                     # We need to filter the issues to just the NOV_CONMAP_LOOKUP issues and get the location
@@ -798,18 +821,15 @@ def load_concepts_from_errors(
 
                         # Assemble additionalData from the raw resource.
                         # This is where we'll extract unit, value, referenceRange, and value[x] if available
-                        resource_json = json.loads(error_service_resource.resource)
                         new_code.add_examples_to_additional_data(
-                            unit=resource_json.get("unit"),
-                            value=resource_json.get("value"),
-                            reference_range=resource_json.get("referenceRange"),
-                            value_quantity=resource_json.get("valueQuantity"),
-                            value_boolean=resource_json.get("valueBoolean"),
-                            value_string=resource_json.get("valueString"),
-                            value_date_time=resource_json.get("valueDateTime"),
-                            value_codeable_concept=resource_json.get(
-                                "valueCodeableConcept"
-                            ),
+                            unit=raw_resource.get("unit"),
+                            value=raw_resource.get("value"),
+                            reference_range=raw_resource.get("referenceRange"),
+                            value_quantity=raw_resource.get("valueQuantity"),
+                            value_boolean=raw_resource.get("valueBoolean"),
+                            value_string=raw_resource.get("valueString"),
+                            value_date_time=raw_resource.get("valueDateTime"),
+                            value_codeable_concept=raw_resource.get("valueCodeableConcept"),
                         )
 
                         if (
