@@ -316,7 +316,9 @@ def test_diff_mappings_and_metadata():
 )
 def test_concept_map_output_to_oci():
     """
-    Not a test. Really a tool for developers to push content to OCI for urgent reasons.
+    Not a test. Really a tool for developers to push content to OCI for urgent reasons. Be aware that if there is
+    already an output file for a version number present in the OCI folder, this function will not overwrite it. If it is
+    imperative to overwrite the previously output file for a version number, you must remove that file from OCI first.
     """
     test_concept_map_version_uuid = "(insert the version uuid here)"  # use this invalid value on purpose when merging
     concept_map_output_to_oci(test_concept_map_version_uuid, ConceptMap.database_schema_version)
