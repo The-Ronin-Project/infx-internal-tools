@@ -1166,7 +1166,7 @@ class ConceptMapVersion:
                                     depends_on[
                                         "display"
                                     ] = source_code.depends_on_display
-                                target_serialized["dependsOn"] = depends_on
+                                target_serialized["dependsOn"] = [depends_on]
 
                             new_element["target"].append(target_serialized)
 

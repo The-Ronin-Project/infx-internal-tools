@@ -318,13 +318,77 @@ def test_concept_map_output_to_oci():
     """
     Not a test. Really a tool for developers to push content to OCI for urgent reasons.
     """
-    # schema_version = ConceptMap.database_schema_version
-    schema_version = ConceptMap.next_schema_version
+    test_concept_map_version_uuid = "(insert the version uuid here)"  # use this invalid value on purpose when merging
+    concept_map_output_to_oci(test_concept_map_version_uuid, ConceptMap.database_schema_version)
+    if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
+        concept_map_output_to_oci(test_concept_map_version_uuid, ConceptMap.next_schema_version)
 
-    test_concept_map_version_uuid = "(insert value here)"  # Always merge using this invalid value, to prevent accidents
+
+def concept_map_output_to_oci(test_concept_map_version_uuid: str, schema_version: int):
+    """
+    Helper function for test_concept_map_output_to_oci.
+    @param schema_version: current and/or next schema version for ConceptMap as input by test_concept_map_output().
+    """
     test_concept_map_version = ConceptMapVersion(test_concept_map_version_uuid)
     if test_concept_map_version is None:
         print(f"Version with UUID {test_concept_map_version_uuid} is None")
     else:
         test_concept_map_version.send_to_oci(schema_version)
     # look in OCI to see the value set and data normalization registry files (open up registry.json to see updates)
+
+
+@pytest.mark.skip(
+    reason="External calls: Calls helper that reads from the database. To run on a local dev machine, comment out " +
+        "this 'skip' annotation. To support future test automation, any external calls must be mocked."
+)
+def test_concept_map_output():
+    """
+    Test that the ConceptMap current and/or next schema version is correctly defined in the ConceptMap class right now.
+    Then run the concept_map_output_for_schema test for each version (only once, if they are the same number right now).
+    """
+    assert ConceptMap.database_schema_version == 3
+    assert ConceptMap.next_schema_version == 4
+    concept_map_output_for_schema(ConceptMap.database_schema_version)
+    if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
+        concept_map_output_for_schema(ConceptMap.next_schema_version)
+
+
+def concept_map_output_for_schema(schema_version: int):
+    """
+    Helper function for test_concept_map_output.
+    @param schema_version: current and/or next schema version for ConceptMap as input by test_concept_map_output().
+    """
+    test_concept_map_version_uuid = "316f6438-6197-4bb0-a932-ed6c48d2a860"  # this map has dependsOn; many others do not
+    test_concept_map_version = ConceptMapVersion(test_concept_map_version_uuid)
+    if test_concept_map_version is None:
+        print(f"Version with UUID {test_concept_map_version_uuid} is None")
+    else:
+        with (open(f"../test/resources/concept_map/serialized_v{schema_version}.json") as serialized_json):
+            # call the output function we are testing
+            (serialized_concept_map, initial_path) = test_concept_map_version.prepare_for_oci(schema_version)
+
+            # is the OCI path correct?
+            assert initial_path == f"ConceptMaps/v{schema_version}"
+
+            # remove timestamp of "now" because it cannot match the timestamp of any other output sample
+            del serialized_concept_map["date"]
+
+            # limit output file size and avoid issues from random element order: cut all but 1 group and 1 element
+            test_group = None
+            for group in serialized_concept_map["group"]:
+                if group.get("target") == "http://loinc.org":
+                    for element in group["element"]:
+                        if element["target"][0].get("code") == "11433-0":
+                            elements = [element]
+                            break
+                    test_group = {"element": elements}
+                    break
+            del serialized_concept_map["group"]
+            serialized_concept_map["group"] = [test_group]
+
+            # read the string from the comparison file and call json.loads() to load it as an object
+            test_file = serialized_json.read()
+            serialized_test = json.loads(test_file)
+
+            # compare serialized concept map object with the object loaded from the file string
+            assert serialized_concept_map == serialized_test
