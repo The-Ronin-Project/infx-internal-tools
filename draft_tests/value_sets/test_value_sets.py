@@ -5,15 +5,24 @@ import app.models.codes
 from app.database import get_db
 
 
-def test_value_set_expand():
-    """
-    Expand the 'Automated Testing Value Set' value set and verify the outputs
-    """
-    value_set_version_uuid = '58e792d9-1264-4f18-b16e-6292cb7ca597'
-    value_set_version = app.value_sets.models.ValueSetVersion.load(value_set_version_uuid)
-    value_set_version.expand(force_new=True)
+class ValueSetTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.conn = get_db()
 
-    assert len(value_set_version.expansion) == 91
+    def tearDown(self) -> None:
+        self.conn.rollback()
+        self.conn.close()
+
+    def test_value_set_expand(self):
+        """
+        Expand the 'Automated Testing Value Set' value set and verify the outputs
+        """
+        # ToDo: add better, more stable rules to this
+        value_set_version_uuid = '58e792d9-1264-4f18-b16e-6292cb7ca597'
+        value_set_version = app.value_sets.models.ValueSetVersion.load(value_set_version_uuid)
+        value_set_version.expand(force_new=True)
+
+        self.assertEqual(11509, len(value_set_version.expansion))
 
 
 class RuleTests(unittest.TestCase):
@@ -25,7 +34,7 @@ class RuleTests(unittest.TestCase):
         self.conn.close()
 
     def test_loinc_rule(self):
-        terminology_version = app.terminologies.models.Terminology.load('554805c6-4ad1-4504-b8c7-3bab4e5196fd')
+        terminology_version = app.terminologies.models.Terminology.load('554805c6-4ad1-4504-b8c7-3bab4e5196fd')  # LOINC 2.74
         rule = app.value_sets.models.LOINCRule(
             uuid=None,
             position=None,
@@ -102,6 +111,7 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(first_code.version, '1')
 
     def test_rxnorm_rule(self):
+        # todo: how can we have a stable test if RxNorm is always changing?
         terminology_version = app.terminologies.models.Terminology.load('4e78774b-059d-4c98-ae13-6a669c5ec783')
         rule = app.value_sets.models.RxNormRule(
             uuid=terminology_version,  # Most recent version of RxNorm
@@ -117,7 +127,7 @@ class RuleTests(unittest.TestCase):
         )
         rule.execute()
 
-        self.assertEqual(609, len(rule.results))
+        self.assertEqual(684, len(rule.results))
 
         first_code = list(rule.results)[0]
         self.assertEqual(first_code.system,
