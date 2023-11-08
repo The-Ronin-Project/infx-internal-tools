@@ -8,7 +8,7 @@ import app.concept_maps.models
 from app.errors import BadRequestWithCode, NotFoundException
 from app.models.codes import Code
 from app.terminologies.models import load_terminology_version_with_cache
-from app.value_sets.models import ValueSet
+import app.value_sets.models
 import logging
 
 LOGGER = logging.getLogger()
@@ -469,7 +469,7 @@ class ConceptMapVersionCreator:
         source_value_set_version = app.value_sets.models.ValueSetVersion.load(
             new_source_value_set_version_uuid
         )
-        active_source_value_set_version = ValueSet.load_most_recent_active_version(
+        active_source_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version(
             source_value_set_version.value_set.uuid
         )
         if active_source_value_set_version is None or (
@@ -485,7 +485,7 @@ class ConceptMapVersionCreator:
         target_value_set_version = app.value_sets.models.ValueSetVersion.load(
             new_target_value_set_version_uuid
         )
-        active_target_value_set_version = ValueSet.load_most_recent_active_version(
+        active_target_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version(
             target_value_set_version.value_set.uuid
         )
         if active_target_value_set_version is None or (
