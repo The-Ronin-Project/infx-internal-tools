@@ -1309,35 +1309,6 @@ async def reprocess_resource(resource_uuid, token, client):
         return None
 
 
-if __name__ == "__main__":
-    # todo: clean out this method altogether, when a temporary, manual error load task is not needed.
-    from app.database import get_db
-
-    # Moved logging setup to here so it does not run in main program and cause duplicate logs
-
-    # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
-    # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded.
-    LOGGER.setLevel("WARNING")
-
-    # Create a console handler and add it to the logger if it doesn't have any handlers
-    if not LOGGER.hasHandlers():
-        ch = logging.StreamHandler()
-        LOGGER.addHandler(ch)
-
-    # Per our usual practice, open a DatabaseHandler, that database calls within load_concepts_from_errors will re-use
-    conn = get_db()
-
-
-    # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    # load_concepts_from_errors(commit_changes=True)
-
-    # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
-    load_concepts_from_errors(commit_changes=False)
-
-    # load_concepts_from_errors ran rollback() and commit() where and as needed; now ask the DatabaseHandler to close()
-    conn.close()
-
-
 @deprecated(
     "This one-time repair function has been used already. Retaining it as an example of a few code patterns."
 )
@@ -1398,3 +1369,32 @@ def _test_norm_registry_null_environments():
         conn.rollback()
         conn.close()
         raise e
+
+
+if __name__ == "__main__":
+    # todo: clean out this method altogether, when a temporary, manual error load task is not needed.
+    from app.database import get_db
+
+    # Moved logging setup to here so it does not run in main program and cause duplicate logs
+
+    # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
+    # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded.
+    LOGGER.setLevel("WARNING")
+
+    # Create a console handler and add it to the logger if it doesn't have any handlers
+    if not LOGGER.hasHandlers():
+        ch = logging.StreamHandler()
+        LOGGER.addHandler(ch)
+
+    # Per our usual practice, open a DatabaseHandler, that database calls within load_concepts_from_errors will re-use
+    conn = get_db()
+
+
+    # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
+    # load_concepts_from_errors(commit_changes=True)
+
+    # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
+    load_concepts_from_errors(commit_changes=False)
+
+    # load_concepts_from_errors ran rollback() and commit() where and as needed; now ask the DatabaseHandler to close()
+    conn.close()
