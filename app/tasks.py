@@ -4,7 +4,7 @@ from uuid import UUID
 from decouple import config
 
 from app.errors import NotFoundException
-from app.value_sets.models import ValueSetVersion, ValueSet
+import app.value_sets.models
 import app.concept_maps.models
 import app.concept_maps.versioning_models
 from app.models.normalization_error_service import load_concepts_from_errors
@@ -82,17 +82,17 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     # Get the target_value_set_uuid from the concept map object.
     # Use it to get the most recent active version of that target value set, if there is one. There must be one.
 
-    target_value_set = ValueSet.load(concept_map.target_value_set_uuid)
+    target_value_set = app.value_sets.models.ValueSet.load(concept_map.target_value_set_uuid)
 
     new_target_value_set_version = (
-        ValueSet.load_most_recent_active_version(target_value_set.uuid)
+        app.value_sets.models.ValueSet.load_most_recent_active_version(target_value_set.uuid)
     )
     if new_target_value_set_version is None:
         raise NotFoundException(f"Could not find an active version of target value set with UUID {UUID}")
 
     # Step 7: Create the new value set version
     # Get the most recent version of the terminology
-    source_value_set_version = ValueSetVersion.load(source_value_set_version_uuid)
+    source_value_set_version = app.value_sets.models.ValueSetVersion.load(source_value_set_version_uuid)
     try:
         terminology_in_source_value_set = (
             source_value_set_version.lookup_terminologies_in_value_set_version()
@@ -107,11 +107,11 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     )
 
     # Create a new version of the value set from the specific version
-    source_value_set_most_recent_version = ValueSet.load_most_recent_version(
+    source_value_set_most_recent_version = app.value_sets.models.ValueSet.load_most_recent_version(
         uuid=concept_map.source_value_set_uuid
     )
     new_source_value_set_version = (
-        ValueSetVersion.create_new_version_from_specified_previous(
+        app.value_sets.models.ValueSetVersion.create_new_version_from_specified_previous(
             version_uuid=source_value_set_most_recent_version.uuid,
             new_version_description=new_source_value_set_version_description,
             new_terminology_version_uuid=source_terminology.uuid,
