@@ -27,7 +27,8 @@ import app.concept_maps.models
 import app.models.data_ingestion_registry
 
 from app.terminologies.models import Terminology
-from app.database import get_db, get_elasticsearch
+
+from app.database import get_db  # , get_elasticsearch
 from flask import current_app
 from app.helpers.simplifier_helper import publish_to_simplifier
 
@@ -1068,32 +1069,32 @@ class CPTRule(VSRule):
         ]
         self.results = set(results)
 
-    def display_regex(self):
-        """Process CPT rules where property=display and operator=regex, where we are string matching to displays"""
-        es = get_elasticsearch()
-
-        results = es.search(
-            query={
-                "simple_query_string": {
-                    "fields": ["display"],
-                    "query": self.value,
-                }
-            },
-            index="cpt_codes",
-            size=MAX_ES_SIZE,
-        )
-
-        search_results = [x.get("_source") for x in results.get("hits").get("hits")]
-        final_results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.get("code"),
-                x.get("display"),
-            )
-            for x in search_results
-        ]
-        self.results = set(final_results)
+    # def display_regex(self):
+    #     """Process CPT rules where property=display and operator=regex, where we are string matching to displays"""
+    #     es = get_elasticsearch()
+    #
+    #     results = es.search(
+    #         query={
+    #             "simple_query_string": {
+    #                 "fields": ["display"],
+    #                 "query": self.value,
+    #             }
+    #         },
+    #         index="cpt_codes",
+    #         size=MAX_ES_SIZE,
+    #     )
+    #
+    #     search_results = [x.get("_source") for x in results.get("hits").get("hits")]
+    #     final_results = [
+    #         Code(
+    #             self.fhir_system,
+    #             self.terminology_version.version,
+    #             x.get("code"),
+    #             x.get("display"),
+    #         )
+    #         for x in search_results
+    #     ]
+    #     self.results = set(final_results)
 
     def include_entire_code_system(self):
         """

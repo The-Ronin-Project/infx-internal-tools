@@ -10,12 +10,12 @@ from typing import Optional, List
 from uuid import UUID
 
 from cachetools.func import ttl_cache
-from elasticsearch.helpers import bulk
+from opensearchpy.helpers import bulk
 from sqlalchemy import text
 
 import app.models.codes
 import app.models.data_ingestion_registry
-from app.database import get_db, get_elasticsearch
+from app.database import get_db, get_opensearch
 from app.errors import BadDataError, BadRequestWithCode, NotFoundException
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
@@ -463,7 +463,7 @@ class ConceptMap:
             concept_map_version_uuid (str): The UUID of the concept map version.
             target_value_set_version_uuid (str): The UUID of the target value set version.
         """
-        es = get_elasticsearch()
+        opensearch = get_opensearch()
 
         def gendata():
             vs_version = app.value_sets.models.ValueSetVersion.load(
@@ -484,7 +484,7 @@ class ConceptMap:
                 }
                 yield document
 
-        bulk(es, gendata())
+        bulk(opensearch, gendata())
 
     def serialize(self):
         """
@@ -513,7 +513,7 @@ class ConceptMap:
         previous_version: int,
         new_version: int,
         previous_schema_version: int = None,
-        new_schema_version: int = None
+        new_schema_version: int = None,
     ):
         """
         Compares concept map versions to assert which mappings were removed and added between versions. For clarity of
@@ -533,7 +533,7 @@ class ConceptMap:
         if previous_version > new_version:
             raise BadRequestWithCode(
                 "ConceptMap.diff.versionsInWrongHistoryOrder",
-                f"Versions {previous_version} (previous) and {new_version} (new) are in the wrong order"
+                f"Versions {previous_version} (previous) and {new_version} (new) are in the wrong order",
             )
         if previous_schema_version is None:
             previous_schema_version = cls.next_schema_version
@@ -553,30 +553,31 @@ class ConceptMap:
         if previous_version == 0:
             previous_concept_map_version = None
         else:
-            previous_concept_map_version = ConceptMapVersion.load_by_concept_map_uuid_and_version(
-                concept_map_uuid,
-                previous_version
+            previous_concept_map_version = (
+                ConceptMapVersion.load_by_concept_map_uuid_and_version(
+                    concept_map_uuid, previous_version
+                )
             )
             if previous_concept_map_version is None:
                 raise BadRequestWithCode(
                     "ConceptMap.diff.previousVersionNotAvailable",
-                    f"Unable to load concept previous new version {previous_version}"
+                    f"Unable to load concept previous new version {previous_version}",
                 )
-        new_concept_map_version = ConceptMapVersion.load_by_concept_map_uuid_and_version(
-            concept_map_uuid,
-            new_version
+        new_concept_map_version = (
+            ConceptMapVersion.load_by_concept_map_uuid_and_version(
+                concept_map_uuid, new_version
+            )
         )
         if new_concept_map_version is None:
             raise BadRequestWithCode(
                 "ConceptMap.diff.newVersionNotAvailable",
-                f"Unable to load concept map new version {new_version}"
+                f"Unable to load concept map new version {new_version}",
             )
 
         # Step 3: get mappings for new - organize results by mapping id, and by groups and elements
         if new_version != 0:
             new_serialized = new_concept_map_version.serialize(
-                include_internal_info=False,
-                schema_version=new_schema_version
+                include_internal_info=False, schema_version=new_schema_version
             )
         if len(new_serialized) > 0:
             new_mappings = cls.collect_and_sort_mappings_for_diff(new_serialized)
@@ -584,11 +585,12 @@ class ConceptMap:
         # Step 4: get mappings for previous - organize results by mapping id, and by groups and elements
         if previous_version != 0:
             previous_serialized = previous_concept_map_version.serialize(
-                include_internal_info=False,
-                schema_version=previous_schema_version
+                include_internal_info=False, schema_version=previous_schema_version
             )
         if len(previous_serialized) > 0:
-            previous_mappings = cls.collect_and_sort_mappings_for_diff(previous_serialized)
+            previous_mappings = cls.collect_and_sort_mappings_for_diff(
+                previous_serialized
+            )
 
         # Step 5: collect data for diff output
         # counts
@@ -682,21 +684,21 @@ class ConceptMap:
             for e in g.get("element"):
                 # the mapping id is unique in this concept map and across all concept maps
                 mapping_id = e.get("id")
-                mappings.update({
-                    mapping_id: {
-                        "source": source,
-                        "sourceVersion": sourceVersion,
-                        "target": target,
-                        "targetVersion": targetVersion,
-                        "element": e
+                mappings.update(
+                    {
+                        mapping_id: {
+                            "source": source,
+                            "sourceVersion": sourceVersion,
+                            "target": target,
+                            "targetVersion": targetVersion,
+                            "element": e,
+                        }
                     }
-                })
+                )
         # sort by unique and immutable mapping id - so the display of diffs has consistent order across versions
         sorted_mappings = dict()
         for i in sorted(mappings):
-            sorted_mappings.update({
-                i: mappings[i]
-            })
+            sorted_mappings.update({i: mappings[i]})
         return sorted_mappings
 
 
@@ -738,7 +740,7 @@ class ConceptMapVersion:
         if not data:
             raise BadRequestWithCode(
                 "ConceptMap.diff.versionsInWrongHistoryOrder",
-                f"Unable to load data for concept map version UUID: {self.uuid}"
+                f"Unable to load data for concept map version UUID: {self.uuid}",
             )
         if concept_map is None:
             self.concept_map = ConceptMap(data.concept_map_uuid)
@@ -804,7 +806,6 @@ class ConceptMapVersion:
                     Terminology.load_from_cache(terminology_version_uuid)
                 )
 
-
     def load_mappings(self):
         conn = get_db()
         query = """
@@ -852,14 +853,14 @@ class ConceptMapVersion:
             if source_system is None:
                 raise BadRequestWithCode(
                     "ConceptMap.loadMappings.missingSystem",
-                    f"Concept map UUID: {self.concept_map.uuid} version {self.version} has no source system identified"
+                    f"Concept map UUID: {self.concept_map.uuid} version {self.version} has no source system identified",
                 )
 
             # Get the Terminology
             if source_system not in terminology.keys():
-                terminology.update({
-                    source_system: load_terminology_version_with_cache(source_system)
-                })
+                terminology.update(
+                    {source_system: load_terminology_version_with_cache(source_system)}
+                )
 
             # Create the SourceConcept
             source_code = SourceConcept(
@@ -1145,7 +1146,6 @@ class ConceptMapVersion:
                                 "comment": comment,
                             }
 
-
                             # Add dependsOn data
                             if (
                                 source_code.depends_on_property
@@ -1210,23 +1210,27 @@ class ConceptMapVersion:
         errors = []  # list to hold error messages
 
         # Iterate over each dictionary in the 'group' list
-        for group in concept_map.get('group', []):
+        for group in concept_map.get("group", []):
             # Iterate over each dictionary in the 'element' list, with enumerate to keep track of the index
-            for index, element in enumerate(group.get('element', [])):
+            for index, element in enumerate(group.get("element", [])):
                 # Integrity Check 1: Check that all data in the code field is a valid string or JSON string
-                code = element.get('code')
+                code = element.get("code")
                 if code is not None:
                     # If string starts with curly brace
-                    if code.startswith('{'):
+                    if code.startswith("{"):
                         # If the string starts with either of the valid patterns
-                        if code.startswith(('{\"text\":', '{\"coding\":')):
+                        if code.startswith(('{"text":', '{"coding":')):
                             try:
                                 # Check if the 'code' field is a valid JSON string
                                 json.loads(code)
                             except ValueError:
-                                errors.append(f"Invalid JSON string in the code field at element index {index}: {code}")
+                                errors.append(
+                                    f"Invalid JSON string in the code field at element index {index}: {code}"
+                                )
                         else:
-                            errors.append(f"Code string has an unrecognized pattern at element index {index}: {code}")
+                            errors.append(
+                                f"Code string has an unrecognized pattern at element index {index}: {code}"
+                            )
 
                     # TODO: This SHOULD be the way that this works, there are instances where that is not the case
                     # What are the times when it would be valid for the code to just be a string?
@@ -1239,35 +1243,47 @@ class ConceptMapVersion:
                     #         errors.append(f"Code string: {code}, does not match display: {display}, at index {index}")
 
                 else:
-                    errors.append(f"'code' key is missing in the element at index {index}")
+                    errors.append(
+                        f"'code' key is missing in the element at index {index}"
+                    )
 
                 # Integrity Check 2: Make sure there are no duplicate targets
                 # TODO: at some point this will need to handle more than one target for some concept maps but not most
                 target_values = set()
-                targets = element.get('target', [])
+                targets = element.get("target", [])
                 if targets:
                     for target in targets:
-                        target_code = target.get('code')
+                        target_code = target.get("code")
                         if target_code:
                             if target_code in target_values:
-                                errors.append(f"Duplicated target elements found at element index {index}: {target_code}")
+                                errors.append(
+                                    f"Duplicated target elements found at element index {index}: {target_code}"
+                                )
                             target_values.add(target_code)
                         else:
-                            errors.append(f"'code' key is missing in the target at element index {index}")
+                            errors.append(
+                                f"'code' key is missing in the target at element index {index}"
+                            )
                 else:
-                    errors.append(f"'target' key is missing in the element at index {index}")
+                    errors.append(
+                        f"'target' key is missing in the element at index {index}"
+                    )
 
         if len(errors) > 0:
-            errors_str = '\n'.join([f"  - {error}" for error in errors])
+            errors_str = "\n".join([f"  - {error}" for error in errors])
             formatted_errors = f"Errors:\n{errors_str}"
 
             raise BadDataError(
                 code="ConceptMapVersion.checkFormatting",
                 description="Formatting Errors found in ConceptMap, INFX Systems Team has been notified via DataDog",
-                errors=formatted_errors
+                errors=formatted_errors,
             )
 
-    def serialize(self, include_internal_info=False, schema_version: int = ConceptMap.next_schema_version):
+    def serialize(
+        self,
+        include_internal_info=False,
+        schema_version: int = ConceptMap.next_schema_version,
+    ):
         """
         Serialize the concept map version
         @param include_internal_info: Caller may set True to include these "internalData" fields in the output:
@@ -1277,7 +1293,7 @@ class ConceptMapVersion:
         @return: object structure representing the concept map and conforming to the specified schema_version
         """
         # Prepare according to the version
-        schema_v4_or_later = (schema_version >= 4)
+        schema_v4_or_later = schema_version >= 4
 
         # Transform the name based on the title
         pattern = r"[A-Z]([A-Za-z0-9_]){0,254}"  # name transformer
@@ -1348,8 +1364,12 @@ class ConceptMapVersion:
                 )
             }
         if schema_v4_or_later:
-            serialized["sourceCanonical"] = f"http://projectronin.io/fhir/ValueSet/{self.concept_map.source_value_set_uuid}"
-            serialized["targetCanonical"] = f"http://projectronin.io/fhir/ValueSet/{self.concept_map.target_value_set_uuid}"
+            serialized[
+                "sourceCanonical"
+            ] = f"http://projectronin.io/fhir/ValueSet/{self.concept_map.source_value_set_uuid}"
+            serialized[
+                "targetCanonical"
+            ] = f"http://projectronin.io/fhir/ValueSet/{self.concept_map.target_value_set_uuid}"
 
         if include_internal_info:
             serialized["internalData"] = {
@@ -1369,12 +1389,14 @@ class ConceptMapVersion:
         @return: (serialized, initial_path) provides the serialized object and the correct starting path in OCI storage.
         """
         # Prepare according to the version
-        schema_v4_or_later = (schema_version >= 4)
+        schema_v4_or_later = schema_version >= 4
 
         # Serialize
-        serialized = self.serialize(include_internal_info=False, schema_version=schema_version)
+        serialized = self.serialize(
+            include_internal_info=False, schema_version=schema_version
+        )
         self.check_formatting(serialized)
-        
+
         if schema_v4_or_later and len(serialized.get("group")) == 0:
             raise BadRequestWithCode(
                 "ConceptMap.prepareForOci.missingMappings",
@@ -1470,10 +1492,7 @@ class ConceptMapVersion:
         )
 
     def diff_versions_and_store_diff(
-        self,
-        concept_map_to_json,
-        initial_path: str,
-        schema_version: int
+        self, concept_map_to_json, initial_path: str, schema_version: int
     ):
         """
         Supports publish() by publishing the diff from the previous version in a sub-folder named /diff
@@ -1482,10 +1501,7 @@ class ConceptMapVersion:
         new_version = concept_map_to_json["version"]
         previous_version = new_version - 1
         concept_map_diff = self.concept_map.diff_mappings_and_metadata(
-            self.concept_map.uuid,
-            previous_version,
-            new_version,
-            schema_version
+            self.concept_map.uuid, previous_version, new_version, schema_version
         )  # sends to OCI
         # diff to OCI
         set_up_object_store(
@@ -1502,7 +1518,9 @@ class ConceptMapVersion:
         @raise BadRequestWithCode if the schema_version is v4 or later and there are no mappings in the concept map.
         @return: n/a
         """
-        concept_map_to_json, initial_path = self.prepare_for_oci(ConceptMap.next_schema_version)
+        concept_map_to_json, initial_path = self.prepare_for_oci(
+            ConceptMap.next_schema_version
+        )
         resource_id = concept_map_to_json["id"]
         resource_type = concept_map_to_json["resourceType"]  # param for Simplifier
         concept_map_to_json["status"] = "active"  # Simplifier requires status

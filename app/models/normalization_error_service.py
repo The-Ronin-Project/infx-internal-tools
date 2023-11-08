@@ -42,6 +42,7 @@ PAGE_SIZE = 1000
 
 LOGGER = logging.getLogger()
 
+
 def get_token(url: str, client_id: str, client_secret: str, audience: str) -> str:
     """
     Fetches a token from Auth0.
@@ -82,7 +83,9 @@ def make_get_request(token, client: httpx.Client, base_url, api_url, params={}):
     return response.json()
 
 
-async def make_get_request_async(token, client: httpx.AsyncClient, base_url, api_url, params={}):
+async def make_get_request_async(
+    token, client: httpx.AsyncClient, base_url, api_url, params={}
+):
     headers: dict[str, str] = {
         "Authorization": f"Bearer {token}",
         "content-type": "application/json",
@@ -91,7 +94,9 @@ async def make_get_request_async(token, client: httpx.AsyncClient, base_url, api
     return response.json()
 
 
-async def make_post_request_async(token, client: httpx.AsyncClient, base_url, api_url, params={}):
+async def make_post_request_async(
+    token, client: httpx.AsyncClient, base_url, api_url, params={}
+):
     headers: dict[str, str] = {
         "Authorization": f"Bearer {token}",
         "content-type": "application/json",
@@ -244,17 +249,18 @@ metadata = MetaData()
 
 # Define the table using the Table syntax
 temp_error_data = Table(
-    'temp_error_data', metadata,
-    Column('code', Text),
-    Column('display', Text),
-    Column('terminology_version_uuid', UUID_column_type),
-    Column('depends_on_system', Text),
-    Column('depends_on_property', Text),
-    Column('depends_on_display', Text),
-    Column('depends_on_value', Text),
-    Column('issue_uuid', UUID_column_type),
-    Column('resource_uuid', UUID_column_type),
-    Column('status', Text)
+    "temp_error_data",
+    metadata,
+    Column("code", Text),
+    Column("display", Text),
+    Column("terminology_version_uuid", UUID_column_type),
+    Column("depends_on_system", Text),
+    Column("depends_on_property", Text),
+    Column("depends_on_display", Text),
+    Column("depends_on_value", Text),
+    Column("issue_uuid", UUID_column_type),
+    Column("resource_uuid", UUID_column_type),
+    Column("status", Text),
 )
 
 
@@ -269,8 +275,8 @@ def extract_telecom_data(resource_type, location, raw_resource):
     """
     # Define the regular expression patterns for 'system' and 'use'
     regex_patterns = {
-        'system': re.compile(fr"^{resource_type}\.telecom\[(\d+)\]\.system$"),
-        'use': re.compile(fr"^{resource_type}\.telecom\[(\d+)\]\.use$")
+        "system": re.compile(rf"^{resource_type}\.telecom\[(\d+)\]\.system$"),
+        "use": re.compile(rf"^{resource_type}\.telecom\[(\d+)\]\.use$"),
     }
 
     # Initialize variables for processed code and display
@@ -278,11 +284,11 @@ def extract_telecom_data(resource_type, location, raw_resource):
     processed_display = None
 
     # Loop through the keys 'system' and 'use' to find matches
-    for key in ['system', 'use']:
+    for key in ["system", "use"]:
         match = regex_patterns[key].search(location)
         if match:
             list_index = int(match.group(1))
-            raw_code = raw_resource['telecom'][list_index][key]
+            raw_code = raw_resource["telecom"][list_index][key]
             processed_code = raw_code
             processed_display = raw_code
 
@@ -290,10 +296,10 @@ def extract_telecom_data(resource_type, location, raw_resource):
 
 
 def load_concepts_from_errors(
-        commit_changes=True,
-        page_size: int = None,
-        requested_organization_id: str = None,
-        requested_resource_type: str = None,
+    commit_changes=True,
+    page_size: int = None,
+    requested_organization_id: str = None,
+    requested_resource_type: str = None,
 ):
     """
     Extracts specific concepts from a list of errors and saves them to a custom terminology.
@@ -338,8 +344,12 @@ def load_concepts_from_errors(
     # Step 0: Initialize and setup
     if page_size is None:
         page_size = PAGE_SIZE
-    if requested_resource_type is not None and (requested_resource_type not in [r.value for r in ResourceType]):
-        LOGGER.warning(f"Support for the {requested_resource_type} resource type has not been implemented")
+    if requested_resource_type is not None and (
+        requested_resource_type not in [r.value for r in ResourceType]
+    ):
+        LOGGER.warning(
+            f"Support for the {requested_resource_type} resource type has not been implemented"
+        )
         return
 
     # Logging variables
@@ -361,10 +371,10 @@ def load_concepts_from_errors(
 
     # Start logging
     LOGGER.warning(
-        f"Begin import from error service at local time {time_start}\n" +
-        f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n" +
-        f"  Load to:   {DATABASE_HOST}\n\n" +
-        f"Main loop:\n"
+        f"Begin import from error service at local time {time_start}\n"
+        + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
+        + f"  Load to:   {DATABASE_HOST}\n\n"
+        + f"Main loop:\n"
     )
 
     # Local caches
@@ -375,7 +385,9 @@ def load_concepts_from_errors(
     terminology_version = dict()
 
     # Resources we have already processed in this environment
-    environment = get_environment_from_service_url(DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL)
+    environment = get_environment_from_service_url(
+        DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL
+    )
     error_service_resource_ids = get_all_unresolved_validation(environment)
 
     try:
@@ -434,7 +446,9 @@ def load_concepts_from_errors(
 
                     fhir_resource_type = None
                     for resource_type_option in ResourceType:
-                        if resource_type_option.value == resource_data.get("resource_type"):
+                        if resource_type_option.value == resource_data.get(
+                            "resource_type"
+                        ):
                             fhir_resource_type = resource_type_option
                             input_fhir_resource = resource_type_option.value
                             break
@@ -478,7 +492,13 @@ def load_concepts_from_errors(
                 # Load issues for all error service resources
                 async def load_all_issues():
                     async with httpx.AsyncClient() as async_client:
-                        await asyncio.gather(*(error_resource.load_issues(client=async_client) for error_resource in error_resources))
+                        await asyncio.gather(
+                            *(
+                                error_resource.load_issues(client=async_client)
+                                for error_resource in error_resources
+                            )
+                        )
+
                 asyncio.run(load_all_issues())
 
                 # Step 2: Extract relevant codes from the resource.
@@ -518,8 +538,8 @@ def load_concepts_from_errors(
                         # data_element is the location without any brackets or indices
                         # ex. if location is 'Patient.telecom[1].system' then data_element is 'Patient.telecom.system'
                         location = issue.location
-                        element = re.sub(r'\[\d+\]', '', location)
-                        match = re.search(r'\[(\d+)\]', location)
+                        element = re.sub(r"\[\d+\]", "", location)
+                        match = re.search(r"\[(\d+)\]", location)
                         # Extract any index that may be present in the location string
                         index = None
                         if match is not None:
@@ -557,9 +577,9 @@ def load_concepts_from_errors(
                                 if index is None:
                                     continue
                                 if (
-                                    "component" not in raw_resource or
-                                    index not in raw_resource["component"] or
-                                    "code" not in raw_resource["component"][index]
+                                    "component" not in raw_resource
+                                    or index not in raw_resource["component"]
+                                    or "code" not in raw_resource["component"][index]
                                 ):
                                     continue
                                 raw_code = raw_resource["component"][index]["code"]
@@ -571,16 +591,21 @@ def load_concepts_from_errors(
                                 if index is None:
                                     continue
                                 if (
-                                    "component" not in raw_resource or
-                                    index not in raw_resource["component"] or
-                                    "valueCodeableConcept" not in raw_resource["component"][index]
+                                    "component" not in raw_resource
+                                    or index not in raw_resource["component"]
+                                    or "valueCodeableConcept"
+                                    not in raw_resource["component"][index]
                                 ):
                                     continue
-                                raw_code = raw_resource["component"][index]["valueCodeableConcept"]
+                                raw_code = raw_resource["component"][index][
+                                    "valueCodeableConcept"
+                                ]
                                 processed_code = raw_code
                                 processed_display = raw_code.get("text")
                             else:
-                                LOGGER.warning(f"Unrecognized location for Observation error: {location}")
+                                LOGGER.warning(
+                                    f"Unrecognized location for Observation error: {location}"
+                                )
 
                         # DocumentReference
                         elif resource_type == ResourceType.DOCUMENT_REFERENCE:
@@ -603,19 +628,27 @@ def load_concepts_from_errors(
 
                         # Patient
                         elif resource_type == ResourceType.PATIENT:
-                            processed_code, processed_display = extract_telecom_data('Patient', location, raw_resource)
+                            processed_code, processed_display = extract_telecom_data(
+                                "Patient", location, raw_resource
+                            )
 
                         # Practitioner
                         elif resource_type == ResourceType.PRACTITIONER:
-                            processed_code, processed_display = extract_telecom_data('Practitioner', location, raw_resource)
+                            processed_code, processed_display = extract_telecom_data(
+                                "Practitioner", location, raw_resource
+                            )
 
                         # PractitionerRole
                         elif resource_type == ResourceType.PRACTITIONER_ROLE:
-                            processed_code, processed_display = extract_telecom_data('PractitionerRole', location, raw_resource)
+                            processed_code, processed_display = extract_telecom_data(
+                                "PractitionerRole", location, raw_resource
+                            )
 
                         # Location
                         elif resource_type == ResourceType.LOCATION:
-                            processed_code, processed_display = extract_telecom_data('Location', location, raw_resource)
+                            processed_code, processed_display = extract_telecom_data(
+                                "Location", location, raw_resource
+                            )
 
                         # Case not yet implemented
                         else:
@@ -629,7 +662,10 @@ def load_concepts_from_errors(
                         # So that we can then identify the correct terminology to load the new coding to
 
                         # Note that some normalization registry data_element strings need adjustment.
-                        if element == "Observation.value" or element == "Observation.component.value":
+                        if (
+                            element == "Observation.value"
+                            or element == "Observation.component.value"
+                        ):
                             data_element = f"{element}CodeableConcept"
                         else:
                             data_element = element
@@ -643,12 +679,14 @@ def load_concepts_from_errors(
                                     organization=error_service_resource.organization,
                                 )
                             )
-                            data_normalization_registry.update({
-                                registry_key: concept_map_version_for_normalization
-                            })
+                            data_normalization_registry.update(
+                                {registry_key: concept_map_version_for_normalization}
+                            )
 
                         # Is the concept_map_version_for_normalization valid?
-                        concept_map_version_for_normalization = data_normalization_registry[registry_key]
+                        concept_map_version_for_normalization = (
+                            data_normalization_registry[registry_key]
+                        )
                         if concept_map_version_for_normalization is None:
                             # We already messaged that the concept map for this resource and issue is missing
                             continue
@@ -659,19 +697,19 @@ def load_concepts_from_errors(
                         )
                         if source_value_set_uuid not in source_value_set.keys():
                             try:
-                                most_recent_active_source_value_set_version = (
-                                    app.value_sets.models.ValueSet.load_most_recent_active_version_with_cache(
-                                        source_value_set_uuid
-                                    )
+                                most_recent_active_source_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version_with_cache(
+                                    source_value_set_uuid
                                 )
-                                most_recent_active_source_value_set_version.expand(no_repeat=True)
-                                source_value_set.update({
-                                    source_value_set_uuid: most_recent_active_source_value_set_version
-                                })
+                                most_recent_active_source_value_set_version.expand(
+                                    no_repeat=True
+                                )
+                                source_value_set.update(
+                                    {
+                                        source_value_set_uuid: most_recent_active_source_value_set_version
+                                    }
+                                )
                             except BadRequest:
-                                source_value_set.update({
-                                    source_value_set_uuid: None
-                                })
+                                source_value_set.update({source_value_set_uuid: None})
                                 LOGGER.warning(
                                     f"No active published version of ValueSet with UUID: {source_value_set_uuid}"
                                 )
@@ -679,7 +717,9 @@ def load_concepts_from_errors(
                                 continue
 
                         # Is the most_recent_active_source_value_set_version valid?
-                        most_recent_active_source_value_set_version = source_value_set[source_value_set_uuid]
+                        most_recent_active_source_value_set_version = source_value_set[
+                            source_value_set_uuid
+                        ]
                         if most_recent_active_source_value_set_version is None:
                             # We messaged the first time we encountered the issue, do not repeat message
                             continue
@@ -699,14 +739,22 @@ def load_concepts_from_errors(
                                     f"No terminologies in source value set {most_recent_active_source_value_set_version.uuid}"
                                 )
 
-                            current_terminology_version = terminologies_in_source_value_set[0]
-                            terminology_for_value_set.update({
-                                source_value_set_uuid: current_terminology_version
-                            })
-                            terminology_version.update({
-                                str(current_terminology_version.uuid): current_terminology_version
-                            })
-                        current_terminology_version = terminology_for_value_set[source_value_set_uuid]
+                            current_terminology_version = (
+                                terminologies_in_source_value_set[0]
+                            )
+                            terminology_for_value_set.update(
+                                {source_value_set_uuid: current_terminology_version}
+                            )
+                            terminology_version.update(
+                                {
+                                    str(
+                                        current_terminology_version.uuid
+                                    ): current_terminology_version
+                                }
+                            )
+                        current_terminology_version = terminology_for_value_set[
+                            source_value_set_uuid
+                        ]
 
                         #  The custom terminology may have already passed its effective end date, so we might need to create a new version
                         terminology_to_load_to = (
@@ -715,7 +763,7 @@ def load_concepts_from_errors(
 
                         new_code_uuid = uuid.uuid4()
                         if processed_display is None:
-                            processed_display = ''
+                            processed_display = ""
                         new_code = Code(
                             code=processed_code,
                             display=processed_display,
@@ -734,7 +782,9 @@ def load_concepts_from_errors(
                                     "resource_uuid": error_service_resource.id,
                                     "environment": environment,
                                     "status": "pending",
-                                    "code": json.dumps(processed_code) if type(processed_code) == dict else processed_code,
+                                    "code": json.dumps(processed_code)
+                                    if type(processed_code) == dict
+                                    else processed_code,
                                     "display": processed_display,
                                     "terminology_version_uuid": terminology_to_load_to.uuid,
                                     # Note: no currently supported resource requires the dependsOn data
@@ -742,7 +792,7 @@ def load_concepts_from_errors(
                                     "depends_on_property": "",
                                     "depends_on_system": "",
                                     "depends_on_value": "",
-                                    "depends_on_display": ""
+                                    "depends_on_display": "",
                                 }
                             )
 
@@ -757,17 +807,22 @@ def load_concepts_from_errors(
                             value_boolean=resource_json.get("valueBoolean"),
                             value_string=resource_json.get("valueString"),
                             value_date_time=resource_json.get("valueDateTime"),
-                            value_codeable_concept=resource_json.get("valueCodeableConcept"),
+                            value_codeable_concept=resource_json.get(
+                                "valueCodeableConcept"
+                            ),
                         )
 
-                        if terminology_to_load_to.uuid in new_codes_to_deduplicate_by_terminology:
+                        if (
+                            terminology_to_load_to.uuid
+                            in new_codes_to_deduplicate_by_terminology
+                        ):
                             new_codes_to_deduplicate_by_terminology[
                                 terminology_to_load_to.uuid
                             ].append(new_code)
                         else:
-                            new_codes_to_deduplicate_by_terminology[terminology_to_load_to.uuid] = [
-                                new_code
-                            ]
+                            new_codes_to_deduplicate_by_terminology[
+                                terminology_to_load_to.uuid
+                            ] = [new_code]
 
                 # Step 3: Deduplicate the codes to avoid redundant data.
                 deduped_codes_by_terminology = {}
@@ -827,18 +882,23 @@ def load_concepts_from_errors(
                     deduped_codes_by_terminology[terminology_uuid] = deduped_codes
 
                 # Step 4: Load the deduplicated codes into their respective terminologies.
-                for terminology_version_uuid, code_list in deduped_codes_by_terminology.items():
+                for (
+                    terminology_version_uuid,
+                    code_list,
+                ) in deduped_codes_by_terminology.items():
                     if terminology_version_uuid not in terminology_version.keys():
-                        terminology = Terminology.load_from_cache(terminology_version_uuid)
-                        terminology_version.update({
-                            terminology_version_uuid: terminology
-                        })
+                        terminology = Terminology.load_from_cache(
+                            terminology_version_uuid
+                        )
+                        terminology_version.update(
+                            {terminology_version_uuid: terminology}
+                        )
                     terminology = terminology_version[terminology_version_uuid]
 
                     if len(code_list) > 0:
                         LOGGER.warning(
-                            f"Loading {len(code_list)} new codes to terminology " +
-                            f"{terminology.terminology} version {terminology.version}"
+                            f"Loading {len(code_list)} new codes to terminology "
+                            + f"{terminology.terminology} version {terminology.version}"
                         )
                         terminology.load_new_codes_to_terminology(
                             code_list, on_conflict_do_nothing=True
@@ -890,8 +950,8 @@ def load_concepts_from_errors(
                                     AND c.depends_on_value = t.depends_on_value
                             ON CONFLICT do nothing
                             """
+                            )
                         )
-                    )
 
                     # Delete the temporary table
                     conn.execute(
@@ -914,16 +974,16 @@ def load_concepts_from_errors(
                 all_loop_total += loop_total
                 all_loop_count += 1
                 LOGGER.warning(
-                    f"  {len(resources_with_errors)} errors received and loaded in {step_1}\n" +
-                    f"  {len(new_codes_to_deduplicate_by_terminology)} new codes found and deduplicated in {step_2}\n" +
-                    f"  at local time {current_time}, loop duration {loop_total}"
+                    f"  {len(resources_with_errors)} errors received and loaded in {step_1}\n"
+                    + f"  {len(new_codes_to_deduplicate_by_terminology)} new codes found and deduplicated in {step_2}\n"
+                    + f"  at local time {current_time}, loop duration {loop_total}"
                 )
 
     except ReadTimeout as rt:
         LOGGER.warning(
-            f"""\nTask halted by ReadTimeout: {rt.message if hasattr(rt, "message") else ""}\n""" +
-            f"  on: {rt.request.method} {rt.request.url}\n"+
-            f"  at: {datetime.datetime.now()}\n\n\n"
+            f"""\nTask halted by ReadTimeout: {rt.message if hasattr(rt, "message") else ""}\n"""
+            + f"  on: {rt.request.method} {rt.request.url}\n"
+            + f"  at: {datetime.datetime.now()}\n\n\n"
         )
     except Exception as e:  # uncaught exceptions can be so costly, that a 'bare except' is fine, despite PEP 8: E722
         LOGGER.warning(
@@ -943,14 +1003,14 @@ def load_concepts_from_errors(
             step_1_average = step_1_total / all_loop_count
             step_2_average = step_2_total / all_loop_count
         LOGGER.warning(
-            f"\nDONE at local time {time_end}, duration {time_elapsed}\n" +
-            f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n" +
-            f"  Load to:   {DATABASE_HOST}\n\n" +
-            f"Main loop skipped {all_skip_count} times (repeated report or FHIR resource not supported).\n" +
-            f"Main loop ran {all_loop_count} times:\n" +
-            f"  Average loop duration: {all_loop_average}\n" +
-            f"  Average time to receive and load errors from service: {step_1_average}\n" +
-            f"  Average time to extract, deduplicate, and load codes into terminologies: {step_2_average}\n\n\n"
+            f"\nDONE at local time {time_end}, duration {time_elapsed}\n"
+            + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
+            + f"  Load to:   {DATABASE_HOST}\n\n"
+            + f"Main loop skipped {all_skip_count} times (repeated report or FHIR resource not supported).\n"
+            + f"Main loop ran {all_loop_count} times:\n"
+            + f"  Average loop duration: {all_loop_average}\n"
+            + f"  Average time to receive and load errors from service: {step_1_average}\n"
+            + f"  Average time to extract, deduplicate, and load codes into terminologies: {step_2_average}\n\n\n"
         )
 
 
@@ -965,9 +1025,12 @@ def lookup_concept_map_version_for_data_element(
     :return:
     """
     LOGGER.warning(
-        f"Checking registry for concept map entry for data element: {data_element} and organization: {organization.id}")
+        f"Checking registry for concept map entry for data element: {data_element} and organization: {organization.id}"
+    )
     # Load the data normalization registry
-    registry = app.models.data_ingestion_registry.DataNormalizationRegistry()  # Full path avoids circular import
+    registry = (
+        app.models.data_ingestion_registry.DataNormalizationRegistry()
+    )  # Full path avoids circular import
     registry.load_entries()
 
     # Filter based on resource type
@@ -984,7 +1047,8 @@ def lookup_concept_map_version_for_data_element(
     organization_specific = [
         registry_entry
         for registry_entry in filtered_registry
-        if registry_entry.tenant_id == organization.id and registry_entry.registry_entry_type == "concept_map"
+        if registry_entry.tenant_id == organization.id
+        and registry_entry.registry_entry_type == "concept_map"
     ]
     if len(organization_specific) > 0:
         concept_map_version = organization_specific[
@@ -997,7 +1061,8 @@ def lookup_concept_map_version_for_data_element(
         tenant_agnostic = [
             registry_entry
             for registry_entry in filtered_registry
-            if registry_entry.tenant_id is None and registry_entry.registry_entry_type == "concept_map"
+            if registry_entry.tenant_id is None
+            and registry_entry.registry_entry_type == "concept_map"
         ]
         if len(tenant_agnostic) > 0:
             concept_map_version = tenant_agnostic[
@@ -1006,7 +1071,9 @@ def lookup_concept_map_version_for_data_element(
 
     # If nothing is found, raise an appropriate error
     if concept_map_version is None:
-        LOGGER.warning(f"No appropriate registry entry found for organization: {organization.id} and data element: {data_element}")
+        LOGGER.warning(
+            f"No appropriate registry entry found for organization: {organization.id} and data element: {data_element}"
+        )
         return None
 
     return concept_map_version
@@ -1153,7 +1220,7 @@ def get_outstanding_errors(
                     "outstanding_code_count": row.code_count,
                     "oldest_new_code_date": row.oldest_new_code_date,
                 }
-          )
+            )
     return list_result
 
 
@@ -1174,7 +1241,7 @@ def get_all_unresolved_validation(environment: str):
         ),
         {
             "environment": environment,
-        }
+        },
     )
     resource_uuid_list = []
     for row in issues_resources:
@@ -1195,7 +1262,9 @@ def set_issues_resolved(issue_uuid_list):
             SET status = 'resolved'
             WHERE issue_uuid IN :issue_uuid_list
             """
-    converted_query = text(query).bindparams(bindparam(key="issue_uuid_list", expanding=True))
+    converted_query = text(query).bindparams(
+        bindparam(key="issue_uuid_list", expanding=True)
+    )
     conn.execute(converted_query, {"issue_uuid_list": issue_uuid_list})
 
 
@@ -1204,14 +1273,16 @@ def reprocess_resources(resource_uuid_list):
     Request the Data Validation Error Service to reprocess resources that previously reported errors.
     @param resource_uuid_list: List of UUIDs of resources to reprocess in the Data Validation Error Service.
     """
+
     async def reprocess_all():
         reprocess_token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
         async with httpx.AsyncClient(timeout=60.0) as async_client:
-            await asyncio.gather(*(reprocess_resource(
-                resource_uuid,
-                reprocess_token,
-                async_client
-            ) for resource_uuid in resource_uuid_list))
+            await asyncio.gather(
+                *(
+                    reprocess_resource(resource_uuid, reprocess_token, async_client)
+                    for resource_uuid in resource_uuid_list
+                )
+            )
 
     asyncio.run(reprocess_all())
 
@@ -1255,6 +1326,7 @@ if __name__ == "__main__":
 
     # Per our usual practice, open a DatabaseHandler, that database calls within load_concepts_from_errors will re-use
     conn = get_db()
+
 
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
     # load_concepts_from_errors(commit_changes=True)
