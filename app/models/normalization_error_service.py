@@ -375,6 +375,7 @@ def load_concepts_from_errors(
     step_2_total = zero
     step_1_average = zero
     step_2_average = zero
+    total_count_loaded_codes = 0
 
     # Start logging
     LOGGER.warning(
@@ -916,11 +917,15 @@ def load_concepts_from_errors(
 
                     if len(code_list) > 0:
                         LOGGER.warning(
-                            f"Loading {len(code_list)} new codes to terminology "
+                            f"Attempting to load {len(code_list)} new codes to terminology "
                             + f"{terminology.terminology} version {terminology.version}"
                         )
-                        terminology.load_new_codes_to_terminology(
+                        inserted_count = terminology.load_new_codes_to_terminology(
                             code_list, on_conflict_do_nothing=True
+                        )
+                        total_count_loaded_codes += inserted_count
+                        LOGGER.warning(
+                            f"Actually inserted {inserted_count} codes to " f"{terminology.terminology} version {terminology.version} " + "after de-duplication"
                         )
 
                 # Step 5: Save the IDs of the original errors and link back to the codes
@@ -994,7 +999,7 @@ def load_concepts_from_errors(
                 all_loop_count += 1
                 LOGGER.warning(
                     f"  {len(resources_with_errors)} errors received and loaded in {step_1}\n"
-                    + f"  {len(new_codes_to_deduplicate_by_terminology)} new codes found and deduplicated in {step_2}\n"
+                    + f"  {total_count_loaded_codes} new codes found and deduplicated in {step_2}\n"
                     + f"  at local time {current_time}, loop duration {loop_total}"
                 )
 
