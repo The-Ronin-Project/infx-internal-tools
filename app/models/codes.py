@@ -40,7 +40,7 @@ class Code:
         additional_data=None,
         uuid=None,
         system_name=None,
-        terminology_version: app.terminologies.models.Terminology = None,
+        terminology_version: 'app.terminologies.models.Terminology' = None,
         terminology_version_uuid=None,
         depends_on_property: str = None,
         depends_on_system: str = None,
@@ -59,6 +59,8 @@ class Code:
             terminology_version
         )
         self.terminology_version_uuid: uuid.UUID = terminology_version_uuid
+        # `custom_terminology_code_uuid` is a specifically assigned uuid for this code
+        # it serves as the primary key in the custom_terminologies.code table
         self.custom_terminology_code_uuid = custom_terminology_code_uuid
 
         self.depends_on_property = depends_on_property
