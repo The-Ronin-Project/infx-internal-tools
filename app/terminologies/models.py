@@ -493,6 +493,7 @@ class Terminology:
                 description=f"Cannot load codes to Terminology {terminology_uuids[0]} using the class for Terminology {self.uuid}",
             )
 
+        total_count_inserted = 0
         for code in codes:
             serialized_code = code.code
             if type(serialized_code) == dict:
@@ -506,7 +507,8 @@ class Terminology:
             if on_conflict_do_nothing:
                 query_text += """ on conflict do nothing
                 """
-            conn.execute(
+            query_text += """ returning uuid"""
+            result = conn.execute(
                 text(query_text),
                 {
                     "uuid": code.custom_terminology_code_uuid
@@ -529,7 +531,10 @@ class Terminology:
                     else "",
                     "additional_data": json.dumps(code.additional_data),
                 },
-            )
+            ).fetchall()
+            count_inserted = len(result)
+            total_count_inserted += count_inserted
+        return total_count_inserted
 
     def get_recent_codes(self, comparison_date):
         conn = get_db()
