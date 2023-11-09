@@ -1448,11 +1448,14 @@ class ConceptMapVersion:
 
         return serialized, initial_path
 
-    def publish(self):
+    def publish(self, resolve_errors: bool = False):
         """
         A method to complete the full publication process including pushing to OCI, Simplifier,
         Normalization Registry and setting status active. If the current ConceptMap.database_schema_version (such as 3)
         and ConceptMap.next_schema_version (such as 4). are different, publishes both formats.
+        @param resolve_errors After publish, reach out to the Error Service to determine whether any of the new concepts
+                in the map will resolve any errors previously reported. To support tests and repairs without exposing
+                OCI to unauthorized changes, default is False. The only caller who sets it to True is the API endpoint.
         @raise BadRequestWithCode if the schema_version is v4 or later and there are no mappings in the concept map.
         @return: n/a
         """
@@ -1478,9 +1481,10 @@ class ConceptMapVersion:
         app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
 
         # Contact the Error Validation Service to resolve any errors fixed by the new concept map
-        app.tasks.resolve_errors_after_concept_map_publish.delay(
-            concept_map_version_uuid=self.uuid
-        )
+        if resolve_errors:
+            app.tasks.resolve_errors_after_concept_map_publish.delay(
+                concept_map_version_uuid=self.uuid
+            )
 
     def send_to_oci(self, schema_version):
         concept_map_to_json, initial_path = self.prepare_for_oci(schema_version)
