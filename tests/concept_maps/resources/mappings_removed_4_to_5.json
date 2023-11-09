@@ -1,7 +1,7 @@
 [
     {
         "0ec6a31d81eab39ebfe1d436fd921475": {
-            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
             "sourceVersion": "2",
             "target": "http://loinc.org",
             "targetVersion": "2.74",
@@ -22,7 +22,7 @@
     },
     {
         "122ca3e89f4451e6600f960b248f4025": {
-            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
             "sourceVersion": "2",
             "target": "http://loinc.org",
             "targetVersion": "2.74",
@@ -43,7 +43,7 @@
     },
     {
         "1b980a4f821f6ac2fee7db3b42753057": {
-            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
             "sourceVersion": "2",
             "target": "http://loinc.org",
             "targetVersion": "2.74",
@@ -64,7 +64,7 @@
     },
     {
         "1e0c5f63a19b9ac92decf5f27cc1aa77": {
-            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
             "sourceVersion": "2",
             "target": "http://loinc.org",
             "targetVersion": "2.74",
@@ -85,7 +85,7 @@
     },
     {
         "2e43266c27bddfded6aaad99387854e1": {
-            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
             "sourceVersion": "2",
             "target": "http://loinc.org",
             "targetVersion": "2.74",
@@ -106,7 +106,7 @@
     },
     {
         "2e5ce97e1b8ae5a4498b90b1e1992f01": {
-            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
             "sourceVersion": "2",
             "target": "http://loinc.org",
             "targetVersion": "2.74",
@@ -127,7 +127,7 @@
     },
     {
         "a34acff0578723ee6c1d034885449308": {
-            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
             "sourceVersion": "2",
             "target": "http://loinc.org",
             "targetVersion": "2.74",
@@ -148,7 +148,7 @@
     },
     {
         "ad0a34c99140f14af62dd9aa03e66299": {
-            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
             "sourceVersion": "2",
             "target": "http://loinc.org",
             "targetVersion": "2.74",
@@ -170,7 +170,7 @@
     },
     {
         "c6768cf7f92d075ddcb4ad9e42c0bb00": {
-            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
             "sourceVersion": "2",
             "target": "http://loinc.org",
             "targetVersion": "2.74",
@@ -192,7 +192,7 @@
     },
     {
         "ee37f56f75f21a80bec808229021ed28": {
-            "source": "http://projectronin.io/FHIR/CodeSystems/mdaoc/observations",
+            "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
             "sourceVersion": "2",
             "target": "http://loinc.org",
             "targetVersion": "2.74",

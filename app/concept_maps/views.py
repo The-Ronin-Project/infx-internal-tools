@@ -249,13 +249,16 @@ def get_concept_map_version_published(version_uuid):
     is different from the current ConceptMap.next_schema_version (such as 4)
     then both formats are output to OCI in /ConceptMap/v3/published and /ConceptMap/v4/published folders.
 
+    As an intended follow-up to publishing a concept map to OCI via this API, this function contacts the error service
+    to see if any of the errors previously reported by the organization are resolved by new concepts added to the map.
+
     @param version_uuid: Concept Map version UUID
     @raise BadRequestWithCode if the schema_version is v4 or later and there are no mappings in the concept map.
     """
     concept_map_version = ConceptMapVersion(version_uuid)
 
     if request.method == "POST":
-        concept_map_version.publish()
+        concept_map_version.publish(resolve_errors=True)
         return "Published"
 
     if request.method == "GET":
