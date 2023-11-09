@@ -5,6 +5,7 @@ from _pytest.python_api import raises
 
 from app.concept_maps.models import ConceptMap, ConceptMapVersion
 from app.errors import BadRequestWithCode
+from app.helpers.file_helper import resources_folder
 
 
 class OutputTests(unittest.TestCase):
@@ -112,7 +113,7 @@ class OutputTests(unittest.TestCase):
         if test_concept_map_version is None:
             print(f"Version with UUID {test_concept_map_version_uuid} is None")
         else:
-            with (open(f"../resources/concept_maps/serialized_v{schema_version}.json") as serialized_json):
+            with (open(resources_folder(__file__, f"serialized_v{schema_version}.json")) as serialized_json):
                 # call the output function we are testing
                 (serialized_concept_map, initial_path) = test_concept_map_version.prepare_for_oci(schema_version)
 

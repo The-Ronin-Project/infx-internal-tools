@@ -4,6 +4,8 @@ from _pytest.python_api import raises
 
 from app.concept_maps.models import ConceptMap, ConceptMapVersion
 from app.errors import BadRequestWithCode
+from app.helpers.file_helper import resources_folder
+
 
 class VersioningTests(unittest.TestCase):
     def test_diff_mappings_and_metadata(self):
@@ -54,7 +56,7 @@ class VersioningTests(unittest.TestCase):
             previous_schema_version=4
         )
         added_codes = result.get("added_codes")
-        with open("../resources/concept_maps/mappings_added_0_to_1.json") as added_test_json:
+        with (open(resources_folder(__file__, "mappings_added_0_to_1.json"))) as added_test_json:
             added_test = json.loads(added_test_json.read())
             assert added_codes == added_test
         removed_codes = result.get("removed_codes")
@@ -100,7 +102,7 @@ class VersioningTests(unittest.TestCase):
         # v3 > v4 - some added - serialize default
         result = concept_map.diff_mappings_and_metadata(concept_map_uuid, previous_version=3, new_version=4)
         modified_codes = result.get("modified_codes")
-        with open("../resources/concept_maps/mappings_modified_3_to_4.json") as modified_test_json:
+        with (open(resources_folder(__file__, "mappings_modified_3_to_4.json"))) as modified_test_json:
             modified_test = json.loads(modified_test_json.read())
             assert modified_codes == modified_test
         assert result.get("removed_count") == 0
@@ -149,7 +151,7 @@ class VersioningTests(unittest.TestCase):
             new_schema_version=4
         )
         summary = result.get("summary_diff")
-        with open("../resources/concept_maps/summary_diff_4_to_4_schema_v3_to_v4.json") as summary_diff_4_to_4_json:
+        with (open(resources_folder(__file__, "summary_diff_4_to_4_schema_v3_to_v4.json"))) as summary_diff_4_to_4_json:
             summary_test = json.loads(summary_diff_4_to_4_json.read())
             assert summary == summary_test
         assert summary["sourceCanonical"]["new_value"] == "http://projectronin.io/fhir/ValueSet/020d5cb0-193b-4240-b024-005802f860aa"
@@ -191,7 +193,7 @@ class VersioningTests(unittest.TestCase):
             previous_schema_version=4
         )
         summary = result.get("summary_diff")
-        with open("../resources/concept_maps/summary_diff_2_to_3_schema_v4.json") as summary_diff_2_to_3_json:
+        with (open(resources_folder(__file__, "summary_diff_2_to_3_schema_v4.json"))) as summary_diff_2_to_3_json:
             summary_test = json.loads(summary_diff_2_to_3_json.read())
             assert summary == summary_test
         assert result.get("removed_count") == 6600
@@ -211,10 +213,10 @@ class VersioningTests(unittest.TestCase):
         )
         removed_codes = result.get("removed_codes")
         summary = result.get("summary_diff")
-        with open("../resources/concept_maps/summary_diff_4_to_5_schema_v3.json") as diff_4_to_5_json:
+        with (open(resources_folder(__file__, "summary_diff_4_to_5_schema_v3.json"))) as diff_4_to_5_json:
             summary_test = json.loads(diff_4_to_5_json.read())
             assert summary == summary_test
-        with open("../resources/concept_maps/mappings_removed_4_to_5.json") as removed_test_json:
+        with (open(resources_folder(__file__, "mappings_removed_4_to_5.json"))) as removed_test_json:
             removed_test = json.loads(removed_test_json.read())
             assert removed_codes == removed_test
         assert result.get("removed_count") == 10
