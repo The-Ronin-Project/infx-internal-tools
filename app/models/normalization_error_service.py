@@ -11,12 +11,13 @@ from typing import Dict, List, Optional
 import traceback
 import sys
 
-import httpcore
 import httpx
 from cachetools.func import ttl_cache
 from decouple import config
 from deprecated.classic import deprecated
 from httpx import ReadTimeout
+from httpcore import PoolTimeout as HttpcorePoolTimeout
+from httpx import PoolTimeout as HttpxPoolTimeout
 from sqlalchemy import text, Table, Column, MetaData, Text, bindparam
 from sqlalchemy.dialects.postgresql import UUID as UUID_column_type
 from werkzeug.exceptions import BadRequest
@@ -26,7 +27,7 @@ import app.concept_maps.models
 import app.models.data_ingestion_registry
 import app.value_sets.models
 from app.errors import BadDataError
-from app.helpers.message_helper import message_exception_summary
+from app.helpers.message_helper import message_exception_summary, message_exception_classname
 from app.models.codes import Code
 from app.models.models import Organization
 from app.terminologies.models import Terminology
@@ -40,7 +41,7 @@ CLIENT_ID = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_ID", default="")
 CLIENT_SECRET = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_SECRET", default="")
 AUTH_AUDIENCE = config("DATA_NORMALIZATION_ERROR_SERVICE_AUDIENCE", default="")
 AUTH_URL = config("DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default="")
-PAGE_SIZE = 1000
+PAGE_SIZE = 500
 
 LOGGER = logging.getLogger()
 
@@ -184,17 +185,19 @@ class ErrorServiceResource:
                 params={},
             )
         # If an error occurs on one resource, skip it
-        except (httpx.ConnectError or httpcore.PoolTimeout or BadDataError) as e:
+        except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError) as e:
             LOGGER.warning(
-                f"{e.__class__.__name__}, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
+                f"{message_exception_classname(e)}, skipping load of issue data for Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
             return None
         except Exception as e:  # uncaught exceptions are so costly, a 'bare except' is acceptable, despite PEP 8: E722
-            intro = f"Unknown Error, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
-            info = "".join(traceback.format_exception(*sys.exc_info()))
-            LOGGER.warning(
-                f"{intro}\n{message_exception_summary(e)}\n{info}"
-            )
+            intro = f"{message_exception_classname(e)}, skipping load of issue data for Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
+            if "Timeout" not in intro:
+                info = "".join(traceback.format_exception(*sys.exc_info()))
+                message = f"{intro}\n{info}"
+            else:
+                message = intro
+            LOGGER.warning(message)
             return None
 
         # Instantiate ErrorServiceIssue
@@ -399,10 +402,11 @@ def load_concepts_from_errors(
     )
     error_service_resource_ids = get_all_unresolved_validation(environment)
 
+    timeout_config = httpx.Timeout(timeout=300.0, pool=300.0)
     try:
         # Step 1: Fetch resources that have encountered errors.
         token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
-        with httpx.Client(timeout=60.0) as client:
+        with httpx.Client(timeout=timeout_config) as client:
 
             # Collecting all resources with errors through paginated API calls.
             rest_api_params = dict(
@@ -534,17 +538,16 @@ def load_concepts_from_errors(
                     try:
                         raw_resource = json.loads(error_service_resource.resource)
                     except Exception as e:
-                        intro = f"Error loading {fhir_resource_type} for {organization_id}: 1 report for 1+ cases"
+                        intro = f"{message_exception_classname(e)} loading {fhir_resource_type} data for {organization_id}: 1 report for 1+ cases"
                         if intro not in tenant_load_json_format_error_reported:
                             error_code = "NormalizationErrorService.load_concepts_from_errors"
                             info = "".join(traceback.format_exception(*sys.exc_info()))
-                            summary = message_exception_summary(e)
-                            LOGGER.warning(f"\n{error_code}\n{intro}\n{summary}\n{info}\n")
+                            LOGGER.warning(f"{intro}\n{info}\n")
                             tenant_load_json_format_error_reported.append(intro)
                             raise BadDataError(
                                 code=error_code,
                                 description=intro,
-                                errors=summary
+                                errors=message_exception_summary(e)
                             )
 
                     # The data element where validation is failed is stored in the 'location' on the issue
@@ -673,7 +676,7 @@ def load_concepts_from_errors(
                                 "Location", location, raw_resource
                             )
 
-                        # Case not yet implemented
+                        # Case not yet implemented OR raw_resource is None (load of raw_resource data from error failed)
                         else:
                             LOGGER.warning(
                                 f"Support for the {fhir_resource_type} resource type at location {element} has not been implemented"
@@ -735,6 +738,12 @@ def load_concepts_from_errors(
                                 source_value_set.update({source_value_set_uuid: None})
                                 LOGGER.warning(
                                     f"No active published version of ValueSet with UUID: {source_value_set_uuid}"
+                                )
+                                all_skip_count += 1
+                                continue
+                            except Exception as e:
+                                LOGGER.warning(
+                                    f"{message_exception_classname(e)} loading ValueSet with UUID: {source_value_set_uuid}"
                                 )
                                 all_skip_count += 1
                                 continue
@@ -1306,6 +1315,7 @@ def reprocess_resources(resource_uuid_list):
 
     async def reprocess_all():
         reprocess_token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
+        # todo: any performance improvements we discover for GET, apply here for POST
         async with httpx.AsyncClient(timeout=60.0) as async_client:
             await asyncio.gather(
                 *(
@@ -1331,10 +1341,17 @@ async def reprocess_resource(resource_uuid, token, client):
             api_url=f"/resources/{resource_uuid}/reprocess",
             params={},
         )
-    except (httpx.ConnectError or httpcore.PoolTimeout or BadDataError) as e:
+    except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError) as e:
         # If an error occurs on one resource, skip it
         LOGGER.warning(
-             f"{e.__class__.__name__}, skipping load: Error Service Resource ID: {resource_uuid}"
+             f"{message_exception_classname(e)}, skipping reprocess resource: Error Service Resource ID: {resource_uuid}"
+        )
+        return None
+    except Exception as e:  # uncaught exceptions are so costly, a 'bare except' is acceptable, despite PEP 8: E722
+        intro = f"{message_exception_classname(e)}, skipping reprocess resource: Error Service Resource ID: {resource_uuid}"
+        stacktrace = "".join(traceback.format_exception(*sys.exc_info()))
+        LOGGER.warning(
+            f"{intro}\n{stacktrace}"
         )
         return None
 
