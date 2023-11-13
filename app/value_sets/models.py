@@ -1481,22 +1481,28 @@ class ValueSet:
 
     @classmethod
     def load(cls, vs_uuid):
+        if vs_uuid is None:
+            raise Exception("Cannot load a Value Set with None as uuid")
+
         conn = get_db()
         vs_data = conn.execute(
             text(
-                """
-            select * from value_sets.value_set where uuid=:uuid
+                """  
+            select * from value_sets.value_set where uuid=:uuid  
             """
             ),
             {"uuid": vs_uuid},
         ).first()
 
+        if vs_data is None:
+            raise NotFound(f"Value Set with uuid {vs_uuid} not found")
+
         synonym_data = conn.execute(
             text(
-                """
-            select context, synonym
-            from resource_synonyms
-            where resource_uuid=:uuid
+                """  
+            select context, synonym  
+            from resource_synonyms  
+            where resource_uuid=:uuid  
             """
             ),
             {"uuid": vs_uuid},
