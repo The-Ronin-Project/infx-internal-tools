@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 import traceback
 import sys
 
+import httpcore
 import httpx
 from cachetools.func import ttl_cache
 from decouple import config
@@ -183,14 +184,9 @@ class ErrorServiceResource:
                 params={},
             )
         # If an error occurs on one resource, skip it
-        except httpx.ConnectError:
+        except (httpx.ConnectError or httpcore.PoolTimeout or BadDataError) as e:
             LOGGER.warning(
-                f"httpx.ConnectError, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
-            )
-            return None
-        except BadDataError:
-            LOGGER.warning(
-                f"BadDataError, skipping load: details logged at first occurrence: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
+                f"{e.__class__.__name__}, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
             return None
         except Exception as e:  # uncaught exceptions are so costly, a 'bare except' is acceptable, despite PEP 8: E722
@@ -352,9 +348,12 @@ def load_concepts_from_errors(
     # Step 0: Initialize and setup
     if page_size is None:
         page_size = PAGE_SIZE
+    unsupported_resource_types = []
     if requested_resource_type is not None and (
         requested_resource_type not in [r.value for r in ResourceType]
     ):
+        if requested_resource_type not in unsupported_resource_types:
+            unsupported_resource_types.append(requested_resource_type)
         LOGGER.warning(
             f"Support for the {requested_resource_type} resource type has not been implemented"
         )
@@ -376,6 +375,7 @@ def load_concepts_from_errors(
     step_2_total = zero
     step_1_average = zero
     step_2_average = zero
+    total_count_loaded_codes = 0
 
     # Start logging
     LOGGER.warning(
@@ -917,11 +917,15 @@ def load_concepts_from_errors(
 
                     if len(code_list) > 0:
                         LOGGER.warning(
-                            f"Loading {len(code_list)} new codes to terminology "
+                            f"Attempting to load {len(code_list)} new codes to terminology "
                             + f"{terminology.terminology} version {terminology.version}"
                         )
-                        terminology.load_new_codes_to_terminology(
+                        inserted_count = terminology.load_new_codes_to_terminology(
                             code_list, on_conflict_do_nothing=True
+                        )
+                        total_count_loaded_codes += inserted_count
+                        LOGGER.warning(
+                            f"Actually inserted {inserted_count} codes to " f"{terminology.terminology} version {terminology.version} " + "after de-duplication"
                         )
 
                 # Step 5: Save the IDs of the original errors and link back to the codes
@@ -995,7 +999,7 @@ def load_concepts_from_errors(
                 all_loop_count += 1
                 LOGGER.warning(
                     f"  {len(resources_with_errors)} errors received and loaded in {step_1}\n"
-                    + f"  {len(new_codes_to_deduplicate_by_terminology)} new codes found and deduplicated in {step_2}\n"
+                    + f"  {total_count_loaded_codes} new codes found and deduplicated in {step_2}\n"
                     + f"  at local time {current_time}, loop duration {loop_total}"
                 )
 
@@ -1022,6 +1026,11 @@ def load_concepts_from_errors(
             all_loop_average = all_loop_total / all_loop_count
             step_1_average = step_1_total / all_loop_count
             step_2_average = step_2_total / all_loop_count
+        if len(unsupported_resource_types) > 0:
+            intro = "Encountered these unsupported FHIR resource types: "
+            list_of_unsupported = f"""{intro}\n  {",".join(unsupported_resource_types)}"""
+        else:
+            list_of_unsupported = ""
         LOGGER.warning(
             f"\nDONE at local time {time_end}, duration {time_elapsed}\n"
             + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
@@ -1030,7 +1039,8 @@ def load_concepts_from_errors(
             + f"Main loop ran {all_loop_count} times:\n"
             + f"  Average loop duration: {all_loop_average}\n"
             + f"  Average time to receive and load errors from service: {step_1_average}\n"
-            + f"  Average time to extract, deduplicate, and load codes into terminologies: {step_2_average}\n\n\n"
+            + f"  Average time to extract, deduplicate, and load codes into terminologies: {step_2_average}\n"
+            + f"{list_of_unsupported}\n\n"
         )
 
 
@@ -1321,10 +1331,10 @@ async def reprocess_resource(resource_uuid, token, client):
             api_url=f"/resources/{resource_uuid}/reprocess",
             params={},
         )
-    except httpx.ConnectError:
+    except (httpx.ConnectError or httpcore.PoolTimeout or BadDataError) as e:
         # If an error occurs on one resource, skip it
         LOGGER.warning(
-            f"httpx.ConnectError, skipping load: Error Service Resource ID: {resource_uuid}"
+             f"{e.__class__.__name__}, skipping load: Error Service Resource ID: {resource_uuid}"
         )
         return None
 
