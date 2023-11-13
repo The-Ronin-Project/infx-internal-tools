@@ -6,7 +6,7 @@
   "description": "MDAOC observations, Code and componentCode, normalized to standard and/or custom terminologies",
   "purpose": "The use case of normalizing the data within the data lake using the legacy systems from data platform.",
   "experimental": false,
-  "status": "active",
+  "status": "retired",
   "version": 12,
   "extension": [
     {
