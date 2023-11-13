@@ -41,7 +41,7 @@ CLIENT_ID = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_ID", default="")
 CLIENT_SECRET = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_SECRET", default="")
 AUTH_AUDIENCE = config("DATA_NORMALIZATION_ERROR_SERVICE_AUDIENCE", default="")
 AUTH_URL = config("DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default="")
-PAGE_SIZE = 500
+PAGE_SIZE = 300
 
 LOGGER = logging.getLogger()
 
@@ -111,7 +111,7 @@ async def make_post_request_async(
 class ResourceType(Enum):
     OBSERVATION = "Observation"
     CONDITION = "Condition"
-    # MEDICATION = "Medication"
+    MEDICATION = "Medication"
     LOCATION = "Location"
     PATIENT = "Patient"
     PRACTITIONER = "Practitioner"
@@ -402,7 +402,7 @@ def load_concepts_from_errors(
     )
     error_service_resource_ids = get_all_unresolved_validation(environment)
 
-    timeout_config = httpx.Timeout(timeout=300.0, pool=300.0)
+    timeout_config = httpx.Timeout(timeout=600.0, pool=600.0)
     try:
         # Step 1: Fetch resources that have encountered errors.
         token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
@@ -576,6 +576,13 @@ def load_concepts_from_errors(
                         # Condition
                         if resource_type == ResourceType.CONDITION:
                             # Condition.code is a CodeableConcept
+                            raw_code = raw_resource["code"]
+                            processed_code = raw_code
+                            processed_display = raw_code.get("text")
+
+                        # Medication
+                        elif resource_type == ResourceType.MEDICATION:
+                            # Medication.code is a CodeableConcept
                             raw_code = raw_resource["code"]
                             processed_code = raw_code
                             processed_display = raw_code.get("text")
