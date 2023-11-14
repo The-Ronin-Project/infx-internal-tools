@@ -705,8 +705,6 @@ class ConceptMapVersionCreator:
                                 ),
                             )
 
-            # Commit the changes to the database
-            self.conn.commit()
         except BadRequestWithCode or NotFoundException as e:
             LOGGER.info(
                 f"create_new_from_previous missing data in concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
