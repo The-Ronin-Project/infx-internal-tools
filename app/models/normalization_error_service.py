@@ -385,6 +385,11 @@ def load_concepts_from_errors(
         f"Begin import from error service at local time {time_start}\n"
         + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
         + f"  Load to:   {DATABASE_HOST}\n\n"
+        + f"  Settings: "
+        + f"    commit_changes={commit_changes}\n"
+        + f"    page_size={page_size}\n"
+        + f"    requested_organization_id={requested_organization_id}\n"
+        + f"    requested_resource_type={requested_resource_type}\n\n"
         + f"Main loop:\n"
     )
     tenant_load_json_format_error_reported = []
@@ -1443,7 +1448,10 @@ if __name__ == "__main__":
     # Per our usual practice, open a DatabaseHandler, that database calls within load_concepts_from_errors will re-use
     conn = get_db()
 
-
+    # Instructions for use:
+    # INPUT page_size and/or requested_organization_id and/or requested_resource_type as needed.
+    #     requested_organization_id: Confluence page called "Organization Ids" under "Living Architecture" lists them
+    #     requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
     # load_concepts_from_errors(commit_changes=True)
 
