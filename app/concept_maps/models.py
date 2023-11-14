@@ -807,6 +807,15 @@ class ConceptMapVersion:
                 )
 
     def load_mappings(self):
+        """
+        Loads mappings between source and target concepts for a specific version of a concept map.
+        This method queries the database to retrieve all reviewed mappings associated with the
+        concept map version, creates SourceConcept and Mapping objects, and stores them in the
+        self.mappings dictionary.
+
+        Raises:
+            BadRequestWithCode: If a source concept in the concept map version is missing a source system.
+        """
         conn = get_db()
         query = """
             select concept_relationship.uuid as mapping_uuid, concept_relationship.author, concept_relationship.review_status, concept_relationship.mapping_comments,
@@ -915,63 +924,27 @@ class ConceptMapVersion:
         :return: A data list and field names list
         """
         conn = get_db()
-        query = """
-            select sc.*, cr.*, rc.display as relationship_display from concept_maps.source_concept sc
-            left join concept_maps.concept_relationship cr on sc.uuid=cr.source_concept_uuid
-            left join concept_maps.relationship_codes rc on rc.uuid=cr.relationship_code_uuid
-            WHERE sc.concept_map_version_uuid=:concept_map_version_uuid
-            """
+        query = """  
+            SELECT sc.*, cr.*, rc.display as relationship_display  
+            FROM concept_maps.source_concept sc  
+            LEFT JOIN concept_maps.concept_relationship cr ON sc.uuid = cr.source_concept_uuid  
+            LEFT JOIN concept_maps.relationship_codes rc ON rc.uuid = cr.relationship_code_uuid  
+            WHERE sc.concept_map_version_uuid = :concept_map_version_uuid  
+        """
         results = conn.execute(
             text(query),
             {
                 "concept_map_version_uuid": self.uuid,
             },
         )
-        # Create an empty list to hold the data
-        data = []
-        # Iterate over the query results to populate the data list
-        for row in results:
-            data.append(
-                {
-                    "Source Code": row[1],
-                    "Source Display": row[2],
-                    "Relationship": row[31],
-                    "Target Code": row[20],
-                    "Target Display": row[21],
-                    "Review Status": row[17],
-                    "Map Status": row[6],
-                    "Mapping Comments": row[18],
-                    "Comments": row[4],
-                    "Additional Context": row[5],
-                    "No-Map": row[10],
-                    "No-Map Reason": row[11],
-                    "Mapping Group": row[12],
-                    "Mapper": row[25],
-                    "Reviewer": row[30],
-                    "Review Comment": row[29],
-                }
-            )
 
-        fieldnames = [
-            "Source Code",
-            "Source Display",
-            "Relationship",
-            "Target Code",
-            "Target Display",
-            "Review Status",
-            "Map Status",
-            "Mapping Comments",
-            "Comments",
-            "Additional Context",
-            "No-Map",
-            "No-Map Reason",
-            "Mapping Group",
-            "Mapper",
-            "Reviewer",
-            "Review Comment",
-        ]
+        # Get the column names
+        column_names = results.keys()
 
-        return data, fieldnames
+        # Convert the rows to a list of dictionaries
+        data = [dict(zip(column_names, row)) for row in results]
+
+        return data, column_names
 
     def version_set_status_active(self):
         """
@@ -1068,6 +1041,18 @@ class ConceptMapVersion:
         )
 
     def serialize_mappings(self):
+        """
+        Serializes the mappings between source and target concepts for a specific version of a concept map.
+        The method iterates through all the source and target code pairs in the mappings, and creates a
+        serialized representation of these mappings in the form of groups, each containing elements
+        representing the source codes and their associated target codes.
+
+        Returns:
+            list: A list of dictionaries representing groups of serialized mappings between source
+                  and target concepts. Each group contains the source and target code system URIs,
+                  their versions, and a list of elements representing individual source codes and
+                  their associated target codes.
+        """
         # Identify all the source terminology / target terminology pairings in the mappings
         source_target_pairs_set = set()
         for source_code, mappings in self.mappings.items():

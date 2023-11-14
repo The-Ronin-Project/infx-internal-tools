@@ -51,7 +51,7 @@ def get_concept_map_version(version_uuid):
     concept_map_version = ConceptMapVersion(version_uuid)
     concept_map_to_json = concept_map_version.serialize(
         include_internal_info=include_internal_info,
-        schema_version=ConceptMap.next_schema_version
+        schema_version=ConceptMap.next_schema_version,
     )
     return jsonify(concept_map_to_json)
 
@@ -141,7 +141,7 @@ def create_initial_concept_map_and_version_one():
 
         serialized_concept_map_version = concept_map_version.serialize(
             include_internal_info=include_internal_info,
-            schema_version=ConceptMap.next_schema_version
+            schema_version=ConceptMap.next_schema_version,
         )
         return jsonify(serialized_concept_map_version)
 
@@ -156,6 +156,7 @@ def get_concept_map_draft(version_uuid):
     """
     concept_map_version = ConceptMapVersion(version_uuid)
     csv_data, csv_field_names = concept_map_version.mapping_draft()
+
     # Create a CSV file-like object in memory
     si = io.StringIO()
     cw = csv.DictWriter(si, fieldnames=csv_field_names)
@@ -174,7 +175,9 @@ def get_concept_map_draft(version_uuid):
     return output
 
 
-@deprecated("Has not been used to date. Deprecated but retained for debugging or any internal use within Systems.")
+@deprecated(
+    "Has not been used to date. Deprecated but retained for debugging or any internal use within Systems."
+)
 @concept_maps_blueprint.route(
     "/ConceptMaps/<string:version_uuid>/prerelease", methods=["GET", "POST"]
 )
@@ -197,7 +200,9 @@ def get_concept_map_version_prerelease(version_uuid):
     if request.method == "POST":
 
         # output as ConceptMap.database_schema_version, which may be the same as ConceptMap.next_schema_version
-        concept_map_to_json, initial_path = concept_map_version.prepare_for_oci(ConceptMap.database_schema_version)
+        concept_map_to_json, initial_path = concept_map_version.prepare_for_oci(
+            ConceptMap.database_schema_version
+        )
         concept_map_to_datastore = set_up_object_store(
             concept_map_to_json,
             initial_path + f"/prerelease/{concept_map_version.concept_map.uuid}",
@@ -207,7 +212,9 @@ def get_concept_map_version_prerelease(version_uuid):
 
         # also output as ConceptMap.next_schema_version, if different from ConceptMap.database_schema_version
         if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
-            concept_map_to_json, initial_path = concept_map_version.prepare_for_oci(ConceptMap.next_schema_version)
+            concept_map_to_json, initial_path = concept_map_version.prepare_for_oci(
+                ConceptMap.next_schema_version
+            )
             concept_map_to_datastore = set_up_object_store(
                 concept_map_to_json,
                 initial_path + f"/prerelease/{concept_map_version.concept_map.uuid}",
@@ -461,7 +468,8 @@ def concepts_for_mapper_assignment(version_uuid):
     dict_list = get_concepts_for_assignment(version_uuid)
     response = jsonify(dict_list)
     return response
-  
+
+
 @concept_maps_blueprint.route("/ConceptMaps/map_no_maps", methods=["POST"])
 def new_concept_map_version_map_no_maps():
     previous_version_uuid = request.json.get("previous_version_uuid")
