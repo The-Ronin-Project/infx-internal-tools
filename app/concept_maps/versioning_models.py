@@ -707,18 +707,20 @@ class ConceptMapVersionCreator:
 
             # Commit the changes to the database
             self.conn.commit()
-        except BadRequestWithCode or NotFoundException:
+        except BadRequestWithCode or NotFoundException as e:
             LOGGER.info(
                 f"create_new_from_previous missing data in concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
             )
             self.conn.rollback()
+            raise e
 
-        except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
+        except Exception as e:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
 
             LOGGER.info(
                 f"create_new_from_previous unexpected error with concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
             )
             self.conn.rollback()
+            raise e
 
         # Return the new concept map version UUID
         return self.new_version_uuid
