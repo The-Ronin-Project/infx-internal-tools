@@ -185,7 +185,7 @@ class ErrorServiceResource:
                 params={},
             )
         # If an error occurs on one resource, skip it
-        except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError) as e:
+        except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError or ReadTimeout) as e:
             LOGGER.warning(
                 f"{message_exception_classname(e)}, skipping load of issue data for Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
@@ -1024,15 +1024,9 @@ def load_concepts_from_errors(
                     + f"  at local time {current_time}, loop duration {loop_total}"
                 )
 
-    except ReadTimeout as rt:
-        LOGGER.warning(
-            f"""\nTask halted by ReadTimeout: {rt.message if hasattr(rt, "message") else ""}\n"""
-            + f"  on: {rt.request.method} {rt.request.url}\n"
-            + f"  at: {datetime.datetime.now()}\n\n\n"
-        )
     except Exception as e:  # uncaught exceptions can be so costly, that a 'bare except' is fine, despite PEP 8: E722
         LOGGER.warning(
-            f"\nTask halted by exception at Data Normalization Error Service " +
+            f"\nTask halted by {message_exception_classname(e)} at Data Normalization Error Service " +
             f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} " +
             f"while processing {input_fhir_resource} for organization: {organization_id}\n" +
             f"Exception may reflect a general, temporary problem, such as another service being unavailable.\n\n" +
@@ -1353,7 +1347,7 @@ async def reprocess_resource(resource_uuid, token, client):
             api_url=f"/resources/{resource_uuid}/reprocess",
             params={},
         )
-    except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError) as e:
+    except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError or ReadTimeout) as e:
         # If an error occurs on one resource, skip it
         LOGGER.warning(
              f"{message_exception_classname(e)}, skipping reprocess resource: Error Service Resource ID: {resource_uuid}"
