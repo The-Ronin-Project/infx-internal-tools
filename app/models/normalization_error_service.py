@@ -385,7 +385,7 @@ def load_concepts_from_errors(
         f"Begin import from error service at local time {time_start}\n"
         + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
         + f"  Load to:   {DATABASE_HOST}\n\n"
-        + f"  Settings: "
+        + f"  Settings: \n"
         + f"    commit_changes={commit_changes}\n"
         + f"    page_size={page_size}\n"
         + f"    requested_organization_id={requested_organization_id}\n"
