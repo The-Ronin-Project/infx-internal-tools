@@ -98,7 +98,7 @@ def get_opensearch():
             )
         return g.opensearch
     return OpenSearch(
-        f"http://{config('OPENSEARCH_PROTOCOL', 'https')}:{config('OPENSEARCH_PASSWORD')}@{config('OPENSEARCH_HOST')}/",
+        f"{config('OPENSEARCH_PROTOCOL', 'https')}://{config('OPENSEARCH_PROTOCOL', 'https')}:{config('OPENSEARCH_PASSWORD')}@{config('OPENSEARCH_HOST')}/",
         verify_certs=False,
     )
 
