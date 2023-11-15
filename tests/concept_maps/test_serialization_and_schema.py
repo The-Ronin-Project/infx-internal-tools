@@ -19,27 +19,18 @@ class OutputTests(unittest.TestCase):
         but each of these test cases triggers an exception on purpose, so the callout does not occur.
 
         Test Cases:
-            Serialize a version as v3 and test that it has no items that are in v4 only.
-            Serialize the same version as v4 and test that it has all items that are in v4 only.
-            Serialize a version that has no mappings as v3 and test that it is fine. Group list is empty.
-            Serialize a version that has no mappings as v4 and test that it is fine. Group list is empty.
-            Attempt to publish as v4, a version that has no mappings, and test that it raises an exception.
-            Attempt to write to OCI as v4, a version that has no mappings, and test that it raises an exception.
+            Serialize the same version as v(n) and test that it has all items that are in v(n) only.
+            Attempt to publish as v(n), a version that violates v(n) requirements, and test that it raises an exception.
+            Attempt to publish using a version number that is not supported.
+            Attempt to publish using a version number that is formerly valid, recently outmoded.
+        Test Cases when dual versions are active (database_schema_version and next_schema_version are different):
+            Serialize a version as v(n) and test that it has no items that are in v(n+1) only.
+            Serialize a version as v(n+1) and test that it has no items that are in v(n) only.
         """
         # Step 1: small concept map with a version that has no mappings
         concept_map_uuid = "3704f2b0-7a8c-4455-ab2e-ffbcda91e1e3"  # "Apposnd Conditions to SNOMED CT" v1-v4
         concept_map_version_2 = ConceptMapVersion.load_by_concept_map_uuid_and_version(concept_map_uuid, 2)
         concept_map_version_4 = ConceptMapVersion.load_by_concept_map_uuid_and_version(concept_map_uuid, 4)
-
-        # v3 serialize a version that has mappings and test that it is fine.  Group list has entries.
-        serialized_v3 = concept_map_version_4.serialize(include_internal_info=True, schema_version=3)
-        group = serialized_v3.get("group")
-        assert group is not None
-        assert len(group) > 0
-        sourceCanonical =  serialized_v3.get("sourceCanonical")
-        assert sourceCanonical is None
-        targetCanonical = serialized_v3.get("targetCanonical")
-        assert targetCanonical is None
 
         # v4 serialize a version that has mappings and test that it is fine. Group list has entries.
         serialized_v4 = concept_map_version_4.serialize(include_internal_info=True, schema_version=4)
@@ -51,16 +42,6 @@ class OutputTests(unittest.TestCase):
         targetCanonical =  serialized_v4.get("targetCanonical")
         assert targetCanonical == "http://projectronin.io/fhir/ValueSet/8b58bcea-82e3-4c09-a7c2-ce7d9e8dad4c"
 
-        # v3 serialize a version that has no mappings as v3 and test that it is fine. Group list is empty.
-        serialized_v3 = concept_map_version_2.serialize(include_internal_info=True, schema_version=3)
-        group = serialized_v3.get("group")
-        assert group is not None
-        assert len(group) == 0
-        sourceCanonical =  serialized_v3.get("sourceCanonical")
-        assert sourceCanonical is None
-        targetCanonical = serialized_v3.get("targetCanonical")
-        assert targetCanonical is None
-
         # v4 serialize a version that has no mappings and test that it is fine. Group list is empty.
         serialized_v4 = concept_map_version_2.serialize(include_internal_info=True, schema_version=4)
         group = serialized_v4.get("group")
@@ -70,6 +51,14 @@ class OutputTests(unittest.TestCase):
         assert sourceCanonical == "http://projectronin.io/fhir/ValueSet/020d5cb0-193b-4240-b024-005802f860aa"
         targetCanonical =  serialized_v4.get("targetCanonical")
         assert targetCanonical == "http://projectronin.io/fhir/ValueSet/8b58bcea-82e3-4c09-a7c2-ce7d9e8dad4c"
+
+        # Cannot write a bad version number of schema format
+        with raises(BadRequestWithCode):
+            concept_map_version_4.serialize(include_internal_info=True, schema_version=0)
+
+        # Cannot write a formerly valid, now outmoded version number of schema format
+        with raises(BadRequestWithCode):
+            concept_map_version_4.serialize(include_internal_info=True, schema_version=3)
 
         # Cannot write to Simplifier, a concept map with 0 mappings - v4 or later forbids this case
         with raises(BadRequestWithCode):
@@ -95,11 +84,13 @@ class OutputTests(unittest.TestCase):
         Test that the ConceptMap current and/or next schema version is correctly defined in the ConceptMap class right now.
         Then run the concept_map_output_for_schema test for each version (only once, if they are the same number right now).
         """
-        assert ConceptMap.database_schema_version == 3
+        assert ConceptMap.database_schema_version == 4
         assert ConceptMap.next_schema_version == 4
-        self.concept_map_output_for_schema(ConceptMap.database_schema_version)
+        versions = 1
         if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
+            versions += 1
             self.concept_map_output_for_schema(ConceptMap.next_schema_version)
+        assert versions == 1  # When the versions are different, this value must be 2 instead of 1
 
 
     @staticmethod
