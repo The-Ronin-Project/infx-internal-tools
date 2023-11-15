@@ -407,7 +407,7 @@ def load_concepts_from_errors(
     )
     error_service_resource_ids = get_all_unresolved_validation(environment)
 
-    timeout_config = httpx.Timeout(timeout=600.0, pool=600.0)
+    timeout_config = httpx.Timeout(timeout=600.0, pool=600.0, read=600.0, connect=600.0)
     try:
         # Step 1: Fetch resources that have encountered errors.
         token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
