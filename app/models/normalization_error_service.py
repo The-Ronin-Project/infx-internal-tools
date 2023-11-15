@@ -41,7 +41,7 @@ CLIENT_ID = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_ID", default="")
 CLIENT_SECRET = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_SECRET", default="")
 AUTH_AUDIENCE = config("DATA_NORMALIZATION_ERROR_SERVICE_AUDIENCE", default="")
 AUTH_URL = config("DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default="")
-PAGE_SIZE = 300
+PAGE_SIZE = 500
 
 LOGGER = logging.getLogger()
 
@@ -185,7 +185,7 @@ class ErrorServiceResource:
                 params={},
             )
         # If an error occurs on one resource, skip it
-        except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError) as e:
+        except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError or ReadTimeout) as e:
             LOGGER.warning(
                 f"{message_exception_classname(e)}, skipping load of issue data for Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
@@ -385,6 +385,11 @@ def load_concepts_from_errors(
         f"Begin import from error service at local time {time_start}\n"
         + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
         + f"  Load to:   {DATABASE_HOST}\n\n"
+        + f"  Settings: \n"
+        + f"    commit_changes={commit_changes}\n"
+        + f"    page_size={page_size}\n"
+        + f"    requested_organization_id={requested_organization_id}\n"
+        + f"    requested_resource_type={requested_resource_type}\n\n"
         + f"Main loop:\n"
     )
     tenant_load_json_format_error_reported = []
@@ -402,7 +407,7 @@ def load_concepts_from_errors(
     )
     error_service_resource_ids = get_all_unresolved_validation(environment)
 
-    timeout_config = httpx.Timeout(timeout=600.0, pool=600.0)
+    timeout_config = httpx.Timeout(timeout=600.0, pool=600.0, read=600.0, connect=600.0)
     try:
         # Step 1: Fetch resources that have encountered errors.
         token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
@@ -1019,15 +1024,9 @@ def load_concepts_from_errors(
                     + f"  at local time {current_time}, loop duration {loop_total}"
                 )
 
-    except ReadTimeout as rt:
-        LOGGER.warning(
-            f"""\nTask halted by ReadTimeout: {rt.message if hasattr(rt, "message") else ""}\n"""
-            + f"  on: {rt.request.method} {rt.request.url}\n"
-            + f"  at: {datetime.datetime.now()}\n\n\n"
-        )
     except Exception as e:  # uncaught exceptions can be so costly, that a 'bare except' is fine, despite PEP 8: E722
         LOGGER.warning(
-            f"\nTask halted by exception at Data Normalization Error Service " +
+            f"\nTask halted by {message_exception_classname(e)} at Data Normalization Error Service " +
             f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} " +
             f"while processing {input_fhir_resource} for organization: {organization_id}\n" +
             f"Exception may reflect a general, temporary problem, such as another service being unavailable.\n\n" +
@@ -1348,7 +1347,7 @@ async def reprocess_resource(resource_uuid, token, client):
             api_url=f"/resources/{resource_uuid}/reprocess",
             params={},
         )
-    except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError) as e:
+    except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError or ReadTimeout) as e:
         # If an error occurs on one resource, skip it
         LOGGER.warning(
              f"{message_exception_classname(e)}, skipping reprocess resource: Error Service Resource ID: {resource_uuid}"
@@ -1443,7 +1442,10 @@ if __name__ == "__main__":
     # Per our usual practice, open a DatabaseHandler, that database calls within load_concepts_from_errors will re-use
     conn = get_db()
 
-
+    # Instructions for use:
+    # INPUT page_size and/or requested_organization_id and/or requested_resource_type as needed.
+    #     requested_organization_id: Confluence page called "Organization Ids" under "Living Architecture" lists them
+    #     requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
     # load_concepts_from_errors(commit_changes=True)
 
