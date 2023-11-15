@@ -93,12 +93,12 @@ def get_opensearch():
     if has_request_context():
         if "opensearch" not in g:
             g.opensearch = OpenSearch(
-                f"http://{config('OPENSEARCH_USER')}:{config('OPENSEARCH_PASSWORD')}@{config('OPENSEARCH_HOST')}/",
+                f"{config('OPENSEARCH_PROTOCOL', default='https')}://{config('OPENSEARCH_USER')}:{config('OPENSEARCH_PASSWORD')}@{config('OPENSEARCH_HOST')}/",
                 verify_certs=False,
             )
         return g.opensearch
     return OpenSearch(
-        f"http://{config('OPENSEARCH_USER')}:{config('OPENSEARCH_PASSWORD')}@{config('OPENSEARCH_HOST')}/",
+        f"{config('OPENSEARCH_PROTOCOL', default='https')}://{config('OPENSEARCH_PROTOCOL', 'https')}:{config('OPENSEARCH_PASSWORD')}@{config('OPENSEARCH_HOST')}/",
         verify_certs=False,
     )
 
