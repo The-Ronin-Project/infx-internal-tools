@@ -11,9 +11,11 @@
     "experimental": "False",
     "status": "retired",
     "date": "None",
+    "sourceCanonical": "http://projectronin.io/fhir/ValueSet/59dba9ed-7d74-472b-977d-ecc457597baa",
+    "targetCanonical": "http://projectronin.io/fhir/ValueSet/c86bf3d2-b6ba-4f05-83dd-f08c48dcca8a",
     "version": {
         "new_value": "5",
         "old_value": "4"
     },
-    "extension": "[{'url': 'http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema', 'valueString': '3.0.0'}]"
+    "extension": "[{'url': 'http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema', 'valueString': '4.0.0'}]"
 }

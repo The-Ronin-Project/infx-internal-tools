@@ -123,41 +123,17 @@ class VersioningTests(unittest.TestCase):
         assert result.get("new_total") == 106
         assert result.get("version") == 4
 
-        # v4 > v4 - compare version to itself, same schema, totals are correct - schema v3
+        # v4 > v4 - compare version to itself, same schema, totals are correct - schema v4
         result = concept_map.diff_mappings_and_metadata(
             concept_map_uuid,
             previous_version=4,
             new_version=4,
-            previous_schema_version=3,
-            new_schema_version=3
-        )
-        summary = result.get("summary_diff")
-        assert summary.get("sourceCanonical") is None
-        assert summary.get("targetCanonical") is None
-        assert result.get("removed_count") == 0
-        assert result.get("added_count") == 0
-        assert result.get("modified_count") == 0
-        assert result.get("unchanged_count") == 106
-        assert result.get("previous_total") == 106
-        assert result.get("new_total") == 106
-        assert result.get("version") == 4
-
-        # v4 > v4 - compare version to itself, totals are correct - schema v3 vs. v4
-        result = concept_map.diff_mappings_and_metadata(
-            concept_map_uuid,
-            previous_version=4,
-            new_version=4,
-            previous_schema_version=3,
+            previous_schema_version=4,
             new_schema_version=4
         )
         summary = result.get("summary_diff")
-        with (open(resources_folder(__file__, "summary_diff_4_to_4_schema_v3_to_v4.json"))) as summary_diff_4_to_4_json:
-            summary_test = json.loads(summary_diff_4_to_4_json.read())
-            assert summary == summary_test
-        assert summary["sourceCanonical"]["new_value"] == "http://projectronin.io/fhir/ValueSet/020d5cb0-193b-4240-b024-005802f860aa"
-        assert summary["targetCanonical"]["new_value"] == "http://projectronin.io/fhir/ValueSet/8b58bcea-82e3-4c09-a7c2-ce7d9e8dad4c"
-        assert summary["sourceCanonical"]["old_value"] == "None"
-        assert summary["targetCanonical"]["old_value"] == "None"
+        assert summary.get("sourceCanonical") == "http://projectronin.io/fhir/ValueSet/020d5cb0-193b-4240-b024-005802f860aa"
+        assert summary.get("targetCanonical") == "http://projectronin.io/fhir/ValueSet/8b58bcea-82e3-4c09-a7c2-ce7d9e8dad4c"
         assert result.get("removed_count") == 0
         assert result.get("added_count") == 0
         assert result.get("modified_count") == 0
@@ -166,12 +142,12 @@ class VersioningTests(unittest.TestCase):
         assert result.get("new_total") == 106
         assert result.get("version") == 4
 
-        # v0 > v4 - skip all versions, totals are correct - serialize v3
+        # v0 > v4 - skip all versions, totals are correct - serialize v4
         result = concept_map.diff_mappings_and_metadata(
             concept_map_uuid,
             previous_version=0,
             new_version=4,
-            previous_schema_version=3
+            previous_schema_version=4
         )
         assert result.get("removed_count") == 0
         assert result.get("added_count") == 106
@@ -204,16 +180,16 @@ class VersioningTests(unittest.TestCase):
         assert result.get("new_total") == 7268
         assert result.get("version") == 3
 
-        # v4 > v5 - some in, some out, compare output for removed - serialize v3
+        # v4 > v5 - some in, some out, compare output for removed - serialize v4
         result = concept_map.diff_mappings_and_metadata(
             concept_map_uuid,
             previous_version=4,
             new_version=5,
-            previous_schema_version=3
+            previous_schema_version=4
         )
         removed_codes = result.get("removed_codes")
         summary = result.get("summary_diff")
-        with (open(resources_folder(__file__, "summary_diff_4_to_5_schema_v3.json"))) as diff_4_to_5_json:
+        with (open(resources_folder(__file__, "summary_diff_4_to_5_schema_v4.json"))) as diff_4_to_5_json:
             summary_test = json.loads(diff_4_to_5_json.read())
             assert summary == summary_test
         with (open(resources_folder(__file__, "mappings_removed_4_to_5.json"))) as removed_test_json:

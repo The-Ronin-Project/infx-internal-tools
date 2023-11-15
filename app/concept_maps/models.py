@@ -209,7 +209,7 @@ class ConceptMap:
             To cut off the old schema output, set database_schema_version to the next_schema_version (in this case 4).
     """
 
-    database_schema_version = 3
+    database_schema_version = 4
     next_schema_version = 4
     object_storage_folder_name = "ConceptMaps"
 
@@ -1278,6 +1278,11 @@ class ConceptMapVersion:
         @return: object structure representing the concept map and conforming to the specified schema_version
         """
         # Prepare according to the version
+        if schema_version not in [ConceptMap.database_schema_version, ConceptMap.next_schema_version]:
+            raise BadRequestWithCode(
+                "ConceptMapVersion.serialize",
+                f"ConceptMap schema version {schema_version} is not supported.",
+            )
         schema_v4_or_later = schema_version >= 4
 
         # Transform the name based on the title
