@@ -18,7 +18,7 @@ from collections import defaultdict
 from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
 
-from app.errors import NotFoundException, BadDataError
+from app.errors import NotFoundException, BadDataError, DataIntegrityError
 from app.helpers.oci_helper import set_up_object_store
 
 from app.models.codes import Code
@@ -27,7 +27,8 @@ import app.concept_maps.models
 import app.models.data_ingestion_registry
 
 from app.terminologies.models import Terminology
-from app.database import get_db, get_elasticsearch
+
+from app.database import get_db  # , get_elasticsearch
 from flask import current_app
 from app.helpers.simplifier_helper import publish_to_simplifier
 
@@ -735,11 +736,14 @@ class LOINCRule(VSRule):
         ReTool saves arrays like this: {"Alpha-1-Fetoprotein","Alpha-1-Fetoprotein Ab","Alpha-1-Fetoprotein.tumor marker"}
         Sometimes, we also save arrays like this: Alpha-1-Fetoprotein,Alpha-1-Fetoprotein Ab,Alpha-1-Fetoprotein.tumor marker
 
-        This function will handle both formats and output a python list of strings
+        This function will handle both formats also, newline character sequences  (LF, CR, and CRLF) by replacing them with a space, and output a python list of strings
         """
         new_value = self.value
         if new_value[:1] == "{" and new_value[-1:] == "}":
             new_value = new_value[1:-1]
+
+            # Replace newline characters with a space
+        new_value = new_value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
 
         # Using csv.reader to handle commas inside quotes
         reader = csv.reader([new_value])
@@ -750,7 +754,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where loinc_num in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -767,7 +771,7 @@ class LOINCRule(VSRule):
             for item in self.split_value[1:]:
                 query += f""" or lower(long_common_name) like {item} """
 
-        query += """ and status = 'ACTIVE'
+        query += """ and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -790,7 +794,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where method_typ in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -800,7 +804,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where time_aspct in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -810,7 +814,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where system in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -820,7 +824,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where component in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -830,7 +834,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where scale_typ in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -840,7 +844,7 @@ class LOINCRule(VSRule):
         query = """
     select * from loinc.code
     where property in :value
-    and status = 'ACTIVE'
+    and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
     and terminology_version_uuid=:terminology_version_uuid
     order by long_common_name
     """
@@ -850,7 +854,7 @@ class LOINCRule(VSRule):
         query = """
             select * from loinc.code
             where classtype in :value
-            and status = 'ACTIVE'
+            and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
             and terminology_version_uuid=:terminology_version_uuid
             order by long_common_name
             """
@@ -860,7 +864,7 @@ class LOINCRule(VSRule):
         query = """
             select * from loinc.code
             where order_obs in :value
-            and status = 'ACTIVE'
+            and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
             and terminology_version_uuid=:terminology_version_uuid
             order by long_common_name
             """
@@ -1001,7 +1005,7 @@ class CPTRule(VSRule):
                 return input_array
             elif type(input_array) == str:
                 return json.loads(input_array)
-        except:
+        except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
             return self.parse_cpt_retool_array(input_array)
 
     def parse_code_number_and_letter(self, code):
@@ -1065,32 +1069,32 @@ class CPTRule(VSRule):
         ]
         self.results = set(results)
 
-    def display_regex(self):
-        """Process CPT rules where property=display and operator=regex, where we are string matching to displays"""
-        es = get_elasticsearch()
-
-        results = es.search(
-            query={
-                "simple_query_string": {
-                    "fields": ["display"],
-                    "query": self.value,
-                }
-            },
-            index="cpt_codes",
-            size=MAX_ES_SIZE,
-        )
-
-        search_results = [x.get("_source") for x in results.get("hits").get("hits")]
-        final_results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.get("code"),
-                x.get("display"),
-            )
-            for x in search_results
-        ]
-        self.results = set(final_results)
+    # def display_regex(self):
+    #     """Process CPT rules where property=display and operator=regex, where we are string matching to displays"""
+    #     es = get_elasticsearch()
+    #
+    #     results = es.search(
+    #         query={
+    #             "simple_query_string": {
+    #                 "fields": ["display"],
+    #                 "query": self.value,
+    #             }
+    #         },
+    #         index="cpt_codes",
+    #         size=MAX_ES_SIZE,
+    #     )
+    #
+    #     search_results = [x.get("_source") for x in results.get("hits").get("hits")]
+    #     final_results = [
+    #         Code(
+    #             self.fhir_system,
+    #             self.terminology_version.version,
+    #             x.get("code"),
+    #             x.get("display"),
+    #         )
+    #         for x in search_results
+    #     ]
+    #     self.results = set(final_results)
 
     def include_entire_code_system(self):
         """
@@ -1477,22 +1481,28 @@ class ValueSet:
 
     @classmethod
     def load(cls, vs_uuid):
+        if vs_uuid is None:
+            raise Exception("Cannot load a Value Set with None as uuid")
+
         conn = get_db()
         vs_data = conn.execute(
             text(
-                """
-            select * from value_sets.value_set where uuid=:uuid
+                """  
+            select * from value_sets.value_set where uuid=:uuid  
             """
             ),
             {"uuid": vs_uuid},
         ).first()
 
+        if vs_data is None:
+            raise NotFound(f"Value Set with uuid {vs_uuid} not found")
+
         synonym_data = conn.execute(
             text(
-                """
-            select context, synonym
-            from resource_synonyms
-            where resource_uuid=:uuid
+                """  
+            select context, synonym  
+            from resource_synonyms  
+            where resource_uuid=:uuid  
             """
             ),
             {"uuid": vs_uuid},
@@ -1734,7 +1744,7 @@ class ValueSet:
         try:
             results = conn.execute(query, {"uuid": uuid})
         except DatabaseError:
-            raise NotFoundException (
+            raise NotFoundException(
                 f"Database unavailable while seeking ValueSet with UUID: {uuid}"
             )
         recent_version = results.first()
@@ -2007,7 +2017,7 @@ class ValueSet:
         most_recent_version.expand()
         try:
             new_value_set_version.expand(force_new=True)
-        except Exception as e:
+        except Exception as e:  # uncaught exceptions can be so costly, a 'bare except' is fine, despite PEP 8: E722
             return "failed_to_expand"
 
         # Get the diff between the two value set versions
@@ -3305,19 +3315,18 @@ class ValueSetVersion:
 
         for code in self.expansion:
             key = (code.system, code.version)
-            terminology = Terminology.load_by_fhir_uri_and_version_from_cache(
-                fhir_uri=code.system, version=code.version
-            )
-            if terminology is None:
-                raise NotFoundException(
-                    f"No Terminology code was found with code system FHIR URI {code.system} " +
-                    f" at code Version {code.version} when loading codes for the Value Set with UUID: " +
-                    f"{self.value_set.uuid} and name: {self.value_set.title} at Value Set Version {self.version}"
+            try:
+                terminology = Terminology.load_by_fhir_uri_and_version_from_cache(
+                    fhir_uri=code.system, version=code.version
+                )
+            except NotFoundException:
+                raise DataIntegrityError(
+                    f"No terminology found with fhir_uri: {code.system} and version: {code.version}."
+                    + f" This caused a failure to look up terminologies in the value set: {self.value_set.title}"
+                    + f" version: {self.version} "
                 )
             if key not in terminologies:
-                terminologies[
-                    key
-                ] = terminology
+                terminologies[key] = terminology
 
         return list(terminologies.values())
 

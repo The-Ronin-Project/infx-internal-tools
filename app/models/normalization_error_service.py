@@ -6,6 +6,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from enum import Enum
+from json import JSONDecodeError
 from typing import Dict, List, Optional
 import traceback
 import sys
@@ -13,7 +14,10 @@ import sys
 import httpx
 from cachetools.func import ttl_cache
 from decouple import config
+from deprecated.classic import deprecated
 from httpx import ReadTimeout
+from httpcore import PoolTimeout as HttpcorePoolTimeout
+from httpx import PoolTimeout as HttpxPoolTimeout
 from sqlalchemy import text, Table, Column, MetaData, Text, bindparam
 from sqlalchemy.dialects.postgresql import UUID as UUID_column_type
 from werkzeug.exceptions import BadRequest
@@ -22,6 +26,8 @@ import app
 import app.concept_maps.models
 import app.models.data_ingestion_registry
 import app.value_sets.models
+from app.errors import BadDataError
+from app.helpers.message_helper import message_exception_summary, message_exception_classname
 from app.models.codes import Code
 from app.models.models import Organization
 from app.terminologies.models import Terminology
@@ -35,9 +41,10 @@ CLIENT_ID = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_ID", default="")
 CLIENT_SECRET = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_SECRET", default="")
 AUTH_AUDIENCE = config("DATA_NORMALIZATION_ERROR_SERVICE_AUDIENCE", default="")
 AUTH_URL = config("DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default="")
-PAGE_SIZE = 1000
+PAGE_SIZE = 300
 
 LOGGER = logging.getLogger()
+
 
 def get_token(url: str, client_id: str, client_secret: str, audience: str) -> str:
     """
@@ -79,7 +86,9 @@ def make_get_request(token, client: httpx.Client, base_url, api_url, params={}):
     return response.json()
 
 
-async def make_get_request_async(token, client: httpx.AsyncClient, base_url, api_url, params={}):
+async def make_get_request_async(
+    token, client: httpx.AsyncClient, base_url, api_url, params={}
+):
     headers: dict[str, str] = {
         "Authorization": f"Bearer {token}",
         "content-type": "application/json",
@@ -88,7 +97,9 @@ async def make_get_request_async(token, client: httpx.AsyncClient, base_url, api
     return response.json()
 
 
-async def make_post_request_async(token, client: httpx.AsyncClient, base_url, api_url, params={}):
+async def make_post_request_async(
+    token, client: httpx.AsyncClient, base_url, api_url, params={}
+):
     headers: dict[str, str] = {
         "Authorization": f"Bearer {token}",
         "content-type": "application/json",
@@ -100,7 +111,7 @@ async def make_post_request_async(token, client: httpx.AsyncClient, base_url, ap
 class ResourceType(Enum):
     OBSERVATION = "Observation"
     CONDITION = "Condition"
-    # MEDICATION = "Medication"
+    MEDICATION = "Medication"
     LOCATION = "Location"
     PATIENT = "Patient"
     PRACTITIONER = "Practitioner"
@@ -174,15 +185,19 @@ class ErrorServiceResource:
                 params={},
             )
         # If an error occurs on one resource, skip it
-        except httpx.ConnectError:
+        except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError) as e:
             LOGGER.warning(
-                f"httpx.ConnectError, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
+                f"{message_exception_classname(e)}, skipping load of issue data for Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
             return None
-        except:
-            LOGGER.warning(
-                f"Unknown Error, skipping load: Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
-            )
+        except Exception as e:  # uncaught exceptions are so costly, a 'bare except' is acceptable, despite PEP 8: E722
+            intro = f"{message_exception_classname(e)}, skipping load of issue data for Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
+            if "Timeout" not in intro:
+                info = "".join(traceback.format_exception(*sys.exc_info()))
+                message = f"{intro}\n{info}"
+            else:
+                message = intro
+            LOGGER.warning(message)
             return None
 
         # Instantiate ErrorServiceIssue
@@ -241,17 +256,18 @@ metadata = MetaData()
 
 # Define the table using the Table syntax
 temp_error_data = Table(
-    'temp_error_data', metadata,
-    Column('code', Text),
-    Column('display', Text),
-    Column('terminology_version_uuid', UUID_column_type),
-    Column('depends_on_system', Text),
-    Column('depends_on_property', Text),
-    Column('depends_on_display', Text),
-    Column('depends_on_value', Text),
-    Column('issue_uuid', UUID_column_type),
-    Column('resource_uuid', UUID_column_type),
-    Column('status', Text)
+    "temp_error_data",
+    metadata,
+    Column("code", Text),
+    Column("display", Text),
+    Column("terminology_version_uuid", UUID_column_type),
+    Column("depends_on_system", Text),
+    Column("depends_on_property", Text),
+    Column("depends_on_display", Text),
+    Column("depends_on_value", Text),
+    Column("issue_uuid", UUID_column_type),
+    Column("resource_uuid", UUID_column_type),
+    Column("status", Text),
 )
 
 
@@ -266,8 +282,8 @@ def extract_telecom_data(resource_type, location, raw_resource):
     """
     # Define the regular expression patterns for 'system' and 'use'
     regex_patterns = {
-        'system': re.compile(fr"^{resource_type}\.telecom\[(\d+)\]\.system$"),
-        'use': re.compile(fr"^{resource_type}\.telecom\[(\d+)\]\.use$")
+        "system": re.compile(rf"^{resource_type}\.telecom\[(\d+)\]\.system$"),
+        "use": re.compile(rf"^{resource_type}\.telecom\[(\d+)\]\.use$"),
     }
 
     # Initialize variables for processed code and display
@@ -275,11 +291,11 @@ def extract_telecom_data(resource_type, location, raw_resource):
     processed_display = None
 
     # Loop through the keys 'system' and 'use' to find matches
-    for key in ['system', 'use']:
+    for key in ["system", "use"]:
         match = regex_patterns[key].search(location)
         if match:
             list_index = int(match.group(1))
-            raw_code = raw_resource['telecom'][list_index][key]
+            raw_code = raw_resource["telecom"][list_index][key]
             processed_code = raw_code
             processed_display = raw_code
 
@@ -287,10 +303,10 @@ def extract_telecom_data(resource_type, location, raw_resource):
 
 
 def load_concepts_from_errors(
-        commit_changes=True,
-        page_size: int = None,
-        requested_organization_id: str = None,
-        requested_resource_type: str = None,
+    commit_changes=True,
+    page_size: int = None,
+    requested_organization_id: str = None,
+    requested_resource_type: str = None,
 ):
     """
     Extracts specific concepts from a list of errors and saves them to a custom terminology.
@@ -335,8 +351,15 @@ def load_concepts_from_errors(
     # Step 0: Initialize and setup
     if page_size is None:
         page_size = PAGE_SIZE
-    if requested_resource_type is not None and (requested_resource_type not in [r.value for r in ResourceType]):
-        LOGGER.warning(f"Support for the {requested_resource_type} resource type has not been implemented")
+    unsupported_resource_types = []
+    if requested_resource_type is not None and (
+        requested_resource_type not in [r.value for r in ResourceType]
+    ):
+        if requested_resource_type not in unsupported_resource_types:
+            unsupported_resource_types.append(requested_resource_type)
+        LOGGER.warning(
+            f"Support for the {requested_resource_type} resource type has not been implemented"
+        )
         return
 
     # Logging variables
@@ -355,14 +378,16 @@ def load_concepts_from_errors(
     step_2_total = zero
     step_1_average = zero
     step_2_average = zero
+    total_count_loaded_codes = 0
 
     # Start logging
     LOGGER.warning(
-        f"Begin import from error service at local time {time_start}\n" +
-        f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n" +
-        f"  Load to:   {DATABASE_HOST}\n\n" +
-        f"Main loop:\n"
+        f"Begin import from error service at local time {time_start}\n"
+        + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
+        + f"  Load to:   {DATABASE_HOST}\n\n"
+        + f"Main loop:\n"
     )
+    tenant_load_json_format_error_reported = []
 
     # Local caches
     # todo: study why ttl_cache, or other caching strategies, did not stop repeat loads from happening
@@ -372,13 +397,16 @@ def load_concepts_from_errors(
     terminology_version = dict()
 
     # Resources we have already processed in this environment
-    environment = get_environment_from_service_url(DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL)
+    environment = get_environment_from_service_url(
+        DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL
+    )
     error_service_resource_ids = get_all_unresolved_validation(environment)
 
+    timeout_config = httpx.Timeout(timeout=600.0, pool=600.0)
     try:
         # Step 1: Fetch resources that have encountered errors.
         token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
-        with httpx.Client(timeout=60.0) as client:
+        with httpx.Client(timeout=timeout_config) as client:
 
             # Collecting all resources with errors through paginated API calls.
             rest_api_params = dict(
@@ -431,7 +459,9 @@ def load_concepts_from_errors(
 
                     fhir_resource_type = None
                     for resource_type_option in ResourceType:
-                        if resource_type_option.value == resource_data.get("resource_type"):
+                        if resource_type_option.value == resource_data.get(
+                            "resource_type"
+                        ):
                             fhir_resource_type = resource_type_option
                             input_fhir_resource = resource_type_option.value
                             break
@@ -475,7 +505,13 @@ def load_concepts_from_errors(
                 # Load issues for all error service resources
                 async def load_all_issues():
                     async with httpx.AsyncClient() as async_client:
-                        await asyncio.gather(*(error_resource.load_issues(client=async_client) for error_resource in error_resources))
+                        await asyncio.gather(
+                            *(
+                                error_resource.load_issues(client=async_client)
+                                for error_resource in error_resources
+                            )
+                        )
+
                 asyncio.run(load_all_issues())
 
                 # Step 2: Extract relevant codes from the resource.
@@ -499,7 +535,20 @@ def load_concepts_from_errors(
                 for error_service_resource in error_resources:
                     # Get the FHIR resource information from the error resource
                     resource_type = error_service_resource.resource_type
-                    raw_resource = json.loads(error_service_resource.resource)
+                    try:
+                        raw_resource = json.loads(error_service_resource.resource)
+                    except Exception as e:
+                        intro = f"{message_exception_classname(e)} loading {fhir_resource_type} data for {organization_id}: 1 report for 1+ cases"
+                        if intro not in tenant_load_json_format_error_reported:
+                            error_code = "NormalizationErrorService.load_concepts_from_errors"
+                            info = "".join(traceback.format_exception(*sys.exc_info()))
+                            LOGGER.warning(f"{intro}\n{info}\n")
+                            tenant_load_json_format_error_reported.append(intro)
+                            raise BadDataError(
+                                code=error_code,
+                                description=intro,
+                                errors=message_exception_summary(e)
+                            )
 
                     # The data element where validation is failed is stored in the 'location' on the issue
                     # We need to filter the issues to just the NOV_CONMAP_LOOKUP issues and get the location
@@ -515,8 +564,8 @@ def load_concepts_from_errors(
                         # data_element is the location without any brackets or indices
                         # ex. if location is 'Patient.telecom[1].system' then data_element is 'Patient.telecom.system'
                         location = issue.location
-                        element = re.sub(r'\[\d+\]', '', location)
-                        match = re.search(r'\[(\d+)\]', location)
+                        element = re.sub(r"\[\d+\]", "", location)
+                        match = re.search(r"\[(\d+)\]", location)
                         # Extract any index that may be present in the location string
                         index = None
                         if match is not None:
@@ -527,6 +576,13 @@ def load_concepts_from_errors(
                         # Condition
                         if resource_type == ResourceType.CONDITION:
                             # Condition.code is a CodeableConcept
+                            raw_code = raw_resource["code"]
+                            processed_code = raw_code
+                            processed_display = raw_code.get("text")
+
+                        # Medication
+                        elif resource_type == ResourceType.MEDICATION:
+                            # Medication.code is a CodeableConcept
                             raw_code = raw_resource["code"]
                             processed_code = raw_code
                             processed_display = raw_code.get("text")
@@ -554,9 +610,9 @@ def load_concepts_from_errors(
                                 if index is None:
                                     continue
                                 if (
-                                    "component" not in raw_resource or
-                                    index not in raw_resource["component"] or
-                                    "code" not in raw_resource["component"][index]
+                                    "component" not in raw_resource
+                                    or index not in raw_resource["component"]
+                                    or "code" not in raw_resource["component"][index]
                                 ):
                                     continue
                                 raw_code = raw_resource["component"][index]["code"]
@@ -568,16 +624,21 @@ def load_concepts_from_errors(
                                 if index is None:
                                     continue
                                 if (
-                                    "component" not in raw_resource or
-                                    index not in raw_resource["component"] or
-                                    "valueCodeableConcept" not in raw_resource["component"][index]
+                                    "component" not in raw_resource
+                                    or index not in raw_resource["component"]
+                                    or "valueCodeableConcept"
+                                    not in raw_resource["component"][index]
                                 ):
                                     continue
-                                raw_code = raw_resource["component"][index]["valueCodeableConcept"]
+                                raw_code = raw_resource["component"][index][
+                                    "valueCodeableConcept"
+                                ]
                                 processed_code = raw_code
                                 processed_display = raw_code.get("text")
                             else:
-                                LOGGER.warning(f"Unrecognized location for Observation error: {location}")
+                                LOGGER.warning(
+                                    f"Unrecognized location for Observation error: {location}"
+                                )
 
                         # DocumentReference
                         elif resource_type == ResourceType.DOCUMENT_REFERENCE:
@@ -600,21 +661,29 @@ def load_concepts_from_errors(
 
                         # Patient
                         elif resource_type == ResourceType.PATIENT:
-                            processed_code, processed_display = extract_telecom_data('Patient', location, raw_resource)
+                            processed_code, processed_display = extract_telecom_data(
+                                "Patient", location, raw_resource
+                            )
 
                         # Practitioner
                         elif resource_type == ResourceType.PRACTITIONER:
-                            processed_code, processed_display = extract_telecom_data('Practitioner', location, raw_resource)
+                            processed_code, processed_display = extract_telecom_data(
+                                "Practitioner", location, raw_resource
+                            )
 
                         # PractitionerRole
                         elif resource_type == ResourceType.PRACTITIONER_ROLE:
-                            processed_code, processed_display = extract_telecom_data('PractitionerRole', location, raw_resource)
+                            processed_code, processed_display = extract_telecom_data(
+                                "PractitionerRole", location, raw_resource
+                            )
 
                         # Location
                         elif resource_type == ResourceType.LOCATION:
-                            processed_code, processed_display = extract_telecom_data('Location', location, raw_resource)
+                            processed_code, processed_display = extract_telecom_data(
+                                "Location", location, raw_resource
+                            )
 
-                        # Case not yet implemented
+                        # Case not yet implemented OR raw_resource is None (load of raw_resource data from error failed)
                         else:
                             LOGGER.warning(
                                 f"Support for the {fhir_resource_type} resource type at location {element} has not been implemented"
@@ -626,7 +695,10 @@ def load_concepts_from_errors(
                         # So that we can then identify the correct terminology to load the new coding to
 
                         # Note that some normalization registry data_element strings need adjustment.
-                        if element == "Observation.value" or element == "Observation.component.value":
+                        if (
+                            element == "Observation.value"
+                            or element == "Observation.component.value"
+                        ):
                             data_element = f"{element}CodeableConcept"
                         else:
                             data_element = element
@@ -640,12 +712,14 @@ def load_concepts_from_errors(
                                     organization=error_service_resource.organization,
                                 )
                             )
-                            data_normalization_registry.update({
-                                registry_key: concept_map_version_for_normalization
-                            })
+                            data_normalization_registry.update(
+                                {registry_key: concept_map_version_for_normalization}
+                            )
 
                         # Is the concept_map_version_for_normalization valid?
-                        concept_map_version_for_normalization = data_normalization_registry[registry_key]
+                        concept_map_version_for_normalization = (
+                            data_normalization_registry[registry_key]
+                        )
                         if concept_map_version_for_normalization is None:
                             # We already messaged that the concept map for this resource and issue is missing
                             continue
@@ -656,27 +730,35 @@ def load_concepts_from_errors(
                         )
                         if source_value_set_uuid not in source_value_set.keys():
                             try:
-                                most_recent_active_source_value_set_version = (
-                                    app.value_sets.models.ValueSet.load_most_recent_active_version_with_cache(
-                                        source_value_set_uuid
-                                    )
+                                most_recent_active_source_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version_with_cache(
+                                    source_value_set_uuid
                                 )
-                                most_recent_active_source_value_set_version.expand(no_repeat=True)
-                                source_value_set.update({
-                                    source_value_set_uuid: most_recent_active_source_value_set_version
-                                })
+                                most_recent_active_source_value_set_version.expand(
+                                    no_repeat=True
+                                )
+                                source_value_set.update(
+                                    {
+                                        source_value_set_uuid: most_recent_active_source_value_set_version
+                                    }
+                                )
                             except BadRequest:
-                                source_value_set.update({
-                                    source_value_set_uuid: None
-                                })
+                                source_value_set.update({source_value_set_uuid: None})
                                 LOGGER.warning(
                                     f"No active published version of ValueSet with UUID: {source_value_set_uuid}"
                                 )
                                 all_skip_count += 1
                                 continue
+                            except Exception as e:
+                                LOGGER.warning(
+                                    f"{message_exception_classname(e)} loading ValueSet with UUID: {source_value_set_uuid}"
+                                )
+                                all_skip_count += 1
+                                continue
 
                         # Is the most_recent_active_source_value_set_version valid?
-                        most_recent_active_source_value_set_version = source_value_set[source_value_set_uuid]
+                        most_recent_active_source_value_set_version = source_value_set[
+                            source_value_set_uuid
+                        ]
                         if most_recent_active_source_value_set_version is None:
                             # We messaged the first time we encountered the issue, do not repeat message
                             continue
@@ -696,14 +778,22 @@ def load_concepts_from_errors(
                                     f"No terminologies in source value set {most_recent_active_source_value_set_version.uuid}"
                                 )
 
-                            current_terminology_version = terminologies_in_source_value_set[0]
-                            terminology_for_value_set.update({
-                                source_value_set_uuid: current_terminology_version
-                            })
-                            terminology_version.update({
-                                str(current_terminology_version.uuid): current_terminology_version
-                            })
-                        current_terminology_version = terminology_for_value_set[source_value_set_uuid]
+                            current_terminology_version = (
+                                terminologies_in_source_value_set[0]
+                            )
+                            terminology_for_value_set.update(
+                                {source_value_set_uuid: current_terminology_version}
+                            )
+                            terminology_version.update(
+                                {
+                                    str(
+                                        current_terminology_version.uuid
+                                    ): current_terminology_version
+                                }
+                            )
+                        current_terminology_version = terminology_for_value_set[
+                            source_value_set_uuid
+                        ]
 
                         #  The custom terminology may have already passed its effective end date, so we might need to create a new version
                         terminology_to_load_to = (
@@ -712,7 +802,7 @@ def load_concepts_from_errors(
 
                         new_code_uuid = uuid.uuid4()
                         if processed_display is None:
-                            processed_display = ''
+                            processed_display = ""
                         new_code = Code(
                             code=processed_code,
                             display=processed_display,
@@ -731,7 +821,9 @@ def load_concepts_from_errors(
                                     "resource_uuid": error_service_resource.id,
                                     "environment": environment,
                                     "status": "pending",
-                                    "code": json.dumps(processed_code) if type(processed_code) == dict else processed_code,
+                                    "code": json.dumps(processed_code)
+                                    if type(processed_code) == dict
+                                    else processed_code,
                                     "display": processed_display,
                                     "terminology_version_uuid": terminology_to_load_to.uuid,
                                     # Note: no currently supported resource requires the dependsOn data
@@ -739,32 +831,34 @@ def load_concepts_from_errors(
                                     "depends_on_property": "",
                                     "depends_on_system": "",
                                     "depends_on_value": "",
-                                    "depends_on_display": ""
+                                    "depends_on_display": "",
                                 }
                             )
 
                         # Assemble additionalData from the raw resource.
                         # This is where we'll extract unit, value, referenceRange, and value[x] if available
-                        resource_json = json.loads(error_service_resource.resource)
                         new_code.add_examples_to_additional_data(
-                            unit=resource_json.get("unit"),
-                            value=resource_json.get("value"),
-                            reference_range=resource_json.get("referenceRange"),
-                            value_quantity=resource_json.get("valueQuantity"),
-                            value_boolean=resource_json.get("valueBoolean"),
-                            value_string=resource_json.get("valueString"),
-                            value_date_time=resource_json.get("valueDateTime"),
-                            value_codeable_concept=resource_json.get("valueCodeableConcept"),
+                            unit=raw_resource.get("unit"),
+                            value=raw_resource.get("value"),
+                            reference_range=raw_resource.get("referenceRange"),
+                            value_quantity=raw_resource.get("valueQuantity"),
+                            value_boolean=raw_resource.get("valueBoolean"),
+                            value_string=raw_resource.get("valueString"),
+                            value_date_time=raw_resource.get("valueDateTime"),
+                            value_codeable_concept=raw_resource.get("valueCodeableConcept"),
                         )
 
-                        if terminology_to_load_to.uuid in new_codes_to_deduplicate_by_terminology:
+                        if (
+                            terminology_to_load_to.uuid
+                            in new_codes_to_deduplicate_by_terminology
+                        ):
                             new_codes_to_deduplicate_by_terminology[
                                 terminology_to_load_to.uuid
                             ].append(new_code)
                         else:
-                            new_codes_to_deduplicate_by_terminology[terminology_to_load_to.uuid] = [
-                                new_code
-                            ]
+                            new_codes_to_deduplicate_by_terminology[
+                                terminology_to_load_to.uuid
+                            ] = [new_code]
 
                 # Step 3: Deduplicate the codes to avoid redundant data.
                 deduped_codes_by_terminology = {}
@@ -824,21 +918,30 @@ def load_concepts_from_errors(
                     deduped_codes_by_terminology[terminology_uuid] = deduped_codes
 
                 # Step 4: Load the deduplicated codes into their respective terminologies.
-                for terminology_version_uuid, code_list in deduped_codes_by_terminology.items():
+                for (
+                    terminology_version_uuid,
+                    code_list,
+                ) in deduped_codes_by_terminology.items():
                     if terminology_version_uuid not in terminology_version.keys():
-                        terminology = Terminology.load_from_cache(terminology_version_uuid)
-                        terminology_version.update({
-                            terminology_version_uuid: terminology
-                        })
+                        terminology = Terminology.load_from_cache(
+                            terminology_version_uuid
+                        )
+                        terminology_version.update(
+                            {terminology_version_uuid: terminology}
+                        )
                     terminology = terminology_version[terminology_version_uuid]
 
                     if len(code_list) > 0:
                         LOGGER.warning(
-                            f"Loading {len(code_list)} new codes to terminology " +
-                            f"{terminology.terminology} version {terminology.version}"
+                            f"Attempting to load {len(code_list)} new codes to terminology "
+                            + f"{terminology.terminology} version {terminology.version}"
                         )
-                        terminology.load_new_codes_to_terminology(
+                        inserted_count = terminology.load_new_codes_to_terminology(
                             code_list, on_conflict_do_nothing=True
+                        )
+                        total_count_loaded_codes += inserted_count
+                        LOGGER.warning(
+                            f"Actually inserted {inserted_count} codes to " f"{terminology.terminology} version {terminology.version} " + "after de-duplication"
                         )
 
                 # Step 5: Save the IDs of the original errors and link back to the codes
@@ -887,8 +990,8 @@ def load_concepts_from_errors(
                                     AND c.depends_on_value = t.depends_on_value
                             ON CONFLICT do nothing
                             """
+                            )
                         )
-                    )
 
                     # Delete the temporary table
                     conn.execute(
@@ -901,7 +1004,7 @@ def load_concepts_from_errors(
 
                     if commit_changes:
                         conn.commit()
-                except:
+                except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
                     conn.rollback()
 
                 current_time = datetime.datetime.now()
@@ -911,24 +1014,24 @@ def load_concepts_from_errors(
                 all_loop_total += loop_total
                 all_loop_count += 1
                 LOGGER.warning(
-                    f"  {len(resources_with_errors)} errors received and loaded in {step_1}\n" +
-                    f"  {len(new_codes_to_deduplicate_by_terminology)} new codes found and deduplicated in {step_2}\n" +
-                    f"  at local time {current_time}, loop duration {loop_total}"
+                    f"  {len(resources_with_errors)} errors received and loaded in {step_1}\n"
+                    + f"  {total_count_loaded_codes} new codes found and deduplicated in {step_2}\n"
+                    + f"  at local time {current_time}, loop duration {loop_total}"
                 )
 
     except ReadTimeout as rt:
         LOGGER.warning(
-            f"""\nTask halted by ReadTimeout: {rt.message if hasattr(rt, "message") else ""}\n""" +
-            f"  on: {rt.request.method} {rt.request.url}\n"+
-            f"  at: {datetime.datetime.now()}\n\n\n"
+            f"""\nTask halted by ReadTimeout: {rt.message if hasattr(rt, "message") else ""}\n"""
+            + f"  on: {rt.request.method} {rt.request.url}\n"
+            + f"  at: {datetime.datetime.now()}\n\n\n"
         )
-    except Exception as e:
+    except Exception as e:  # uncaught exceptions can be so costly, that a 'bare except' is fine, despite PEP 8: E722
         LOGGER.warning(
             f"\nTask halted by exception at Data Normalization Error Service " +
             f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} " +
             f"while processing {input_fhir_resource} for organization: {organization_id}\n" +
             f"Exception may reflect a general, temporary problem, such as another service being unavailable.\n\n" +
-            f"""{e.__class__.__name__}: {e.message if hasattr(e, "message") else ""}\n{e}\n"""
+            message_exception_summary(e)
         )
         # A full stack trace is necessary to pinpoint issues triggered by frequently used constructs like terminologies
         traceback.print_exception(*sys.exc_info())
@@ -939,15 +1042,21 @@ def load_concepts_from_errors(
             all_loop_average = all_loop_total / all_loop_count
             step_1_average = step_1_total / all_loop_count
             step_2_average = step_2_total / all_loop_count
+        if len(unsupported_resource_types) > 0:
+            intro = "Encountered these unsupported FHIR resource types: "
+            list_of_unsupported = f"""{intro}\n  {",".join(unsupported_resource_types)}"""
+        else:
+            list_of_unsupported = ""
         LOGGER.warning(
-            f"\nDONE at local time {time_end}, duration {time_elapsed}\n" +
-            f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n" +
-            f"  Load to:   {DATABASE_HOST}\n\n" +
-            f"Main loop skipped {all_skip_count} times (repeated report or FHIR resource not supported).\n" +
-            f"Main loop ran {all_loop_count} times:\n" +
-            f"  Average loop duration: {all_loop_average}\n" +
-            f"  Average time to receive and load errors from service: {step_1_average}\n" +
-            f"  Average time to extract, deduplicate, and load codes into terminologies: {step_2_average}\n\n\n"
+            f"\nDONE at local time {time_end}, duration {time_elapsed}\n"
+            + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
+            + f"  Load to:   {DATABASE_HOST}\n\n"
+            + f"Main loop skipped {all_skip_count} times (repeated report or FHIR resource not supported).\n"
+            + f"Main loop ran {all_loop_count} times:\n"
+            + f"  Average loop duration: {all_loop_average}\n"
+            + f"  Average time to receive and load errors from service: {step_1_average}\n"
+            + f"  Average time to extract, deduplicate, and load codes into terminologies: {step_2_average}\n"
+            + f"{list_of_unsupported}\n\n"
         )
 
 
@@ -962,9 +1071,12 @@ def lookup_concept_map_version_for_data_element(
     :return:
     """
     LOGGER.warning(
-        f"Checking registry for concept map entry for data element: {data_element} and organization: {organization.id}")
+        f"Checking registry for concept map entry for data element: {data_element} and organization: {organization.id}"
+    )
     # Load the data normalization registry
-    registry = app.models.data_ingestion_registry.DataNormalizationRegistry()  # Full path avoids circular import
+    registry = (
+        app.models.data_ingestion_registry.DataNormalizationRegistry()
+    )  # Full path avoids circular import
     registry.load_entries()
 
     # Filter based on resource type
@@ -981,7 +1093,8 @@ def lookup_concept_map_version_for_data_element(
     organization_specific = [
         registry_entry
         for registry_entry in filtered_registry
-        if registry_entry.tenant_id == organization.id and registry_entry.registry_entry_type == "concept_map"
+        if registry_entry.tenant_id == organization.id
+        and registry_entry.registry_entry_type == "concept_map"
     ]
     if len(organization_specific) > 0:
         concept_map_version = organization_specific[
@@ -994,7 +1107,8 @@ def lookup_concept_map_version_for_data_element(
         tenant_agnostic = [
             registry_entry
             for registry_entry in filtered_registry
-            if registry_entry.tenant_id is None and registry_entry.registry_entry_type == "concept_map"
+            if registry_entry.tenant_id is None
+            and registry_entry.registry_entry_type == "concept_map"
         ]
         if len(tenant_agnostic) > 0:
             concept_map_version = tenant_agnostic[
@@ -1003,7 +1117,9 @@ def lookup_concept_map_version_for_data_element(
 
     # If nothing is found, raise an appropriate error
     if concept_map_version is None:
-        LOGGER.warning(f"No appropriate registry entry found for organization: {organization.id} and data element: {data_element}")
+        LOGGER.warning(
+            f"No appropriate registry entry found for organization: {organization.id} and data element: {data_element}"
+        )
         return None
 
     return concept_map_version
@@ -1150,7 +1266,7 @@ def get_outstanding_errors(
                     "outstanding_code_count": row.code_count,
                     "oldest_new_code_date": row.oldest_new_code_date,
                 }
-          )
+            )
     return list_result
 
 
@@ -1171,7 +1287,7 @@ def get_all_unresolved_validation(environment: str):
         ),
         {
             "environment": environment,
-        }
+        },
     )
     resource_uuid_list = []
     for row in issues_resources:
@@ -1192,7 +1308,9 @@ def set_issues_resolved(issue_uuid_list):
             SET status = 'resolved'
             WHERE issue_uuid IN :issue_uuid_list
             """
-    converted_query = text(query).bindparams(bindparam(key="issue_uuid_list", expanding=True))
+    converted_query = text(query).bindparams(
+        bindparam(key="issue_uuid_list", expanding=True)
+    )
     conn.execute(converted_query, {"issue_uuid_list": issue_uuid_list})
 
 
@@ -1201,14 +1319,17 @@ def reprocess_resources(resource_uuid_list):
     Request the Data Validation Error Service to reprocess resources that previously reported errors.
     @param resource_uuid_list: List of UUIDs of resources to reprocess in the Data Validation Error Service.
     """
+
     async def reprocess_all():
         reprocess_token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
+        # todo: any performance improvements we discover for GET, apply here for POST
         async with httpx.AsyncClient(timeout=60.0) as async_client:
-            await asyncio.gather(*(reprocess_resource(
-                resource_uuid,
-                reprocess_token,
-                async_client
-            ) for resource_uuid in resource_uuid_list))
+            await asyncio.gather(
+                *(
+                    reprocess_resource(resource_uuid, reprocess_token, async_client)
+                    for resource_uuid in resource_uuid_list
+                )
+            )
 
     asyncio.run(reprocess_all())
 
@@ -1227,15 +1348,85 @@ async def reprocess_resource(resource_uuid, token, client):
             api_url=f"/resources/{resource_uuid}/reprocess",
             params={},
         )
-    except httpx.ConnectError:
+    except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError) as e:
         # If an error occurs on one resource, skip it
         LOGGER.warning(
-            f"httpx.ConnectError, skipping load: Error Service Resource ID: {resource_uuid}"
+             f"{message_exception_classname(e)}, skipping reprocess resource: Error Service Resource ID: {resource_uuid}"
+        )
+        return None
+    except Exception as e:  # uncaught exceptions are so costly, a 'bare except' is acceptable, despite PEP 8: E722
+        intro = f"{message_exception_classname(e)}, skipping reprocess resource: Error Service Resource ID: {resource_uuid}"
+        stacktrace = "".join(traceback.format_exception(*sys.exc_info()))
+        LOGGER.warning(
+            f"{intro}\n{stacktrace}"
         )
         return None
 
 
+@deprecated(
+    "This one-time repair function has been used already. Retaining it as an example of a few code patterns."
+)
+def _test_norm_registry_null_environments():
+    """
+    Not a test. Really a tool for developers to perform a one-time correction in the error_service_issue table.
+    Repeat test_norm_registry_null_environments() in each environment until there are no results to the first query.
+    This function offers a useful pattern for using GET /resources/:resource_uuid to see whether a particular resource
+    still exists on the Data Ingestion Error Validation Service. The pattern is that if a JSONDecodeError is raised
+    by this GET it is because it returned an empty string. This particular GET does that when the resource is not found.
+    """
+    from app.database import get_db
+    conn = get_db()
+    query = """
+        select distinct resource_uuid from 
+        custom_terminologies.error_service_issue
+        where environment is null
+    """
+    results = conn.execute(
+        text(query)
+    )
+    environment = get_environment_from_service_url(DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL)
+    environment_uuid_list = []
+    for row in results:
+        resource_uuid = row.resource_uuid
+        try:
+            token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
+            url = f"/resources/{resource_uuid}"
+            with httpx.Client(timeout=60.0) as client:
+                # try to GET this resource_uuid from the environment
+                response = make_get_request(
+                    token=token,
+                    client=client,
+                    base_url=DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL,
+                    api_url=url
+                )
+                if response is not None:
+                    # the GET response shows this resource_uuid was found in this environment
+                    environment_uuid_list.append(str(resource_uuid))
+        except JSONDecodeError:
+            # the GET response was an empty string that JSON could not decode because the resource_uuid was not found
+            continue
+        except Exception as e:
+            # the GET request experienced an uncaught exception that we need to study and/or prevent
+            raise e
+    # insert the environment name into the environment column for each row whose resource_uuid is in the uuid_list
+    query = f"""
+        update custom_terminologies.error_service_issue set environment = '{environment}'
+        where resource_uuid in ('{"','".join(environment_uuid_list)}')
+    """
+    try:
+        conn.execute(
+            text(query)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        raise e
+
+
 if __name__ == "__main__":
+    # todo: clean out this method altogether, when a temporary, manual error load task is not needed.
     from app.database import get_db
 
     # Moved logging setup to here so it does not run in main program and cause duplicate logs
@@ -1249,18 +1440,15 @@ if __name__ == "__main__":
         ch = logging.StreamHandler()
         LOGGER.addHandler(ch)
 
+    # Per our usual practice, open a DatabaseHandler, that database calls within load_concepts_from_errors will re-use
     conn = get_db()
 
-    # todo: clean out altogether, when temporary error load task is not needed
-    # comment out the next 5 lines for merges and normal use; uncomment when running the temporary error load task
-    # try:
-    #     load_concepts_from_errors(commit_changes=True)
-    #     conn.commit()
-    # except Exception:
-    #     conn.rollback()
 
-    # uncomment the next 2 commands for merges and normal use; comment out when running the temporary error load task
+    # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
+    # load_concepts_from_errors(commit_changes=True)
+
+    # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
     load_concepts_from_errors(commit_changes=False)
-    conn.rollback()
 
+    # load_concepts_from_errors ran rollback() and commit() where and as needed; now ask the DatabaseHandler to close()
     conn.close()

@@ -51,3 +51,8 @@ class TerminologyIsFHIRError(Exception):
 
 class CodeDisplayPairDuplicatedError(Exception):
     pass
+
+
+class DataIntegrityError(Exception):
+    def __init__(self, message):
+        self.message = message

@@ -8,7 +8,7 @@ import app.concept_maps.models
 from app.errors import BadRequestWithCode, NotFoundException
 from app.models.codes import Code
 from app.terminologies.models import load_terminology_version_with_cache
-from app.value_sets.models import ValueSet
+import app.value_sets.models
 import logging
 
 LOGGER = logging.getLogger()
@@ -282,10 +282,18 @@ class ConceptMapVersionCreator:
                 mapping_group=row.source_concept_mapping_group,
                 concept_map_version_uuid=row.source_concept_map_version_uuid,
                 # Matching behavior relies on depends on data defaulting to '' instead of null
-                depends_on_system=row.depends_on_system if row.depends_on_system is not None else '',
-                depends_on_property=row.depends_on_property if row.depends_on_property is not None else '',
-                depends_on_value=row.depends_on_value if row.depends_on_value is not None else '',
-                depends_on_display=row.depends_on_display if row.depends_on_value is not None else '',
+                depends_on_system=row.depends_on_system
+                if row.depends_on_system is not None
+                else "",
+                depends_on_property=row.depends_on_property
+                if row.depends_on_property is not None
+                else "",
+                depends_on_value=row.depends_on_value
+                if row.depends_on_value is not None
+                else "",
+                depends_on_display=row.depends_on_display
+                if row.depends_on_value is not None
+                else "",
             )
 
             mapping = None
@@ -461,7 +469,7 @@ class ConceptMapVersionCreator:
         source_value_set_version = app.value_sets.models.ValueSetVersion.load(
             new_source_value_set_version_uuid
         )
-        active_source_value_set_version = ValueSet.load_most_recent_active_version(
+        active_source_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version(
             source_value_set_version.value_set.uuid
         )
         if active_source_value_set_version is None or (
@@ -477,7 +485,7 @@ class ConceptMapVersionCreator:
         target_value_set_version = app.value_sets.models.ValueSetVersion.load(
             new_target_value_set_version_uuid
         )
-        active_target_value_set_version = ValueSet.load_most_recent_active_version(
+        active_target_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version(
             target_value_set_version.value_set.uuid
         )
         if active_target_value_set_version is None or (
@@ -490,6 +498,12 @@ class ConceptMapVersionCreator:
             )
 
         # todo: dated April 2023: do we want to re-expand the value_sets being passed in? Or put some data integrity checks to ensure the expansion is already done?
+
+        # Mapped no map constants
+        no_map_target_concept_code = "No map"
+        no_map_target_concept_display = "No matching concept"
+        no_map_system = "http://projectronin.io/fhir/CodeSystem/ronin/nomap"
+        no_map_version = "1.0"
 
         # Create new version from previous
         try:
@@ -536,7 +550,6 @@ class ConceptMapVersionCreator:
             previous_contexts_list = []
 
             for new_source_concept in new_source_concepts:
-                logging.info(f"Processing new source concept: {new_source_concept}")
                 # For each new_source_concept, create a source_lookup_key tuple using the source concept's properties
                 source_lookup_key = (
                     new_source_concept.code,
@@ -584,12 +597,25 @@ class ConceptMapVersionCreator:
                         mapping = previous_mapping_data["mappings"][0]
                         previous_mapping = mapping
 
-                        if (
+                        if require_review_for_non_equivalent_relationships:
+                            # c. check for require_review_for_non_equivalent_relationships is True
+                            no_map_target_concept = app.concept_maps.models.Code(
+                                code=previous_mapping.target.code,
+                                display=previous_mapping.target.display,
+                                system=previous_mapping.target.system,
+                                version=no_map_version,
+                            )
+                            self.copy_mapping_require_review(
+                                new_source_concept=new_source_concept,
+                                new_target_concept=no_map_target_concept,
+                                previous_mapping=previous_mapping,
+                            )
+                        elif (
                             require_review_no_maps_not_in_target
                             and previous_source_concept.reason_for_no_map
                             == "Not in target code system"
                         ):
-                            # c. when require_review is True and reason "Not in target code system"
+                            # d. check for require_review is True and reason "Not in target code system"
                             result = self.process_no_map(
                                 previous_source_concept,
                                 new_source_concept,
@@ -599,15 +625,7 @@ class ConceptMapVersionCreator:
                             if result is not None:
                                 previous_contexts_list.append(result)
                         else:
-                            # d. Otherwise, copy the previous mapping exactly using the copy_mapping_exact method with the new_target_code set to "No map"
-                            # Mapped no map constants
-                            no_map_target_concept_code = "No map"
-                            no_map_target_concept_display = "No matching concept"
-                            no_map_system = (
-                                "http://projectronin.io/fhir/CodeSystem/ronin/nomap"
-                            )
-                            no_map_version = "1.0"
-
+                            # e. Otherwise, copy the previous mapping exactly using the copy_mapping_exact method with the new_target_code set to "No map"
                             no_map_code = app.concept_maps.models.Code(
                                 code=no_map_target_concept_code,
                                 display=no_map_target_concept_display,
@@ -687,18 +705,20 @@ class ConceptMapVersionCreator:
                                 ),
                             )
 
-            # Commit the changes to the database
-            self.conn.commit()
-        except BadRequestWithCode or NotFoundException:
+        except BadRequestWithCode or NotFoundException as e:
             LOGGER.info(
                 f"create_new_from_previous missing data in concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
             )
             self.conn.rollback()
-        except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
+            raise e
+
+        except Exception as e:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
+
             LOGGER.info(
                 f"create_new_from_previous unexpected error with concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
             )
             self.conn.rollback()
+            raise e
 
         # Return the new concept map version UUID
         return self.new_version_uuid
@@ -912,7 +932,7 @@ class ConceptMapVersionCreator:
 
         # Explicitly over-write the review status to set it back to needing review
         new_mapping = app.concept_maps.models.Mapping(
-            source=source_code,
+            source=new_source_concept,
             relationship=relationship,
             target=target_code,
             mapping_comments=previous_mapping.mapping_comments,
