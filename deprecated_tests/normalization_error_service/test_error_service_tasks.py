@@ -45,7 +45,7 @@ def generate_mock_error_resources():
 def generate_mock_error_resources_observation():
     # Load the error template
     with open(
-        "sample_normalization_observation_error.json"
+            "sample_normalization_observation_error.json"
     ) as sample_normalization_error_file:
         sample_normalization_error = sample_normalization_error_file.read()
         sample_normalization_error_json = json.loads(sample_normalization_error)

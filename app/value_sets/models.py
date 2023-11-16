@@ -18,7 +18,7 @@ from collections import defaultdict
 from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
 
-from app.errors import NotFoundException, BadDataError, DataIntegrityError
+from app.errors import NotFoundException, BadDataError, DataIntegrityError, BadRequestWithCode
 from app.helpers.oci_helper import set_up_object_store
 
 from app.models.codes import Code
@@ -113,6 +113,11 @@ class VSRule:
 
     @classmethod
     def load(cls, rule_uuid):
+        if rule_uuid is None:
+            raise BadRequestWithCode(
+                "ValueSetRule.load.empty",
+                "Cannot update Value Set Rule: empty Terminology Version ID"
+            )
         conn = get_db()
         result = conn.execute(
             text(
@@ -123,6 +128,9 @@ class VSRule:
             ),
             {"uuid": rule_uuid},
         ).first()
+
+        if result is None:
+            raise NotFoundException(f"Not found: Value Rule Set with ID: {rule_uuid}")
 
         return cls(
             uuid=result.uuid,
@@ -138,6 +146,11 @@ class VSRule:
         )
 
     def update(self, new_terminology_version_uuid):
+        if new_terminology_version_uuid is None:
+            raise BadRequestWithCode(
+                "ValueSetRule.update.empty",
+                "Cannot update Value Set Rule: empty Terminology Version ID"
+            )
         conn = get_db()
         conn.execute(
             text(

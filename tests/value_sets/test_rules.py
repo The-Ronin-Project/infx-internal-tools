@@ -1,13 +1,21 @@
+import json
 import unittest
+
+from _pytest.python_api import raises
+
 import app.value_sets.models
 import app.terminologies.models
 import app.models.codes
 from app.database import get_db
+from app.app import create_app
+from app.errors import BadRequestWithCode, NotFoundException
 
 
 class RuleTests(unittest.TestCase):
     def setUp(self) -> None:
         self.conn = get_db()
+        self.app = create_app()
+        self.client = self.app.test_client()
 
     def tearDown(self) -> None:
         self.conn.rollback()
@@ -60,7 +68,6 @@ class RuleTests(unittest.TestCase):
 
         self.assertEqual(first_item.system, 'http://snomed.info/sct')
         self.assertEqual(first_item.version, '2023-03-01')
-
 
     def test_custom_terminology_rule(self):
         """
@@ -135,6 +142,287 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(first_code.system,
                          'http://hl7.org/fhir/sid/icd-10-cm')
         self.assertEqual(first_code.version, '2023')
+
+    def test_execute_rules_directly(self):
+        response = self.client.post(
+            "/ValueSets/rule_set/execute",
+            data=json.dumps(
+                [
+                    {
+                        "property": "component",
+                        "operator": "in",
+                        "value": '{"Alpha-1-Fetoprotein"}',
+                        "include": True,
+                        "terminology_version": "7c19e704-19d9-412b-90c3-79c5fb99ebe8",
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        assert len(response.json) == 25
+
+    def test_icd_10_cm_in_section(self):
+        response = self.app.test_client().post(
+            "/ValueSets/rule_set/execute",
+            data=json.dumps(
+                [
+                    {
+                        "property": "code",
+                        "operator": "in-section",
+                        "value": "d66586d4-5ed0-11ec-8f1f-00163e90ea35",
+                        "include": True,
+                        "terminology_version": "1ea19640-63e6-4e1b-b82f-be444ba395b4",
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        assert len(response.json) == 32
+
+    def test_icd_10_cm_in_chapter(self):
+        response = self.app.test_client().post(
+            "/ValueSets/rule_set/execute",
+            data=json.dumps(
+                [
+                    {
+                        "property": "code",
+                        "operator": "in-chapter",
+                        "value": "3f830074-5ed1-11ec-8f1f-00163e90ea35",
+                        "include": True,
+                        "terminology_version": "1ea19640-63e6-4e1b-b82f-be444ba395b4",
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        assert len(response.json) == 1191
+
+    def test_icd_10_pcs_has_body_system(self):
+        response = self.app.test_client().post(
+            "/ValueSets/rule_set/execute",
+            data=json.dumps(
+                [
+                    {
+                        "property": "code",
+                        "operator": "has-body-system",
+                        "value": [" Eye "],
+                        "include": True,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        assert len(response.json) == 1290
+
+    def test_icd_10_pcs_has_root_operation(self):
+        response = self.app.test_client().post(
+            "/ValueSets/rule_set/execute",
+            data=json.dumps(
+                [
+                    {
+                        "property": "code",
+                        "operator": "has-root-operation",
+                        "value": [" Magnetic Resonance Imaging (MRI) "],
+                        "include": True,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        print(response.json)
+        assert len(response.json) == 421
+
+    def test_icd_10_pcs_has_device(self):
+        response = self.app.test_client().post(
+            "/ValueSets/rule_set/execute",
+            data=json.dumps(
+                [
+                    {
+                        "property": "code",
+                        "operator": "has-device",
+                        "value": [" Unenhanced and Enhanced "],
+                        "include": True,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        assert len(response.json) == 314
+
+    def test_icd_10_pcs_has_body_part(self):
+        response = self.app.test_client().post(
+            "/ValueSets/rule_set/execute",
+            data=json.dumps(
+                [
+                    {
+                        "property": "code",
+                        "operator": "has-body-part",
+                        "value": [" Spinal Canal "],
+                        "include": True,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        assert len(response.json) == 152
+
+    def test_icd_10_pcs_has_approach(self):
+        response = self.app.test_client().post(
+            "/ValueSets/rule_set/execute",
+            data=json.dumps(
+                [
+                    {
+                        "property": "code",
+                        "operator": "has-approach",
+                        "value": [" High Osmolar "],
+                        "include": True,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        assert len(response.json) == 581
+
+    def test_icd_10_pcs_has_qualifier(self):
+        response = self.app.test_client().post(
+            "/ValueSets/rule_set/execute",
+            data=json.dumps(
+                [
+                    {
+                        "property": "code",
+                        "operator": "has-qualifier",
+                        "value": [" Atrium"],
+                        "include": True,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        assert len(response.json) == 18
+
+    def test_icd_10_pcs_multi_rule(self):
+        response = self.app.test_client().post(
+            "/ValueSets/rule_set/execute",
+            data=json.dumps(
+                [
+                    {
+                        "property": "code",
+                        "operator": "in-section",
+                        "value": ["Medical and Surgical "],
+                        "include": True,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    },
+                    {
+                        "property": "code",
+                        "operator": "has-body-system",
+                        "value": [" Central Nervous System and Cranial Nerves "],
+                        "include": True,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    },
+                    {
+                        "property": "code",
+                        "operator": "has-root-operation",
+                        "value": [" Bypass "],
+                        "include": True,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    },
+                    {
+                        "property": "code",
+                        "operator": "has-body-part",
+                        "value": [" Spinal Canal "],
+                        "include": True,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    },
+                    {
+                        "property": "code",
+                        "operator": "in",
+                        "value": ["001U077"],
+                        "include": False,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    },
+                    {
+                        "property": "code",
+                        "operator": "has-approach",
+                        "value": [" Open "],
+                        "include": True,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    },
+                    {
+                        "property": "code",
+                        "operator": "has-device",
+                        "value": [" Autologous Tissue Substitute "],
+                        "include": True,
+                        "terminology_version": "60f15a17-973e-4987-ad71-22777eac994a",
+                    },
+                ]
+            ),
+            content_type="application/json",
+        )
+        assert len(response.json) == 4
+
+    def test_update_single_rule(self):
+        """
+            rule 731913f0-32ca-11ee-90ef-5386acde3123 has
+                value set version c316bbc8-1489-4320-9268-9edf9bedf7f1 and
+                terminology 554805c6-4ad1-4504-b8c7-3bab4e5196fd
+        """
+        # happy path: valid rule UUID and value terminology version UUID
+        response = self.app.test_client().patch(
+            "/ValueSetRules/731913f0-32ca-11ee-90ef-5386acde3123",
+            data=json.dumps(
+                {
+                    "new_terminology_version_uuid": "554805c6-4ad1-4504-b8c7-3bab4e5196fd"
+                }
+            ),
+            content_type="application/json",
+        )
+        assert response.text == "OK"
+
+        # invalid rule UUID provided in URL: gives VSRule.load() NotFoundException
+        response = self.app.test_client().patch(
+            "/ValueSetRules/11111111-1111-1111-1111-111111111111",
+            data=json.dumps(
+                {
+                    "new_terminology_version_uuid": "554805c6-4ad1-4504-b8c7-3bab4e5196fd"
+                }
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert result.get("message") == "Not found: Value Rule Set with ID: 11111111-1111-1111-1111-111111111111"
+
+        # No rule UUID provided in URL: gives app.views.update_single_rule() API URL endpoint failure
+        response = self.app.test_client().patch(
+            "/ValueSetRules/",
+            data=json.dumps(
+                {
+                    "new_terminology_version_uuid": "554805c6-4ad1-4504-b8c7-3bab4e5196fd"
+                }
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert result.get("message") == "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again."
+
+        # None input to VSRule.load(): BadRequestWithCode for empty ID
+        with raises(BadRequestWithCode):
+            app.value_sets.models.VSRule.load(None)
+
+        # No terminology UUID provided in parameters: VSRule.update() BadRequestWithCode for empty ID
+        response = self.app.test_client().patch(
+            "/ValueSetRules/731913f0-32ca-11ee-90ef-5386acde3123",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        result = response.json
+        assert result.get("code") == "ValueSetRule.update.empty"
+        assert result.get("message") == "Cannot update Value Set Rule: empty Terminology Version ID"
 
 
 if __name__ == '__main__':
