@@ -21,6 +21,7 @@ def terminology_version_uuid_lookup(fhir_uri: str, version: str):
 
     Returns:
         UUID: The UUID of the corresponding terminology version.
+        If no result, it returns None. Caller method handles this possibility.
     """
     conn = get_db()
     result = conn.execute(
@@ -94,7 +95,7 @@ class Terminology:
         """
 
         conn = get_db()
-        data = conn.execute(
+        term_data = conn.execute(
             text(
                 """
                 select * from terminology_versions
@@ -102,14 +103,13 @@ class Terminology:
                 """
             ),
             {"terminology_version_uuid": terminology_version_uuid},
-        )
+        ).first()
 
         # When there is no data, do not create an object
-        if data is None:
+        if term_data is None:
             raise NotFoundException(
                 f"No data found for terminology version UUID: {terminology_version_uuid}"
             )
-        term_data = data.first()
 
         # Create and return a Terminology object
         return cls(
