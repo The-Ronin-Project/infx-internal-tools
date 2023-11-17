@@ -116,7 +116,7 @@ class VSRule:
         if rule_uuid is None:
             raise BadRequestWithCode(
                 "ValueSetRule.load.empty",
-                "Cannot update Value Set Rule: empty Terminology Version ID"
+                "Cannot update Value Set Rule: empty Rule ID"
             )
         conn = get_db()
         result = conn.execute(
@@ -130,7 +130,7 @@ class VSRule:
         ).first()
 
         if result is None:
-            raise NotFoundException(f"Not found: Value Rule Set with ID: {rule_uuid}")
+            raise NotFoundException(f"Not found: Value Set Rule with ID: {rule_uuid}")
 
         return cls(
             uuid=result.uuid,
