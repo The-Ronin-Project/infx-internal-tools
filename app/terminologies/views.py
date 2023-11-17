@@ -70,15 +70,6 @@ def create_code():
     """
     Add one or multiple new codes to a terminology, providing information such as code system, version, code, display,
     and terminology version.
-    Here's a sample json for testing this endpoint:
-    {
-    "code": "test code",
-    "display": "test display",
-    "terminology_version_uuid": "d2ae0de5-0168-4f54-924a-1f79cf658939",
-    "additional_data": {
-        "data": "sweet sweet json"
-        }
-    }
     """
     if request.method == "POST":
         payload = request.json
@@ -107,10 +98,17 @@ def create_code():
                 additional_data=code_data.get("additional_data"),
                 system=None,
                 version=None,
+                depends_on_property=code_data.get("depends_on_property"),
+                depends_on_system=code_data.get("depends_on_system"),
+                depends_on_value=code_data.get("depends_on_value"),
+                depends_on_display=code_data.get("depends_on_display"),
             )
             codes.append(code)
 
-        terminology.load_new_codes_to_terminology(codes)
+        try:
+            terminology.load_new_codes_to_terminology(codes)
+        except Exception as e:
+            raise BadRequestWithCode
         return "Complete"
 
 

@@ -15,7 +15,7 @@ class SurveyTests(unittest.TestCase):
         self.conn.close()
 
     def test_survey_export(self):
-        response = self.app.test_client().get(
+        response = self.client.get(
             "/surveys/34775510-1267-11ec-b9a3-77c9d91ff3f2?organization_uuid=866632f0-ff85-11eb-9f47-ffa6d132f8a4"
         )
         # print(hashlib.md5(response.data).hexdigest())

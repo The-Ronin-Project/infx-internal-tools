@@ -94,7 +94,7 @@ class Terminology:
         """
 
         conn = get_db()
-        data = conn.execute(
+        term_data = conn.execute(
             text(
                 """
                 select * from terminology_versions
@@ -102,14 +102,13 @@ class Terminology:
                 """
             ),
             {"terminology_version_uuid": terminology_version_uuid},
-        )
+        ).first()
 
         # When there is no data, do not create an object
-        if data is None:
+        if term_data is None:
             raise NotFoundException(
                 f"No data found for terminology version UUID: {terminology_version_uuid}"
             )
-        term_data = data.first()
 
         # Create and return a Terminology object
         return cls(
@@ -508,30 +507,34 @@ class Terminology:
                 query_text += """ on conflict do nothing
                 """
             query_text += """ returning uuid"""
-            result = conn.execute(
-                text(query_text),
-                {
-                    "uuid": code.custom_terminology_code_uuid
-                    if code.custom_terminology_code_uuid is not None
-                    else uuid.uuid4(),
-                    "code": serialized_code,
-                    "display": code.display,
-                    "terminology_version_uuid": code.terminology_version_uuid,
-                    "depends_on_value": code.depends_on_value
-                    if code.depends_on_value
-                    else "",
-                    "depends_on_display": code.depends_on_display
-                    if code.depends_on_display
-                    else "",
-                    "depends_on_property": code.depends_on_property
-                    if code.depends_on_property
-                    else "",
-                    "depends_on_system": code.depends_on_system
-                    if code.depends_on_system
-                    else "",
-                    "additional_data": json.dumps(code.additional_data),
-                },
-            ).fetchall()
+            try:
+                result = conn.execute(
+                    text(query_text),
+                    {
+                        "uuid": code.custom_terminology_code_uuid
+                        if code.custom_terminology_code_uuid is not None
+                        else uuid.uuid4(),
+                        "code": serialized_code,
+                        "display": code.display,
+                        "terminology_version_uuid": code.terminology_version_uuid,
+                        "depends_on_value": code.depends_on_value
+                        if code.depends_on_value
+                        else "",
+                        "depends_on_display": code.depends_on_display
+                        if code.depends_on_display
+                        else "",
+                        "depends_on_property": code.depends_on_property
+                        if code.depends_on_property
+                        else "",
+                        "depends_on_system": code.depends_on_system
+                        if code.depends_on_system
+                        else "",
+                        "additional_data": json.dumps(code.additional_data),
+                    },
+                ).fetchall()
+            except Exception as e:
+                conn.rollback()
+                raise e
             count_inserted = len(result)
             total_count_inserted += count_inserted
         return total_count_inserted
