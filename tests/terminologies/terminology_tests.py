@@ -78,7 +78,6 @@ class TerminologyTests(unittest.TestCase):
         response = self.client.get(
             "/terminology/",
             query_string={
-                "fhir_uri": "",
                 "version": 4,
             },
             content_type="application/json",
