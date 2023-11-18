@@ -139,7 +139,44 @@ class ConceptMapVersionCreator:
         ) in mapped_no_map_lookup.items():
             new_sources.append(source_and_mapping.get("source_concept"))
 
-        return new_sources
+    def get_deleted_mappings_for_source_concept(self, source_concept_uuid):
+        """
+        Fetches deleted mappings for the given source_concept_uuid from the concept_relationship table.
+
+        Args:
+            source_concept_uuid (str): The UUID of the source concept.
+
+        Returns:
+            list: A list of dictionaries containing the required fields for each deleted mapping, including
+                  'target_concept_code', 'target_concept_display', 'relationship_code_uuid', 'review_comment',
+                  'deleted_by', and 'deleted_timestamp'.
+        """
+        deleted_mappings_query = self.conn.execute(
+            text(
+                """
+                    SELECT target_concept_code, target_concept_display, relationship_code_uuid, review_comment, deleted_by, deleted_timestamp  
+                    FROM concept_maps.concept_relationship  
+                    WHERE source_concept_uuid =: source_concept_uuid
+                    AND review_status = 'deleted'
+                """
+            ),
+            {"source_concept_uuid": source_concept_uuid},
+        )
+
+        # Convert the results into a list of dictionaries
+        deleted_mappings = []
+        for result in deleted_mappings_query:
+            deleted_mapping = {
+                "target_concept_code": result[0],
+                "target_concept_display": result[1],
+                "relationship_code_uuid": result[2],
+                "review_comment": result[3],
+                "deleted_by": result[4],
+                "deleted_timestamp": result[5],
+            }
+            deleted_mappings.append(deleted_mapping)
+
+        return deleted_mappings
 
     def load_all_sources_and_mappings(self, concept_map_version_uuid):
         """
@@ -294,6 +331,30 @@ class ConceptMapVersionCreator:
                 depends_on_display=row.depends_on_display
                 if row.depends_on_value is not None
                 else "",
+                previous_mapping_context=None,
+            )
+
+            # Get the deleted mappings for the source_concept_uuid
+            deleted_mappings = self.get_deleted_mappings_for_source_concept(
+                row.source_concept_uuid
+            )
+            # If the source_concept has an existing 'previous_mapping_context', convert it to a Python list
+            if source_concept.previous_mapping_context:
+                previous_mapping_context = json.loads(
+                    source_concept.previous_mapping_context
+                )
+            else:
+                previous_mapping_context = []
+
+            # Merge the existing 'previous_mapping_context' list with the new list of deleted mappings
+            merged_previous_mapping_context = previous_mapping_context.copy()
+            for dm in deleted_mappings:
+                if dm not in previous_mapping_context:
+                    merged_previous_mapping_context.append(dm)
+
+            # Store the merged list back into the 'previous_mapping_context' attribute for the source_concept object
+            source_concept.previous_mapping_context = json.dumps(
+                merged_previous_mapping_context
             )
 
             mapping = None
@@ -469,8 +530,10 @@ class ConceptMapVersionCreator:
         source_value_set_version = app.value_sets.models.ValueSetVersion.load(
             new_source_value_set_version_uuid
         )
-        active_source_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version(
-            source_value_set_version.value_set.uuid
+        active_source_value_set_version = (
+            app.value_sets.models.ValueSet.load_most_recent_active_version(
+                source_value_set_version.value_set.uuid
+            )
         )
         if active_source_value_set_version is None or (
             str(active_source_value_set_version.uuid)
@@ -485,8 +548,10 @@ class ConceptMapVersionCreator:
         target_value_set_version = app.value_sets.models.ValueSetVersion.load(
             new_target_value_set_version_uuid
         )
-        active_target_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version(
-            target_value_set_version.value_set.uuid
+        active_target_value_set_version = (
+            app.value_sets.models.ValueSet.load_most_recent_active_version(
+                target_value_set_version.value_set.uuid
+            )
         )
         if active_target_value_set_version is None or (
             str(active_target_value_set_version.uuid)
@@ -704,6 +769,19 @@ class ConceptMapVersionCreator:
                                     previous_mapping_context, cls=CustomJSONEncoder
                                 ),
                             )
+
+            for source_concept_data in new_source_concepts:
+                # Retrieve the 'previous_mapping_context' value from the source_concept object
+                previous_mapping_context = source_concept_data.previous_mapping_context
+
+                # If there's any data in the 'previous_mapping_context' list, convert the list to a JSON string
+                if previous_mapping_context:
+                    previous_mapping_context_json = json.dumps(previous_mapping_context)
+
+                    # Update the new_source_concept's 'previous_mapping_context' field with the JSON string
+                    source_concept_data.previous_mapping_context = (
+                        previous_mapping_context_json
+                    )
 
         except BadRequestWithCode or NotFoundException as e:
             LOGGER.info(

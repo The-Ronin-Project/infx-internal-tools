@@ -1278,7 +1278,10 @@ class ConceptMapVersion:
         @return: object structure representing the concept map and conforming to the specified schema_version
         """
         # Prepare according to the version
-        if schema_version not in [ConceptMap.database_schema_version, ConceptMap.next_schema_version]:
+        if schema_version not in [
+            ConceptMap.database_schema_version,
+            ConceptMap.next_schema_version,
+        ]:
             raise BadRequestWithCode(
                 "ConceptMapVersion.serialize",
                 f"ConceptMap schema version {schema_version} is not supported.",
@@ -1700,6 +1703,7 @@ class SourceConcept:
     depends_on_system: Optional[str] = None
     depends_on_value: Optional[str] = None
     depends_on_display: Optional[str] = None
+    previous_mapping_context: Optional[str] = None
 
     def __post_init__(self):
         self.code_object = Code(
