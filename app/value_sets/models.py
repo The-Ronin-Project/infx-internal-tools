@@ -241,14 +241,13 @@ class VSRule:
         if self.property == "include_entire_code_system":
             self.include_entire_code_system()
 
+    def serialize(self):
+        """
+        Prepares a JSON representation to return to the API and returns the property, operator, and value of the rule
 
-def serialize(self):
-    """
-    Prepares a JSON representation to return to the API and returns the property, operator, and value of the rule
-
-    :return: A dictionary containing the property, operator, and value of the rule.
-    """
-    return {"property": self.property, "op": self.operator, "value": self.value}
+        :return: A dictionary containing the property, operator, and value of the rule.
+        """
+        return {"property": self.property, "op": self.operator, "value": self.value}
 
 
 class UcumRule(VSRule):
