@@ -21,6 +21,7 @@ def terminology_version_uuid_lookup(fhir_uri: str, version: str):
 
     Returns:
         UUID: The UUID of the corresponding terminology version.
+        If no result, it returns None. Caller method handles this possibility.
     """
     conn = get_db()
     result = conn.execute(
