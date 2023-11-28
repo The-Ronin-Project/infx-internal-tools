@@ -165,7 +165,7 @@ class RuleTests(unittest.TestCase):
         assert len(response.json) == 25
 
     def test_icd_10_cm_in_section(self):
-        response = self.app.test_client().post(
+        response = self.client.post(
             "/ValueSets/rule_set/execute",
             data=json.dumps(
                 [
@@ -183,7 +183,7 @@ class RuleTests(unittest.TestCase):
         assert len(response.json) == 32
 
     def test_icd_10_cm_in_chapter(self):
-        response = self.app.test_client().post(
+        response = self.client.post(
             "/ValueSets/rule_set/execute",
             data=json.dumps(
                 [
@@ -201,7 +201,7 @@ class RuleTests(unittest.TestCase):
         assert len(response.json) == 1191
 
     def test_icd_10_pcs_has_body_system(self):
-        response = self.app.test_client().post(
+        response = self.client.post(
             "/ValueSets/rule_set/execute",
             data=json.dumps(
                 [
@@ -219,7 +219,7 @@ class RuleTests(unittest.TestCase):
         assert len(response.json) == 1290
 
     def test_icd_10_pcs_has_root_operation(self):
-        response = self.app.test_client().post(
+        response = self.client.post(
             "/ValueSets/rule_set/execute",
             data=json.dumps(
                 [
@@ -238,7 +238,7 @@ class RuleTests(unittest.TestCase):
         assert len(response.json) == 421
 
     def test_icd_10_pcs_has_device(self):
-        response = self.app.test_client().post(
+        response = self.client.post(
             "/ValueSets/rule_set/execute",
             data=json.dumps(
                 [
@@ -256,7 +256,7 @@ class RuleTests(unittest.TestCase):
         assert len(response.json) == 314
 
     def test_icd_10_pcs_has_body_part(self):
-        response = self.app.test_client().post(
+        response = self.client.post(
             "/ValueSets/rule_set/execute",
             data=json.dumps(
                 [
@@ -274,7 +274,7 @@ class RuleTests(unittest.TestCase):
         assert len(response.json) == 152
 
     def test_icd_10_pcs_has_approach(self):
-        response = self.app.test_client().post(
+        response = self.client.post(
             "/ValueSets/rule_set/execute",
             data=json.dumps(
                 [
@@ -292,7 +292,7 @@ class RuleTests(unittest.TestCase):
         assert len(response.json) == 581
 
     def test_icd_10_pcs_has_qualifier(self):
-        response = self.app.test_client().post(
+        response = self.client.post(
             "/ValueSets/rule_set/execute",
             data=json.dumps(
                 [
@@ -310,7 +310,7 @@ class RuleTests(unittest.TestCase):
         assert len(response.json) == 18
 
     def test_icd_10_pcs_multi_rule(self):
-        response = self.app.test_client().post(
+        response = self.client.post(
             "/ValueSets/rule_set/execute",
             data=json.dumps(
                 [
@@ -376,7 +376,7 @@ class RuleTests(unittest.TestCase):
                 terminology 554805c6-4ad1-4504-b8c7-3bab4e5196fd
         """
         # happy path: valid rule UUID and value terminology version UUID
-        response = self.app.test_client().patch(
+        response = self.client.patch(
             "/ValueSetRules/731913f0-32ca-11ee-90ef-5386acde3123",
             data=json.dumps(
                 {
@@ -388,7 +388,7 @@ class RuleTests(unittest.TestCase):
         assert response.text == "OK"
 
         # invalid rule UUID provided in URL: gives VSRule.load() NotFoundException
-        response = self.app.test_client().patch(
+        response = self.client.patch(
             "/ValueSetRules/11111111-1111-1111-1111-111111111111",
             data=json.dumps(
                 {
@@ -401,7 +401,7 @@ class RuleTests(unittest.TestCase):
         assert result.get("message") == "Not found: Value Rule Set with ID: 11111111-1111-1111-1111-111111111111"
 
         # No rule UUID provided in URL: gives app.views.update_single_rule() API URL endpoint failure
-        response = self.app.test_client().patch(
+        response = self.client.patch(
             "/ValueSetRules/",
             data=json.dumps(
                 {
@@ -418,7 +418,7 @@ class RuleTests(unittest.TestCase):
             app.value_sets.models.VSRule.load(None)
 
         # No terminology UUID provided in parameters: VSRule.update() BadRequestWithCode for empty ID
-        response = self.app.test_client().patch(
+        response = self.client.patch(
             "/ValueSetRules/731913f0-32ca-11ee-90ef-5386acde3123",
             data=json.dumps({}),
             content_type="application/json",

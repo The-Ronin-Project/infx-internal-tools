@@ -39,7 +39,7 @@ class ValueSetTests(unittest.TestCase):
             app.value_sets.models.ValueSetVersion.load(value_set_version_uuid_2)
 
     def test_expansion_report(self):
-        response = self.app.test_client().get(
+        response = self.client.get(
             "/ValueSets/expansions/3257aed4-6da1-11ec-bd74-aa665a30495f/report"
         )
         # print('hex digest', hashlib.md5(response.data).hexdigest())
