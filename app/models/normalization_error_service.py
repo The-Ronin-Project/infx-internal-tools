@@ -41,7 +41,7 @@ CLIENT_ID = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_ID", default="")
 CLIENT_SECRET = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_SECRET", default="")
 AUTH_AUDIENCE = config("DATA_NORMALIZATION_ERROR_SERVICE_AUDIENCE", default="")
 AUTH_URL = config("DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default="")
-PAGE_SIZE = 500
+PAGE_SIZE = 300
 
 LOGGER = logging.getLogger()
 
@@ -726,7 +726,7 @@ def load_concepts_from_errors(
                             data_normalization_registry[registry_key]
                         )
                         if concept_map_version_for_normalization is None:
-                            # We already messaged that the concept map for this resource and issue is missing
+                            # per Content team, desired action is to continue (stop the loop here, process next error)
                             continue
 
                         # Inside the concept map version, we'll extract the source value set
@@ -1009,10 +1009,12 @@ def load_concepts_from_errors(
 
                     if commit_changes:
                         conn.commit()
-                except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
+                except Exception as e:
                     conn.rollback()
+                    raise e
 
                 current_time = datetime.datetime.now()
+                time_elapsed = current_time - time_start
                 since_last_time = current_time - previous_time
                 previous_time = current_time
                 loop_total += since_last_time
@@ -1021,7 +1023,7 @@ def load_concepts_from_errors(
                 LOGGER.warning(
                     f"  {len(resources_with_errors)} errors received and loaded in {step_1}\n"
                     + f"  {total_count_loaded_codes} new codes found and deduplicated in {step_2}\n"
-                    + f"  at local time {current_time}, loop duration {loop_total}"
+                    + f"  loop {all_loop_count} done at time {current_time.time()}, duration {loop_total}"
                 )
 
     except Exception as e:  # uncaught exceptions can be so costly, that a 'bare except' is fine, despite PEP 8: E722
@@ -1047,7 +1049,7 @@ def load_concepts_from_errors(
         else:
             list_of_unsupported = ""
         LOGGER.warning(
-            f"\nDONE at local time {time_end}, duration {time_elapsed}\n"
+            f"\nDONE at local time {time_end}, time since start {time_elapsed}\n"
             + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
             + f"  Load to:   {DATABASE_HOST}\n\n"
             + f"Main loop skipped {all_skip_count} times (repeated report or FHIR resource not supported).\n"
@@ -1114,13 +1116,7 @@ def lookup_concept_map_version_for_data_element(
                 0
             ].concept_map.most_recent_active_version
 
-    # If nothing is found, raise an appropriate error
-    if concept_map_version is None:
-        LOGGER.warning(
-            f"No appropriate registry entry found for organization: {organization.id} and data element: {data_element}"
-        )
-        return None
-
+    # If nothing is found (result is None) then per Content team, desired action here is to return None (ignore)
     return concept_map_version
 
 
