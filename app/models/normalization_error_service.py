@@ -431,13 +431,30 @@ def load_concepts_from_errors(
             all_resources_fetched = False
             while all_resources_fetched is False:
                 # Retrieve the first page of resources
-                response = make_get_request(
-                    token=token,
-                    client=client,
-                    base_url=DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL,
-                    api_url="/resources",
-                    params=rest_api_params,
-                )
+                try:
+                    response = make_get_request(
+                        token=token,
+                        client=client,
+                        base_url=DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL,
+                        api_url="/resources",
+                        params=rest_api_params,
+                    )
+                except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError or ReadTimeout) as e:
+                    LOGGER.warning(
+                        f"{message_exception_classname(e)}, skipping load of {page_size} resources of type {input_fhir_resource} for organization {organization_id}"
+                    )
+                    continue
+                except Exception as e:  # uncaught exceptions are so costly, a 'bare except' is acceptable, despite PEP 8: E722
+                    intro = f"{message_exception_classname(e)}, skipping load of {page_size} resources of type {input_fhir_resource} for organization {organization_id}"
+                    if "Timeout" not in intro:
+                        info = "".join(traceback.format_exception(*sys.exc_info()))
+                        message = f"{intro}\n{info}"
+                    else:
+                        message = intro
+                    LOGGER.warning(message)
+                    continue
+
+                # Here is the first page of resources
                 resources_with_errors = response
 
                 length_of_response = len(response)
@@ -1386,7 +1403,8 @@ def _test_norm_registry_null_environments():
         try:
             token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
             url = f"/resources/{resource_uuid}"
-            with httpx.Client(timeout=60.0) as client:
+            timeout_config = httpx.Timeout(timeout=600.0, pool=600.0, read=600.0, connect=600.0)
+            with httpx.Client(timeout=timeout_config) as client:
                 # try to GET this resource_uuid from the environment
                 response = make_get_request(
                     token=token,
