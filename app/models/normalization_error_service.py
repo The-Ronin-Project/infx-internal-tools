@@ -1376,7 +1376,7 @@ async def reprocess_resource(resource_uuid, token, client):
         )
         return None
 
-    
+
 @deprecated(
     "This one-time repair function has been used already. Retaining it as an example of a few code patterns."
 )
@@ -1463,10 +1463,10 @@ if __name__ == "__main__":
     #     requested_organization_id: Confluence page called "Organization Ids" under "Living Architecture" lists them
     #     requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    load_concepts_from_errors(commit_changes=True, page_size=500)
+    # load_concepts_from_errors(commit_changes=True, page_size=500)
 
     # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
-    # load_concepts_from_errors(commit_changes=False)
+    load_concepts_from_errors(commit_changes=False)
 
     # load_concepts_from_errors ran rollback() and commit() where and as needed; now ask the DatabaseHandler to close()
     conn.close()
