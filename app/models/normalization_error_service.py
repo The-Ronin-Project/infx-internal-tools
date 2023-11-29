@@ -27,7 +27,10 @@ import app.concept_maps.models
 import app.models.data_ingestion_registry
 import app.value_sets.models
 from app.errors import BadDataError
-from app.helpers.message_helper import message_exception_summary, message_exception_classname
+from app.helpers.message_helper import (
+    message_exception_summary,
+    message_exception_classname,
+)
 from app.models.codes import Code
 from app.models.models import Organization
 from app.terminologies.models import Terminology
@@ -190,7 +193,15 @@ class ErrorServiceResource:
                 params={},
             )
         # If an error occurs on one resource, skip it
-        except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError or ReadTimeout) as e:
+        except (
+            httpx.ConnectError
+            or HttpxPoolTimeout
+            or HttpcorePoolTimeout
+            or BadDataError
+            or asyncio.exceptions.CancelledError
+            or TimeoutError
+            or ReadTimeout
+        ) as e:
             LOGGER.warning(
                 f"{message_exception_classname(e)}, skipping load of issue data for Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
@@ -575,14 +586,16 @@ def load_concepts_from_errors(
                     except Exception as e:
                         intro = f"{message_exception_classname(e)} loading {fhir_resource_type} data for {organization_id}: 1 report for 1+ cases"
                         if intro not in tenant_load_json_format_error_reported:
-                            error_code = "NormalizationErrorService.load_concepts_from_errors"
+                            error_code = (
+                                "NormalizationErrorService.load_concepts_from_errors"
+                            )
                             info = "".join(traceback.format_exception(*sys.exc_info()))
                             LOGGER.warning(f"{intro}\n{info}\n")
                             tenant_load_json_format_error_reported.append(intro)
                             raise BadDataError(
                                 code=error_code,
                                 description=intro,
-                                errors=message_exception_summary(e)
+                                errors=message_exception_summary(e),
                             )
 
                     # The data element where validation is failed is stored in the 'location' on the issue
@@ -880,7 +893,9 @@ def load_concepts_from_errors(
                             value_boolean=raw_resource.get("valueBoolean"),
                             value_string=raw_resource.get("valueString"),
                             value_date_time=raw_resource.get("valueDateTime"),
-                            value_codeable_concept=raw_resource.get("valueCodeableConcept"),
+                            value_codeable_concept=raw_resource.get(
+                                "valueCodeableConcept"
+                            ),
                         )
 
                         if (
@@ -977,7 +992,8 @@ def load_concepts_from_errors(
                         total_count_loaded_codes += inserted_count
                         LOGGER.warning(
                             f"Actually inserted {inserted_count} codes to "
-                            + f"{terminology.terminology} version {terminology.version} after de-duplication"
+                            + f"{terminology.terminology} version {terminology.version} "
+                            + "after de-duplication"
                         )
 
                 # Step 5: Save the IDs of the original errors and link back to the codes
@@ -1077,7 +1093,9 @@ def load_concepts_from_errors(
             step_2_average = step_2_total / all_loop_count
         if len(unsupported_resource_types) > 0:
             intro = "Encountered these unsupported FHIR resource types: "
-            list_of_unsupported = f"""{intro}\n  {",".join(unsupported_resource_types)}"""
+            list_of_unsupported = (
+                f"""{intro}\n  {",".join(unsupported_resource_types)}"""
+            )
         else:
             list_of_unsupported = ""
         LOGGER.warning(
@@ -1361,6 +1379,49 @@ def reprocess_resources(resource_uuid_list):
     asyncio.run(reprocess_all())
 
 
+def reprocess_errors_for_published_concept_maps():
+    """
+    One time process to purge errors from daily load.
+    """
+    conn = get_db()
+    resource_uuid_query = conn.execute(
+        text(
+            """
+            SELECT distinct esi.resource_uuid FROM   
+            concept_maps.concept_relationship cr  
+        JOIN   
+            concept_maps.source_concept sc ON cr.source_concept_uuid = sc.uuid  
+        JOIN   
+            concept_maps.concept_map_version cmv ON sc.concept_map_version_uuid = cmv.uuid  
+        JOIN   
+            custom_terminologies.error_service_issue esi ON sc.custom_terminology_uuid = esi.custom_terminology_code_uuid  
+        WHERE   
+            cmv.status = 'active'
+            AND esi.status = 'pending'  
+            AND EXISTS (  
+                SELECT 1  
+                FROM concept_maps.concept_relationship cr_exist  
+                WHERE cr_exist.source_concept_uuid = sc.uuid  
+            )  
+    """
+        )
+    )
+    resource_uuid_list = []
+    for row in resource_uuid_query:
+        resource_uuid = row.resource_uuid
+        if resource_uuid is not None:
+            resource_uuid_list.append(str(resource_uuid))
+
+    def chunked(iterable, chunk_size):
+        """Yield successive chunk_size chunks from iterable."""
+        for i in range(0, len(iterable), chunk_size):
+            yield iterable[i : i + chunk_size]
+
+    chunk_size = 25  # Set the chunk size
+    for chunk in chunked(resource_uuid_list, chunk_size):
+        reprocess_resources(chunk)
+
+
 async def reprocess_resource(resource_uuid, token, client):
     """
     @param resource_uuid: UUID of the resource to reprocess in the Data Validation Error Service.
@@ -1375,18 +1436,24 @@ async def reprocess_resource(resource_uuid, token, client):
             api_url=f"/resources/{resource_uuid}/reprocess",
             params={},
         )
-    except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError or ReadTimeout) as e:
+    except (
+        httpx.ConnectError
+        or HttpxPoolTimeout
+        or HttpcorePoolTimeout
+        or BadDataError
+        or asyncio.exceptions.CancelledError
+        or TimeoutError
+        or ReadTimeout
+    ) as e:
         # If an error occurs on one resource, skip it
         LOGGER.warning(
-             f"{message_exception_classname(e)}, skipping reprocess resource: Error Service Resource ID: {resource_uuid}"
+            f"{message_exception_classname(e)}, skipping reprocess resource: Error Service Resource ID: {resource_uuid}"
         )
         return None
     except Exception as e:  # uncaught exceptions are so costly, a 'bare except' is acceptable, despite PEP 8: E722
         intro = f"{message_exception_classname(e)}, skipping reprocess resource: Error Service Resource ID: {resource_uuid}"
         stacktrace = "".join(traceback.format_exception(*sys.exc_info()))
-        LOGGER.warning(
-            f"{intro}\n{stacktrace}"
-        )
+        LOGGER.warning(f"{intro}\n{stacktrace}")
         return None
 
 
@@ -1402,16 +1469,17 @@ def _test_norm_registry_null_environments():
     by this GET it is because it returned an empty string. This particular GET does that when the resource is not found.
     """
     from app.database import get_db
+
     conn = get_db()
     query = """
         select distinct resource_uuid from 
         custom_terminologies.error_service_issue
         where environment is null
     """
-    results = conn.execute(
-        text(query)
+    results = conn.execute(text(query))
+    environment = get_environment_from_service_url(
+        DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL
     )
-    environment = get_environment_from_service_url(DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL)
     environment_uuid_list = []
     for row in results:
         resource_uuid = row.resource_uuid
@@ -1425,7 +1493,7 @@ def _test_norm_registry_null_environments():
                     token=token,
                     client=client,
                     base_url=DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL,
-                    api_url=url
+                    api_url=url,
                 )
                 if response is not None:
                     # the GET response shows this resource_uuid was found in this environment
@@ -1442,9 +1510,7 @@ def _test_norm_registry_null_environments():
         where resource_uuid in ('{"','".join(environment_uuid_list)}')
     """
     try:
-        conn.execute(
-            text(query)
-        )
+        conn.execute(text(query))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -1479,7 +1545,7 @@ if __name__ == "__main__":
     # load_concepts_from_errors(commit_changes=True)
 
     # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
-    load_concepts_from_errors(commit_changes=False)
+    # load_concepts_from_errors(commit_changes=False)
 
     # load_concepts_from_errors ran rollback() and commit() where and as needed; now ask the DatabaseHandler to close()
     conn.close()
