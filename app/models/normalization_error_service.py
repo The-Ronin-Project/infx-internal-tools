@@ -963,7 +963,8 @@ def load_concepts_from_errors(
                         )
                         total_count_loaded_codes += inserted_count
                         LOGGER.warning(
-                            f"Actually inserted {inserted_count} codes to " f"{terminology.terminology} version {terminology.version} " + "after de-duplication"
+                            f"Actually inserted {inserted_count} codes to "
+                            + f"{terminology.terminology} version {terminology.version} after de-duplication"
                         )
 
                 # Step 5: Save the IDs of the original errors and link back to the codes
@@ -1027,11 +1028,13 @@ def load_concepts_from_errors(
                     if commit_changes:
                         conn.commit()
                 except Exception as e:
+                    LOGGER.warning(
+                        f"{message_exception_classname(e)} saving error IDs in custom_terminologies.error_service_issue"
+                    )
                     conn.rollback()
                     raise e
 
                 current_time = datetime.datetime.now()
-                time_elapsed = current_time - time_start
                 since_last_time = current_time - previous_time
                 previous_time = current_time
                 loop_total += since_last_time
@@ -1045,11 +1048,10 @@ def load_concepts_from_errors(
 
     except Exception as e:  # uncaught exceptions can be so costly, that a 'bare except' is fine, despite PEP 8: E722
         LOGGER.warning(
-            f"\nTask halted by {message_exception_classname(e)} at Data Normalization Error Service " +
-            f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} " +
-            f"while processing {input_fhir_resource} for organization: {organization_id}\n" +
-            f"Exception may reflect a general, temporary problem, such as another service being unavailable.\n\n" +
-            message_exception_summary(e)
+            f"\nTask halted by {message_exception_classname(e)} at Data Normalization Error Service "
+            + f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} "
+            + f"while processing {input_fhir_resource} for organization: {organization_id}\n\n"
+            + message_exception_summary(e)
         )
         # A full stack trace is necessary to pinpoint issues triggered by frequently used constructs like terminologies
         traceback.print_exception(*sys.exc_info())
@@ -1375,69 +1377,6 @@ async def reprocess_resource(resource_uuid, token, client):
         return None
 
 
-@deprecated(
-    "This one-time repair function has been used already. Retaining it as an example of a few code patterns."
-)
-def _test_norm_registry_null_environments():
-    """
-    Not a test. Really a tool for developers to perform a one-time correction in the error_service_issue table.
-    Repeat test_norm_registry_null_environments() in each environment until there are no results to the first query.
-    This function offers a useful pattern for using GET /resources/:resource_uuid to see whether a particular resource
-    still exists on the Data Ingestion Error Validation Service. The pattern is that if a JSONDecodeError is raised
-    by this GET it is because it returned an empty string. This particular GET does that when the resource is not found.
-    """
-    from app.database import get_db
-    conn = get_db()
-    query = """
-        select distinct resource_uuid from 
-        custom_terminologies.error_service_issue
-        where environment is null
-    """
-    results = conn.execute(
-        text(query)
-    )
-    environment = get_environment_from_service_url(DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL)
-    environment_uuid_list = []
-    for row in results:
-        resource_uuid = row.resource_uuid
-        try:
-            token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
-            url = f"/resources/{resource_uuid}"
-            timeout_config = httpx.Timeout(timeout=600.0, pool=600.0, read=600.0, connect=600.0)
-            with httpx.Client(timeout=timeout_config) as client:
-                # try to GET this resource_uuid from the environment
-                response = make_get_request(
-                    token=token,
-                    client=client,
-                    base_url=DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL,
-                    api_url=url
-                )
-                if response is not None:
-                    # the GET response shows this resource_uuid was found in this environment
-                    environment_uuid_list.append(str(resource_uuid))
-        except JSONDecodeError:
-            # the GET response was an empty string that JSON could not decode because the resource_uuid was not found
-            continue
-        except Exception as e:
-            # the GET request experienced an uncaught exception that we need to study and/or prevent
-            raise e
-    # insert the environment name into the environment column for each row whose resource_uuid is in the uuid_list
-    query = f"""
-        update custom_terminologies.error_service_issue set environment = '{environment}'
-        where resource_uuid in ('{"','".join(environment_uuid_list)}')
-    """
-    try:
-        conn.execute(
-            text(query)
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        raise e
-
-
 if __name__ == "__main__":
     # todo: clean out this method altogether, when a temporary, manual error load task is not needed.
     from app.database import get_db
@@ -1461,10 +1400,10 @@ if __name__ == "__main__":
     #     requested_organization_id: Confluence page called "Organization Ids" under "Living Architecture" lists them
     #     requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    # load_concepts_from_errors(commit_changes=True)
+    load_concepts_from_errors(commit_changes=True, page_size=500)
 
     # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
-    load_concepts_from_errors(commit_changes=False)
+    # load_concepts_from_errors(commit_changes=False)
 
     # load_concepts_from_errors ran rollback() and commit() where and as needed; now ask the DatabaseHandler to close()
     conn.close()
