@@ -121,6 +121,11 @@ class ResourceType(Enum):
     # TELECOM_USE = "Practitioner.telecom.use"  # Only in for testing until we have a real data type live
 
 
+class ExcludeTenant(Enum):
+    """Tenant IDs confirmed by Content as intentionally not having concept maps created for them at this time."""
+    CERNER_SALES_DOMAIN = "tv6fx8pm"
+
+
 @dataclass
 class ErrorServiceResource:
     """
@@ -359,6 +364,11 @@ def load_concepts_from_errors(
             unsupported_resource_types.append(requested_resource_type)
         LOGGER.warning(
             f"Support for the {requested_resource_type} resource type has not been implemented"
+        )
+        return
+    if requested_organization_id in [x.value for x in ExcludeTenant]:
+        LOGGER.warning(
+            f"The Content team does not provide concept maps for the tenant ID: {requested_organization_id}"
         )
         return
 
