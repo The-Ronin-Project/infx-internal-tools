@@ -248,24 +248,28 @@ class Terminology:
 
         conn = get_db()
         new_terminology_uuid = uuid.uuid4()
-        conn.execute(
-            text(
-                """
-                Insert into public.terminology_versions(uuid, terminology, version, effective_start, effective_end, fhir_uri, is_standard, fhir_terminology)
-                Values (:uuid, :terminology, :version, :effective_start, :effective_end, :fhir_uri, :is_standard, :fhir_terminology)
-                """
-            ),
-            {
-                "uuid": new_terminology_uuid,
-                "terminology": terminology,
-                "version": version,
-                "effective_start": effective_start,
-                "effective_end": effective_end,
-                "fhir_uri": fhir_uri,
-                "is_standard": is_standard,
-                "fhir_terminology": fhir_terminology,
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """
+                    Insert into public.terminology_versions(uuid, terminology, version, effective_start, effective_end, fhir_uri, is_standard, fhir_terminology)
+                    Values (:uuid, :terminology, :version, :effective_start, :effective_end, :fhir_uri, :is_standard, :fhir_terminology)
+                    """
+                ),
+                {
+                    "uuid": new_terminology_uuid,
+                    "terminology": terminology,
+                    "version": version,
+                    "effective_start": effective_start,
+                    "effective_end": effective_end,
+                    "fhir_uri": fhir_uri,
+                    "is_standard": is_standard,
+                    "fhir_terminology": fhir_terminology,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
         new_terminology = conn.execute(
             text(
                 """
@@ -397,39 +401,46 @@ class Terminology:
         fhir_uri = previous_version_metadata.fhir_uri
         is_standard = previous_version_metadata.is_standard
         fhir_terminology = previous_version_metadata.fhir_terminology
-        conn.execute(
-            text(
-                """
-                Insert into public.terminology_versions(uuid, terminology, version, fhir_uri, is_standard, fhir_terminology, effective_start, effective_end )
-                Values (:uuid, :terminology, :version, :fhir_uri, :is_standard, :fhir_terminology, :effective_start, :effective_end)
-                """
-            ),
-            {
-                "uuid": version_uuid,
-                "terminology": terminology,
-                "version": version,
-                "fhir_uri": fhir_uri,
-                "is_standard": is_standard,
-                "fhir_terminology": fhir_terminology,
-                "effective_start": effective_start,
-                "effective_end": effective_end,
-            },
-        )
-
-        conn.execute(
-            text(
-                """
-                Insert into custom_terminologies.code(code, display, terminology_version_uuid, additional_data, depends_on_value, depends_on_display, depends_on_property, depends_on_system, created_date)
-                select code, display, :version_uuid, additional_data, depends_on_value, depends_on_display, depends_on_property, depends_on_system, created_date
-                from custom_terminologies.code
-                where terminology_version_uuid = :previous_version_uuid
-                """
-            ),
-            {
-                "previous_version_uuid": previous_version_uuid,
-                "version_uuid": version_uuid,
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """
+                    Insert into public.terminology_versions(uuid, terminology, version, fhir_uri, is_standard, fhir_terminology, effective_start, effective_end )
+                    Values (:uuid, :terminology, :version, :fhir_uri, :is_standard, :fhir_terminology, :effective_start, :effective_end)
+                    """
+                ),
+                {
+                    "uuid": version_uuid,
+                    "terminology": terminology,
+                    "version": version,
+                    "fhir_uri": fhir_uri,
+                    "is_standard": is_standard,
+                    "fhir_terminology": fhir_terminology,
+                    "effective_start": effective_start,
+                    "effective_end": effective_end,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
+        try:
+            conn.execute(
+                text(
+                    """
+                    Insert into custom_terminologies.code(code, display, terminology_version_uuid, additional_data, depends_on_value, depends_on_display, depends_on_property, depends_on_system, created_date)
+                    select code, display, :version_uuid, additional_data, depends_on_value, depends_on_display, depends_on_property, depends_on_system, created_date
+                    from custom_terminologies.code
+                    where terminology_version_uuid = :previous_version_uuid
+                    """
+                ),
+                {
+                    "previous_version_uuid": previous_version_uuid,
+                    "version_uuid": version_uuid,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
         new_term_version = conn.execute(
             text(
                 """
@@ -508,30 +519,34 @@ class Terminology:
                 query_text += """ on conflict do nothing
                 """
             query_text += """ returning uuid"""
-            result = conn.execute(
-                text(query_text),
-                {
-                    "uuid": code.custom_terminology_code_uuid
-                    if code.custom_terminology_code_uuid is not None
-                    else uuid.uuid4(),
-                    "code": serialized_code,
-                    "display": code.display,
-                    "terminology_version_uuid": code.terminology_version_uuid,
-                    "depends_on_value": code.depends_on_value
-                    if code.depends_on_value
-                    else "",
-                    "depends_on_display": code.depends_on_display
-                    if code.depends_on_display
-                    else "",
-                    "depends_on_property": code.depends_on_property
-                    if code.depends_on_property
-                    else "",
-                    "depends_on_system": code.depends_on_system
-                    if code.depends_on_system
-                    else "",
-                    "additional_data": json.dumps(code.additional_data),
-                },
-            ).fetchall()
+            try:
+                result = conn.execute(
+                    text(query_text),
+                    {
+                        "uuid": code.custom_terminology_code_uuid
+                        if code.custom_terminology_code_uuid is not None
+                        else uuid.uuid4(),
+                        "code": serialized_code,
+                        "display": code.display,
+                        "terminology_version_uuid": code.terminology_version_uuid,
+                        "depends_on_value": code.depends_on_value
+                        if code.depends_on_value
+                        else "",
+                        "depends_on_display": code.depends_on_display
+                        if code.depends_on_display
+                        else "",
+                        "depends_on_property": code.depends_on_property
+                        if code.depends_on_property
+                        else "",
+                        "depends_on_system": code.depends_on_system
+                        if code.depends_on_system
+                        else "",
+                        "additional_data": json.dumps(code.additional_data),
+                    },
+                ).fetchall()
+            except Exception as e:
+                conn.rollback()
+                raise e
             count_inserted = len(result)
             total_count_inserted += count_inserted
         return total_count_inserted
