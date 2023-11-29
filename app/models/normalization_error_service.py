@@ -962,7 +962,7 @@ def load_concepts_from_errors(
                         total_count_loaded_codes += inserted_count
                         LOGGER.warning(
                             f"Actually inserted {inserted_count} codes to "
-                            f"{terminology.terminology} version {terminology.version} "
+                            + f"{terminology.terminology} version {terminology.version} "
                             + "after de-duplication"
                         )
 
