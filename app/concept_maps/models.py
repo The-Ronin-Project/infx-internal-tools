@@ -16,7 +16,7 @@ from sqlalchemy import text
 import app.models.codes
 import app.models.data_ingestion_registry
 from app.database import get_db, get_opensearch
-from app.errors import BadDataError, BadRequestWithCode, NotFoundException
+from app.errors import BadDataError, BadRequestWithCode, NotFoundException, BadSourceCodeError, DuplicateTargetError
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.models.codes import Code
@@ -1192,7 +1192,8 @@ class ConceptMapVersion:
         Integrity Check 2: Make sure there are no duplicate targets
         """
 
-        errors = []  # list to hold error messages
+        bad_source_errors = []  # List to hold bad source code errors
+        duplicate_target_errors = []  # List to hold duplicate target errors
 
         # Iterate over each dictionary in the 'group' list
         for group in concept_map.get("group", []):
@@ -1209,11 +1210,11 @@ class ConceptMapVersion:
                                 # Check if the 'code' field is a valid JSON string
                                 json.loads(code)
                             except ValueError:
-                                errors.append(
+                                bad_source_errors.append(
                                     f"Invalid JSON string in the code field at element index {index}: {code}"
                                 )
                         else:
-                            errors.append(
+                            bad_source_errors.append(
                                 f"Code string has an unrecognized pattern at element index {index}: {code}"
                             )
 
@@ -1228,7 +1229,7 @@ class ConceptMapVersion:
                     #         errors.append(f"Code string: {code}, does not match display: {display}, at index {index}")
 
                 else:
-                    errors.append(
+                    bad_source_errors.append(
                         f"'code' key is missing in the element at index {index}"
                     )
 
@@ -1241,27 +1242,35 @@ class ConceptMapVersion:
                         target_code = target.get("code")
                         if target_code:
                             if target_code in target_values:
-                                errors.append(
+                                duplicate_target_errors.append(
                                     f"Duplicated target elements found at element index {index}: {target_code}"
                                 )
                             target_values.add(target_code)
                         else:
-                            errors.append(
+                            duplicate_target_errors.append(
                                 f"'code' key is missing in the target at element index {index}"
                             )
                 else:
-                    errors.append(
+                    duplicate_target_errors.append(
                         f"'target' key is missing in the element at index {index}"
                     )
 
-        if len(errors) > 0:
-            errors_str = "\n".join([f"  - {error}" for error in errors])
-            formatted_errors = f"Errors:\n{errors_str}"
+        if bad_source_errors:
+            errors_str = "\n".join([f"  - {error}" for error in bad_source_errors])
+            formatted_errors = f"Bad Source Code Errors:\n{errors_str}"
+            raise BadSourceCodeError(
+                code="BadSourceCode",
+                description="Bad source code errors found in ConceptMap",
+                errors=formatted_errors
+            )
 
-            raise BadDataError(
-                code="ConceptMapVersion.checkFormatting",
-                description="Formatting Errors found in ConceptMap, INFX Systems Team has been notified via DataDog",
-                errors=formatted_errors,
+        if duplicate_target_errors:
+            errors_str = "\n".join([f"  - {error}" for error in duplicate_target_errors])
+            formatted_errors = f"Duplicate Target Errors:\n{errors_str}"
+            raise DuplicateTargetError(
+                code="DuplicateTarget",
+                description="Duplicate target errors found in ConceptMap",
+                errors=formatted_errors
             )
 
     def serialize(
