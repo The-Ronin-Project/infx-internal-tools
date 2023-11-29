@@ -44,7 +44,7 @@ CLIENT_ID = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_ID", default="")
 CLIENT_SECRET = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_SECRET", default="")
 AUTH_AUDIENCE = config("DATA_NORMALIZATION_ERROR_SERVICE_AUDIENCE", default="")
 AUTH_URL = config("DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default="")
-PAGE_SIZE = 500
+PAGE_SIZE = 300
 
 LOGGER = logging.getLogger()
 
@@ -122,6 +122,11 @@ class ResourceType(Enum):
     APPOINTMENT = "Appointment"
     DOCUMENT_REFERENCE = "DocumentReference"
     # TELECOM_USE = "Practitioner.telecom.use"  # Only in for testing until we have a real data type live
+
+
+class ExcludeTenant(Enum):
+    """Tenant IDs confirmed by Content as intentionally not having concept maps created for them at this time."""
+    CERNER_SALES_DOMAIN = "tv6fx8pm"
 
 
 @dataclass
@@ -372,6 +377,11 @@ def load_concepts_from_errors(
             f"Support for the {requested_resource_type} resource type has not been implemented"
         )
         return
+    if requested_organization_id in [x.value for x in ExcludeTenant]:
+        LOGGER.warning(
+            f"The Content team does not provide concept maps for the tenant ID: {requested_organization_id}"
+        )
+        return
 
     # Logging variables
     organization_id = requested_organization_id
@@ -442,13 +452,33 @@ def load_concepts_from_errors(
             all_resources_fetched = False
             while all_resources_fetched is False:
                 # Retrieve the first page of resources
-                response = make_get_request(
-                    token=token,
-                    client=client,
-                    base_url=DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL,
-                    api_url="/resources",
-                    params=rest_api_params,
-                )
+                try:
+                    response = make_get_request(
+                        token=token,
+                        client=client,
+                        base_url=DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL,
+                        api_url="/resources",
+                        params=rest_api_params,
+                    )
+                except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError or ReadTimeout) as e:
+                    LOGGER.warning(
+                        f"{message_exception_classname(e)}, skipping load of {page_size} resources of type {input_fhir_resource} for organization {organization_id}"
+                    )
+                    continue
+                except Exception as e:  # uncaught exceptions are so costly, a 'bare except' is acceptable, despite PEP 8: E722
+                    intro = f"{message_exception_classname(e)}, skipping load of {page_size} resources of type {input_fhir_resource} for organization {organization_id}"
+                    if "Timeout" not in intro:
+                        info = "".join(traceback.format_exception(*sys.exc_info()))
+                        if "Expecting value: line 1 column 1 (char 0)" in intro:
+                            message = f"{intro}\n{info}\nThis JSON parsing error means that a required value was empty."
+                        else:
+                            message = f"{intro}\n{info}"
+                    else:
+                        message = intro
+                    LOGGER.warning(message)
+                    continue
+
+                # Here is the first page of resources
                 resources_with_errors = response
 
                 length_of_response = len(response)
@@ -739,7 +769,7 @@ def load_concepts_from_errors(
                             data_normalization_registry[registry_key]
                         )
                         if concept_map_version_for_normalization is None:
-                            # We already messaged that the concept map for this resource and issue is missing
+                            # per Content team, desired action is to continue (stop the loop here, process next error)
                             continue
 
                         # Inside the concept map version, we'll extract the source value set
@@ -1026,8 +1056,12 @@ def load_concepts_from_errors(
 
                     if commit_changes:
                         conn.commit()
-                except:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
+                except Exception as e:
+                    LOGGER.warning(
+                        f"{message_exception_classname(e)} saving error IDs in custom_terminologies.error_service_issue"
+                    )
                     conn.rollback()
+                    raise e
 
                 current_time = datetime.datetime.now()
                 since_last_time = current_time - previous_time
@@ -1038,15 +1072,14 @@ def load_concepts_from_errors(
                 LOGGER.warning(
                     f"  {len(resources_with_errors)} errors received and loaded in {step_1}\n"
                     + f"  {total_count_loaded_codes} new codes found and deduplicated in {step_2}\n"
-                    + f"  at local time {current_time}, loop duration {loop_total}"
+                    + f"  loop {all_loop_count} done at time {current_time.time()}, duration {loop_total}"
                 )
 
     except Exception as e:  # uncaught exceptions can be so costly, that a 'bare except' is fine, despite PEP 8: E722
         LOGGER.warning(
             f"\nTask halted by {message_exception_classname(e)} at Data Normalization Error Service "
             + f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} "
-            + f"while processing {input_fhir_resource} for organization: {organization_id}\n"
-            + f"Exception may reflect a general, temporary problem, such as another service being unavailable.\n\n"
+            + f"while processing {input_fhir_resource} for organization: {organization_id}\n\n"
             + message_exception_summary(e)
         )
         # A full stack trace is necessary to pinpoint issues triggered by frequently used constructs like terminologies
@@ -1066,7 +1099,7 @@ def load_concepts_from_errors(
         else:
             list_of_unsupported = ""
         LOGGER.warning(
-            f"\nDONE at local time {time_end}, duration {time_elapsed}\n"
+            f"\nDONE at local time {time_end}, time since start {time_elapsed}\n"
             + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
             + f"  Load to:   {DATABASE_HOST}\n\n"
             + f"Main loop skipped {all_skip_count} times (repeated report or FHIR resource not supported).\n"
@@ -1133,13 +1166,7 @@ def lookup_concept_map_version_for_data_element(
                 0
             ].concept_map.most_recent_active_version
 
-    # If nothing is found, raise an appropriate error
-    if concept_map_version is None:
-        LOGGER.warning(
-            f"No appropriate registry entry found for organization: {organization.id} and data element: {data_element}"
-        )
-        return None
-
+    # If nothing is found (result is None) then per Content team, desired action here is to return None (ignore)
     return concept_map_version
 
 
@@ -1459,7 +1486,8 @@ def _test_norm_registry_null_environments():
         try:
             token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
             url = f"/resources/{resource_uuid}"
-            with httpx.Client(timeout=60.0) as client:
+            timeout_config = httpx.Timeout(timeout=600.0, pool=600.0, read=600.0, connect=600.0)
+            with httpx.Client(timeout=timeout_config) as client:
                 # try to GET this resource_uuid from the environment
                 response = make_get_request(
                     token=token,
