@@ -11,6 +11,9 @@ class TerminologyTests(unittest.TestCase):
     def setUp(self) -> None:
         self.conn = get_db()
         self.app = create_app()
+        self.app.config.update({
+            "TESTING": True,
+        })
         self.client = self.app.test_client()
 
     def tearDown(self) -> None:

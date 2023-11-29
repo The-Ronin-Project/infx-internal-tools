@@ -1,13 +1,28 @@
 import json
 import unittest
+
 from _pytest.python_api import raises
 
 from app.concept_maps.models import ConceptMap, ConceptMapVersion
 from app.errors import BadRequestWithCode
 from app.helpers.file_helper import resources_folder
+from app.database import get_db
+from app.app import create_app
 
 
 class VersioningTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.conn = get_db()
+        self.app = create_app()
+        self.app.config.update({
+            "TESTING": True,
+        })
+        self.client = self.app.test_client()
+
+    def tearDown(self) -> None:
+        self.conn.rollback()
+        self.conn.close()
+
     def test_diff_mappings_and_metadata(self):
         """
         Functions called by this test do not change data or write to OCI. They serialize data or read from OCI artifacts.
