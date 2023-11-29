@@ -1463,7 +1463,7 @@ if __name__ == "__main__":
     #     requested_organization_id: Confluence page called "Organization Ids" under "Living Architecture" lists them
     #     requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    # load_concepts_from_errors(commit_changes=True, page_size=500)
+    # load_concepts_from_errors(commit_changes=True)
 
     # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
     load_concepts_from_errors(commit_changes=False)
