@@ -6,14 +6,14 @@ on:
     branches: [master]
 
 jobs:
-  ###############################################
-  # Run tests and publish coverage to codecov.io
-  ###############################################
+  #####################################################
+  # Run tests and (not yet implemented publish coverage
+  #####################################################
   test:
     runs-on: self-hosted
-    # uses: projectronin/github/.github/workflows/python_test.yml@PLAT-333-cleanup-python-test-workflow
+    # uses: projectronin/github/.github/workflows/python_test.yml
     # secrets:
-    #   codecov-token: ${{ secrets.INFX_API_CODECOV_TOKEN  }}
+    #   (none at this time)
     steps:
       - name: test
         run: echo "I solemnly swear I am up to no good and have no tests."
