@@ -121,6 +121,11 @@ class ResourceType(Enum):
     # TELECOM_USE = "Practitioner.telecom.use"  # Only in for testing until we have a real data type live
 
 
+class ExcludeTenant(Enum):
+    """Tenant IDs confirmed by Content as intentionally not having concept maps created for them at this time."""
+    CERNER_SALES_DOMAIN = "tv6fx8pm"
+
+
 @dataclass
 class ErrorServiceResource:
     """
@@ -361,6 +366,11 @@ def load_concepts_from_errors(
             f"Support for the {requested_resource_type} resource type has not been implemented"
         )
         return
+    if requested_organization_id in [x.value for x in ExcludeTenant]:
+        LOGGER.warning(
+            f"The Content team does not provide concept maps for the tenant ID: {requested_organization_id}"
+        )
+        return
 
     # Logging variables
     organization_id = requested_organization_id
@@ -448,7 +458,10 @@ def load_concepts_from_errors(
                     intro = f"{message_exception_classname(e)}, skipping load of {page_size} resources of type {input_fhir_resource} for organization {organization_id}"
                     if "Timeout" not in intro:
                         info = "".join(traceback.format_exception(*sys.exc_info()))
-                        message = f"{intro}\n{info}"
+                        if "Expecting value: line 1 column 1 (char 0)" in intro:
+                            message = f"{intro}\n{info}\nThis JSON parsing error means that a required value was empty."
+                        else:
+                            message = f"{intro}\n{info}"
                     else:
                         message = intro
                     LOGGER.warning(message)
@@ -963,7 +976,8 @@ def load_concepts_from_errors(
                         )
                         total_count_loaded_codes += inserted_count
                         LOGGER.warning(
-                            f"Actually inserted {inserted_count} codes to " f"{terminology.terminology} version {terminology.version} " + "after de-duplication"
+                            f"Actually inserted {inserted_count} codes to "
+                            + f"{terminology.terminology} version {terminology.version} after de-duplication"
                         )
 
                 # Step 5: Save the IDs of the original errors and link back to the codes
@@ -1027,11 +1041,13 @@ def load_concepts_from_errors(
                     if commit_changes:
                         conn.commit()
                 except Exception as e:
+                    LOGGER.warning(
+                        f"{message_exception_classname(e)} saving error IDs in custom_terminologies.error_service_issue"
+                    )
                     conn.rollback()
                     raise e
 
                 current_time = datetime.datetime.now()
-                time_elapsed = current_time - time_start
                 since_last_time = current_time - previous_time
                 previous_time = current_time
                 loop_total += since_last_time
@@ -1045,11 +1061,10 @@ def load_concepts_from_errors(
 
     except Exception as e:  # uncaught exceptions can be so costly, that a 'bare except' is fine, despite PEP 8: E722
         LOGGER.warning(
-            f"\nTask halted by {message_exception_classname(e)} at Data Normalization Error Service " +
-            f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} " +
-            f"while processing {input_fhir_resource} for organization: {organization_id}\n" +
-            f"Exception may reflect a general, temporary problem, such as another service being unavailable.\n\n" +
-            message_exception_summary(e)
+            f"\nTask halted by {message_exception_classname(e)} at Data Normalization Error Service "
+            + f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} "
+            + f"while processing {input_fhir_resource} for organization: {organization_id}\n\n"
+            + message_exception_summary(e)
         )
         # A full stack trace is necessary to pinpoint issues triggered by frequently used constructs like terminologies
         traceback.print_exception(*sys.exc_info())
