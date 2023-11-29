@@ -20,6 +20,7 @@ from sqlalchemy.sql.expression import bindparam
 
 from app.errors import NotFoundException, BadDataError, DataIntegrityError, BadRequestWithCode
 from app.helpers.oci_helper import set_up_object_store
+from app.deferred_publish import DeferredPublisher, DeferredPublicationManager
 
 from app.models.codes import Code
 
@@ -2498,6 +2499,11 @@ class ValueSetVersion:
 
         self._expanded = False
 
+        # To hold value set artifact ready for publication
+        self.value_set_for_oci = None
+        self.oci_initial_path = None
+        self.value_set_for_simplifier = None
+
     def __repr__(self):
         return f"<ValueSetVersion uuid={self.uuid}, title={self.value_set.title}, version={self.version}>"
 
@@ -3082,41 +3088,53 @@ class ValueSetVersion:
         return serialized, initial_path
 
     def publish(self, force_new):
+        self.prepare_artifact_for_publication(force_new=force_new)
+
+        deferred_publication_manager = DeferredPublicationManager()
+        deferred_publication_manager.add_to_publish_queue(self.publish_prepared_artifact)
+        deferred_publication_manager.queue_data_normalization_registry_regeneration()
+
+    def prepare_artifact_for_publication(self, force_new):
         self.expand(force_new=force_new)
-        value_set_to_json, initial_path = self.prepare_for_oci()
-        value_set_to_json_copy = value_set_to_json.copy()  # Simplifier requires status
+        self.value_set_for_oci, self.oci_initial_path = self.prepare_for_oci()
+        self.value_set_for_simplifier = self.value_set_for_oci.copy()  # Simplifier requires status
 
         self.version_set_status_active()
         self.retire_and_obsolete_previous_version()
-        value_set_uuid = self.value_set.uuid
+
+        # Modify the artifact to meet standards for Simplifier
+        self.value_set_for_simplifier["status"] = "active"
+        # Check if the 'expansion' and 'contains' keys are present
+        if (
+                "expansion" in self.value_set_for_simplifier
+                and "contains" in self.value_set_for_simplifier["expansion"]
+        ):
+            # Store the original total value
+            original_total = self.value_set_for_simplifier["expansion"]["total"]
+
+            # Limit the contains list to the top 50 entries
+            self.value_set_for_simplifier["expansion"]["contains"] = self.value_set_for_simplifier[
+                                                                         "expansion"
+                                                                     ]["contains"][:50]
+
+            # Set the 'total' field to the original total
+            self.value_set_for_simplifier["expansion"]["total"] = original_total
+
+    def publish_prepared_artifact(self):
+        if self.value_set_for_oci is None or self.value_set_for_simplifier is None:
+            raise Exception("self.value_set_for_oci and self.value_set_for_simplifer cannot be None when publish_prepared_artifact is called")
+        if self.oci_initial_path is None:
+            raise Exception("self.oci_initial_path cannot be None when publish_prepared_artifact is called")
+
         set_up_object_store(
-            value_set_to_json,
-            initial_path + f"/published/{value_set_uuid}",
+            self.value_set_for_oci,
+            self.oci_initial_path + f"/published/{self.value_set.uuid}",
             folder="published",
             content_type="json",
         )  # sending to OCI
+
         resource_type = "ValueSet"  # param for Simplifier
-        value_set_to_json_copy["status"] = "active"
-        # Check if the 'expansion' and 'contains' keys are present
-        if (
-            "expansion" in value_set_to_json_copy
-            and "contains" in value_set_to_json_copy["expansion"]
-        ):
-            # Store the original total value
-            original_total = value_set_to_json_copy["expansion"]["total"]
-
-            # Limit the contains list to the top 50 entries
-            value_set_to_json_copy["expansion"]["contains"] = value_set_to_json[
-                "expansion"
-            ]["contains"][:50]
-
-            # Set the 'total' field to the original total
-            value_set_to_json_copy["expansion"]["total"] = original_total
-        publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
-
-        # Publish new version of data normalization registry
-
-        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
+        publish_to_simplifier(resource_type, self.value_set.uuid, self.value_set_for_simplifier)
 
     @classmethod
     def load_expansion_report(cls, expansion_uuid):
