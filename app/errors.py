@@ -21,6 +21,23 @@ class BadDataError(InternalServerError):
         self.http_status_code = http_status_code
 
 
+# Errors for ConceptMaps
+class BadSourceCodeError(InternalServerError):
+    def __init__(self, code, description, errors, http_status_code=409):
+        self.code = code
+        self.description = description
+        self.errors = errors
+        self.http_status_code = http_status_code
+
+
+class DuplicateTargetError(InternalServerError):
+    def __init__(self, code, description, errors, http_status_code=409):
+        self.code = code
+        self.description = description
+        self.errors = errors
+        self.http_status_code = http_status_code
+
+
 class TerminologyExpiredError(Exception):
     pass
 
