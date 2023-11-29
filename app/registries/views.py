@@ -24,7 +24,7 @@ def create_or_get_registry():
         if sorting_enabled is not None:
             if type(sorting_enabled) != bool:
                 raise BadRequestWithCode(
-                    "bad-request", "sorting_enabled must be boolean"
+                    "Registry.sort.boolean", "sorting_enabled must be boolean"
                 )
 
         new_registry = Registry.create(

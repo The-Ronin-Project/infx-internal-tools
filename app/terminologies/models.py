@@ -485,7 +485,7 @@ class Terminology:
         able_to_load, fail_reason = self.able_to_load_new_codes()
         if not able_to_load:
             raise BadRequestWithCode(
-                code="invalid_request",
+                code="Terminology.load_new_codes.closed_to_new_codes",
                 description=fail_reason,
             )
 
@@ -494,13 +494,13 @@ class Terminology:
 
         if len(terminology_uuids) > 1:
             raise BadRequestWithCode(
-                code="BadRequest",
-                description="Loading to multiple terminologies at once is not allowed",
+                "Terminology.load_new_codes.multiple_terminologies",
+                "Cannot load codes to multiple terminologies at the same time",
             )
 
         if str(terminology_uuids[0]) != str(self.uuid):
             raise BadRequestWithCode(
-                code="BadRequest",
+                code="Terminology.load_new_codes.class_conflict",
                 description=f"Cannot load codes to Terminology {terminology_uuids[0]} using the class for Terminology {self.uuid}",
             )
 
