@@ -1519,8 +1519,5 @@ if __name__ == "__main__":
     # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
     # load_concepts_from_errors(commit_changes=False)
 
-    # If we want to reprocess errors from published concept maps, uncomment line below to purge errors from daily load.
-    reprocess_errors_for_published_concept_maps()
-
     # load_concepts_from_errors ran rollback() and commit() where and as needed; now ask the DatabaseHandler to close()
     conn.close()
