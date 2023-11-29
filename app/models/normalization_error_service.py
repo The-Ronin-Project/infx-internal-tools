@@ -458,7 +458,10 @@ def load_concepts_from_errors(
                     intro = f"{message_exception_classname(e)}, skipping load of {page_size} resources of type {input_fhir_resource} for organization {organization_id}"
                     if "Timeout" not in intro:
                         info = "".join(traceback.format_exception(*sys.exc_info()))
-                        message = f"{intro}\n{info}"
+                        if "Expecting value: line 1 column 1 (char 0)" in intro:
+                            message = f"{intro}\n{info}\nThis JSON parsing error means that a required value was empty."
+                        else:
+                            message = f"{intro}\n{info}"
                     else:
                         message = intro
                     LOGGER.warning(message)
