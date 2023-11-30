@@ -160,7 +160,6 @@ class ConceptMapVersionCreator:
             "relationship_code_uuid": "dca7c556-82d9-4433-8971-0b7edb9c9661",
             "target_concept_code": "No map",
             "target_concept_display": "No matching concept",
-            "target_concept_system_version_uuid": "93ec9286-17cf-4837-a4dc-218ce3015de6",
         }
 
         mapped_no_map = {}
@@ -259,10 +258,6 @@ class ConceptMapVersionCreator:
                 and (
                     row.target_concept_display
                     == mapped_no_map_criteria["target_concept_display"]
-                )
-                and (
-                    str(row.target_concept_system_version_uuid)
-                    == mapped_no_map_criteria["target_concept_system_version_uuid"]
                 )
             )
 
