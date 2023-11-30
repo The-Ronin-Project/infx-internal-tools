@@ -8,6 +8,9 @@ from app.database import get_db
 
 
 class TerminologyTests(unittest.TestCase):
+    """
+    Safe Terminology UUIDs, see CodeTests class doc
+    """
     def setUp(self) -> None:
         self.conn = get_db()
         self.app = create_app()
@@ -20,6 +23,10 @@ class TerminologyTests(unittest.TestCase):
         self.conn.rollback()
         self.conn.close()
 
+    safe_term_uuid_fake = "d2ae0de5-0168-4f54-924a-1f79cf658939"
+    safe_term_uuid_test = "3c9ed300-0cb8-47af-8c04-a06352a14b8d"
+    safe_term_uuid_dupl = "d14cbd3a-aabe-4b26-b754-5ae2fbd20949"
+
     def test_deduplicate_on_insert(self) -> None:
         """
         When `load_new_codes_to_terminology` is called on a Terminology (app.terminologies.models.Terminology)
@@ -30,8 +37,8 @@ class TerminologyTests(unittest.TestCase):
         well as a new one. We will expect the final count to only be 1 (representing the new one).
         """
         duplicate_insert_test_terminology = app.terminologies.models.Terminology.load(
-            "d14cbd3a-aabe-4b26-b754-5ae2fbd20949"
-        )  # Duplicate Insert Test Terminology
+            self.safe_term_uuid_dupl
+        )
 
         code1 = app.models.codes.Code(
             code="test1",
@@ -59,12 +66,10 @@ class TerminologyTests(unittest.TestCase):
         )
         self.assertEqual(1, inserted_count)
 
-    def test_get_terminology(self):
+    def test_get_terminology_happy(self):
         """
-        Unit test for get_terminology API endpoint where a terminology is looked up by its fhir_uri and version.
+        Happy path where both valid fhir_uri and version are provided
         """
-
-        # Happy path where both valid fhir_uri and version are provided
         response = self.client.get(
             "/terminology/",
             query_string={
@@ -77,7 +82,10 @@ class TerminologyTests(unittest.TestCase):
         assert result.get("name") == "apposnd_document_type"
         assert result.get("fhir_terminology") is False
 
-        # Test when fhir_uri is empty
+    def test_get_terminology_fhir_uri_empty(self):
+        """
+        Test when fhir_uri is empty
+        """
         response = self.client.get(
             "/terminology/",
             query_string={
@@ -89,7 +97,10 @@ class TerminologyTests(unittest.TestCase):
         assert response.status == "400 BAD REQUEST"
         assert result.get("error") == "fhir_uri and version parameters are required."
 
-        # Test when version is empty
+    def test_get_terminology_version_empty(self):
+        """
+        Test when version is empty
+        """
         response = self.client.get(
             "/terminology/",
             query_string={
@@ -102,7 +113,10 @@ class TerminologyTests(unittest.TestCase):
         assert response.status == "400 BAD REQUEST"
         assert result.get("error") == "fhir_uri and version parameters are required."
 
-        # Test when fhir_uri is not a valid uri
+    def test_get_terminology_fhir_uri_invalid(self):
+        """
+        Test when fhir_uri is not a valid uri
+        """
         response = self.client.get(
             "/terminology/",
             query_string={
@@ -115,7 +129,9 @@ class TerminologyTests(unittest.TestCase):
         assert response.status == "404 NOT FOUND"
         assert (
             result.get("message")
-            == "No terminology is found with the provided fhir_uri: http://projectronin.io/fhir/CodeSystem/mock/DocumentType and version: 4"
+            ==
+            "No terminology is found with the provided fhir_uri: "
+            + "http://projectronin.io/fhir/CodeSystem/mock/DocumentType and version: 4"
         )
 
 
