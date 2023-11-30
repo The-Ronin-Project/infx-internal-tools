@@ -469,8 +469,10 @@ class ConceptMapVersionCreator:
         source_value_set_version = app.value_sets.models.ValueSetVersion.load(
             new_source_value_set_version_uuid
         )
-        active_source_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version(
-            source_value_set_version.value_set.uuid
+        active_source_value_set_version = (
+            app.value_sets.models.ValueSet.load_most_recent_active_version(
+                source_value_set_version.value_set.uuid
+            )
         )
         if active_source_value_set_version is None or (
             str(active_source_value_set_version.uuid)
@@ -485,8 +487,10 @@ class ConceptMapVersionCreator:
         target_value_set_version = app.value_sets.models.ValueSetVersion.load(
             new_target_value_set_version_uuid
         )
-        active_target_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version(
-            target_value_set_version.value_set.uuid
+        active_target_value_set_version = (
+            app.value_sets.models.ValueSet.load_most_recent_active_version(
+                target_value_set_version.value_set.uuid
+            )
         )
         if active_target_value_set_version is None or (
             str(active_target_value_set_version.uuid)
@@ -596,21 +600,22 @@ class ConceptMapVersionCreator:
                         # b. get the previous_mapping
                         mapping = previous_mapping_data["mappings"][0]
                         previous_mapping = mapping
+                        no_map_target_concept = app.concept_maps.models.Code(
+                            code=previous_mapping.target.code,
+                            display=previous_mapping.target.display,
+                            system=previous_mapping.target.system,
+                            version=no_map_version,
+                        )
 
                         if require_review_for_non_equivalent_relationships:
                             # c. check for require_review_for_non_equivalent_relationships is True
-                            no_map_target_concept = app.concept_maps.models.Code(
-                                code=previous_mapping.target.code,
-                                display=previous_mapping.target.display,
-                                system=previous_mapping.target.system,
-                                version=no_map_version,
-                            )
                             self.copy_mapping_require_review(
                                 new_source_concept=new_source_concept,
                                 new_target_concept=no_map_target_concept,
                                 previous_mapping=previous_mapping,
                             )
-                        elif (
+
+                        if (
                             require_review_no_maps_not_in_target
                             and previous_source_concept.reason_for_no_map
                             == "Not in target code system"
@@ -624,7 +629,11 @@ class ConceptMapVersionCreator:
                             )
                             if result is not None:
                                 previous_contexts_list.append(result)
-                        else:
+
+                        if (
+                            not require_review_for_non_equivalent_relationships
+                            and not require_review_no_maps_not_in_target
+                        ):
                             # e. Otherwise, copy the previous mapping exactly using the copy_mapping_exact method with the new_target_code set to "No map"
                             no_map_code = app.concept_maps.models.Code(
                                 code=no_map_target_concept_code,
