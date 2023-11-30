@@ -414,6 +414,7 @@ def load_concepts_from_errors(
         + f"Main loop:\n"
     )
     tenant_load_json_format_error_reported = []
+    tenant_id_excluded_error_reported = []
 
     # Local caches
     # todo: study why ttl_cache, or other caching strategies, did not stop repeat loads from happening
@@ -502,6 +503,14 @@ def load_concepts_from_errors(
                 for resource_data in resources_with_errors:
                     organization = Organization(resource_data.get("organization_id"))
                     organization_id = organization.id
+                    if organization_id in [x.value for x in ExcludeTenant]:
+                        all_skip_count += 1
+                        if organization_id not in tenant_id_excluded_error_reported:
+                            LOGGER.warning(
+                                f"The Content team does not provide concept maps for the tenant ID: {organization_id}"
+                            )
+                            tenant_id_excluded_error_reported.append(organization_id)
+                        continue
 
                     fhir_resource_type = None
                     for resource_type_option in ResourceType:
@@ -1545,7 +1554,7 @@ if __name__ == "__main__":
     # load_concepts_from_errors(commit_changes=True)
 
     # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
-    # load_concepts_from_errors(commit_changes=False)
+    load_concepts_from_errors(commit_changes=False)
 
     # load_concepts_from_errors ran rollback() and commit() where and as needed; now ask the DatabaseHandler to close()
     conn.close()
