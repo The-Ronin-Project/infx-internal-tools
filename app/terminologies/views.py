@@ -1,7 +1,11 @@
+import sys
+import traceback
+
 from deprecated.classic import deprecated
 from flask import Blueprint, request, jsonify
 import dataclasses
 
+from app.helpers.message_helper import message_exception_classname, message_exception_summary
 from app.models.codes import *
 from app.terminologies.models import *
 
@@ -92,8 +96,8 @@ def create_code():
         terminology_version_uuids = list(set(terminology_version_uuids))
         if len(terminology_version_uuids) > 1:
             raise BadRequestWithCode(
-                "MultipleTerminologiesNotAllowed",
-                "Cannot load to multiple terminologies at the same time",
+                "Terminology.create_code.multiple_terminologies",
+                "Cannot create codes in multiple terminologies at the same time",
             )
         else:
             terminology = Terminology.load(terminology_version_uuids[0])
@@ -110,7 +114,18 @@ def create_code():
             )
             codes.append(code)
 
-        terminology.load_new_codes_to_terminology(codes)
+        try:
+            terminology.load_new_codes_to_terminology(codes)
+        except Exception as e:
+            info = "".join(traceback.format_exception(*sys.exc_info()))
+            if "psycopg2.errors." in info:
+                raise BadRequestWithCode(
+                    code="Terminology.create_code.database_error",
+                    description=f"""{message_exception_summary(e)}"""
+                )
+            else:
+                raise e
+
         return "Complete"
 
 
