@@ -121,6 +121,7 @@ class ResourceType(Enum):
     PRACTITIONER_ROLE = "PractitionerRole"  # For both use and system
     APPOINTMENT = "Appointment"
     DOCUMENT_REFERENCE = "DocumentReference"
+    CARE_PLAN = "CarePlan"
     # TELECOM_USE = "Practitioner.telecom.use"  # Only in for testing until we have a real data type live
 
 
@@ -1603,7 +1604,7 @@ if __name__ == "__main__":
     # Moved logging setup to here so it does not run in main program and cause duplicate logs
 
     # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
-    # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded.
+    # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded
     LOGGER.setLevel("WARNING")
 
     # Create a console handler and add it to the logger if it doesn't have any handlers
