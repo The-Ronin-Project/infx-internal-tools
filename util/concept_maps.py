@@ -1,11 +1,12 @@
 import json
+from unittest import skip
 
 import pytest
 
 from app.concept_maps.models import ConceptMap, ConceptMapVersion
 
 
-# Use only for repairs by Informatics Systems team members. Writes to the OCI data store. This is a utility, not a test.
+@skip("This is a utility, not a test. Use only for OCI repairs by Informatics Systems team members.")
 def test_concept_map_output_to_oci():
     """
     Not a test. Really a tool for developers to push content to OCI for urgent reasons. Be aware that if there is
