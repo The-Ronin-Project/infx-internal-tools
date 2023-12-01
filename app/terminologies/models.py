@@ -54,6 +54,7 @@ class Terminology:
         effective_start,
         effective_end,
         fhir_uri,
+        is_standard,
         fhir_terminology,
     ):
         self.uuid = uuid
@@ -62,9 +63,9 @@ class Terminology:
         self.effective_start = effective_start
         self.effective_end = effective_end
         self.fhir_uri = fhir_uri
+        self.is_standard = is_standard
         self.fhir_terminology = fhir_terminology
         self.codes = []
-        self.is_standard = None
 
     @property
     def name(self):
@@ -119,6 +120,7 @@ class Terminology:
             effective_start=term_data.effective_start,
             effective_end=term_data.effective_end,
             fhir_uri=term_data.fhir_uri,
+            is_standard=term_data.is_standard,
             fhir_terminology=term_data.fhir_terminology,
         )
 
