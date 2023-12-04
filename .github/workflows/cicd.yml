@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [master]
+    branches: [main]
 
 jobs:
   #####################################################
@@ -19,7 +19,7 @@ jobs:
         run: echo "I solemnly swear I am up to no good and have no tests."
 
   application-image:
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
     name: Push multiplatform application image to Nexus
     uses: projectronin/github/.github/workflows/image_push_nexus.yml@image_push_nexus/v4
     needs:
@@ -32,7 +32,7 @@ jobs:
       password: ${{ secrets.NEXUS_DOCKER_PASSWORD }}
 
   deploy_dev:
-    if: github.ref == 'refs/heads/master' || contains(github.ref, 'hotfix/')
+    if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
     uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
     needs: [application-image]
     with:
@@ -43,7 +43,7 @@ jobs:
     secrets: inherit
 
   deploy_stage:
-    if: github.ref == 'refs/heads/master' || contains(github.ref, 'hotfix/')
+    if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
     uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
     needs: [deploy_dev]
     with:
@@ -54,7 +54,7 @@ jobs:
     secrets: inherit
 
   deploy_prod:
-    if: github.ref == 'refs/heads/master' || contains(github.ref, 'hotfix/')
+    if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
     uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
     needs: [deploy_stage]
     with:
