@@ -91,10 +91,10 @@ def generate_response(ticket: Ticket, files=None, schemas=None, previous_respons
         if files:
             for file_name in files:
                 if file_name in ['value_sets.py', 'concept_maps.py', 'surveys.py', 'terminologies.py', 'data_ingestion_registry.py', 'concept_map_versioning.py', 'codes.py']:
-                    file_contents = app.coding_companion.github.get_file_from_github('projectronin', 'infx-internal-tools', 'master', f'app/models/{file_name}')
+                    file_contents = app.coding_companion.github.get_file_from_github('projectronin', 'infx-internal-tools', 'main', f'app/models/{file_name}')
                 elif file_name in ['app.py', 'database.py']:
                     file_contents = app.coding_companion.github.get_file_from_github('projectronin',
-                                                                                     'infx-internal-tools', 'master',
+                                                                                     'infx-internal-tools', 'main',
                                                                                      f'app/{file_name}')
                 messages.append({
                     "role": "user",
