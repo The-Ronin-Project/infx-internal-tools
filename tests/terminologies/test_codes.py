@@ -238,6 +238,75 @@ class CodeTests(unittest.TestCase):
         assert result.get("code") == "Terminology.load_new_codes.closed_to_new_codes"
         assert result.get("message") == "Cannot add new codes to a standard or FHIR terminology."
 
+    def test_create_code_multiple_terminologies(self):
+        """
+        Cannot add a code if multiple terminologies are input
+        """
+        response = self.client.post(
+            "/terminology/new_code",
+            data=json.dumps(
+                [
+                    {
+                        "code": f"""test code {datetime.datetime.utcnow()}""",
+                        "display": "test display",
+                        "terminology_version_uuid": self.safe_term_uuid_test,
+                        "depends_on_value": "a",
+                        "depends_on_display": "b",
+                        "depends_on_property": "c",
+                        "depends_on_system": "d",
+                        "additional_data": {
+                            "data": "sweet sweet json"
+                        }
+                    },
+                    {
+                        "code": f"""test code {datetime.datetime.utcnow()} 2""",
+                        "display": "test display",
+                        "terminology_version_uuid": self.safe_term_uuid_fake,
+                        "depends_on_value": "a",
+                        "depends_on_display": "b",
+                        "depends_on_property": "c",
+                        "depends_on_system": "d",
+                        "additional_data": {
+                            "data": "sweet sweet json"
+                        }
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert response.status == "400 BAD REQUEST"
+        assert result.get("code") == "Terminology.create_code.multiple_terminologies"
+        assert result.get("message") == "Cannot create codes in multiple terminologies at the same time"
+
+    def test_create_code_no_terminology(self):
+        """
+        Cannot add a code if no terminology is input
+        """
+        response = self.client.post(
+            "/terminology/new_code",
+            data=json.dumps(
+                [
+                    {
+                        "code": f"""test code {datetime.datetime.utcnow()}""",
+                        "display": "test display",
+                        "depends_on_value": "a",
+                        "depends_on_display": "b",
+                        "depends_on_property": "c",
+                        "depends_on_system": "d",
+                        "additional_data": {
+                            "data": "sweet sweet json"
+                        }
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert response.status == "400 BAD REQUEST"
+        assert result.get("code") == "Terminology.create_code.no_terminology"
+        assert result.get("message") == "Cannot create codes when no terminology is input"
+
 
 if __name__ == "__main__":
     unittest.main()

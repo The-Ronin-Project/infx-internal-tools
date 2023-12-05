@@ -99,8 +99,12 @@ def create_code():
                 "Terminology.create_code.multiple_terminologies",
                 "Cannot create codes in multiple terminologies at the same time",
             )
-        else:
-            terminology = Terminology.load(terminology_version_uuids[0])
+        if terminology_version_uuids is None or terminology_version_uuids[0] is None:
+            raise BadRequestWithCode(
+                "Terminology.create_code.no_terminology",
+                "Cannot create codes when no terminology is input",
+            )
+        terminology = Terminology.load(terminology_version_uuids[0])
 
         codes = []
         for code_data in payload:
