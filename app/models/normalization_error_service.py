@@ -238,7 +238,7 @@ class ErrorServiceResource:
             or ReadTimeout
         ) as e:
             LOGGER.warning(
-                f"{message_exception_classname(e)}, skipping load of issue data for Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
+                f"{message_exception_summary(e)}, skipping load of issue data for Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
             return None
         except Exception as e:  # uncaught exceptions are so costly, a 'bare except' is acceptable, despite PEP 8: E722
@@ -541,7 +541,7 @@ def load_concepts_from_errors(
                                     )
                                 except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError or ReadTimeout) as e:
                                     LOGGER.warning(
-                                        f"{message_exception_classname(e)}, skipping load of {page_size} resources of type {input_resource_type} for {input_issue_type} issue for organization {organization_id}"
+                                        f"{message_exception_summary(e)}, skipping load of {page_size} resources of type {input_resource_type} for {input_issue_type} issue for organization {organization_id}"
                                     )
                                     continue
                                 except Exception as e:
@@ -867,10 +867,10 @@ def load_concepts_from_errors(
                                                 continue
                                             except Exception as e:
                                                 LOGGER.warning(
-                                                    f"{message_exception_classname(e)} loading ValueSet with UUID: {source_value_set_uuid}"
+                                                    f"{message_exception_summary(e)} loading ValueSet with UUID: {source_value_set_uuid}"
                                                 )
                                                 all_skip_count += 1
-                                                continue
+                                                raise e
 
                                         # Is the most_recent_active_source_value_set_version valid?
                                         most_recent_active_source_value_set_version = source_value_set[
@@ -1127,7 +1127,7 @@ def load_concepts_from_errors(
                                         conn.commit()
                                 except Exception as e:
                                     LOGGER.warning(
-                                        f"{message_exception_classname(e)} saving error IDs in custom_terminologies.error_service_issue"
+                                        f"{message_exception_summary(e)} saving error IDs in custom_terminologies.error_service_issue"
                                     )
                                     conn.rollback()
                                     raise e
@@ -1147,7 +1147,7 @@ def load_concepts_from_errors(
                     # at the innermost loop level, we have all the variables defined for a useful message
                     except Exception as e:
                         LOGGER.warning(
-                            f"\n{message_exception_classname(e)} at Data Normalization Error Service "
+                            f"\n{message_exception_summary(e)} at Data Normalization Error Service "
                             + f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} "
                             + f"while processing {input_fhir_resource} issue {input_issue_type} "
                             + f"""for organization: {organization_id}"""
@@ -1525,7 +1525,7 @@ async def reprocess_resource(resource_uuid, token, client):
     ) as e:
         # If an error occurs on one resource, skip it
         LOGGER.warning(
-            f"{message_exception_classname(e)}, skipping reprocess resource: Error Service Resource ID: {resource_uuid}"
+            f"{message_exception_summary(e)}, skipping reprocess resource: Error Service Resource ID: {resource_uuid}"
         )
         return None
     except Exception as e:
