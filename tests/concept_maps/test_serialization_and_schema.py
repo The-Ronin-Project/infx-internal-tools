@@ -3,7 +3,7 @@ import unittest
 
 from _pytest.python_api import raises
 
-from app.concept_maps.models import ConceptMap, ConceptMapVersion
+from app.concept_maps.models import ConceptMap, ConceptMapVersion, transform_struct_string_to_json
 from app.errors import BadRequestWithCode
 from app.helpers.file_helper import resources_folder
 from app.database import get_db
@@ -106,6 +106,16 @@ class OutputTests(unittest.TestCase):
             self.concept_map_output_for_schema(ConceptMap.next_schema_version)
         assert versions == 1  # When the versions are different, this value must be 2 instead of 1
 
+    def test_convert_struct_psj_format_with_urn(self):
+        example_http_string = "{[{18107-3, Cardiac echo study Procedure stress method, http://loinc.org, null}], Stress Echo Adult with Treadmill Stress}"
+        http_string_output = transform_struct_string_to_json(example_http_string)
+
+        self.assertEqual(http_string_output, '{"coding": [{"code": "18107-3", "display": "Cardiac echo study Procedure stress method", "system": "http://loinc.org"}], "text": "Stress Echo Adult with Treadmill Stress"}')
+
+        example_uri_string = "{[{72137, External ED Note, urn:oid:1.2.840.114350.1.13.297.2.7.4.686783.100, null}], External ED Note}"
+        uri_string_output = transform_struct_string_to_json(example_uri_string)
+
+        self.assertEqual(uri_string_output, '{"coding": [{"code": "72137", "display": "External ED Note", "system": "urn:oid:1.2.840.114350.1.13.297.2.7.4.686783.100"}], "text": "External ED Note"}')
 
     @staticmethod
     def concept_map_output_for_schema(schema_version: int):
