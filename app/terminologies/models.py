@@ -27,7 +27,7 @@ def terminology_version_uuid_lookup(fhir_uri: str, version: str):
     result = conn.execute(
         text(
             """
-            select * from terminology_versions
+            select uuid from terminology_versions
             where fhir_uri=:fhir_uri
             and version=:version
             """
@@ -399,6 +399,10 @@ class Terminology:
             ),
             {"previous_version_uuid": previous_version_uuid},
         ).first()
+        if previous_version_metadata is None:
+            raise NotFoundException(
+                f"No Terminology found with UUID: {previous_version_uuid}"
+            )
         version_uuid = uuid.uuid4()
         terminology = previous_version_metadata.terminology
         fhir_uri = previous_version_metadata.fhir_uri

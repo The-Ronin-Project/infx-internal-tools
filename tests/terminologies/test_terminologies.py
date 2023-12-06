@@ -1,6 +1,9 @@
+import json
 import unittest
 import uuid
 import time
+from datetime import datetime, date
+
 import app.terminologies.models
 import app.models.codes
 from app.app import create_app
@@ -170,6 +173,282 @@ class TerminologyTests(unittest.TestCase):
         result = e.value
         assert result.message == f"No data found for terminology version UUID: {self.safe_vsv_uuid}"
 
+    def test_create_new_terminology_happy(self):
+        """
+        create_new_terminology() helper method - happy path - with serialize()
+
+        Inputs:
+            terminology (str): The name of the new terminology.
+            version (str): The version of the new terminology.
+            effective_start (datetime.datetime): The effective start date of the new terminology.
+            effective_end (datetime.datetime): The effective end date of the new terminology.
+            fhir_uri (str): The FHIR URI of the new terminology.
+            is_standard (bool): Whether the new terminology is standard or not.
+            fhir_terminology (bool): Whether the new terminology is a FHIR terminology.
+        """
+        terminology = app.terminologies.models.Terminology.create_new_terminology(
+            terminology=f"test name {datetime.utcnow()}",
+            version="999",
+            effective_start=datetime(2023, 12, 3),
+            effective_end=datetime(2030, 12, 2),
+            fhir_uri="fake_uri",
+            is_standard=False,
+            fhir_terminology=True,
+        )
+        assert terminology is not None
+        serialized = app.terminologies.models.Terminology.serialize(terminology)
+        assert len(serialized) == 8
+        assert serialized.get("uuid") is not None
+        assert "test name " in serialized.get("name")
+        assert serialized.get("version") == "999"
+        assert serialized.get("effective_start") == date(2023, 12, 3)
+        assert serialized.get("effective_end") == date(2030, 12, 2)
+        assert serialized.get("fhir_uri") == "fake_uri"
+        assert serialized.get("is_standard") == False
+        assert serialized.get("fhir_terminology") == True
+
+    def test_create_terminology_happy(self):
+        """
+        create_terminology() API endpoint - happy path
+        """
+        response = self.client.post(
+            "/terminology/",
+            data=json.dumps(
+                {
+                    "terminology": f"test name {datetime.utcnow()}",
+                    "version": "99",
+                    "effective_start": "2023-12-03",
+                    "effective_end": "2023-12-02",
+                    "fhir_uri": f"fake_uri {datetime.utcnow()}",
+                    "is_standard": False,
+                    "fhir_terminology": True
+                }
+            ),
+            content_type="application/json",
+        )
+        serialized = response.json
+        assert len(serialized) == 8
+        assert serialized.get("uuid") is not None
+        assert "test name" in serialized.get("name")
+        assert serialized.get("version") == "99"
+        assert "03 Dec 2023 00:00:00" in serialized.get("effective_start")
+        assert "02 Dec 2023 00:00:00" in serialized.get("effective_end")
+        assert "fake_uri" in serialized.get("fhir_uri")
+        assert serialized.get("is_standard") == False
+        assert serialized.get("fhir_terminology") == True
+
+    def test_create_terminology_no_terminology(self):
+        """
+        create_terminology() API endpoint - no terminology name value is supplied
+        """
+        response = self.client.post(
+            "/terminology/",
+            data=json.dumps(
+                {
+                    "version": f"{datetime.utcnow()}",
+                    "effective_start": "2023-12-03",
+                    "effective_end": "2023-12-02",
+                    "fhir_uri": f"fake_uri {datetime.utcnow()}",
+                    "is_standard": False,
+                    "fhir_terminology": False
+                }
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert response.status == "400 BAD REQUEST"
+        assert result.get("code") == "Terminology.create_terminology.database_error"
+        error_text = f"""(psycopg2.errors.NotNullViolation) null value in column "terminology" violates not-null constraint"""
+        assert error_text in result.get("message")
+
+    def test_create_terminology_no_version(self):
+        """
+        create_terminology() API endpoint - no terminology name value is supplied
+        """
+        response = self.client.post(
+            "/terminology/",
+            data=json.dumps(
+                {
+                    "terminology": f"test name {datetime.utcnow()}",
+                    "effective_start": "2023-12-03",
+                    "effective_end": "2023-12-02",
+                    "fhir_uri": f"fake_uri {datetime.utcnow()}",
+                    "is_standard": False,
+                    "fhir_terminology": False
+                }
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert response.status == "400 BAD REQUEST"
+        assert result.get("code") == "Terminology.create_terminology.database_error"
+        error_text = f"""(psycopg2.errors.NotNullViolation) null value in column "version" violates not-null constraint"""
+        assert error_text in result.get("message")
+
+    def test_create_terminology_no_is_standard(self):
+        """
+        create_terminology() API endpoint - no terminology name value is supplied
+        """
+        response = self.client.post(
+            "/terminology/",
+            data=json.dumps(
+                {
+                    "terminology": f"test name {datetime.utcnow()}",
+                    "version": f"{datetime.utcnow()}",
+                    "effective_start": "2023-12-03",
+                    "effective_end": "2023-12-02",
+                    "fhir_uri": f"fake_uri {datetime.utcnow()}",
+                    "fhir_terminology": False,
+                }
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert response.status == "400 BAD REQUEST"
+        assert result.get("code") == "Terminology.create_terminology.database_error"
+        error_text = f"""(psycopg2.errors.NotNullViolation) null value in column "is_standard" violates not-null constraint"""
+        assert error_text in result.get("message")
+
+    def test_create_terminology_no_fhir_terminology(self):
+        """
+        create_terminology() API endpoint - no terminology name value is supplied
+        """
+        response = self.client.post(
+            "/terminology/",
+            data=json.dumps(
+                {
+                    "terminology": f"test name {datetime.utcnow()}",
+                    "version": f"{datetime.utcnow()}",
+                    "effective_start": "2023-12-03",
+                    "effective_end": "2023-12-02",
+                    "fhir_uri": f"fake_uri {datetime.utcnow()}",
+                    "is_standard": False,
+                }
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert response.status == "400 BAD REQUEST"
+        assert result.get("code") == "Terminology.create_terminology.database_error"
+        error_text = f"""(psycopg2.errors.NotNullViolation) null value in column "fhir_terminology" violates not-null constraint"""
+        assert error_text in result.get("message")
+
+    def test_new_terminology_version_from_previous_happy(self):
+        """
+        new_terminology_version_from_previous() helper method - happy path - with serialize()
+
+        Inputs:
+            previous_version_uuid (UUID): The UUID of the previous terminology version.
+            version (str): The version of the new terminology.
+            effective_start (datetime.datetime): The effective start date of the new terminology.
+            effective_end (datetime.datetime): The effective end date of the new terminology.
+        """
+        terminology = app.terminologies.models.Terminology.new_terminology_version_from_previous(
+            f"{self.safe_term_uuid_dupl}",
+            "999",
+            effective_start=datetime(2023, 12, 3),
+            effective_end=datetime(2030, 12, 2),
+        )
+        serialized = app.terminologies.models.Terminology.serialize(terminology)
+        assert len(serialized) == 8
+        assert serialized.get("uuid") is not None
+        assert serialized.get("name") == "Test ONLY: Duplicate Insert Test"
+        assert serialized.get("version") == "999"
+        assert serialized.get("effective_start") == date(2023, 12, 3)
+        assert serialized.get("effective_end") == date(2030, 12, 2)
+        assert serialized.get("fhir_uri") == "http://testing/duplicateInsertTest"
+        assert serialized.get("is_standard") == False
+        assert serialized.get("fhir_terminology") == False
+
+    def test_create_term_from_previous_happy(self):
+        """
+        create_new_term_version_from_previous() API endpoint - happy path
+        """
+        response = self.client.post(
+            "/terminology/new_version_from_previous",
+            data=json.dumps(
+                {
+                    "previous_terminology_version_uuid": f"{self.safe_term_uuid_dupl}",
+                    "version": "99",
+                    "effective_start": "2023-12-03",
+                    "effective_end": "2023-12-02",
+                }
+            ),
+            content_type="application/json",
+        )
+        serialized = response.json
+        assert len(serialized) == 8
+        assert serialized.get("uuid") is not None
+        assert serialized.get("name") == "Test ONLY: Duplicate Insert Test"
+        assert serialized.get("version") == "99"
+        assert "03 Dec 2023 00:00:00" in serialized.get("effective_start")
+        assert "02 Dec 2023 00:00:00" in serialized.get("effective_end")
+        assert serialized.get("fhir_uri") == "http://testing/duplicateInsertTest"
+        assert serialized.get("is_standard") == False
+        assert serialized.get("fhir_terminology") == False
+
+    def test_create_term_from_previous_not_found(self):
+        """
+        create_new_term_version_from_previous() - previous not found
+        """
+        response = self.client.post(
+            "/terminology/new_version_from_previous",
+            data=json.dumps(
+                {
+                    "previous_terminology_version_uuid": f"{self.safe_vsv_uuid}",
+                    "version": "99",
+                    "effective_start": "2023-12-03",
+                    "effective_end": "2023-12-02",
+                }
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert response.status == "400 BAD REQUEST"
+        assert result.get("code") == "Terminology.create_new_term_version_from_previous.no_previous"
+        assert result.get("message") == f"No Terminology found with UUID: {self.safe_vsv_uuid}"
+
+    def test_create_term_from_previous_no_version(self):
+        """
+        create_new_term_version_from_previous() - version not input for new terminology
+        """
+        response = self.client.post(
+            "/terminology/new_version_from_previous",
+            data=json.dumps(
+                {
+                    "previous_terminology_version_uuid": f"{self.safe_term_uuid_dupl}",
+                    "effective_start": "2023-12-03",
+                    "effective_end": "2023-12-02",
+                }
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert response.status == "400 BAD REQUEST"
+        assert result.get("code") == "Terminology.create_new_term_version_from_previous.database_error"
+        assert f"""(psycopg2.errors.NotNullViolation) null value in column "version" violates not-null constraint""" in result.get("message")
+
+    def test_create_term_from_previous_conflict_version(self):
+        """
+        create_new_term_version_from_previous() - version value already exists
+        """
+        response = self.client.post(
+            "/terminology/new_version_from_previous",
+            data=json.dumps(
+                {
+                    "previous_terminology_version_uuid": f"{self.safe_term_uuid_dupl}",
+                    "version": "1",
+                    "effective_start": "2023-12-03",
+                    "effective_end": "2023-12-02",
+                }
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert response.status == "400 BAD REQUEST"
+        assert result.get("code") == "Terminology.create_new_term_version_from_previous.database_error"
+        error_text = "(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint \"unique_version_fhir_uri\""
+        assert error_text in result.get("message")
 
 if __name__ == "__main__":
     unittest.main()
