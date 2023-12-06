@@ -51,22 +51,27 @@ def create_terminology():
         fhir_uri = request.json.get("fhir_uri")
         is_standard = request.json.get("is_standard")
         fhir_terminology = request.json.get("fhir_terminology")
-        new_terminology = Terminology.create_new_terminology(
-            terminology,
-            version,
-            effective_start,
-            effective_end,
-            fhir_uri,
-            is_standard,
-            fhir_terminology,
-        )
-        if new_terminology is None:
-            raise BadRequestWithCode(
-                "Terminology.create",
-                f"Unable to create terminology {terminology} {version} with fhir_uri: {fhir_uri}, is_standard: {is_standard}, new_terminology: {new_terminology}"
+        try:
+            new_terminology = Terminology.create_new_terminology(
+                terminology,
+                version,
+                effective_start,
+                effective_end,
+                fhir_uri,
+                is_standard,
+                fhir_terminology,
             )
-        term = Terminology.serialize(new_terminology)
-        return term
+            term = Terminology.serialize(new_terminology)
+            return term
+        except Exception as e:
+            info = "".join(traceback.format_exception(*sys.exc_info()))
+            if "psycopg2.errors." in info:
+                raise BadRequestWithCode(
+                    code="Terminology.create_terminology.database_error",
+                    description=f"""{message_exception_summary(e)}"""
+                )
+            else:
+                raise e
 
 
 @terminologies_blueprint.route("/terminology/new_code", methods=["POST"])
@@ -194,11 +199,23 @@ def create_new_term_version_from_previous():
         version = request.json.get("version")
         effective_start = request.json.get("effective_start")
         effective_end = request.json.get("effective_end")
-        new_terminology_version = Terminology.new_terminology_version_from_previous(
-            previous_terminology_version_uuid,
-            version,
-            effective_start,
-            effective_end,
-        )
-        new_term_version = Terminology.serialize(new_terminology_version)
-        return new_term_version
+        try:
+            new_terminology_version = Terminology.new_terminology_version_from_previous(
+                previous_terminology_version_uuid,
+                version,
+                effective_start,
+                effective_end,
+            )
+            new_term_version = Terminology.serialize(new_terminology_version)
+            return new_term_version
+        except NotFoundException:
+            ####
+        except Exception as e:
+            info = "".join(traceback.format_exception(*sys.exc_info()))
+            if "psycopg2.errors." in info: ###########
+                raise BadRequestWithCode(
+                    code="Terminology.create_new_term_version_from_previous.database_error",
+                    description=f"""{message_exception_summary(e)}"""
+                )
+            else:
+                raise e

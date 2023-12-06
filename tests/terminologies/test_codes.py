@@ -16,7 +16,7 @@ from app.terminologies.views import create_code_payload_to_code_list
 
 class CodeTests(unittest.TestCase):
     """
-    There are 3 public.terminology_versions rows safe to use in tests that also pass checks to allow codes to be created
+    There are 5 public.terminology_versions rows safe to use in tests that also pass checks to allow codes to be created
     ```
     terminology                    version     uri                 is_standard is_fhir effective_start  _end
     "Test ONLY: fake/fhir_uri"         "3"    "fake/fhir_uri"            false false   "2023-04-12"
