@@ -500,7 +500,11 @@ class Terminology:
                 "Terminology.load_new_codes.multiple_terminologies",
                 "Cannot load codes to multiple terminologies at the same time",
             )
-
+        if terminology_uuids is None or terminology_uuids[0] is None:
+            raise BadRequestWithCode(
+                "Terminology.load_new_codes.no_terminology",
+                "Cannot load codes when no terminology is input",
+            )
         if str(terminology_uuids[0]) != str(self.uuid):
             raise BadRequestWithCode(
                 code="Terminology.load_new_codes.class_conflict",

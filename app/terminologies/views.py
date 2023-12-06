@@ -105,18 +105,7 @@ def create_code():
                 "Cannot create codes when no terminology is input",
             )
         terminology = Terminology.load(terminology_version_uuids[0])
-
-        codes = []
-        for code_data in payload:
-            code = Code(
-                code=code_data.get("code"),
-                display=code_data.get("display"),
-                terminology_version_uuid=code_data.get("terminology_version_uuid"),
-                additional_data=code_data.get("additional_data"),
-                system=None,
-                version=None,
-            )
-            codes.append(code)
+        codes = create_code_payload_to_code_list(payload)
 
         try:
             terminology.load_new_codes_to_terminology(codes)
@@ -131,6 +120,24 @@ def create_code():
                 raise e
 
         return "Complete"
+
+
+def create_code_payload_to_code_list(payload) -> list:
+    """
+    Helper method for create_code() creates Code objects from a JSON payload which is a list of dict objects
+    """
+    codes = []
+    for code_data in payload:
+        code = Code(
+            code=code_data.get("code"),
+            display=code_data.get("display"),
+            terminology_version_uuid=code_data.get("terminology_version_uuid"),
+            additional_data=code_data.get("additional_data"),
+            system=None,
+            version=None,
+        )
+        codes.append(code)
+    return codes
 
 
 @terminologies_blueprint.route(

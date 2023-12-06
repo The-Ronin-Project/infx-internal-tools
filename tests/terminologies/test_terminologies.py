@@ -5,6 +5,8 @@ import app.terminologies.models
 import app.models.codes
 from app.app import create_app
 from app.database import get_db
+from app.errors import NotFoundException
+from pytest import raises
 
 
 class TerminologyTests(unittest.TestCase):
@@ -24,8 +26,9 @@ class TerminologyTests(unittest.TestCase):
         self.conn.close()
 
     safe_term_uuid_fake = "d2ae0de5-0168-4f54-924a-1f79cf658939"
-    safe_term_uuid_test = "3c9ed300-0cb8-47af-8c04-a06352a14b8d"
+    safe_term_uuid_old = "3c9ed300-0cb8-47af-8c04-a06352a14b8d"
     safe_term_uuid_dupl = "d14cbd3a-aabe-4b26-b754-5ae2fbd20949"
+    safe_vsv_uuid = "58e792d9-1264-4f18-b16e-6292cb7ca597"
 
     def test_deduplicate_on_insert(self) -> None:
         """
@@ -133,6 +136,39 @@ class TerminologyTests(unittest.TestCase):
             "No terminology is found with the provided fhir_uri: "
             + "http://projectronin.io/fhir/CodeSystem/mock/DocumentType and version: 4"
         )
+
+    def test_load_terminology_uuid_string(self):
+        """
+        happy path - string input
+        """
+        terminology = app.terminologies.models.Terminology.load(self.safe_term_uuid_fake)
+        assert terminology.name == "Test  ONLY: fake/fhir_uri"
+
+    def test_load_terminology_uuid_object(self):
+        """
+        happy path - UUID object input
+        """
+        uuid_object = uuid.UUID(self.safe_term_uuid_fake)
+        terminology = app.terminologies.models.Terminology.load(uuid_object)
+        assert terminology.name == "Test  ONLY: fake/fhir_uri"
+
+    def test_load_terminology_null_uuid(self):
+        """
+        Cannot load a Terminology if the UUID is None
+        """
+        with raises(NotFoundException) as e:
+            app.terminologies.models.Terminology.load(None)
+        result = e.value
+        assert result.message == f"No data found for terminology version UUID: None"
+
+    def test_load_terminology_bad_uuid(self):
+        """
+        Cannot load a Terminology if the UUID is not the UUID of any Terminology
+        """
+        with raises(NotFoundException) as e:
+            app.terminologies.models.Terminology.load(self.safe_vsv_uuid)
+        result = e.value
+        assert result.message == f"No data found for terminology version UUID: {self.safe_vsv_uuid}"
 
 
 if __name__ == "__main__":

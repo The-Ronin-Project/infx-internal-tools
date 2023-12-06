@@ -2,6 +2,7 @@ import datetime
 import json
 import unittest
 
+from pytest import raises
 from sqlalchemy import text
 from werkzeug.exceptions import NotFound
 
@@ -9,6 +10,8 @@ import app.terminologies.models
 import app.models.codes
 from app.app import create_app
 from app.database import get_db
+from app.errors import BadRequestWithCode
+from app.terminologies.views import create_code_payload_to_code_list
 
 
 class CodeTests(unittest.TestCase):
@@ -64,7 +67,7 @@ class CodeTests(unittest.TestCase):
         self.conn.close()
 
     safe_term_uuid_fake = "d2ae0de5-0168-4f54-924a-1f79cf658939"
-    safe_term_uuid_test = "3c9ed300-0cb8-47af-8c04-a06352a14b8d"
+    safe_term_uuid_old = "3c9ed300-0cb8-47af-8c04-a06352a14b8d"
     safe_term_uuid_dupl = "d14cbd3a-aabe-4b26-b754-5ae2fbd20949"
     safe_term_uuid_fhir = "34eb844c-ffff-4462-ad6d-48af68f1e8a1"
     safe_term_uuid_std = "c96200d7-9e30-4a0c-b98e-22d0ff146a99"
@@ -121,6 +124,25 @@ class CodeTests(unittest.TestCase):
         )
         assert response.text == "Complete"
 
+    def test_create_code_happy_no_additional(self):
+        """
+        happy path - with no additional_data or depends_on
+        """
+        response = self.client.post(
+            "/terminology/new_code",
+            data=json.dumps(
+                [
+                    {
+                        "code": f"""test code {datetime.datetime.utcnow()}""",
+                        "display": "test display",
+                        "terminology_version_uuid": self.safe_term_uuid_fake,
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        assert response.text == "Complete"
+
     def test_create_code_outdated(self):
         """
         outdated terminology version - expiry date in past
@@ -132,7 +154,7 @@ class CodeTests(unittest.TestCase):
                     {
                         "code": f"""test code {datetime.datetime.utcnow()}""",
                         "display": "test display",
-                        "terminology_version_uuid": self.safe_term_uuid_test,
+                        "terminology_version_uuid": self.safe_term_uuid_old,
                         "depends_on_value": "a",
                         "depends_on_display": "b",
                         "depends_on_property": "c",
@@ -249,7 +271,7 @@ class CodeTests(unittest.TestCase):
                     {
                         "code": f"""test code {datetime.datetime.utcnow()}""",
                         "display": "test display",
-                        "terminology_version_uuid": self.safe_term_uuid_test,
+                        "terminology_version_uuid": self.safe_term_uuid_old,
                         "depends_on_value": "a",
                         "depends_on_display": "b",
                         "depends_on_property": "c",
@@ -306,6 +328,154 @@ class CodeTests(unittest.TestCase):
         assert response.status == "400 BAD REQUEST"
         assert result.get("code") == "Terminology.create_code.no_terminology"
         assert result.get("message") == "Cannot create codes when no terminology is input"
+
+    def test_create_code_no_code_code(self):
+        """
+        Cannot add a code if the input payload does not provide a Code.code value
+        """
+        response = self.client.post(
+            "/terminology/new_code",
+            data=json.dumps(
+                [
+                    {
+                        "display": "test display",
+                        "terminology_version_uuid": self.safe_term_uuid_fake,
+                        "depends_on_value": "a",
+                        "depends_on_display": "b",
+                        "depends_on_property": "c",
+                        "depends_on_system": "d",
+                        "additional_data": {
+                            "data": "sweet sweet json"
+                        }
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert response.status == "400 BAD REQUEST"
+        assert result.get("code") == "Terminology.create_code.database_error"
+        error_text = """(psycopg2.errors.NotNullViolation) null value in column "code" violates not-null constraint"""
+        assert error_text in result.get("message")
+
+    def test_create_code_no_code_display(self):
+        """
+        Cannot add a code if the input payload does not provide a Code.display value
+        """
+        response = self.client.post(
+            "/terminology/new_code",
+            data=json.dumps(
+                [
+                    {
+                        "code": f"""test code {datetime.datetime.utcnow()}""",
+                        "terminology_version_uuid": self.safe_term_uuid_fake,
+                        "depends_on_value": "a",
+                        "depends_on_display": "b",
+                        "depends_on_property": "c",
+                        "depends_on_system": "d",
+                        "additional_data": {
+                            "data": "sweet sweet json"
+                        }
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        result = response.json
+        assert response.status == "400 BAD REQUEST"
+        assert result.get("code") == "Terminology.create_code.database_error"
+        error_text = """(psycopg2.errors.NotNullViolation) null value in column "display" violates not-null constraint"""
+        assert error_text in result.get("message")
+
+    def test_load_codes_multiple_terminologies(self):
+        """
+        Cannot load codes if multiple terminologies are input
+        """
+        terminology = app.terminologies.models.Terminology.load(self.safe_term_uuid_fake)
+        payload = [
+            {
+                "code": f"""test code {datetime.datetime.utcnow()}""",
+                "display": "test display",
+                "terminology_version_uuid": self.safe_term_uuid_dupl,
+                "depends_on_value": "a",
+                "depends_on_display": "b",
+                "depends_on_property": "c",
+                "depends_on_system": "d",
+                "additional_data": {
+                    "data": "sweet sweet json"
+                }
+            },
+            {
+                "code": f"""test code {datetime.datetime.utcnow()} 2""",
+                "display": "test display",
+                "terminology_version_uuid": self.safe_term_uuid_fake,
+                "depends_on_value": "a",
+                "depends_on_display": "b",
+                "depends_on_property": "c",
+                "depends_on_system": "d",
+                "additional_data": {
+                    "data": "sweet sweet json"
+                }
+            }
+        ]
+        codes = create_code_payload_to_code_list(payload)
+        with raises(BadRequestWithCode) as e:
+            terminology.load_new_codes_to_terminology(codes)
+        result = e.value
+        assert result.code == "Terminology.load_new_codes.multiple_terminologies"
+        assert result.description == "Cannot load codes to multiple terminologies at the same time"
+
+    def test_load_codes_no_terminology(self):
+        """
+        Cannot load codes if no terminology is input
+        """
+        terminology = app.terminologies.models.Terminology.load(self.safe_term_uuid_fake)
+        payload = [
+            {
+                "code": f"""test code {datetime.datetime.utcnow()}""",
+                "display": "test display",
+                "depends_on_value": "a",
+                "depends_on_display": "b",
+                "depends_on_property": "c",
+                "depends_on_system": "d",
+                "additional_data": {
+                    "data": "sweet sweet json"
+                }
+            }
+        ]
+        codes = create_code_payload_to_code_list(payload)
+        with raises(BadRequestWithCode) as e:
+            terminology.load_new_codes_to_terminology(codes)
+        result = e.value
+        assert result.code == "Terminology.load_new_codes.no_terminology"
+        assert result.description == "Cannot load codes when no terminology is input"
+
+    def test_load_codes_class_conflict(self):
+        """
+        Cannot load codes if there is a code terminology identified in the input payload
+        that is different from the Terminology that is calling load_new_codes_to_terminology()
+        """
+        terminology = app.terminologies.models.Terminology.load(self.safe_term_uuid_fake)
+        payload = [
+            {
+                "code": f"""test code {datetime.datetime.utcnow()}""",
+                "display": "test display",
+                "terminology_version_uuid": self.safe_term_uuid_dupl,
+                "depends_on_value": "a",
+                "depends_on_display": "b",
+                "depends_on_property": "c",
+                "depends_on_system": "d",
+                "additional_data": {
+                    "data": "sweet sweet json"
+                }
+            }
+        ]
+        codes = create_code_payload_to_code_list(payload)
+        with raises(BadRequestWithCode) as e:
+            terminology.load_new_codes_to_terminology(codes)
+        result = e.value
+        assert result.code == "Terminology.load_new_codes.class_conflict"
+        assert result.description == f"Cannot load codes to Terminology {self.safe_term_uuid_dupl} using the class for Terminology {self.safe_term_uuid_fake}"
 
 
 if __name__ == "__main__":
