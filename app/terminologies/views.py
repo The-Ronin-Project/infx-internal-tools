@@ -208,11 +208,14 @@ def create_new_term_version_from_previous():
             )
             new_term_version = Terminology.serialize(new_terminology_version)
             return new_term_version
-        except NotFoundException:
-            ####
+        except NotFoundException as e:
+            raise BadRequestWithCode(
+                code="Terminology.create_new_term_version_from_previous.no_previous",
+                description=f"""{e.message}"""
+            )
         except Exception as e:
             info = "".join(traceback.format_exception(*sys.exc_info()))
-            if "psycopg2.errors." in info: ###########
+            if "psycopg2.errors." in info:
                 raise BadRequestWithCode(
                     code="Terminology.create_new_term_version_from_previous.database_error",
                     description=f"""{message_exception_summary(e)}"""
