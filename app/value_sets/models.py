@@ -130,7 +130,7 @@ class VSRule:
         ).first()
 
         if result is None:
-            raise NotFoundException(f"Not found: Value Rule Set with ID: {rule_uuid}")
+            raise NotFoundException(f"No Value Set Rule found with UUID: {rule_uuid}")
 
         return cls(
             uuid=result.uuid,
@@ -1508,7 +1508,7 @@ class ValueSet:
         ).first()
 
         if vs_data is None:
-            raise NotFound(f"Value Set with uuid {vs_uuid} not found")
+            raise NotFoundException(f"No Value Set found with UUID: {vs_uuid}")
 
         synonym_data = conn.execute(
             text(
@@ -2555,7 +2555,7 @@ class ValueSetVersion:
         ).first()
 
         if vs_version_data is None:
-            raise NotFound(f"Value Set Version with uuid {uuid} not found")
+            raise NotFoundException(f"No Value Set Version found with UUID: {uuid}")
 
         value_set = ValueSet.load(vs_version_data.value_set_uuid)
 
@@ -2669,6 +2669,9 @@ class ValueSetVersion:
             ),
             {"version_uuid": self.uuid},
         ).first()
+        if expansion_metadata is None:
+            raise NotFoundException(f"No Value Set Version found with UUID: {self.uuid}")
+
         self.expansion_uuid = expansion_metadata.uuid
 
         # print(expansion_metadata.timestamp, type(expansion_metadata.timestamp))

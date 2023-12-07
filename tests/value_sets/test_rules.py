@@ -8,7 +8,7 @@ import app.terminologies.models
 import app.models.codes
 from app.database import get_db
 from app.app import create_app
-from app.errors import BadRequestWithCode, NotFoundException
+from app.errors import BadRequestWithCode
 
 
 class RuleTests(unittest.TestCase):
@@ -398,7 +398,7 @@ class RuleTests(unittest.TestCase):
             content_type="application/json",
         )
         result = response.json
-        assert result.get("message") == "Not found: Value Rule Set with ID: 11111111-1111-1111-1111-111111111111"
+        assert result.get("message") == "No Value Set Rule found with UUID: 11111111-1111-1111-1111-111111111111"
 
         # No rule UUID provided in URL: gives app.views.update_single_rule() API URL endpoint failure
         response = self.client.patch(

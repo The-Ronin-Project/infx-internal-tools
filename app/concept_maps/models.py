@@ -2080,21 +2080,21 @@ def transform_struct_string_to_json(struct_string):
         }
 
         # Code for special case of PSJ DocumentReference imported in Spark format
-        if ', urn:oid:' in d.get('display'):
-            display = d.get('display')
-            find_index = display.index(', urn:oid:')
+        if ", urn:oid:" in str(d.get("display")):
+            display = d.get("display")
+            find_index = display.index(", urn:oid:")
             new_display = display[:find_index]
             new_system = display[find_index+2:]
-            d['display'] = new_display
-            d['system'] = new_system
+            d["display"] = new_display
+            d["system"] = new_system
 
-        if ', http:' in d.get('display'):
-            display = d.get('display')
-            find_index = display.index(', http:')
+        if ", http:" in str(d.get("display")):
+            display = d.get("display")
+            find_index = display.index(", http:")
             new_display = display[:find_index]
             new_system = display[find_index+2:]
-            d['display'] = new_display
-            d['system'] = new_system
+            d["display"] = new_display
+            d["system"] = new_system
 
         coding_array.append(d)
 

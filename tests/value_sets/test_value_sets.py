@@ -1,14 +1,66 @@
 import hashlib
 import unittest
+
+from pytest import raises
+
 import app.value_sets.models
 import app.terminologies.models
 import app.models.codes
 from app.database import get_db
 from app.app import create_app
-from werkzeug.exceptions import NotFound
+from app.errors import NotFoundException
 
 
 class ValueSetTests(unittest.TestCase):
+    """
+    There are 8 value_sets.value_set rows safe to use in tests.
+    ```
+    uuid                                    title                                           description
+    "ca75b03c-1763-44fd-9bfa-4fe015ff809c"	"Test ONLY: Mirth Validation Test Observations" "For automated test in Mirth"
+    "c7c37780-e727-42f6-9d1b-d823d75171ad"	"Test ONLY: Test August 29"                     "no map + diabetes"
+    "50ead103-a8c9-4aae-b5f0-f1e51b264323"	"Test ONLY: Test Condition Incremental Load"... "testing source terminology for condition incremental load"
+    "236b88af-40c2-4d59-b319-a5e68865afdc"	"Test ONLY: test fhir and vs description"       "the value set description goes here"
+    "ccba9765-66ee-4742-a656-4e37d0811958"	"Test ONLY: Test Observation Incremental"...	"Observations for Incremental Load testing"
+    "fc82ec39-7b9f-4d74-9a34-adf86db1a50f"	"Test ONLY: Automated Testing Value Set"	    "For automated testing in infx-internal-tools"
+    "b5f97703-abf3-4fc0-aa49-f8851a3fced4"	"Test ONLY: Test ValueSet for diffs"            "This valueset will have a small number of codes for diff check"
+    "477195c0-8a91-11ec-ac15-073d0cb083df"	"Test ONLY: Testing Value Set test. Yay"        "Various codes and code systems test"
+
+    ```
+    You may want various status of value sets for different test cases. To find those with active status:
+    ```
+    select * from
+    value_sets.value_set_version
+    where value_set_uuid in (
+    'ca75b03c-1763-44fd-9bfa-4fe015ff809c',
+    'c7c37780-e727-42f6-9d1b-d823d75171ad',
+    '50ead103-a8c9-4aae-b5f0-f1e51b264323',
+    '236b88af-40c2-4d59-b319-a5e68865afdc',
+    'ccba9765-66ee-4742-a656-4e37d0811958',
+    'fc82ec39-7b9f-4d74-9a34-adf86db1a50f',
+    'b5f97703-abf3-4fc0-aa49-f8851a3fced4',
+    '477195c0-8a91-11ec-ac15-073d0cb083df'
+    )
+    and status = 'active'
+
+    ```
+    To see all past versions of safe value sets, regardless of status, use this query:
+    ```
+    select * from
+    value_sets.value_set_version
+    where value_set_uuid in (
+    'ca75b03c-1763-44fd-9bfa-4fe015ff809c',
+    'c7c37780-e727-42f6-9d1b-d823d75171ad',
+    '50ead103-a8c9-4aae-b5f0-f1e51b264323',
+    '236b88af-40c2-4d59-b319-a5e68865afdc',
+    'ccba9765-66ee-4742-a656-4e37d0811958',
+    'fc82ec39-7b9f-4d74-9a34-adf86db1a50f',
+    'b5f97703-abf3-4fc0-aa49-f8851a3fced4',
+    '477195c0-8a91-11ec-ac15-073d0cb083df'
+    )
+    order by value_set_uuid desc
+
+    ```
+    """
     def setUp(self) -> None:
         self.conn = get_db()
         self.app = create_app()
@@ -21,29 +73,58 @@ class ValueSetTests(unittest.TestCase):
         self.conn.rollback()
         self.conn.close()
 
+    # UUID values: value_sets.value_set
+    # version and status may change over time; before using in a test, double-check with a query: see class doc above
+    # expected status is active:
+    safe_value_set_uuid_obsrv_mirth = "ca75b03c-1763-44fd-9bfa-4fe015ff809c"
+    safe_value_set_uuid_nomap_diab = "c7c37780-e727-42f6-9d1b-d823d75171ad"
+    safe_value_set_uuid_cond_load = "50ead103-a8c9-4aae-b5f0-f1e51b264323"
+    safe_value_set_uuid_obsrv_load = "ccba9765-66ee-4742-a656-4e37d0811958"
+    safe_value_set_uuid_code_systems = "477195c0-8a91-11ec-ac15-073d0cb083df"
+    # expected status is obsolete:
+    safe_value_set_uuid_code_diffs = "b5f97703-abf3-4fc0-aa49-f8851a3fced4"
+    safe_value_set_uuid_descrip = "236b88af-40c2-4d59-b319-a5e68865afdc"
+    # expected status is in progress:
+    safe_value_set_uuid_auto_tool = "fc82ec39-7b9f-4d74-9a34-adf86db1a50f"
+
+    # UUID values: (as needed) value_sets.value_set_version
+    safe_value_set_uuid_auto_tool_version = "58e792d9-1264-4f18-b16e-6292cb7ca597"
+
+    # UUID values: (as needed) value_sets.expansion
+    safe_value_set_uuid_auto_tool_expansion = "640e5226-79a6-11ee-93aa-b2cb39228ed3"
+
+    # UUID values: (as needed) correctly formatted UUID that cannot find a value set (because it is for a Terminology)
+    safe_term_uuid_dupl = "d14cbd3a-aabe-4b26-b754-5ae2fbd20949"
+
     def test_value_set_expand(self):
         """
         Expand the 'Automated Testing Value Set' value set and verify the outputs,
         catch lower level error if value set version uuid isn't valid
         """
-        value_set_version_uuid = "58e792d9-1264-4f18-b16e-6292cb7ca597"
-        value_set_version_uuid_2 = "58e792d9-1264-4f18-b16e-0000cb0ca000"
         value_set_version = app.value_sets.models.ValueSetVersion.load(
-            value_set_version_uuid
+            self.safe_value_set_uuid_auto_tool_version
         )
         value_set_version.expand(force_new=True)
 
         self.assertEqual(11509, len(value_set_version.expansion))
 
-        with self.assertRaises(NotFound):
-            app.value_sets.models.ValueSetVersion.load(value_set_version_uuid_2)
+    def test_value_set_not_found(self):
+        with raises(NotFoundException) as e:
+            app.value_sets.models.ValueSet.load(self.safe_term_uuid_dupl)
+        result = e.value
+        assert result.message == f"No Value Set found with UUID: {self.safe_term_uuid_dupl}"
+
+    def test_value_set_version_not_found(self):
+        with raises(NotFoundException) as e:
+            app.value_sets.models.ValueSetVersion.load(self.safe_term_uuid_dupl)
+        result = e.value
+        assert result.message == f"No Value Set Version found with UUID: {self.safe_term_uuid_dupl}"
 
     def test_expansion_report(self):
         response = self.client.get(
-            "/ValueSets/expansions/3257aed4-6da1-11ec-bd74-aa665a30495f/report"
+            f"/ValueSets/expansions/{self.safe_value_set_uuid_auto_tool_expansion}/report"
         )
-        # print('hex digest', hashlib.md5(response.data).hexdigest())
-        assert hashlib.md5(response.data).hexdigest() == "ca5613af2d0a65e32d7505849fd1c1d2"
+        assert hashlib.md5(response.data).hexdigest() == "8cb508cafbae9fba542270698aa9db9e"
 
 
 if __name__ == '__main__':
