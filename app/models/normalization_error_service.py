@@ -122,6 +122,7 @@ class ResourceType(Enum):
     APPOINTMENT = "Appointment"
     DOCUMENT_REFERENCE = "DocumentReference"
     CARE_PLAN = "CarePlan"
+    PROCEDURE = "Procedure" # Only code for now
     # TELECOM_USE = "Practitioner.telecom.use"  # Only in for testing until we have a real data type live
 
 
@@ -756,6 +757,16 @@ def load_concepts_from_errors(
                                                 LOGGER.warning(
                                                     f"Unrecognized location for Observation error: {location}"
                                                 )
+
+                                        # Procedure
+                                        elif resource_type == ResourceType.PROCEDURE:
+                                            # Procedure.code is a CodeableConcept
+                                            if element == "Procedure.code":
+                                                if "code" not in raw_resource:
+                                                    continue
+                                                raw_code = raw_resource["code"]
+                                                processed_code = raw_code
+                                                processed_display = raw_code.get("text")
 
                                         # DocumentReference
                                         elif resource_type == ResourceType.DOCUMENT_REFERENCE:
