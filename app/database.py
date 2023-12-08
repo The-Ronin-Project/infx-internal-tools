@@ -6,7 +6,7 @@ from decouple import config
 
 # Create an SQL Alchemy engine instance for connecting to the Postgres database.
 SQL_ALCHEMY_ENGINE = create_engine(
-    f"postgresql://{config('DATABASE_USER', default='')}@{config('DATABASE_HOST', default='')}:{config('DATABASE_PASSWORD', default='')}@{config('DATABASE_HOST', default='')}/{config('DATABASE_NAME', default='')}",
+    f"postgresql://{config('DATABASE_USER', default='')}:{config('DATABASE_PASSWORD', default='')}@{config('DATABASE_HOST', default='')}/{config('DATABASE_NAME', default='')}",
     connect_args={"sslmode": "require"},
     pool_size=5,
     max_overflow=0,
@@ -27,7 +27,7 @@ class DatabaseManager:
     class __Database:
         def __init__(self):
             self.engine = create_engine(
-                f"postgresql://{config('DATABASE_USER', default='')}@{config('DATABASE_HOST', default='')}:{config('DATABASE_PASSWORD', default='')}@{config('DATABASE_HOST', default='')}/{config('DATABASE_NAME', default='')}",
+                f"postgresql://{config('DATABASE_USER', default='')}:{config('DATABASE_PASSWORD', default='')}@{config('DATABASE_HOST', default='')}/{config('DATABASE_NAME', default='')}",
                 connect_args={"sslmode": "require"},
                 pool_size=2,
                 max_overflow=0,
@@ -93,20 +93,25 @@ def get_opensearch():
     if has_request_context():
         if "opensearch" not in g:
             g.opensearch = OpenSearch(
-                hosts=[{'host': config('OPENSEARCH_HOST'), 'port': config('OPENSEARCH_PORT')}],
+                hosts=[
+                    {
+                        "host": config("OPENSEARCH_HOST"),
+                        "port": config("OPENSEARCH_PORT"),
+                    }
+                ],
                 http_compress=True,  # enables gzip compression for request bodies
-                http_auth=(config('OPENSEARCH_USER'), config('OPENSEARCH_PASSWORD')),
-                use_ssl=config('OPENSEARCH_USE_SSL', cast=bool),
+                http_auth=(config("OPENSEARCH_USER"), config("OPENSEARCH_PASSWORD")),
+                use_ssl=config("OPENSEARCH_USE_SSL", cast=bool),
                 verify_certs=False,
                 ssl_assert_hostname=False,
                 ssl_show_warn=False,
             )
         return g.opensearch
     return OpenSearch(
-        hosts=[{'host': config('OPENSEARCH_HOST'), 'port': config('OPENSEARCH_PORT')}],
+        hosts=[{"host": config("OPENSEARCH_HOST"), "port": config("OPENSEARCH_PORT")}],
         http_compress=True,  # enables gzip compression for request bodies
-        http_auth=(config('OPENSEARCH_USER'), config('OPENSEARCH_PASSWORD')),
-        use_ssl=config('OPENSEARCH_USE_SSL', cast=bool),
+        http_auth=(config("OPENSEARCH_USER"), config("OPENSEARCH_PASSWORD")),
+        use_ssl=config("OPENSEARCH_USE_SSL", cast=bool),
         verify_certs=False,
         ssl_assert_hostname=False,
         ssl_show_warn=False,
