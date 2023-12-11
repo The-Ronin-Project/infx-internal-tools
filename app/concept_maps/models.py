@@ -1585,10 +1585,10 @@ class ConceptMapVersion:
 
         # Using full paths to avoid circular import from normalization_error_service
         # Gather the reprocessing calls for each resource_uuid
-        app.models.normalization_error_service.reprocess_resources(resource_uuid_list)
+        app.models.mapping_request_service.reprocess_resources(resource_uuid_list)
 
         # Mark issues resolved - full path avoids circular import
-        app.models.normalization_error_service.set_issues_resolved(issue_uuid_list)
+        app.models.mapping_request_service.set_issues_resolved(issue_uuid_list)
 
     @classmethod
     def get_active_concept_map_versions(cls) -> List["ConceptMapVersion"]:

@@ -7,7 +7,7 @@ from app.errors import NotFoundException
 import app.value_sets.models
 import app.concept_maps.models
 import app.concept_maps.versioning_models
-from app.models.normalization_error_service import load_concepts_from_errors
+from app.models.mapping_request_service import load_concepts_from_errors
 from app.database import get_db
 
 

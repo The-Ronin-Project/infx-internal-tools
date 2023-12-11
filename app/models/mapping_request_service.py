@@ -228,7 +228,7 @@ class ErrorServiceResource:
                 api_url=f"/resources/{self.id}/issues",
                 params={},
             )
-        # If an error occurs on one resource, skip it
+        # If a timeout occurs on one resource, skip it
         except (
             httpx.ConnectError
             or HttpxPoolTimeout
@@ -242,15 +242,13 @@ class ErrorServiceResource:
                 f"{message_exception_summary(e)}, skipping load of issue data for Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
             )
             return None
-        except Exception as e:  # uncaught exceptions are so costly, a 'bare except' is acceptable, despite PEP 8: E722
+        except Exception as e:
             intro = f"{message_exception_classname(e)}, skipping load of issue data for Error Service Resource ID: {self.id} - {self.resource_type.value} for organization {self.organization.id}"
-            if "Timeout" not in intro:
-                info = "".join(traceback.format_exception(*sys.exc_info()))
-                message = f"{intro}\n{info}"
+            LOGGER.warning(intro)
+            if "Timeout" in intro:
+                return None
             else:
-                message = intro
-            LOGGER.warning(message)
-            return None
+                raise e
 
         # Instantiate ErrorServiceIssue
         for issue_data in get_issues_for_resource:
@@ -366,31 +364,14 @@ def load_concepts_from_errors(
 
     This function processes errors to identify and extract relevant concepts. It then organizes
     these concepts by the originating organization and type of resource they pertain to. The
-    results are saved back to the appropriate custom terminology.
-
-    A daily run inputs no values and gets all organization_ids and resource_types using the default HTTP GET page_size.
-
-    Here is a sample test output log limited by input values for page_size, organization_id, and resource_type:
+    results are saved back to the appropriate custom terminology. The Mapping Request Service sends Mapping Requests
+    into Informatics tooling, such as the Retool Mapping Request Dashboard where outstanding Mapping Requests
+    can be viewed, triaged, and loaded into ConceptMaps. Upon publication of a new ConceptMap version, the
+    Mapping Request Service reaches out to the Interops Service again, requesting reprocessing of the data that
+    originated that Mapping Request. Because of the new ConceptMap, this data now successfully enters the system.
     ```
-    Begin import from error service
-    50 errors in page
-    Checking registry for concept map entry for data element: Appointment.status and organization: apposnd
-    Loading 3 new codes to terminology apposnd_appointmentstatus version 2
-    50 errors in page
-    Loading 4 new codes to terminology apposnd_appointmentstatus version 2
-    50 errors in page
-    Loading 4 new codes to terminology apposnd_appointmentstatus version 2
-    500 errors in page
-    Loading 3 new codes to terminology apposnd_appointmentstatus version 2
-    41 errors in page
-    Loading 2 new codes to terminology apposnd_appointmentstatus version 2
-    Loading data from error service to custom terminologies complete
-
-    Process finished with exit code 0
-    ```
-
     Parameters:
-        commit_changes (bool, optional): Whether or not to commit after each batch
+        commit_changes (bool, optional): Whether to commit after each batch
         page_size (int, optional): HTTP GET page size, if empty, use the default PAGE_SIZE
         requested_organization_id (str): If non-empty, get errors only for the organization_id listed; if empty, get all
         requested_resource_type (str): Get errors only for the ResourceType enum string listed; if empty, get all
@@ -467,7 +448,7 @@ def load_concepts_from_errors(
 
     # Start logging
     LOGGER.warning(
-        f"Begin import from error service at local time {time_start}\n"
+        f"Begin loading data from the Interops Data Ingestion Validation Error Service at local time {time_start}\n"
         + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
         + f"  Load to:   {DATABASE_HOST}\n\n"
         + f"  Settings: \n"
@@ -1138,7 +1119,7 @@ def load_concepts_from_errors(
                                         conn.commit()
                                 except Exception as e:
                                     LOGGER.warning(
-                                        f"{message_exception_summary(e)} saving error IDs in custom_terminologies.error_service_issue"
+                                        f"{message_exception_summary(e)} adding data to custom_terminologies.error_service_issue"
                                     )
                                     conn.rollback()
                                     raise e
@@ -1150,7 +1131,7 @@ def load_concepts_from_errors(
                                 all_loop_total += loop_total
                                 all_loop_count += 1
                                 LOGGER.warning(
-                                    f"  {len(resources_with_errors)} errors received and loaded in {step_1}\n"
+                                    f"  {len(resources_with_errors)} responses received and loaded in {step_1}\n"
                                     + f"  {total_count_loaded_codes} new codes found and deduplicated in {step_2}\n"
                                     + f"  loop {all_loop_count} done at time {current_time.time()}, duration {loop_total}"
                                 )
@@ -1158,7 +1139,7 @@ def load_concepts_from_errors(
                     # at the innermost loop level, we have all the variables defined for a useful message
                     except Exception as e:
                         LOGGER.warning(
-                            f"\n{message_exception_summary(e)} at Data Normalization Error Service "
+                            f"\n{message_exception_summary(e)} at Interops Data Ingestion Validation Error Service "
                             + f"Resource ID: {error_service_resource_id} Issue ID: {error_service_issue_id} "
                             + f"while processing {input_fhir_resource} issue {input_issue_type} "
                             + f"""for organization: {organization_id}"""

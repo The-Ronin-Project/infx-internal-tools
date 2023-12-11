@@ -19,7 +19,7 @@ from app.helpers.structlog import config_structlog, common_handler
 from app.models.data_ingestion_registry import (
     DataNormalizationRegistry,
 )
-from app.models.normalization_error_service import get_outstanding_errors
+from app.models.mapping_request_service import get_outstanding_errors
 from app.models.patient_edu import *
 from app.models.surveys import *
 from app.models.teams import *

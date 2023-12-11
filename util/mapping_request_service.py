@@ -23,7 +23,7 @@ from sqlalchemy import text, Table, Column, MetaData, Text, bindparam
 from sqlalchemy.dialects.postgresql import UUID as UUID_column_type
 from werkzeug.exceptions import BadRequest
 
-from app.models.normalization_error_service import get_environment_from_service_url, \
+from app.models.mapping_request_service import get_environment_from_service_url, \
     DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL, get_token, AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE, \
     make_get_request
 from app.terminologies.models import Terminology
