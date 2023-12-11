@@ -33,7 +33,9 @@ import app.tasks
 def is_coding_array(source_code_string):
     return source_code_string.strip().startswith(
         "[{"
-    ) or source_code_string.strip().startswith("{[{")
+    ) or source_code_string.strip().startswith(
+        "{[{"
+    ) or source_code_string.strip().startswith("{null, ")
 
 
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and
@@ -1211,11 +1213,11 @@ class ConceptMapVersion:
                                 json.loads(code)
                             except ValueError:
                                 bad_source_errors.append(
-                                    f"Invalid JSON string in the code field at element index {index}: {code}"
+                                    f"Invalid JSON string in the code field at element index {index}: {code}; element: {element}"
                                 )
                         else:
                             bad_source_errors.append(
-                                f"Code string has an unrecognized pattern at element index {index}: {code}"
+                                f"Code string has an unrecognized pattern at element index {index}: {code}; element: {element}"
                             )
 
                     # TODO: This SHOULD be the way that this works, there are instances where that is not the case
@@ -1230,7 +1232,7 @@ class ConceptMapVersion:
 
                 else:
                     bad_source_errors.append(
-                        f"'code' key is missing in the element at index {index}"
+                        f"'code' key is missing in the element at index {index}; element: {element}"
                     )
 
                 # Integrity Check 2: Make sure there are no duplicate targets
@@ -1243,16 +1245,16 @@ class ConceptMapVersion:
                         if target_code:
                             if target_code in target_values:
                                 duplicate_target_errors.append(
-                                    f"Duplicated target elements found at element index {index}: {target_code}"
+                                    f"Duplicated target elements found at element index {index}: {target_code}; element: {element}"
                                 )
                             target_values.add(target_code)
                         else:
                             duplicate_target_errors.append(
-                                f"'code' key is missing in the target at element index {index}"
+                                f"'code' key is missing in the target at element index {index}; element: {element}"
                             )
                 else:
                     duplicate_target_errors.append(
-                        f"'target' key is missing in the element at index {index}"
+                        f"'target' key is missing in the element at index {index}; element: {element}"
                     )
 
         if bad_source_errors:
@@ -1260,7 +1262,7 @@ class ConceptMapVersion:
             formatted_errors = f"Bad Source Code Errors:\n{errors_str}"
             raise BadSourceCodeError(
                 code="BadSourceCode",
-                description="Bad source code errors found in ConceptMap",
+                description=f"Bad source code errors found in ConceptMap. {bad_source_errors}",
                 errors=formatted_errors
             )
 
@@ -1269,7 +1271,7 @@ class ConceptMapVersion:
             formatted_errors = f"Duplicate Target Errors:\n{errors_str}"
             raise DuplicateTargetError(
                 code="DuplicateTarget",
-                description="Duplicate target errors found in ConceptMap",
+                description=f"Duplicate target errors found in ConceptMap. {duplicate_target_errors}",
                 errors=formatted_errors
             )
 
@@ -2047,6 +2049,13 @@ class MappingSuggestion:
 
 # TODO: This is a temporary function to solve a short term problem we have
 def transform_struct_string_to_json(struct_string):
+    # Handle case where we have a single code and the code is null
+    if struct_string.startswith("{null, ") and struct_string.endswith("}"):
+        return json.dumps({
+            'code': None,
+            'display': struct_string[7:-1]
+        })
+
     # Parse the coding elements and the text that trails at the end
     # Handle different start/end characters
     if struct_string.startswith("{") and struct_string.endswith("}"):
