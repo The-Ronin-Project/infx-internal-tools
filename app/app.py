@@ -14,7 +14,7 @@ import app.tasks as tasks
 import app.terminologies.views as terminology_views
 import app.value_sets.views as value_set_views
 from app.database import close_db, rollback_and_close_connection_if_open
-from app.errors import BadRequestWithCode, NotFoundException
+from app.errors import BadRequestWithCode, NotFoundException, BadSourceCodeError, DuplicateTargetError
 from app.helpers.structlog import config_structlog, common_handler
 from app.models.data_ingestion_registry import (
     DataNormalizationRegistry,
@@ -73,6 +73,22 @@ def create_app(script_info=None):
     def handle_bad_data_error(e):
         """
         Handles BadDataError exceptions by returning a JSON response with the appropriate error code and message.
+        """
+        rollback_and_close_connection_if_open()
+        return jsonify({"code": e.code, "message": e.description}), e.http_status_code
+
+    @app.errorhandler(BadSourceCodeError)
+    def handle_bad_data_error(e):
+        """
+        Handles BadSourceCodeError exceptions by returning a JSON response with the appropriate error code and message.
+        """
+        rollback_and_close_connection_if_open()
+        return jsonify({"code": e.code, "message": e.description}), e.http_status_code
+
+    @app.errorhandler(DuplicateTargetError)
+    def handle_bad_data_error(e):
+        """
+        Handles DuplicateTargetError exceptions by returning a JSON response with the appropriate error code and message.
         """
         rollback_and_close_connection_if_open()
         return jsonify({"code": e.code, "message": e.description}), e.http_status_code
