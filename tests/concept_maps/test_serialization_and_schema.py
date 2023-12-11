@@ -106,6 +106,12 @@ class OutputTests(unittest.TestCase):
             self.concept_map_output_for_schema(ConceptMap.next_schema_version)
         assert versions == 1  # When the versions are different, this value must be 2 instead of 1
 
+    def test_convert_struct_null_display(self):
+        example_string = "{null, Comorbidities found via Retrieve Dx}"
+        json_output = transform_struct_string_to_json(example_string)
+
+        self.assertEqual(json_output, '{"code": null, "display": "Comorbidities found via Retrieve Dx"}')
+
     def test_convert_struct_psj_format_with_urn(self):
         example_http_string = "{[{18107-3, Cardiac echo study Procedure stress method, http://loinc.org, null}], Stress Echo Adult with Treadmill Stress}"
         http_string_output = transform_struct_string_to_json(example_http_string)
