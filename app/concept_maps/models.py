@@ -1205,19 +1205,14 @@ class ConceptMapVersion:
                 code = element.get("code")
                 if code is not None:
                     # If string starts with curly brace
-                    if code.startswith("{"):
+                    if code.startswith("{") and code.endswith("}"):
                         # If the string starts with either of the valid patterns
-                        if code.startswith(('{"text":', '{"coding":')):
-                            try:
-                                # Check if the 'code' field is a valid JSON string
-                                json.loads(code)
-                            except ValueError:
-                                bad_source_errors.append(
-                                    f"Invalid JSON string in the code field at element index {index}: {code}; element: {element}"
-                                )
-                        else:
+                        try:
+                            # Check if the 'code' field is a valid JSON string
+                            json.loads(code)
+                        except ValueError:
                             bad_source_errors.append(
-                                f"Code string has an unrecognized pattern at element index {index}: {code}; element: {element}"
+                                f"Invalid JSON string in the code field at element index {index}: {code}; element: {element}"
                             )
 
                     # TODO: This SHOULD be the way that this works, there are instances where that is not the case
