@@ -1609,6 +1609,23 @@ class ConceptMapVersion:
         active_concept_map_versions = [cls(row.uuid) for row in data]
         return active_concept_map_versions
 
+    @staticmethod
+    def update_loaded_concepts_count(concept_map_version_uuid, loaded_count):
+        conn = get_db()
+        conn.execute(
+            text(
+                """
+                UPDATE concept_maps.concept_map
+                SET count_loaded_concepts = :loaded_count
+                WHERE uuid = :concept_map_version_uuid
+                """
+            ),
+            {
+                "concept_map_version_uuid": concept_map_version_uuid,
+                "loaded_count": loaded_count
+            }
+        )
+
 
 @dataclass
 class MappingRelationship:
