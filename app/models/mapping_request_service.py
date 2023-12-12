@@ -459,13 +459,8 @@ def load_concepts_from_errors(
         + f"    requested_issue_type={requested_issue_type}\n\n"
         + f"Main loop:\n"
     )
-    tenant_load_json_format_error_reported = []
 
     # Local caches
-    # todo: study why ttl_cache, or other caching strategies, did not stop repeat loads from happening
-    data_normalization_registry = dict()
-    source_value_set = dict()
-    terminology_for_value_set = dict()
     terminology_version = dict()
 
     # todo: (feature, not bug) When we support multiple issue types, cache the Error resource objects we load for use,
@@ -631,345 +626,21 @@ def load_concepts_from_errors(
 
                                 # Walk through all the error service resources
                                 for error_service_resource in error_resources:
-                                    # Get the FHIR resource information from the error resource
-                                    resource_type = error_service_resource.resource_type
-                                    try:
-                                        raw_resource = json.loads(error_service_resource.resource)
-                                    except Exception as e:
-                                        intro = f"{message_exception_classname(e)} loading {fhir_resource_type} data for issue {input_issue_type} for {organization_id}: 1 report for 1+ cases"
-                                        if intro not in tenant_load_json_format_error_reported:
-                                            error_code = (
-                                                "NormalizationErrorService.load_concepts_from_errors"
-                                            )
-                                            info = "".join(traceback.format_exception(*sys.exc_info()))
-                                            LOGGER.warning(f"{intro}\n{info}\n")
-                                            tenant_load_json_format_error_reported.append(intro)
-                                            raise BadDataError(
-                                                code=error_code,
-                                                description=intro,
-                                                errors=message_exception_summary(e),
-                                            )
-
-                                    # Our GET returned only the Error resources that had at least one issue of the
-                                    # issue tye we requested. Now extract only the issues of that type, to make a list.
-                                    requested_issues = error_service_resource.filter_issues_by_type(
-                                        input_issue_type
+                                    (
+                                        terminology_version,
+                                        new_codes_to_deduplicate_by_terminology,
+                                        error_code_link_data,
+                                        skip_count
+                                    ) = extract_error_resource_data(
+                                        error_service_resource,
+                                        input_fhir_resource,
+                                        organization_id,
+                                        input_issue_type,
+                                        terminology_version,
+                                        new_codes_to_deduplicate_by_terminology,
+                                        error_code_link_data,
                                     )
-                                    for issue in requested_issues:
-                                        # save for logging
-                                        error_service_issue_id = str(issue.id)
-
-                                        # data_element is the location without any brackets or indices
-                                        # i.e. if location is Patient.telecom[1].system,
-                                        # then data_element is Patient.telecom.system
-                                        location = issue.location
-                                        element = re.sub(r"\[\d+\]", "", location)
-                                        match = re.search(r"\[(\d+)\]", location)
-                                        # Extract any index that may be present in the location string
-                                        index = None
-                                        if match is not None:
-                                            index = int(match.group(1))
-
-                                        # Based on resource_type, identify coding that needs to get into the concept map
-                                        # There's something unique about the handling for every resource_type we support
-                                        # Condition
-                                        if resource_type == ResourceType.CONDITION:
-                                            # Condition.code is a CodeableConcept
-                                            raw_code = raw_resource["code"]
-                                            processed_code = raw_code
-                                            processed_display = raw_code.get("text")
-
-                                        # Medication
-                                        elif resource_type == ResourceType.MEDICATION:
-                                            # Medication.code is a CodeableConcept
-                                            raw_code = raw_resource["code"]
-                                            processed_code = raw_code
-                                            processed_display = raw_code.get("text")
-
-                                        # Observation
-                                        elif resource_type == ResourceType.OBSERVATION:
-                                            # Observation.value is a CodeableConcept
-                                            if element == "Observation.value":
-                                                if "valueCodeableConcept" not in raw_resource:
-                                                    continue
-                                                raw_code = raw_resource["valueCodeableConcept"]
-                                                processed_code = raw_code
-                                                processed_display = raw_code.get("text")
-
-                                            # Observation.code is a CodeableConcept
-                                            elif element == "Observation.code":
-                                                if "code" not in raw_resource:
-                                                    continue
-                                                raw_code = raw_resource["code"]
-                                                processed_code = raw_code
-                                                processed_display = raw_code.get("text")
-
-                                            # Observation.component.code is a CodeableConcept - location has an index
-                                            elif element == "Observation.component.code":
-                                                if index is None:
-                                                    continue
-                                                if (
-                                                    "component" not in raw_resource
-                                                    or index not in raw_resource["component"]
-                                                    or "code" not in raw_resource["component"][index]
-                                                ):
-                                                    continue
-                                                raw_code = raw_resource["component"][index]["code"]
-                                                processed_code = raw_code
-                                                processed_display = raw_code.get("text")
-
-                                            # Observation.component.value is a CodeableConcept - location will have an index
-                                            elif element == "Observation.component.value":
-                                                if index is None:
-                                                    continue
-                                                if (
-                                                    "component" not in raw_resource
-                                                    or index not in raw_resource["component"]
-                                                    or "valueCodeableConcept"
-                                                    not in raw_resource["component"][index]
-                                                ):
-                                                    continue
-                                                raw_code = raw_resource["component"][index][
-                                                    "valueCodeableConcept"
-                                                ]
-                                                processed_code = raw_code
-                                                processed_display = raw_code.get("text")
-                                            else:
-                                                LOGGER.warning(
-                                                    f"Unrecognized location for Observation error: {location}"
-                                                )
-
-                                        # Procedure
-                                        elif resource_type == ResourceType.PROCEDURE:
-                                            # Procedure.code is a CodeableConcept
-                                            if element == "Procedure.code":
-                                                if "code" not in raw_resource:
-                                                    continue
-                                                raw_code = raw_resource["code"]
-                                                processed_code = raw_code
-                                                processed_display = raw_code.get("text")
-
-                                        # DocumentReference
-                                        elif resource_type == ResourceType.DOCUMENT_REFERENCE:
-                                            # DocumentReference.type is a CodeableConcept
-                                            if element == "DocumentReference.type":
-                                                raw_code = raw_resource["type"]
-                                                processed_code = raw_code
-                                                processed_display = raw_code.get("text")
-
-                                        # Appointment
-                                        elif resource_type == ResourceType.APPOINTMENT:
-                                            # Appointment.status is a raw code - used for code and display
-                                            if element == "Appointment.status":
-                                                raw_code = raw_resource["status"]
-                                                processed_code = raw_code
-                                                processed_display = raw_code
-
-                                        # Use extract_telecom_data function to extract the codes from each resource type
-                                        # Extract codes for issues from all resource types for ContactPoint.system, .use
-
-                                        # Patient
-                                        elif resource_type == ResourceType.PATIENT:
-                                            processed_code, processed_display = extract_telecom_data(
-                                                "Patient", location, raw_resource
-                                            )
-
-                                        # Practitioner
-                                        elif resource_type == ResourceType.PRACTITIONER:
-                                            processed_code, processed_display = extract_telecom_data(
-                                                "Practitioner", location, raw_resource
-                                            )
-
-                                        # PractitionerRole
-                                        elif resource_type == ResourceType.PRACTITIONER_ROLE:
-                                            processed_code, processed_display = extract_telecom_data(
-                                                "PractitionerRole", location, raw_resource
-                                            )
-
-                                        # Location
-                                        elif resource_type == ResourceType.LOCATION:
-                                            processed_code, processed_display = extract_telecom_data(
-                                                "Location", location, raw_resource
-                                            )
-
-                                        # Case not yet implemented OR raw_resource is None (raw_resource data load failed)
-                                        else:
-                                            LOGGER.warning(
-                                                f"Support for the {fhir_resource_type} resource type at location {element} has not been implemented"
-                                            )
-                                            all_skip_count += 1
-                                            continue
-
-                                        # Lookup the concept map version used to normalize this type of resource
-                                        # So that we can then identify the correct terminology to load the new coding to
-
-                                        # Note that some normalization registry data_element strings need adjustment.
-                                        if (
-                                            element == "Observation.value"
-                                            or element == "Observation.component.value"
-                                        ):
-                                            data_element = f"{element}CodeableConcept"
-                                        else:
-                                            data_element = element
-
-                                        # Get the concept_map_version_for_normalization
-                                        registry_key = f"{organization.id} {data_element}"
-                                        if registry_key not in data_normalization_registry.keys():
-                                            concept_map_version_for_normalization = (
-                                                lookup_concept_map_version_for_data_element(
-                                                    data_element=data_element,
-                                                    organization=error_service_resource.organization,
-                                                )
-                                            )
-                                            data_normalization_registry.update(
-                                                {registry_key: concept_map_version_for_normalization}
-                                            )
-
-                                        # Is the concept_map_version_for_normalization valid?
-                                        concept_map_version_for_normalization = (
-                                            data_normalization_registry[registry_key]
-                                        )
-                                        if concept_map_version_for_normalization is None:
-                                            # per Content team, desired action is continue (stop loop, process next error)
-                                            continue
-
-                                        # Inside the concept map version, we'll extract the source value set
-                                        source_value_set_uuid = (
-                                            concept_map_version_for_normalization.concept_map.source_value_set_uuid
-                                        )
-                                        if source_value_set_uuid not in source_value_set.keys():
-                                            try:
-                                                most_recent_active_source_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version_with_cache(
-                                                    source_value_set_uuid
-                                                )
-                                                most_recent_active_source_value_set_version.expand(
-                                                    no_repeat=True
-                                                )
-                                                source_value_set.update(
-                                                    {
-                                                        source_value_set_uuid: most_recent_active_source_value_set_version
-                                                    }
-                                                )
-                                            except BadRequest:
-                                                source_value_set.update({source_value_set_uuid: None})
-                                                LOGGER.warning(
-                                                    f"No active published version of ValueSet with UUID: {source_value_set_uuid}"
-                                                )
-                                                all_skip_count += 1
-                                                continue
-                                            except Exception as e:
-                                                LOGGER.warning(
-                                                    f"{message_exception_summary(e)} loading ValueSet with UUID: {source_value_set_uuid}"
-                                                )
-                                                all_skip_count += 1
-                                                raise e
-
-                                        # Is the most_recent_active_source_value_set_version valid?
-                                        most_recent_active_source_value_set_version = source_value_set[
-                                            source_value_set_uuid
-                                        ]
-                                        if most_recent_active_source_value_set_version is None:
-                                            # We messaged the first time we encountered the issue, do not repeat message
-                                            continue
-
-                                        # Identify the terminology inside the source value set
-                                        if source_value_set_uuid not in terminology_version.keys():
-                                            terminologies_in_source_value_set = (
-                                                most_recent_active_source_value_set_version.lookup_terminologies_in_value_set_version()
-                                            )
-
-                                            if len(terminologies_in_source_value_set) > 1:
-                                                raise Exception(
-                                                    "There should only be a single source terminology for a concept map used in data normalization"
-                                                )
-                                            if len(terminologies_in_source_value_set) == 0:
-                                                raise Exception(
-                                                    f"No terminologies in source value set {most_recent_active_source_value_set_version.uuid}"
-                                                )
-
-                                            current_terminology_version = (
-                                                terminologies_in_source_value_set[0]
-                                            )
-                                            terminology_for_value_set.update(
-                                                {source_value_set_uuid: current_terminology_version}
-                                            )
-                                            terminology_version.update(
-                                                {
-                                                    str(
-                                                        current_terminology_version.uuid
-                                                    ): current_terminology_version
-                                                }
-                                            )
-                                        current_terminology_version = terminology_for_value_set[
-                                            source_value_set_uuid
-                                        ]
-
-                                        # The custom terminology may have already passed its end date, check it
-                                        terminology_to_load_to = (
-                                            current_terminology_version.version_to_load_new_content_to()
-                                        )
-
-                                        new_code_uuid = uuid.uuid4()
-                                        if processed_display is None:
-                                            processed_display = ""
-                                        new_code = Code(
-                                            code=processed_code,
-                                            display=processed_display,
-                                            system=None,
-                                            version=None,
-                                            terminology_version_uuid=terminology_to_load_to.uuid,
-                                            custom_terminology_code_uuid=new_code_uuid,
-                                        )
-
-                                        # Save the data linking this code back to its original error
-                                        # After deduplication, we will look them up and insert them to the table
-                                        for issue_id in error_service_resource.issue_ids:
-                                            error_code_link_data.append(
-                                                {
-                                                    "issue_uuid": issue_id,
-                                                    "resource_uuid": error_service_resource.id,
-                                                    "environment": environment,
-                                                    "status": "pending",
-                                                    "code": json.dumps(processed_code)
-                                                    if type(processed_code) == dict
-                                                    else processed_code,
-                                                    "display": processed_display,
-                                                    "terminology_version_uuid": terminology_to_load_to.uuid,
-                                                    # todo: no currently supported resource requires the dependsOn data
-                                                    # but it is part of the unique constraint to look up a row, so use it
-                                                    "depends_on_property": "",
-                                                    "depends_on_system": "",
-                                                    "depends_on_value": "",
-                                                    "depends_on_display": "",
-                                                }
-                                            )
-
-                                        # Assemble additionalData from the raw resource.
-                                        # This is where we'll extract unit, value, referenceRange, and value[x] if available
-                                        new_code.add_examples_to_additional_data(
-                                            unit=raw_resource.get("unit"),
-                                            value=raw_resource.get("value"),
-                                            reference_range=raw_resource.get("referenceRange"),
-                                            value_quantity=raw_resource.get("valueQuantity"),
-                                            value_boolean=raw_resource.get("valueBoolean"),
-                                            value_string=raw_resource.get("valueString"),
-                                            value_date_time=raw_resource.get("valueDateTime"),
-                                            value_codeable_concept=raw_resource.get(
-                                                "valueCodeableConcept"
-                                            ),
-                                        )
-
-                                        if (
-                                            terminology_to_load_to.uuid
-                                            in new_codes_to_deduplicate_by_terminology
-                                        ):
-                                            new_codes_to_deduplicate_by_terminology[
-                                                terminology_to_load_to.uuid
-                                            ].append(new_code)
-                                        else:
-                                            new_codes_to_deduplicate_by_terminology[
-                                                terminology_to_load_to.uuid
-                                            ] = [new_code]
+                                    all_skip_count += skip_count
 
                                 # Step 3: Deduplicate the codes to avoid redundant data.
                                 deduped_codes_by_terminology = {}
@@ -1180,6 +851,387 @@ def load_concepts_from_errors(
             + f"{list_of_unsupported}\n\n"
         )
 
+
+def extract_error_resource_data(
+    error_service_resource: ErrorServiceResource,
+    fhir_resource_type: str,
+    input_issue_type: str,
+    organization_id: str,
+    terminology_version: dict,
+    new_codes_to_deduplicate_by_terminology: dict,
+    error_code_link_data: list,
+) -> (dict, dict, list, int):
+    """
+    Extract the FHIR resource validation issue data from a single ErrorServiceResource item from Interops
+    @param error_service_resource: object from the main loop, one of many ErrorServiceResource item from Interops
+    @param fhir_resource_type: control value from the main loop through all error resources
+    @param input_issue_type: control value from the main loop through all error resources
+    @param organization_id: control value from the main loop through all error resources
+    @param terminology_version: discovered Terminology objects for deduplication
+    @param new_codes_to_deduplicate_by_terminology: holds codes that need deduplication
+            Key: terminology_version_uuid, Value: list containing the codes to load to terminology
+    @param error_code_link_data: data linking codes back to the issues/errors they came from
+    @return: (terminology_version, new_codes_to_deduplicate_by_terminology, error_code_link_data, all_skip_count)
+        terminology_version (dict): updated dict of Terminology objects discovered in processing
+            Key: terminology_version_uuid, Value: Terminology object for that uuid
+        new_codes_to_deduplicate_by_terminology (dict): holds codes that need deduplication
+            Key: terminology_version_uuid, Value: list containing the codes to load to terminology
+        error_code_link_data (list): data linking codes back to the issues/errors they came from
+        all_skip_count: count of resources skipped for transitory (i.e. network connection) reasons
+    """
+    # Log setup
+    all_skip_count = 0
+    tenant_load_json_format_error_reported = []
+
+    # Local caches
+    data_normalization_registry = dict()
+    source_value_set = dict()
+    terminology_for_value_set = dict()
+
+    # Get the FHIR resource information from the error resource
+    resource_type = error_service_resource.resource_type
+    try:
+        raw_resource = json.loads(error_service_resource.resource)
+    except Exception as e:
+        intro = f"{message_exception_classname(e)} loading {fhir_resource_type} data for issue {input_issue_type} for {organization_id}: 1 report for 1+ cases"
+        if intro not in tenant_load_json_format_error_reported:
+            error_code = (
+                "NormalizationErrorService.load_concepts_from_errors"
+            )
+            info = "".join(traceback.format_exception(*sys.exc_info()))
+            LOGGER.warning(f"{intro}\n{info}\n")
+            tenant_load_json_format_error_reported.append(intro)
+            raise BadDataError(
+                code=error_code,
+                description=intro,
+                errors=message_exception_summary(e),
+            )
+
+    # Our GET returned only the Error resources that had at least one issue of the
+    # issue tye we requested. Now extract only the issues of that type, to make a list.
+    requested_issues = error_service_resource.filter_issues_by_type(
+        input_issue_type
+    )
+    for issue in requested_issues:
+        # save for logging
+        error_service_issue_id = str(issue.id)
+
+        # data_element is the location without any brackets or indices
+        # i.e. if location is Patient.telecom[1].system,
+        # then data_element is Patient.telecom.system
+        location = issue.location
+        element = re.sub(r"\[\d+\]", "", location)
+        match = re.search(r"\[(\d+)\]", location)
+        # Extract any index that may be present in the location string
+        index = None
+        if match is not None:
+            index = int(match.group(1))
+
+        # Based on resource_type, identify coding that needs to get into the concept map
+        # There's something unique about the handling for every resource_type we support
+        # Condition
+        if resource_type == ResourceType.CONDITION:
+            # Condition.code is a CodeableConcept
+            raw_code = raw_resource["code"]
+            processed_code = raw_code
+            processed_display = raw_code.get("text")
+
+        # Medication
+        elif resource_type == ResourceType.MEDICATION:
+            # Medication.code is a CodeableConcept
+            raw_code = raw_resource["code"]
+            processed_code = raw_code
+            processed_display = raw_code.get("text")
+
+        # Observation
+        elif resource_type == ResourceType.OBSERVATION:
+            # Observation.value is a CodeableConcept
+            if element == "Observation.value":
+                if "valueCodeableConcept" not in raw_resource:
+                    continue
+                raw_code = raw_resource["valueCodeableConcept"]
+                processed_code = raw_code
+                processed_display = raw_code.get("text")
+
+            # Observation.code is a CodeableConcept
+            elif element == "Observation.code":
+                if "code" not in raw_resource:
+                    continue
+                raw_code = raw_resource["code"]
+                processed_code = raw_code
+                processed_display = raw_code.get("text")
+
+            # Observation.component.code is a CodeableConcept - location has an index
+            elif element == "Observation.component.code":
+                if index is None:
+                    continue
+                if (
+                        "component" not in raw_resource
+                        or index not in raw_resource["component"]
+                        or "code" not in raw_resource["component"][index]
+                ):
+                    continue
+                raw_code = raw_resource["component"][index]["code"]
+                processed_code = raw_code
+                processed_display = raw_code.get("text")
+
+            # Observation.component.value is a CodeableConcept - location will have an index
+            elif element == "Observation.component.value":
+                if index is None:
+                    continue
+                if (
+                        "component" not in raw_resource
+                        or index not in raw_resource["component"]
+                        or "valueCodeableConcept"
+                        not in raw_resource["component"][index]
+                ):
+                    continue
+                raw_code = raw_resource["component"][index][
+                    "valueCodeableConcept"
+                ]
+                processed_code = raw_code
+                processed_display = raw_code.get("text")
+            else:
+                LOGGER.warning(
+                    f"Unrecognized location for Observation error: {location}"
+                )
+
+        # Procedure
+        elif resource_type == ResourceType.PROCEDURE:
+            # Procedure.code is a CodeableConcept
+            if element == "Procedure.code":
+                if "code" not in raw_resource:
+                    continue
+                raw_code = raw_resource["code"]
+                processed_code = raw_code
+                processed_display = raw_code.get("text")
+
+        # DocumentReference
+        elif resource_type == ResourceType.DOCUMENT_REFERENCE:
+            # DocumentReference.type is a CodeableConcept
+            if element == "DocumentReference.type":
+                raw_code = raw_resource["type"]
+                processed_code = raw_code
+                processed_display = raw_code.get("text")
+
+        # Appointment
+        elif resource_type == ResourceType.APPOINTMENT:
+            # Appointment.status is a raw code - used for code and display
+            if element == "Appointment.status":
+                raw_code = raw_resource["status"]
+                processed_code = raw_code
+                processed_display = raw_code
+
+        # Use extract_telecom_data function to extract the codes from each resource type
+        # Extract codes for issues from all resource types for ContactPoint.system, .use
+
+        # Patient
+        elif resource_type == ResourceType.PATIENT:
+            processed_code, processed_display = extract_telecom_data(
+                "Patient", location, raw_resource
+            )
+
+        # Practitioner
+        elif resource_type == ResourceType.PRACTITIONER:
+            processed_code, processed_display = extract_telecom_data(
+                "Practitioner", location, raw_resource
+            )
+
+        # PractitionerRole
+        elif resource_type == ResourceType.PRACTITIONER_ROLE:
+            processed_code, processed_display = extract_telecom_data(
+                "PractitionerRole", location, raw_resource
+            )
+
+        # Location
+        elif resource_type == ResourceType.LOCATION:
+            processed_code, processed_display = extract_telecom_data(
+                "Location", location, raw_resource
+            )
+
+        # Case not yet implemented OR raw_resource is None (raw_resource data load failed)
+        else:
+            LOGGER.warning(
+                f"Support for the {fhir_resource_type} resource type at location {element} has not been implemented"
+            )
+            all_skip_count += 1
+            continue
+
+        # Lookup the concept map version used to normalize this type of resource
+        # So that we can then identify the correct terminology to load the new coding to
+
+        # Note that some normalization registry data_element strings need adjustment.
+        if (
+                element == "Observation.value"
+                or element == "Observation.component.value"
+        ):
+            data_element = f"{element}CodeableConcept"
+        else:
+            data_element = element
+
+        # Get the concept_map_version_for_normalization
+        registry_key = f"{organization_id} {data_element}"
+        if registry_key not in data_normalization_registry.keys():
+            concept_map_version_for_normalization = (
+                lookup_concept_map_version_for_data_element(
+                    data_element=data_element,
+                    organization=error_service_resource.organization,
+                )
+            )
+            data_normalization_registry.update(
+                {registry_key: concept_map_version_for_normalization}
+            )
+
+        # Is the concept_map_version_for_normalization valid?
+        concept_map_version_for_normalization = (
+            data_normalization_registry[registry_key]
+        )
+        if concept_map_version_for_normalization is None:
+            # per Content team, desired action is continue (stop loop, process next error)
+            continue
+
+        # Inside the concept map version, we'll extract the source value set
+        source_value_set_uuid = (
+            concept_map_version_for_normalization.concept_map.source_value_set_uuid
+        )
+        if source_value_set_uuid not in source_value_set.keys():
+            try:
+                most_recent_active_source_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version_with_cache(
+                    source_value_set_uuid
+                )
+                most_recent_active_source_value_set_version.expand(
+                    no_repeat=True
+                )
+                source_value_set.update(
+                    {
+                        source_value_set_uuid: most_recent_active_source_value_set_version
+                    }
+                )
+            except BadRequest:
+                source_value_set.update({source_value_set_uuid: None})
+                LOGGER.warning(
+                    f"No active published version of ValueSet with UUID: {source_value_set_uuid}"
+                )
+                all_skip_count += 1
+                continue
+            except Exception as e:
+                LOGGER.warning(
+                    f"{message_exception_summary(e)} loading ValueSet with UUID: {source_value_set_uuid}"
+                )
+                all_skip_count += 1
+                raise e
+
+        # Is the most_recent_active_source_value_set_version valid?
+        most_recent_active_source_value_set_version = source_value_set[
+            source_value_set_uuid
+        ]
+        if most_recent_active_source_value_set_version is None:
+            # We messaged the first time we encountered the issue, do not repeat message
+            continue
+
+        # Identify the terminology inside the source value set
+        if source_value_set_uuid not in terminology_version.keys():
+            terminologies_in_source_value_set = (
+                most_recent_active_source_value_set_version.lookup_terminologies_in_value_set_version()
+            )
+
+            if len(terminologies_in_source_value_set) > 1:
+                raise Exception(
+                    "There should only be a single source terminology for a concept map used in data normalization"
+                )
+            if len(terminologies_in_source_value_set) == 0:
+                raise Exception(
+                    f"No terminologies in source value set {most_recent_active_source_value_set_version.uuid}"
+                )
+
+            current_terminology_version = (
+                terminologies_in_source_value_set[0]
+            )
+            terminology_for_value_set.update(
+                {source_value_set_uuid: current_terminology_version}
+            )
+            terminology_version.update(
+                {
+                    str(
+                        current_terminology_version.uuid
+                    ): current_terminology_version
+                }
+            )
+        current_terminology_version = terminology_for_value_set[
+            source_value_set_uuid
+        ]
+
+        # The custom terminology may have already passed its end date, check it
+        terminology_to_load_to = (
+            current_terminology_version.version_to_load_new_content_to()
+        )
+
+        new_code_uuid = uuid.uuid4()
+        if processed_display is None:
+            processed_display = ""
+        new_code = Code(
+            code=processed_code,
+            display=processed_display,
+            system=None,
+            version=None,
+            terminology_version_uuid=terminology_to_load_to.uuid,
+            custom_terminology_code_uuid=new_code_uuid,
+        )
+
+        # Save the data linking this code back to its original error
+        # After deduplication, we will look them up and insert them to the table
+        environment = get_environment_from_service_url(
+            DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL
+        )
+        for issue_id in error_service_resource.issue_ids:
+            error_code_link_data.append(
+                {
+                    "issue_uuid": issue_id,
+                    "resource_uuid": error_service_resource.id,
+                    "environment": environment,
+                    "status": "pending",
+                    "code": json.dumps(processed_code)
+                    if type(processed_code) == dict
+                    else processed_code,
+                    "display": processed_display,
+                    "terminology_version_uuid": terminology_to_load_to.uuid,
+                    # todo: no currently supported resource requires the dependsOn data
+                    # but it is part of the unique constraint to look up a row, so use it
+                    "depends_on_property": "",
+                    "depends_on_system": "",
+                    "depends_on_value": "",
+                    "depends_on_display": "",
+                }
+            )
+
+        # Assemble additionalData from the raw resource.
+        # This is where we'll extract unit, value, referenceRange, and value[x] if available
+        new_code.add_examples_to_additional_data(
+            unit=raw_resource.get("unit"),
+            value=raw_resource.get("value"),
+            reference_range=raw_resource.get("referenceRange"),
+            value_quantity=raw_resource.get("valueQuantity"),
+            value_boolean=raw_resource.get("valueBoolean"),
+            value_string=raw_resource.get("valueString"),
+            value_date_time=raw_resource.get("valueDateTime"),
+            value_codeable_concept=raw_resource.get(
+                "valueCodeableConcept"
+            ),
+        )
+
+        if (
+                terminology_to_load_to.uuid
+                in new_codes_to_deduplicate_by_terminology
+        ):
+            new_codes_to_deduplicate_by_terminology[
+                terminology_to_load_to.uuid
+            ].append(new_code)
+        else:
+            new_codes_to_deduplicate_by_terminology[
+                terminology_to_load_to.uuid
+            ] = [new_code]
+
+    return terminology_version, new_codes_to_deduplicate_by_terminology, error_code_link_data, all_skip_count
 
 @ttl_cache()
 def lookup_concept_map_version_for_data_element(
