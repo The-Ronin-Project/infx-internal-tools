@@ -122,7 +122,7 @@ First, follow these directions: https://docs.github.com/en/authentication/connec
     - Target type: Script path
     - Target: (navigate to the local file infx-internal-tools/app/app.py)
     - Application: application
-    - Additional options: `--host=0.0.0.0 --port=5500`
+    - Additional options: `--host=0.0.0.0 --port=5500` (See note on port below.)
     - FLASK_ENV: development
     - FLASK_DEBUG: (check the box)
     - Python interpreter: (should already be correct from "PyCharm setup" above)
@@ -130,6 +130,10 @@ First, follow these directions: https://docs.github.com/en/authentication/connec
     - Add content/source roots to PYTHONPATH (check both boxes)
 4. Choose Apply and OK. 
 5. Restart PyCharm
+
+> Note that the Postman `Dev-Local` environment uses port 5000 as the initial value. However, [port 5000 is used by the AirPlay
+> Receiver service on Macbooks](https://developer.apple.com/forums/thread/682332) and may block the application from
+> running locally. Alteration of port configurations may be necessary for local testing.
 
 
 ### Running a dev server
