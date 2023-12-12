@@ -521,23 +521,25 @@ def load_concepts_from_errors(
                                         api_url="/resources",
                                         params=rest_api_params,
                                     )
-                                except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError or ReadTimeout) as e:
+                                except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError or ReadTimeout or JSONDecodeError) as e:
+                                    intro = message_exception_summary(e)
+                                    if "Expecting value: line 1 column 1 (char 0)" in intro:
+                                        tip = f"\nThis error means a required value was empty."
+                                    else:
+                                        tip = ""
                                     LOGGER.warning(
-                                        f"{message_exception_summary(e)}, skipping load of {page_size} resources of type {input_resource_type} for {input_issue_type} issue for organization {organization_id}"
+                                        f"{intro}, skipping load of {page_size} resources of type {input_resource_type} for {input_issue_type} issue for organization {organization_id}{tip}"
                                     )
                                     continue
                                 except Exception as e:
-                                    intro = f"{message_exception_classname(e)}, skipping load of {page_size} resources of type {input_resource_type} for issue {input_issue_type} for organization {organization_id}"
-                                    if "Timeout" not in intro:
-                                        info = "".join(traceback.format_exception(*sys.exc_info()))
-                                        if "Expecting value: line 1 column 1 (char 0)" in intro:
-                                            message = f"{intro}\n{info}\nThis error means a required value was empty."
-                                        else:
-                                            message = f"{intro}\n{info}"
+                                    intro = message_exception_classname(e)
+                                    if "Timeout" in intro:
+                                        LOGGER.warning(
+                                            f"{intro}, skipping load of {page_size} resources of type {input_resource_type} for issue {input_issue_type} for organization {organization_id}"
+                                        )
+                                        continue
                                     else:
-                                        message = intro
-                                    LOGGER.warning(message)
-                                    continue
+                                        raise e
 
                                 # Here is the first page of resources
                                 resources_with_errors = response
