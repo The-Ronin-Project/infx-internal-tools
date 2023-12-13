@@ -420,6 +420,9 @@ def create_app(script_info=None):
         old_terminology_version_uuid = request.json.get("old_terminology_version_uuid")
         new_terminology_version_uuid = request.json.get("new_terminology_version_uuid")
 
+        if old_terminology_version_uuid is None or new_terminology_version_uuid is None:
+            return jsonify({})
+
         result = perform_terminology_update_for_all_value_sets(
             old_terminology_version_uuid=old_terminology_version_uuid,
             new_terminology_version_uuid=new_terminology_version_uuid,

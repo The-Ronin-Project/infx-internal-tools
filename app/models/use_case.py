@@ -174,6 +174,8 @@ class UseCase:
 
         This method inserts a new row to the `value_sets.value_set_use_case_link` table with the provided values.
 
+        Raises any database exceptions to the caller
+
         Parameters
         ----------
         use_case : UseCase
@@ -188,21 +190,25 @@ class UseCase:
         None
         """
         conn = get_db()
-        query = conn.execute(
-            text(
-                """        
-                INSERT INTO value_sets.value_set_use_case_link        
-                (value_set_uuid, use_case_uuid, is_primary)        
-                VALUES        
-                (:value_set_uuid, :use_case_uuid, :is_primary)        
-                """
-            ),
-            {
-                "value_set_uuid": value_set_uuid,
-                "use_case_uuid": use_case["uuid"],
-                "is_primary": is_primary,
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """        
+                    INSERT INTO value_sets.value_set_use_case_link        
+                    (value_set_uuid, use_case_uuid, is_primary)        
+                    VALUES        
+                    (:value_set_uuid, :use_case_uuid, :is_primary)        
+                    """
+                ),
+                {
+                    "value_set_uuid": value_set_uuid,
+                    "use_case_uuid": use_case["uuid"],
+                    "is_primary": is_primary,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
 
 
 def load_use_case_by_value_set_uuid(
