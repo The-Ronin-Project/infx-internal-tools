@@ -741,7 +741,7 @@ class ConceptMapVersion:
 
         if not data:
             raise BadRequestWithCode(
-                "ConceptMap.diff.versionsInWrongHistoryOrder",
+                "ConceptMap.VersionNotFound",
                 f"Unable to load data for concept map version UUID: {self.uuid}",
             )
         if concept_map is None:
