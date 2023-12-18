@@ -2991,19 +2991,17 @@ class ValueSetVersion:
                 }
             ],
         )
-        serialized["immutable"] = (self.value_set.immutable,)
-        serialized["experimental"] = (self.value_set.experimental,)
-        serialized["purpose"] = (self.value_set.purpose,)
-        serialized["version"] = (str(self.version),)  # Version must be a string
-        serialized["status"] = (self.status,)
-        serialized["expansion"] = (
-            {
-                "contains": [x.serialize() for x in self.expansion],
-                "timestamp": self.expansion_timestamp.strftime("%Y-%m-%d")
-                if self.expansion_timestamp is not None
-                else None,
-            },
-        )
+        serialized["immutable"] = self.value_set.immutable
+        serialized["experimental"] = self.value_set.experimental
+        serialized["purpose"] = self.value_set.purpose
+        serialized["version"] = str(self.version)  # Version must be a string
+        serialized["status"] = self.status
+        serialized["expansion"] = {
+            "contains": [x.serialize() for x in self.expansion],
+            "timestamp": self.expansion_timestamp.strftime("%Y-%m-%d")
+            if self.expansion_timestamp is not None
+            else None,
+        }
         # serialized["compose"] = {"include": self.serialize_include()},
         serialized[
             "additionalData"
