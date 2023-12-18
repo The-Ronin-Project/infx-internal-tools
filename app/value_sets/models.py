@@ -2909,6 +2909,7 @@ class ValueSetVersion:
                 "ValueSetVersion.serialize",
                 f"Value Set schema version {schema_version} is not supported.",
             )
+        is_schema_version_5_or_later = schema_version >= 5
 
         pattern = r"[A-Z]([A-Za-z0-9_]){0,254}"  # name transformer
         if re.match(pattern, self.value_set.name):  # name follows pattern use name
@@ -2964,16 +2965,20 @@ class ValueSetVersion:
             "title": self.value_set.title,
             "publisher": self.value_set.publisher,
             "contact": [{"name": self.value_set.contact}],
-            # if else depending on the schema version
-            "description": (self.value_set.description or "")
-            + " "
-            + (self.description or "")
-            if ValueSet.database_schema_version == 4
-            else (self.value_set.description),
-            "versionDescription": None
-            if ValueSet.database_schema_version == 4
-            else (self.description),
-            "useContext": [
+        }
+
+        # if else for descriptions, depending on the schema version
+        if is_schema_version_5_or_later:
+            serialized["description"] = self.value_set.description or ""
+            serialized["versionDescription"] = self.description or ""
+        else:
+            serialized["description"] = (
+                (self.value_set.description or "") + " " + (self.description or "")
+            )
+
+        # continue with the rest of the dictionary
+        serialized["useContext"] = (
+            [
                 {
                     "code": {
                         "system": "http://terminology.hl7.org/CodeSystem/usage-context-type",  # static value
@@ -2985,26 +2990,30 @@ class ValueSetVersion:
                     },
                 }
             ],
-            "immutable": self.value_set.immutable,
-            "experimental": self.value_set.experimental,
-            "purpose": self.value_set.purpose,
-            "version": str(self.version),  # Version must be a string
-            "status": self.status,
-            "expansion": {
+        )
+        serialized["immutable"] = (self.value_set.immutable,)
+        serialized["experimental"] = (self.value_set.experimental,)
+        serialized["purpose"] = (self.value_set.purpose,)
+        serialized["version"] = (str(self.version),)  # Version must be a string
+        serialized["status"] = (self.status,)
+        serialized["expansion"] = (
+            {
                 "contains": [x.serialize() for x in self.expansion],
                 "timestamp": self.expansion_timestamp.strftime("%Y-%m-%d")
                 if self.expansion_timestamp is not None
                 else None,
             },
-            # "compose": {"include": self.serialize_include()},
-            "additionalData": {  # Place to put custom values that aren't part of the FHIR spec
-                "effective_start": self.effective_start,
-                "effective_end": self.effective_end,
-                "version_uuid": self.uuid,
-                "value_set_uuid": self.value_set.uuid,
-                "expansion_uuid": self.expansion_uuid,
-                "synonyms": self.value_set.synonyms,
-            },
+        )
+        # serialized["compose"] = {"include": self.serialize_include()},
+        serialized[
+            "additionalData"
+        ] = {  # Place to put custom values that aren't part of the FHIR spec
+            "effective_start": self.effective_start,
+            "effective_end": self.effective_end,
+            "version_uuid": self.uuid,
+            "value_set_uuid": self.value_set.uuid,
+            "expansion_uuid": self.expansion_uuid,
+            "synonyms": self.value_set.synonyms,
         }
 
         # serialized_exclude = self.serialize_exclude()
@@ -3139,53 +3148,54 @@ class ValueSetVersion:
         value_set_to_json, initial_path = self.prepare_for_oci(
             ValueSet.database_schema_version
         )
-        self.set_up_object_store(
-            value_set_to_json, initial_path
-        )  # Replace with your existing OCI storage handling method
+        set_up_object_store(
+            value_set_to_json, initial_path, folder="published", content_type="json"
+        )
 
         # OCI: also output as ValueSet.next_schema_version, if different from ValueSet.database_schema_version
         if ValueSet.database_schema_version != ValueSet.next_schema_version:
             value_set_to_json, initial_path = self.prepare_for_oci(
                 ValueSet.next_schema_version
             )
-            self.set_up_object_store(
-                value_set_to_json, initial_path
-            )  # Replace with your existing OCI storage handling method
+            set_up_object_store(
+                value_set_to_json, initial_path, folder="published", content_type="json"
+            )
+        value_set_to_json["status"] = "active"
 
-        # ... (remaining code unchanged)
-
-        value_set_to_json_copy = value_set_to_json.copy()  # Simplifier requires status
-
-        self.version_set_status_active()
-        self.retire_and_obsolete_previous_version()
-        value_set_uuid = self.value_set.uuid
+        # Store the published version of the ValueSet instance in the "published" folder
         set_up_object_store(
             value_set_to_json,
-            initial_path + f"/published/{value_set_uuid}",
+            initial_path + f"/published/{self.value_set.uuid}",
             folder="published",
             content_type="json",
-        )  # sending to OCI
+        )
+
+        # Additional publishing activities
+        self.version_set_status_active()
+        self.retire_and_obsolete_previous_version()
+
+        value_set_uuid = self.value_set.uuid
         resource_type = "ValueSet"  # param for Simplifier
-        value_set_to_json_copy["status"] = "active"
+        value_set_to_json["status"] = "active"
+
         # Check if the 'expansion' and 'contains' keys are present
         if (
-            "expansion" in value_set_to_json_copy
-            and "contains" in value_set_to_json_copy["expansion"]
+            "expansion" in value_set_to_json
+            and "contains" in value_set_to_json["expansion"]
         ):
             # Store the original total value
-            original_total = value_set_to_json_copy["expansion"]["total"]
+            original_total = value_set_to_json["expansion"]["total"]
 
             # Limit the contains list to the top 50 entries
-            value_set_to_json_copy["expansion"]["contains"] = value_set_to_json[
-                "expansion"
-            ]["contains"][:50]
+            value_set_to_json["expansion"]["contains"] = value_set_to_json["expansion"][
+                "contains"
+            ][:50]
 
             # Set the 'total' field to the original total
-            value_set_to_json_copy["expansion"]["total"] = original_total
-        publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
+            value_set_to_json["expansion"]["total"] = original_total
+        publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json)
 
         # Publish new version of data normalization registry
-
         app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
 
     @classmethod
