@@ -3143,38 +3143,34 @@ class ValueSetVersion:
         self.expand(force_new=force_new)
 
         # OCI: output as ValueSet.database_schema_version, which may be the same as ValueSet.next_schema_version
-        value_set_to_json, initial_path = self.prepare_for_oci(
-            ValueSet.database_schema_version
-        )
-        set_up_object_store(
-            value_set_to_json, initial_path, folder="published", content_type="json"
-        )
+        value_set_to_json = self.send_to_oci(ValueSet.database_schema_version)
 
         # OCI: also output as ValueSet.next_schema_version, if different from ValueSet.database_schema_version
         if ValueSet.database_schema_version != ValueSet.next_schema_version:
-            value_set_to_json, initial_path = self.prepare_for_oci(
-                ValueSet.next_schema_version
-            )
-            set_up_object_store(
-                value_set_to_json, initial_path, folder="published", content_type="json"
-            )
-        value_set_to_json["status"] = "active"
+            value_set_to_json = self.send_to_oci(ValueSet.next_schema_version)
 
-        # Store the published version of the ValueSet instance in the "published" folder
+        # Additional publishing activities
+        self.version_set_status_active()
+        self.retire_and_obsolete_previous_version()
+        self.to_simplifier(value_set_to_json)
+
+        # Publish new version of data normalization registry
+        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
+
+    def send_to_oci(self, schema_version):
+        value_set_to_json, initial_path = self.prepare_for_oci(schema_version)
         set_up_object_store(
             value_set_to_json,
             initial_path + f"/published/{self.value_set.uuid}",
             folder="published",
             content_type="json",
         )
+        return value_set_to_json
 
-        # Additional publishing activities
-        self.version_set_status_active()
-        self.retire_and_obsolete_previous_version()
-
+    def to_simplifier(self, value_set_to_json):
         value_set_uuid = self.value_set.uuid
         resource_type = "ValueSet"  # param for Simplifier
-        value_set_to_json["status"] = "active"
+        value_set_to_json["status"] = "active"  # Simplifier requires a status
 
         # Check if the 'expansion' and 'contains' keys are present
         if (
@@ -3192,9 +3188,6 @@ class ValueSetVersion:
             # Set the 'total' field to the original total
             value_set_to_json["expansion"]["total"] = original_total
         publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json)
-
-        # Publish new version of data normalization registry
-        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
 
     @classmethod
     def load_expansion_report(cls, expansion_uuid):
