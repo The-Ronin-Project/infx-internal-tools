@@ -14,7 +14,6 @@ import sys
 import httpx
 from cachetools.func import ttl_cache
 from decouple import config
-from deprecated.classic import deprecated
 from httpx import ReadTimeout, Response
 from httpcore import PoolTimeout as HttpcorePoolTimeout
 from httpx import PoolTimeout as HttpxPoolTimeout
@@ -27,6 +26,8 @@ import app.concept_maps.models
 import app.models.data_ingestion_registry
 import app.value_sets.models
 from app.errors import BadDataError, NotFoundException
+from app.helpers.api_helper import get_token, make_get_request_async, make_get_request, make_post_request_async
+from app.helpers.format_helper import convert_string_to_datetime_or_none
 from app.helpers.message_helper import (
     message_exception_summary,
     message_exception_classname,
@@ -49,68 +50,6 @@ PAGE_SIZE = 300
 LOGGER = logging.getLogger()
 
 
-def get_token(url: str, client_id: str, client_secret: str, audience: str) -> str:
-    """
-    Fetches a token from Auth0.
-    """
-    payload = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "audience": audience,
-        "grant_type": "client_credentials",
-    }
-    response = httpx.post(url, json=payload)
-    try:
-        token = response.json()["access_token"]
-    except (KeyError, ValueError) as e:
-        LOGGER.error("Failed to get token")
-        LOGGER.debug(response.content)
-        raise e
-    return token
-
-
-def convert_string_to_datetime_or_none(input_string):
-    if input_string is None:
-        return None
-    else:
-        try:
-            return datetime.datetime.strptime(input_string, "%Y-%m-%dT%H:%M:%S.%fZ")
-        except ValueError:
-            return datetime.datetime.strptime(input_string, "%Y-%m-%dT%H:%M:%SZ")
-
-
-# Function to use the token to access the API
-def make_get_request(token, client: httpx.Client, base_url, api_url, params={}):
-    headers: dict[str, str] = {
-        "Authorization": f"Bearer {token}",
-        "content-type": "application/json",
-    }
-    response = client.get(base_url + api_url, headers=headers, params=params)
-    return response.json()
-
-
-async def make_get_request_async(
-    token, client: httpx.AsyncClient, base_url, api_url, params={}
-):
-    headers: dict[str, str] = {
-        "Authorization": f"Bearer {token}",
-        "content-type": "application/json",
-    }
-    response = await client.get(base_url + api_url, headers=headers, params=params)
-    return response.json()
-
-
-async def make_post_request_async(
-    token, client: httpx.AsyncClient, base_url, api_url, params={}
-):
-    headers: dict[str, str] = {
-        "Authorization": f"Bearer {token}",
-        "content-type": "application/json",
-    }
-    response = await client.post(base_url + api_url, headers=headers, params=params)
-    return response.json()
-
-
 class ResourceType(Enum):
     OBSERVATION = "Observation"
     CONDITION = "Condition"
@@ -122,7 +61,7 @@ class ResourceType(Enum):
     APPOINTMENT = "Appointment"
     DOCUMENT_REFERENCE = "DocumentReference"
     CARE_PLAN = "CarePlan"
-    PROCEDURE = "Procedure" # Only code for now
+    PROCEDURE = "Procedure"  # Only code for now
     # TELECOM_USE = "Practitioner.telecom.use"  # Only in for testing until we have a real data type live
 
 
@@ -186,7 +125,13 @@ class ErrorServiceResource:
     def __post_init__(self):
         self.issues = []
         if self.token is None:
-            self.token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
+            try:
+                self.token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
+            except (KeyError, ValueError) as e:
+                LOGGER.error(
+                    f"Failed to get token:\nAUTH_URL: {AUTH_URL}\nCLIENT_ID: {CLIENT_ID}\nAUTH_AUDIENCE: {AUTH_AUDIENCE})"
+                )
+                raise e
 
     @classmethod
     def deserialize(cls, resource_data, token=None):
@@ -695,9 +640,9 @@ class MappingRequestService:
                 tip = f"\nThis error means a required value was empty."
             else:
                 tip = ""
-                LOGGER.warning(
-                    f"{intro}, skipping load of {cls.page_size} resources of type {cls.fhir_resource_type} for {cls.input_issue_type} issue for organization {cls.organization_id}{tip}"
-                )
+            LOGGER.warning(
+                f"{intro}, skipping load of {cls.page_size} resources of type {cls.fhir_resource_type} for {cls.input_issue_type} issue for organization {cls.organization_id}{tip}"
+            )
         except Exception as e:
             intro = message_exception_summary(e)
             if ("Connect" or "Socket" or "Timeout") in intro:
@@ -1794,8 +1739,9 @@ if __name__ == "__main__":
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
     # service.load_concepts_from_errors(commit_changes=True)
 
-    # UNCOMMENT the line below, for merges and normal use; comment out when running the temporary error load task
+    # UNCOMMENT the 2 lines below for GitHub merges and testing; comment them when running the temporary error load task
     service.load_concepts_from_errors(commit_changes=False)
+    conn.rollback()
 
-    # load_concepts_from_errors ran rollback() and commit() where and as needed; now ask the DatabaseHandler to close()
+    # We have run rollback() and commit() where and as needed; now ask the DatabaseHandler to close() the connection
     conn.close()
