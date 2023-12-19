@@ -16,7 +16,13 @@ from sqlalchemy import text
 import app.models.codes
 import app.models.data_ingestion_registry
 from app.database import get_db, get_opensearch
-from app.errors import BadDataError, BadRequestWithCode, NotFoundException, BadSourceCodeError, DuplicateTargetError
+from app.errors import (
+    BadDataError,
+    BadRequestWithCode,
+    NotFoundException,
+    BadSourceCodeError,
+    DuplicateTargetError,
+)
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.models.codes import Code
@@ -31,11 +37,11 @@ import app.tasks
 
 # Function for checking if we have a coding array string that used to be JSON
 def is_coding_array(source_code_string):
-    return source_code_string.strip().startswith(
-        "[{"
-    ) or source_code_string.strip().startswith(
-        "{[{"
-    ) or source_code_string.strip().startswith("{null, ")
+    return (
+        source_code_string.strip().startswith("[{")
+        or source_code_string.strip().startswith("{[{")
+        or source_code_string.strip().startswith("{null, ")
+    )
 
 
 # This is from when we used `scrappyMaps`. It's used for mapping inclusions and
@@ -1258,16 +1264,18 @@ class ConceptMapVersion:
             raise BadSourceCodeError(
                 code="BadSourceCode",
                 description=f"Bad source code errors found in ConceptMap. {bad_source_errors}",
-                errors=formatted_errors
+                errors=formatted_errors,
             )
 
         if duplicate_target_errors:
-            errors_str = "\n".join([f"  - {error}" for error in duplicate_target_errors])
+            errors_str = "\n".join(
+                [f"  - {error}" for error in duplicate_target_errors]
+            )
             formatted_errors = f"Duplicate Target Errors:\n{errors_str}"
             raise DuplicateTargetError(
                 code="DuplicateTarget",
                 description=f"Duplicate target errors found in ConceptMap. {duplicate_target_errors}",
-                errors=formatted_errors
+                errors=formatted_errors,
             )
 
     def serialize(
@@ -1284,7 +1292,10 @@ class ConceptMapVersion:
         @return: object structure representing the concept map and conforming to the specified schema_version
         """
         # Prepare according to the version
-        if schema_version not in [ConceptMap.database_schema_version, ConceptMap.next_schema_version]:
+        if schema_version not in [
+            ConceptMap.database_schema_version,
+            ConceptMap.next_schema_version,
+        ]:
             raise BadRequestWithCode(
                 "ConceptMapVersion.serialize",
                 f"ConceptMap schema version {schema_version} is not supported.",
@@ -2046,10 +2057,7 @@ class MappingSuggestion:
 def transform_struct_string_to_json(struct_string):
     # Handle case where we have a single code and the code is null
     if struct_string.startswith("{null, ") and struct_string.endswith("}"):
-        return json.dumps({
-            'code': None,
-            'display': struct_string[7:-1]
-        })
+        return json.dumps({"code": None, "display": struct_string[7:-1]})
 
     # Parse the coding elements and the text that trails at the end
     # Handle different start/end characters
@@ -2088,7 +2096,7 @@ def transform_struct_string_to_json(struct_string):
             display = d.get("display")
             find_index = display.index(", urn:oid:")
             new_display = display[:find_index]
-            new_system = display[find_index+2:]
+            new_system = display[find_index + 2 :]
             d["display"] = new_display
             d["system"] = new_system
 
@@ -2096,7 +2104,7 @@ def transform_struct_string_to_json(struct_string):
             display = d.get("display")
             find_index = display.index(", http:")
             new_display = display[:find_index]
-            new_system = display[find_index+2:]
+            new_system = display[find_index + 2 :]
             d["display"] = new_display
             d["system"] = new_system
 
