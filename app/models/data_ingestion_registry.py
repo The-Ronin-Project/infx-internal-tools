@@ -33,7 +33,11 @@ class DNRegistryEntry:
     concept_map: "app.concept_maps.models.ConceptMap" = None
     value_set: "app.value_sets.models.ValueSet" = None
 
-    def serialize(self, concept_map_schema_version: int = None, value_set_schema_version: int = None):
+    def serialize(
+        self,
+        concept_map_schema_version: int = None,
+        value_set_schema_version: int = None,
+    ):
         """
         Serialize the DNRegistryEntry object into a dictionary. It is either a concept map or a value set.
         @param concept_map_schema_version: Format to use in serialization for concept_map entries. Caller may accept the
@@ -56,15 +60,22 @@ class DNRegistryEntry:
 
             # Determine the output schema version
             if value_set_schema_version is None:
-                value_set_schema_version = app.value_sets.models.ValueSet.next_schema_version
+                value_set_schema_version = (
+                    app.value_sets.models.ValueSet.next_schema_version
+                )
             else:
-                if value_set_schema_version != app.value_sets.models.ValueSet.next_schema_version and (
-                        concept_map_schema_version != app.value_sets.models.ValueSet.database_schema_version
+                if (
+                    value_set_schema_version
+                    != app.value_sets.models.ValueSet.next_schema_version
+                    and (
+                        concept_map_schema_version
+                        != app.value_sets.models.ValueSet.database_schema_version
+                    )
                 ):
                     raise BadRequestWithCode(
                         "DNRegistryEntry.serialize.BadValueSetSchemaVersion",
-                        f"ConceptMap output format schema version {value_set_schema_version} is not supported"
-                        )
+                        f"ConceptMap output format schema version {value_set_schema_version} is not supported",
+                    )
 
             # Prepare the DNRegistryEntry
             value_set_version = self.value_set.load_most_recent_active_version(
@@ -74,22 +85,27 @@ class DNRegistryEntry:
             serialized["value_set_name"] = self.value_set.name
             serialized["value_set_uuid"] = str(self.value_set.uuid)
             serialized["version"] = value_set_version
-            serialized[
-                "filename"
-            ] = filepath
+            serialized["filename"] = filepath
         if self.registry_entry_type == "concept_map":
 
             # Determine the output schema version
             if concept_map_schema_version is None:
-                concept_map_schema_version = app.concept_maps.models.ConceptMap.next_schema_version
+                concept_map_schema_version = (
+                    app.concept_maps.models.ConceptMap.next_schema_version
+                )
             else:
-                if concept_map_schema_version != app.concept_maps.models.ConceptMap.next_schema_version and (
-                        concept_map_schema_version != app.concept_maps.models.ConceptMap.database_schema_version
+                if (
+                    concept_map_schema_version
+                    != app.concept_maps.models.ConceptMap.next_schema_version
+                    and (
+                        concept_map_schema_version
+                        != app.concept_maps.models.ConceptMap.database_schema_version
+                    )
                 ):
                     raise BadRequestWithCode(
                         "DNRegistryEntry.serialize.BadConceptMapSchemaVersion",
-                        f"ConceptMap output format schema version {concept_map_schema_version} is not supported"
-                        )
+                        f"ConceptMap output format schema version {concept_map_schema_version} is not supported",
+                    )
 
             # Prepare the DNRegistryEntry
             concept_map_version = self.concept_map.most_recent_active_version.version
@@ -97,9 +113,7 @@ class DNRegistryEntry:
             serialized["concept_map_name"] = self.concept_map.name
             serialized["concept_map_uuid"] = str(self.concept_map.uuid)
             serialized["version"] = concept_map_version
-            serialized[
-                "filename"
-            ] = filepath
+            serialized["filename"] = filepath
         return serialized
 
 
@@ -122,6 +136,7 @@ class DataNormalizationRegistry:
         object_storage_diff_name (str): Diff file in OCI storage, for easy retrieval during storage and read utilities.
         entries (list):
     """
+
     entries: List[DNRegistryEntry] = None
     database_schema_version = 4
     next_schema_version = 5
@@ -183,17 +198,25 @@ class DataNormalizationRegistry:
                     "Only value_set and concept_map are recognized registry types"
                 )
 
-    def serialize(self, concept_map_schema_version: int = None, value_set_schema_version: int = None):
+    def serialize(
+        self,
+        concept_map_schema_version: int = None,
+        value_set_schema_version: int = None,
+    ):
         """
         Serialize the DataNormalizationRegistry object into a list of entries. Each entry is a concept map or value set.
         The schema version for the DataNormalizationRegistry itself does not affect the format of any list entry.
         @param concept_map_schema_version: Format to use in serialization for concept_map entries. Caller may accept the
         default, or input a choice between the current ConceptMap.database_schema_version (such as 3) and
         ConceptMap.next_schema_version (such as 4). If None or not supplied, next_schema_version is used.
+        @param value_set_schema_version: Similar but for value sets.
         @return: object structure representing the DNRegistryEntry and conforming to the specified schema versions.
         @raise BadRequestWithCode if a concept_map_schema_version value is provided, but turns out to be invalid.
         """
-        return [x.serialize(concept_map_schema_version, value_set_schema_version) for x in self.entries]
+        return [
+            x.serialize(concept_map_schema_version, value_set_schema_version)
+            for x in self.entries
+        ]
 
     @staticmethod
     def publish_to_object_store(registry, filepath):
@@ -273,31 +296,36 @@ class DataNormalizationRegistry:
 
     @classmethod
     def publish_data_normalization_registry_output(
-            cls,
-            current_registry,
-            norm_registry_schema_version: int,
-            concept_map_schema_version: int,
-            value_set_schema_version: int
+        cls,
+        current_registry,
+        norm_registry_schema_version: int,
+        concept_map_schema_version: int,
+        value_set_schema_version: int,
     ):
         """
         Helper method for calls to publish_data_normalization_registry using different combinations of schema version.
         """
         registry_serialized = current_registry.serialize(
-            concept_map_schema_version,
-            value_set_schema_version
+            concept_map_schema_version, value_set_schema_version
         )
         filepath = f"{DataNormalizationRegistry.object_storage_folder_name}/v{norm_registry_schema_version}"
-        full_filepath = f"{filepath}/{DataNormalizationRegistry.object_storage_file_name}"
-        newly_published_version = DataNormalizationRegistry.publish_to_object_store(
-            registry_serialized,
+        full_filepath = (
             f"{filepath}/{DataNormalizationRegistry.object_storage_file_name}"
         )
+        newly_published_version = DataNormalizationRegistry.publish_to_object_store(
+            registry_serialized,
+            f"{filepath}/{DataNormalizationRegistry.object_storage_file_name}",
+        )
         try:
-            previous_version = DataNormalizationRegistry.get_last_published_registry(full_filepath)
-            diff_version = get_incremented_versions_and_update(previous_version, newly_published_version)
+            previous_version = DataNormalizationRegistry.get_last_published_registry(
+                full_filepath
+            )
+            diff_version = get_incremented_versions_and_update(
+                previous_version, newly_published_version
+            )
             DataNormalizationRegistry.publish_to_object_store(
                 diff_version,
-                f"{filepath}/{DataNormalizationRegistry.object_storage_diff_name}"
+                f"{filepath}/{DataNormalizationRegistry.object_storage_diff_name}",
             )
         except ServiceError:
             pass
@@ -321,16 +349,19 @@ class DataNormalizationRegistry:
             current_registry,
             DataNormalizationRegistry.database_schema_version,
             app.concept_maps.models.ConceptMap.database_schema_version,
-            app.concept_maps.models.ValueSet.database_schema_version
+            app.concept_maps.models.ValueSet.database_schema_version,
         )
 
         # Step 3: Also output DataNormalizationRegistry.next_schema_version, if different from database_schema_version
-        if DataNormalizationRegistry.database_schema_version != DataNormalizationRegistry.next_schema_version:
+        if (
+            DataNormalizationRegistry.database_schema_version
+            != DataNormalizationRegistry.next_schema_version
+        ):
             newly_published_version = cls.publish_data_normalization_registry_output(
                 current_registry,
                 DataNormalizationRegistry.next_schema_version,
                 app.concept_maps.models.ConceptMap.next_schema_version,
-                app.concept_maps.models.ValueSet.next_schema_version
+                app.concept_maps.models.ValueSet.next_schema_version,
             )
 
         # Step 4: Done
