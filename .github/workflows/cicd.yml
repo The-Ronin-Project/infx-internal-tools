@@ -17,11 +17,12 @@ jobs:
     steps:
       - name: test
         run: echo "I solemnly swear I am up to no good and have no tests."
+
   application-image:
     runs-on: oci-shared
-    if: github.ref == 'refs/heads/main'
     needs:
       - test
+    if: github.ref == 'refs/heads/main'
     steps:
       - id: get-version
         uses: projectronin/github/get-version@get-version/v3
