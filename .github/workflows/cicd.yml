@@ -28,12 +28,11 @@ jobs:
         uses: projectronin/github/get-version@get-version/v3
 
       - name: Push multiplatform application image to Nexus
-        uses: projectronin/github/.github/workflows/image_push_nexus.yml@image_push_nexus/v4
+        uses: projectronin/github/build-image@build-image/v3
         with:
-          image-tag: ${{ steps.get-version.outputs.version }}
-          repo: "infx-internal-tools"
           username: ${{ secrets.NEXUS_DOCKER_USERNAME }}
           password: ${{ secrets.NEXUS_DOCKER_PASSWORD }}
+          tags: ${{ steps.get-version.outputs.version }}
 
       - id: set-version
         uses: projectronin/github/set-version@set-version/v2
