@@ -68,7 +68,7 @@ class DNRegistryEntry:
                     value_set_schema_version
                     != app.value_sets.models.ValueSet.next_schema_version
                     and (
-                        concept_map_schema_version
+                        value_set_schema_version
                         != app.value_sets.models.ValueSet.database_schema_version
                     )
                 ):
@@ -349,7 +349,7 @@ class DataNormalizationRegistry:
             current_registry,
             DataNormalizationRegistry.database_schema_version,
             app.concept_maps.models.ConceptMap.database_schema_version,
-            app.concept_maps.models.ValueSet.database_schema_version,
+            app.value_sets.models.ValueSet.database_schema_version,
         )
 
         # Step 3: Also output DataNormalizationRegistry.next_schema_version, if different from database_schema_version
@@ -361,7 +361,7 @@ class DataNormalizationRegistry:
                 current_registry,
                 DataNormalizationRegistry.next_schema_version,
                 app.concept_maps.models.ConceptMap.next_schema_version,
-                app.concept_maps.models.ValueSet.next_schema_version,
+                app.value_sets.models.ValueSet.next_schema_version,
             )
 
         # Step 4: Done
