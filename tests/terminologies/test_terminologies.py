@@ -284,7 +284,7 @@ class TerminologyTests(unittest.TestCase):
         result = response.json
         assert response.status == "400 BAD REQUEST"
         assert result.get("code") == "Terminology.create_terminology.database_error"
-        error_text = f"""(psycopg2.errors.NotNullViolation) null value in column "terminology" violates not-null constraint"""
+        error_text = """(psycopg2.errors.NotNullViolation) null value in column "terminology" of relation "terminology_versions" violates not-null constraint"""
         assert error_text in result.get("message")
 
     def test_create_terminology_no_version(self):
@@ -308,7 +308,7 @@ class TerminologyTests(unittest.TestCase):
         result = response.json
         assert response.status == "400 BAD REQUEST"
         assert result.get("code") == "Terminology.create_terminology.database_error"
-        error_text = f"""(psycopg2.errors.NotNullViolation) null value in column "version" violates not-null constraint"""
+        error_text = """(psycopg2.errors.NotNullViolation) null value in column "version" of relation "terminology_versions" violates not-null constraint"""
         assert error_text in result.get("message")
 
     def test_create_terminology_no_is_standard(self):
@@ -332,7 +332,7 @@ class TerminologyTests(unittest.TestCase):
         result = response.json
         assert response.status == "400 BAD REQUEST"
         assert result.get("code") == "Terminology.create_terminology.database_error"
-        error_text = f"""(psycopg2.errors.NotNullViolation) null value in column "is_standard" violates not-null constraint"""
+        error_text = """(psycopg2.errors.NotNullViolation) null value in column "is_standard" of relation "terminology_versions" violates not-null constraint"""
         assert error_text in result.get("message")
 
     def test_create_terminology_no_fhir_terminology(self):
@@ -356,7 +356,7 @@ class TerminologyTests(unittest.TestCase):
         result = response.json
         assert response.status == "400 BAD REQUEST"
         assert result.get("code") == "Terminology.create_terminology.database_error"
-        error_text = f"""(psycopg2.errors.NotNullViolation) null value in column "fhir_terminology" violates not-null constraint"""
+        error_text = """(psycopg2.errors.NotNullViolation) null value in column "fhir_terminology" of relation "terminology_versions" violates not-null constraint"""
         assert error_text in result.get("message")
 
     def test_new_terminology_version_from_previous_happy(self):
@@ -452,7 +452,7 @@ class TerminologyTests(unittest.TestCase):
         result = response.json
         assert response.status == "400 BAD REQUEST"
         assert result.get("code") == "Terminology.create_new_term_version_from_previous.database_error"
-        assert f"""(psycopg2.errors.NotNullViolation) null value in column "version" violates not-null constraint""" in result.get("message")
+        assert f"""(psycopg2.errors.NotNullViolation) null value in column "version" of relation "terminology_versions" violates not-null constraint""" in result.get("message")
 
     def test_create_term_from_previous_conflict_version(self):
         """

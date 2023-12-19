@@ -355,7 +355,7 @@ class CodeTests(unittest.TestCase):
         result = response.json
         assert response.status == "400 BAD REQUEST"
         assert result.get("code") == "Terminology.create_code.database_error"
-        error_text = """(psycopg2.errors.NotNullViolation) null value in column "code" violates not-null constraint"""
+        error_text = """(psycopg2.errors.NotNullViolation) null value in column "code" of relation "code" violates not-null constraint"""
         assert error_text in result.get("message")
 
     def test_create_code_no_code_display(self):
@@ -384,7 +384,7 @@ class CodeTests(unittest.TestCase):
         result = response.json
         assert response.status == "400 BAD REQUEST"
         assert result.get("code") == "Terminology.create_code.database_error"
-        error_text = """(psycopg2.errors.NotNullViolation) null value in column "display" violates not-null constraint"""
+        error_text = """(psycopg2.errors.NotNullViolation) null value in column "display" of relation "code" violates not-null constraint"""
         assert error_text in result.get("message")
 
     def test_load_codes_multiple_terminologies(self):
