@@ -10,26 +10,34 @@ jobs:
   # Run tests and (not yet implemented publish coverage
   #####################################################
   test:
-    runs-on: self-hosted
+    runs-on: oci-shared
     # uses: projectronin/github/.github/workflows/python_test.yml
     # secrets:
     #   (none at this time)
     steps:
       - name: test
         run: echo "I solemnly swear I am up to no good and have no tests."
-
   application-image:
+    runs-on: oci-shared
     if: github.ref == 'refs/heads/main'
-    name: Push multiplatform application image to Nexus
-    uses: projectronin/github/.github/workflows/image_push_nexus.yml@image_push_nexus/v4
     needs:
       - test
-    with:
-      image-tag: ${{ github.sha }}
-      repo: "infx-internal-tools"
-    secrets:
-      username: ${{ secrets.NEXUS_DOCKER_USERNAME }}
-      password: ${{ secrets.NEXUS_DOCKER_PASSWORD }}
+    steps:
+      - id: get-version
+        uses: projectronin/github/get-version@get-version/v3
+
+      - name: Push multiplatform application image to Nexus
+        uses: projectronin/github/.github/workflows/image_push_nexus.yml@image_push_nexus/v4
+        with:
+          image-tag: ${{ steps.get-version.outputs.version }}
+          repo: "infx-internal-tools"
+          username: ${{ secrets.NEXUS_DOCKER_USERNAME }}
+          password: ${{ secrets.NEXUS_DOCKER_PASSWORD }}
+
+      - id: set-version
+        uses: projectronin/github/set-version@set-version/v2
+        with:
+          semver: "${{ steps.get-version.outputs.version }}"
 
   deploy_dev:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
