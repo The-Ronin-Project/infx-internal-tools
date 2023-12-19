@@ -1326,7 +1326,7 @@ class ValueSet:
 
     """
 
-    database_schema_version = 4
+    database_schema_version = 2
     next_schema_version = 5
     object_storage_folder_name = "ValueSets"
 
