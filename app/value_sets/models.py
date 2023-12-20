@@ -18,8 +18,10 @@ from collections import defaultdict
 from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
 
+
 from app.errors import NotFoundException, BadDataError, DataIntegrityError, BadRequestWithCode
 from app.helpers.message_helper import message_exception_classname
+
 from app.helpers.oci_helper import set_up_object_store
 
 from app.models.codes import Code
@@ -117,7 +119,7 @@ class VSRule:
         if rule_uuid is None:
             raise BadRequestWithCode(
                 "ValueSetRule.load.empty",
-                "Cannot update Value Set Rule: empty Terminology Version ID"
+                "Cannot update Value Set Rule: empty Terminology Version ID",
             )
         conn = get_db()
         result = conn.execute(
@@ -150,7 +152,7 @@ class VSRule:
         if new_terminology_version_uuid is None:
             raise BadRequestWithCode(
                 "ValueSetRule.update.empty",
-                "Cannot update Value Set Rule: empty Terminology Version ID"
+                "Cannot update Value Set Rule: empty Terminology Version ID",
             )
         conn = get_db()
         conn.execute(
@@ -1303,6 +1305,7 @@ class ValueSet:
         type: str, the type of the value set.
         synonyms: dict, the synonyms of the value set.
         database_schema_version (int): The current output schema version for ValueSet JSON files in OCI.
+        next_schema_version (int): The pending next output schema version for ValueSet JSON files in OCI.
         object_storage_folder_name (str): "ValueSets" folder name for OCI storage, for easy retrieval by utilities.
 
     Methods:
@@ -1322,7 +1325,7 @@ class ValueSet:
     """
 
     database_schema_version = 2
-    # todo: when ready, add a ValueSet.next_schema_version as we have for ConceptMap and DataNormalizationRegistry
+    next_schema_version = 5
     object_storage_folder_name = "ValueSets"
 
     def __init__(
@@ -1553,6 +1556,7 @@ class ValueSet:
         return value_set
 
     def serialize(self):
+
         use_case_info = load_use_case_by_value_set_uuid(self.uuid)
         # Extract the names from use_case_info
         use_case_names = []
@@ -2752,7 +2756,9 @@ class ValueSetVersion:
             {"version_uuid": self.uuid},
         ).first()
         if expansion_metadata is None:
-            raise NotFoundException(f"No Value Set Version found with UUID: {self.uuid}")
+            raise NotFoundException(
+                f"No Value Set Version found with UUID: {self.uuid}"
+            )
 
         self.expansion_uuid = expansion_metadata.uuid
 
@@ -2960,7 +2966,10 @@ class ValueSetVersion:
         else:  # No exclude for extensional
             return []
 
-    def serialize(self):
+    def serialize(
+        self,
+        schema_version: int = ValueSet.next_schema_version,
+    ):
         """
         Transform the ValueSet instance into a dictionary in a format suitable for serialization.
 
@@ -2970,12 +2979,28 @@ class ValueSetVersion:
         It also applies specific transformations to the data to ensure it meets the RCDM-compliant format,
         including generating a compliant name for the ValueSet, and transforming use case names into the required format.
 
+        Parameters
+        ----------
+        schema_version : int, optional
+        The schema version to use when serializing the ValueSet instance. Default is ValueSet.next_schema_version.
+
         Returns
         -------
         dict
             The dictionary representing the serialized state of the ValueSet instance.
 
         """
+        # Prepare according to the version
+        if schema_version not in [
+            ValueSet.database_schema_version,
+            ValueSet.next_schema_version,
+        ]:
+            raise BadRequestWithCode(
+                "ValueSetVersion.serialize",
+                f"Value Set schema version {schema_version} is not supported.",
+            )
+        is_schema_version_5_or_later = schema_version >= 5
+
         pattern = r"[A-Z]([A-Za-z0-9_]){0,254}"  # name transformer
         if re.match(pattern, self.value_set.name):  # name follows pattern use name
             rcdm_name = self.value_set.name
@@ -3030,10 +3055,20 @@ class ValueSetVersion:
             "title": self.value_set.title,
             "publisher": self.value_set.publisher,
             "contact": [{"name": self.value_set.contact}],
-            "description": (self.value_set.description or "")
-            + " "
-            + (self.description or ""),
-            "useContext": [
+        }
+
+        # if else for descriptions, depending on the schema version
+        if is_schema_version_5_or_later:
+            serialized["description"] = self.value_set.description or ""
+            serialized["versionDescription"] = self.description or ""
+        else:
+            serialized["description"] = (
+                (self.value_set.description or "") + " " + (self.description or "")
+            )
+
+        # continue with the rest of the dictionary
+        serialized["useContext"] = (
+            [
                 {
                     "code": {
                         "system": "http://terminology.hl7.org/CodeSystem/usage-context-type",  # static value
@@ -3045,26 +3080,28 @@ class ValueSetVersion:
                     },
                 }
             ],
-            "immutable": self.value_set.immutable,
-            "experimental": self.value_set.experimental,
-            "purpose": self.value_set.purpose,
-            "version": str(self.version),  # Version must be a string
-            "status": self.status,
-            "expansion": {
-                "contains": [x.serialize() for x in self.expansion],
-                "timestamp": self.expansion_timestamp.strftime("%Y-%m-%d")
-                if self.expansion_timestamp is not None
-                else None,
-            },
-            # "compose": {"include": self.serialize_include()},
-            "additionalData": {  # Place to put custom values that aren't part of the FHIR spec
-                "effective_start": self.effective_start,
-                "effective_end": self.effective_end,
-                "version_uuid": self.uuid,
-                "value_set_uuid": self.value_set.uuid,
-                "expansion_uuid": self.expansion_uuid,
-                "synonyms": self.value_set.synonyms,
-            },
+        )
+        serialized["immutable"] = self.value_set.immutable
+        serialized["experimental"] = self.value_set.experimental
+        serialized["purpose"] = self.value_set.purpose
+        serialized["version"] = str(self.version)  # Version must be a string
+        serialized["status"] = self.status
+        serialized["expansion"] = {
+            "contains": [x.serialize() for x in self.expansion],
+            "timestamp": self.expansion_timestamp.strftime("%Y-%m-%d")
+            if self.expansion_timestamp is not None
+            else None,
+        }
+        # serialized["compose"] = {"include": self.serialize_include()},
+        serialized[
+            "additionalData"
+        ] = {  # Place to put custom values that aren't part of the FHIR spec
+            "effective_start": self.effective_start,
+            "effective_end": self.effective_end,
+            "version_uuid": self.uuid,
+            "value_set_uuid": self.value_set.uuid,
+            "expansion_uuid": self.expansion_uuid,
+            "synonyms": self.value_set.synonyms,
         }
 
         # serialized_exclude = self.serialize_exclude()
@@ -3076,7 +3113,7 @@ class ValueSetVersion:
 
         return serialized
 
-    def prepare_for_oci(self):
+    def prepare_for_oci(self, schema_version: int = ValueSet.next_schema_version):
         """
         This method prepares the serialized representation of a value set for OCI publishing.
 
@@ -3084,12 +3121,17 @@ class ValueSetVersion:
         dictionary representation, including relevant fields such as ID, URL, status, date, and expansion.
         The method also determines the initial path for storage based on the value set's UUID.
 
+        Parameters
+        ----------
+        schema_version : int, optional
+        The schema version to use when preparing the ValueSet instance for OCI publishing. Default is ValueSet.next_schema_version.
+
         Returns:
         tuple: A tuple containing two elements:
         1. dict: The RCDM-compliant serialized representation of the value set.
         2. str: The initial storage path for the value set, based on its UUID.
         """
-        serialized = self.serialize()
+        serialized = self.serialize(schema_version=schema_version)
         rcdm_id = serialized.get("id")
         rcdm_url = "http://projectronin.io/ValueSet/"
         # id will depend on publisher
@@ -3172,48 +3214,70 @@ class ValueSetVersion:
         serialized.pop("immutable")
         serialized.pop("contact")
         serialized.pop("publisher")
-        initial_path = (
-            f"{ValueSet.object_storage_folder_name}/v{ValueSet.database_schema_version}"
-        )
+        initial_path = f"{ValueSet.object_storage_folder_name}/v{schema_version}"
 
         return serialized, initial_path
 
     def publish(self, force_new):
-        self.expand(force_new=force_new)
-        value_set_to_json, initial_path = self.prepare_for_oci()
-        value_set_to_json_copy = value_set_to_json.copy()  # Simplifier requires status
+        """
+        Publish the ValueSet instance to OCI storage and Simplifier.
 
+        This method first expands the ValueSet instance and then prepares it for OCI publishing using the `prepare_for_oci` method.
+        It sends the serialized value set to OCI storage using the `set_up_object_store` method for both the database_schema_version
+        and next_schema_version, if they are different.
+
+        The method then creates a copy of the serialized value set for Simplifier and sets the status to active.
+
+        """
+
+        self.expand(force_new=force_new)
+
+        # OCI: output as ValueSet.database_schema_version, which may be the same as ValueSet.next_schema_version
+        value_set_to_json = self.send_to_oci(ValueSet.database_schema_version)
+
+        # OCI: also output as ValueSet.next_schema_version, if different from ValueSet.database_schema_version
+        if ValueSet.database_schema_version != ValueSet.next_schema_version:
+            value_set_to_json = self.send_to_oci(ValueSet.next_schema_version)
+
+        # Additional publishing activities
         self.version_set_status_active()
         self.retire_and_obsolete_previous_version()
-        value_set_uuid = self.value_set.uuid
-        set_up_object_store(
-            value_set_to_json,
-            initial_path + f"/published/{value_set_uuid}",
-            folder="published",
-            content_type="json",
-        )  # sending to OCI
-        resource_type = "ValueSet"  # param for Simplifier
-        value_set_to_json_copy["status"] = "active"
-        # Check if the 'expansion' and 'contains' keys are present
-        if (
-            "expansion" in value_set_to_json_copy
-            and "contains" in value_set_to_json_copy["expansion"]
-        ):
-            # Store the original total value
-            original_total = value_set_to_json_copy["expansion"]["total"]
-
-            # Limit the contains list to the top 50 entries
-            value_set_to_json_copy["expansion"]["contains"] = value_set_to_json[
-                "expansion"
-            ]["contains"][:50]
-
-            # Set the 'total' field to the original total
-            value_set_to_json_copy["expansion"]["total"] = original_total
-        publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json_copy)
+        self.to_simplifier(value_set_to_json)
 
         # Publish new version of data normalization registry
-
         app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
+
+    def send_to_oci(self, schema_version):
+        value_set_to_json, initial_path = self.prepare_for_oci(schema_version)
+        set_up_object_store(
+            value_set_to_json,
+            initial_path + f"/published/{self.value_set.uuid}",
+            folder="published",
+            content_type="json",
+        )
+        return value_set_to_json
+
+    def to_simplifier(self, value_set_to_json):
+        value_set_uuid = self.value_set.uuid
+        resource_type = "ValueSet"  # param for Simplifier
+        value_set_to_json["status"] = "active"  # Simplifier requires a status
+
+        # Check if the 'expansion' and 'contains' keys are present
+        if (
+            "expansion" in value_set_to_json
+            and "contains" in value_set_to_json["expansion"]
+        ):
+            # Store the original total value
+            original_total = value_set_to_json["expansion"]["total"]
+
+            # Limit the contains list to the top 50 entries
+            value_set_to_json["expansion"]["contains"] = value_set_to_json["expansion"][
+                "contains"
+            ][:50]
+
+            # Set the 'total' field to the original total
+            value_set_to_json["expansion"]["total"] = original_total
+        publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json)
 
     @classmethod
     def load_expansion_report(cls, expansion_uuid):
