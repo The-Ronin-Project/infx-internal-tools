@@ -308,13 +308,15 @@ class Terminology:
         Returns the latest version of the terminology
         """
         # First check if this is the most recent version
+        # This operation casts a string (the version of the terminology) as a number
+        # For all custom terminologies, this should be safe
         conn = get_db()
         terminology_versions_info = conn.execute(
             text(
                 """
                 select * from public.terminology_versions
                 where terminology=:terminology_name
-                order by version desc
+                order by version::numeric desc
                 """
             ),
             {"terminology_name": self.terminology},
@@ -475,7 +477,7 @@ class Terminology:
 
     def load_new_codes_to_terminology(
         self, codes: List["app.models.codes.Code"], on_conflict_do_nothing=False
-    ):
+    ) -> int:
         """
         This method loads new codes into the terminology.
 
@@ -485,6 +487,9 @@ class Terminology:
         Raises:
         BadRequestWithCode: This exception is raised if the terminology is not a custom terminology,
         or if the terminology's effective period has ended.
+
+        Returns:
+            count of codes loaded
         """
         # Get database connection
         conn = get_db()

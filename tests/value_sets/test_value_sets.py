@@ -1,5 +1,7 @@
 import hashlib
+import json
 import unittest
+from unittest.mock import patch, Mock
 
 from pytest import raises
 
@@ -24,6 +26,7 @@ class ValueSetTests(unittest.TestCase):
     "fc82ec39-7b9f-4d74-9a34-adf86db1a50f"	"Test ONLY: Automated Testing Value Set"	    "For automated testing in infx-internal-tools"
     "b5f97703-abf3-4fc0-aa49-f8851a3fced4"	"Test ONLY: Test ValueSet for diffs"            "This valueset will have a small number of codes for diff check"
     "477195c0-8a91-11ec-ac15-073d0cb083df"	"Test ONLY: Testing Value Set test. Yay"        "Various codes and code systems test"
+    "e49af176-189f-4536-8231-e58a261ed36d"	"Test ONLY: Concept Map Versioning Target"...   made up target concepts and inactive codes" (has no ValueSetVersion)
 
     ```
     You may want various status of value sets for different test cases. To find those with active status:
@@ -38,7 +41,8 @@ class ValueSetTests(unittest.TestCase):
     'ccba9765-66ee-4742-a656-4e37d0811958',
     'fc82ec39-7b9f-4d74-9a34-adf86db1a50f',
     'b5f97703-abf3-4fc0-aa49-f8851a3fced4',
-    '477195c0-8a91-11ec-ac15-073d0cb083df'
+    '477195c0-8a91-11ec-ac15-073d0cb083df',
+    'e49af176-189f-4536-8231-e58a261ed36d'
     )
     and status = 'active'
 
@@ -93,7 +97,9 @@ class ValueSetTests(unittest.TestCase):
     # UUID values: (as needed) value_sets.expansion
     safe_value_set_uuid_auto_tool_expansion = "640e5226-79a6-11ee-93aa-b2cb39228ed3"
 
-    # UUID values: (as needed) correctly formatted UUID that cannot find a value set (because it is for a Terminology)
+    # UUID values: public.terminology_versions (documentation see test_codes.py)
+    safe_term_uuid_fake = "d2ae0de5-0168-4f54-924a-1f79cf658939"
+    safe_term_uuid_old = "3c9ed300-0cb8-47af-8c04-a06352a14b8d"
     safe_term_uuid_dupl = "d14cbd3a-aabe-4b26-b754-5ae2fbd20949"
 
     def test_value_set_expand(self):

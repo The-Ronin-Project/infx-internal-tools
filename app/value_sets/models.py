@@ -18,12 +18,10 @@ from collections import defaultdict
 from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
 
-from app.errors import (
-    NotFoundException,
-    BadDataError,
-    DataIntegrityError,
-    BadRequestWithCode,
-)
+
+from app.errors import NotFoundException, BadDataError, DataIntegrityError, BadRequestWithCode
+from app.helpers.message_helper import message_exception_classname
+
 from app.helpers.oci_helper import set_up_object_store
 
 from app.models.codes import Code
@@ -1404,6 +1402,8 @@ class ValueSet:
         sets up the link between the value set and its use cases, creates a new version of the
         value set in the `value_sets.value_set_version` table, and returns the loaded value set.
 
+        Raises any database exceptions to the caller
+
         Parameters
         ----------
         name : str
@@ -1445,28 +1445,32 @@ class ValueSet:
         vs_uuid = uuid.uuid4()
 
         # Insert the value_set into the value_sets.value_set table
-        conn.execute(
-            text(
-                """  
-                insert into value_sets.value_set  
-                (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type)  
-                values  
-                (:uuid, :name, :title, :publisher, :contact, :value_set_description, :immutable, :experimental, :purpose, :vs_type)  
-                """
-            ),
-            {
-                "uuid": vs_uuid,
-                "name": name,
-                "title": title,
-                "publisher": publisher,
-                "contact": contact,
-                "value_set_description": value_set_description,
-                "immutable": immutable,
-                "experimental": experimental,
-                "purpose": purpose,
-                "vs_type": vs_type,
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """  
+                    insert into value_sets.value_set  
+                    (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type)  
+                    values  
+                    (:uuid, :name, :title, :publisher, :contact, :value_set_description, :immutable, :experimental, :purpose, :vs_type)  
+                    """
+                ),
+                {
+                    "uuid": vs_uuid,
+                    "name": name,
+                    "title": title,
+                    "publisher": publisher,
+                    "contact": contact,
+                    "value_set_description": value_set_description,
+                    "immutable": immutable,
+                    "experimental": experimental,
+                    "purpose": purpose,
+                    "vs_type": vs_type,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
 
         # Call to insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
         cls.value_set_use_case_link_set_up(
@@ -1475,26 +1479,30 @@ class ValueSet:
 
         # Insert the value_set_version into the value_sets.value_set_version table
         new_version_uuid = uuid.uuid4()
-        conn.execute(
-            text(
-                """  
-                insert into value_sets.value_set_version  
-                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)  
-                values  
-                (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :version_description, :created_date, :version)  
-                """
-            ),
-            {
-                "new_version_uuid": new_version_uuid,
-                "effective_start": effective_start,
-                "effective_end": effective_end,
-                "value_set_uuid": vs_uuid,
-                "status": "pending",
-                "version_description": version_description,
-                "created_date": datetime.now(),
-                "version": 1,
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """  
+                    insert into value_sets.value_set_version  
+                    (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)  
+                    values  
+                    (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :version_description, :created_date, :version)  
+                    """
+                ),
+                {
+                    "new_version_uuid": new_version_uuid,
+                    "effective_start": effective_start,
+                    "effective_end": effective_end,
+                    "value_set_uuid": vs_uuid,
+                    "status": "pending",
+                    "version_description": version_description,
+                    "created_date": datetime.now(),
+                    "version": 1,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
 
         return cls.load(vs_uuid)
 
@@ -1706,6 +1714,9 @@ class ValueSet:
 
     @classmethod
     def load_version_metadata(cls, uuid):
+        """
+        Result may be an empty list
+        """
         conn = get_db()
         results = conn.execute(
             text(
@@ -1787,30 +1798,39 @@ class ValueSet:
         version_description,
         use_case_uuid=None,
     ):
+        """
+        Raises NotFoundException if the ValueSet to be duplicated, cannot be found.
+        Raises any database exceptions to the caller
+        """
         conn = get_db()
         # create new value set uuid
         new_vs_uuid = uuid.uuid4()
-        conn.execute(
-            text(
-                """
-                insert into value_sets.value_set
-                (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type, use_case_uuid)
-                select :new_vs_uuid, :name, :title, publisher, :contact, :value_set_description, immutable, experimental, :purpose, type, :use_case_uuid
-                from value_sets.value_set
-                where uuid = :old_uuid
-                """
-            ),
-            {
-                "new_vs_uuid": str(new_vs_uuid),
-                "name": name,
-                "title": title,
-                "contact": contact,
-                "value_set_description": value_set_description,
-                "purpose": purpose,
-                "use_case_uuid": use_case_uuid,
-                "old_uuid": self.uuid,
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """
+                    insert into value_sets.value_set
+                    (uuid, name, title, publisher, contact, description, immutable, experimental, purpose, type, use_case_uuid)
+                    select :new_vs_uuid, :name, :title, publisher, :contact, :value_set_description, immutable, experimental, :purpose, type, :use_case_uuid
+                    from value_sets.value_set
+                    where uuid = :old_uuid
+                    """
+                ),
+                {
+                    "new_vs_uuid": str(new_vs_uuid),
+                    "name": name,
+                    "title": title,
+                    "contact": contact,
+                    "value_set_description": value_set_description,
+                    "purpose": purpose,
+                    "use_case_uuid": use_case_uuid,
+                    "old_uuid": self.uuid,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
+
         # get the most recent active version of the value set being duplicated
         most_recent_vs_version = conn.execute(
             text(
@@ -1822,47 +1842,57 @@ class ValueSet:
             ),
             {"value_set_uuid": self.uuid},
         ).first()
+        if most_recent_vs_version is None:
+            raise NotFoundException(f"No Value Set found with UUID: {self.uuid}")
 
         # create version in the newly duplicated value set
         new_version_uuid = uuid.uuid4()
-        conn.execute(
-            text(
-                """
-                insert into value_sets.value_set_version
-                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)
-                values
-                (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version)
-                """
-            ),
-            {
-                "new_version_uuid": str(new_version_uuid),
-                "effective_start": effective_start,
-                "effective_end": effective_end,
-                "value_set_uuid": new_vs_uuid,
-                "status": "pending",
-                "description": version_description,
-                "created_date": datetime.now(),
-                "version": 1,
-            },
-        )
-
-        # Copy rules from original value set most recent active version into new duplicate version
-        if current_app.config["MOCK_DB"] is False:
+        try:
             conn.execute(
                 text(
                     """
-                    insert into value_sets.value_set_rule
-                    (position, description, property, operator, value, include, terminology_version, value_set_version)
-                    select position, description, property, operator, value, include, terminology_version, :new_version_uuid
-                    from value_sets.value_set_rule
-                    where value_set_version = :previous_version_uuid
+                    insert into value_sets.value_set_version
+                    (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)
+                    values
+                    (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version)
                     """
                 ),
                 {
-                    "previous_version_uuid": str(most_recent_vs_version.uuid),
                     "new_version_uuid": str(new_version_uuid),
+                    "effective_start": effective_start,
+                    "effective_end": effective_end,
+                    "value_set_uuid": new_vs_uuid,
+                    "status": "pending",
+                    "description": version_description,
+                    "created_date": datetime.now(),
+                    "version": 1,
                 },
             )
+        except Exception as e:
+            conn.rollback()
+            raise e
+
+        # Copy rules from original value set most recent active version into new duplicate version
+        if current_app.config["MOCK_DB"] is False:
+            try:
+                conn.execute(
+                    text(
+                        """
+                        insert into value_sets.value_set_rule
+                        (position, description, property, operator, value, include, terminology_version, value_set_version)
+                        select position, description, property, operator, value, include, terminology_version, :new_version_uuid
+                        from value_sets.value_set_rule
+                        where value_set_version = :previous_version_uuid
+                        """
+                    ),
+                    {
+                        "previous_version_uuid": str(most_recent_vs_version.uuid),
+                        "new_version_uuid": str(new_version_uuid),
+                    },
+                )
+            except Exception as e:
+                conn.rollback()
+                raise e
 
         return new_vs_uuid
 
@@ -1870,7 +1900,11 @@ class ValueSet:
         self, effective_start, effective_end, description
     ):
         """
-        This will identify the most recent version of the value set and clone it, incrementing the version by 1, to create a new version
+        This will identify the most recent version of the value set and clone it, incrementing the version by 1,
+        to create a new version
+
+        Raises NotFoundException if the ValueSet data is not found.
+        Raises any database exceptions to the caller
         """
         conn = get_db()
         most_recent_vs_version = conn.execute(
@@ -1883,78 +1917,96 @@ class ValueSet:
             ),
             {"value_set_uuid": self.uuid},
         ).first()
+        if most_recent_vs_version is None:
+            raise NotFoundException(f"No Value Set found with UUID: {self.uuid}")
 
         # Create new version
         new_version_uuid = uuid.uuid4()
-        conn.execute(
-            text(
-                """
-                insert into value_sets.value_set_version
-                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)
-                values
-                (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version)
-                """
-            ),
-            {
-                "new_version_uuid": str(new_version_uuid),
-                "effective_start": effective_start,
-                "effective_end": effective_end,
-                "value_set_uuid": self.uuid,
-                "status": "pending",
-                "description": description,
-                "created_date": datetime.now(),
-                "version": most_recent_vs_version.version + 1,
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """
+                    insert into value_sets.value_set_version
+                    (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)
+                    values
+                    (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version)
+                    """
+                ),
+                {
+                    "new_version_uuid": str(new_version_uuid),
+                    "effective_start": effective_start,
+                    "effective_end": effective_end,
+                    "value_set_uuid": self.uuid,
+                    "status": "pending",
+                    "description": description,
+                    "created_date": datetime.now(),
+                    "version": most_recent_vs_version.version + 1,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
 
         # Copy rules from previous version to new version
-        conn.execute(
-            text(
-                """
-                insert into value_sets.value_set_rule
-                (position, description, property, operator, value, include, terminology_version, value_set_version, rule_group)
-                select position, description, property, operator, value, include, terminology_version, :new_version_uuid, rule_group
-                from value_sets.value_set_rule
-                where value_set_version = :previous_version_uuid
-                """
-            ),
-            {
-                "previous_version_uuid": str(most_recent_vs_version.uuid),
-                "new_version_uuid": str(new_version_uuid),
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """
+                    insert into value_sets.value_set_rule
+                    (position, description, property, operator, value, include, terminology_version, value_set_version, rule_group)
+                    select position, description, property, operator, value, include, terminology_version, :new_version_uuid, rule_group
+                    from value_sets.value_set_rule
+                    where value_set_version = :previous_version_uuid
+                    """
+                ),
+                {
+                    "previous_version_uuid": str(most_recent_vs_version.uuid),
+                    "new_version_uuid": str(new_version_uuid),
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
 
         # Copy over mapping inclusions
-        conn.execute(
-            text(
-                """
-                insert into value_sets.mapping_inclusion
-                (concept_map_uuid, relationship_types, match_source_or_target, concept_map_name, vs_version_uuid)
-                select concept_map_uuid, relationship_types, match_source_or_target, concept_map_name, :new_value_set_version_uuid from value_sets.mapping_inclusion
-                where vs_version_uuid=:previous_version_uuid
-                """
-            ),
-            {
-                "new_value_set_version_uuid": str(new_version_uuid),
-                "previous_version_uuid": str(most_recent_vs_version.uuid),
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """
+                    insert into value_sets.mapping_inclusion
+                    (concept_map_uuid, relationship_types, match_source_or_target, concept_map_name, vs_version_uuid)
+                    select concept_map_uuid, relationship_types, match_source_or_target, concept_map_name, :new_value_set_version_uuid from value_sets.mapping_inclusion
+                    where vs_version_uuid=:previous_version_uuid
+                    """
+                ),
+                {
+                    "new_value_set_version_uuid": str(new_version_uuid),
+                    "previous_version_uuid": str(most_recent_vs_version.uuid),
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
 
         # Copy over explicitly included codes
-        conn.execute(
-            text(
-                """
-                insert into value_sets.explicitly_included_code
-                (vs_version_uuid, code_uuid, review_status)
-                select :new_value_set_version_uuid, code_uuid, review_status from value_sets.explicitly_included_code
-                where vs_version_uuid = :previous_version_uuid
-                """
-            ),
-            {
-                "new_value_set_version_uuid": str(new_version_uuid),
-                "previous_version_uuid": str(most_recent_vs_version.uuid),
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """
+                    insert into value_sets.explicitly_included_code
+                    (vs_version_uuid, code_uuid, review_status)
+                    select :new_value_set_version_uuid, code_uuid, review_status from value_sets.explicitly_included_code
+                    where vs_version_uuid = :previous_version_uuid
+                    """
+                ),
+                {
+                    "new_value_set_version_uuid": str(new_version_uuid),
+                    "previous_version_uuid": str(most_recent_vs_version.uuid),
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
 
         return new_version_uuid
 
@@ -1967,7 +2019,15 @@ class ValueSet:
         description,
     ):
         """
-        This function performs a terminology update on a value set by creating a new version of the value set with updated terminology rules. It first checks if the highest version of the value set is active and has not been updated already. If the conditions are met, it creates a new version of the value set and updates the rules to target the new terminology version. The function then expands the previous and new value set versions and calculates the diff between them. Finally, it updates the status of the new value set version based on the differences in codes.
+        This function performs a terminology update on a value set by creating a new version of the value set with
+        updated terminology rules. It first checks if the highest version of the value set is active and has not been
+        updated already. If the conditions are met, it creates a new version of the value set and updates the rules
+        to target the new terminology version. The function then expands the previous and new value set versions and
+        calculates the diff between them. Finally, it updates the status of the new value set version based on the
+        differences in codes.
+
+        If exceptions occur while attempting to update the database, these are raised to the caller.
+        If exceptions occur while gathering informational data, they are noted by name in the report, without details.
 
         Args:
         old_terminology_version_uuid (str): The UUID of the old terminology version to be replaced.
@@ -1980,12 +2040,22 @@ class ValueSet:
         str: A string representing the status of the new value set version, which can be one of the following:
         - "already_updated": The value set has already been updated with the new terminology version.
         - "latest_version_not_active": The latest version of the value set is not active.
+        - "failed_to_create_new": An exception occurred while creating a new value set version from previous.
+        - "failed_to_update_rules": An exception occurred while updating rules for terminologies.
         - "failed_to_expand": An exception occurred while expanding the new value set version.
+        - "failed_to_diff_versions": An exception occurred while comparing old and new value set versions.
         - "reviewed": The new value set version has no differences in codes and is marked as reviewed.
         - "pending": The new value set version has differences in codes and is marked as pending.
         """
-        # Safety check: Raise an exception if the highest version does not have a status of 'active'
+        if old_terminology_version_uuid is None or new_terminology_version_uuid is None:
+            raise NotFoundException(
+                f"Unable to compare Terminology with UUID: {old_terminology_version_uuid} "
+                + f"to Terminology with UUID: {new_terminology_version_uuid}"
+            )
+
         value_set_metadata = ValueSet.load_version_metadata(self.uuid)
+        if len(value_set_metadata) == 0:
+            raise NotFoundException(f"No versions found for Value Set with UUID: {self.uuid}")
         sorted_versions = sorted(
             value_set_metadata, key=lambda x: x["version"], reverse=True
         )
@@ -1998,53 +2068,46 @@ class ValueSet:
         ):  # safely returns True or False
             return "already_updated"
 
-        # Check to see if it's active (we will not auto-update pending value sets still being worked on)
+        # Safety check: Raise an exception if the highest version does not have a status of 'active'
+        # (we will not auto-update pending value sets still being worked on)
         if most_recent_version.status != "active":
             return "latest_version_not_active"
 
         # Create a new version of the value set
-        new_value_set_version_uuid = self.create_new_version_from_previous(
-            effective_start=effective_start,
-            effective_end=effective_end,
-            description=description,
-        )
-
-        # # As a one-time thing, we need to delete older SNOMED content
-        # # todo: remove this section
-        # conn = get_db()
-        # conn.execute(
-        #     text(
-        #         """
-        #         delete from value_sets.value_set_rule
-        #         where value_set_version=:version_uuid
-        #         and terminology_version='5efa6244-32ad-4a2d-9d21-8f237499325a'
-        #         """
-        #     ),
-        #     {
-        #         "version_uuid": new_value_set_version_uuid
-        #     }
-        # )
-
+        try:
+            new_value_set_version_uuid = self.create_new_version_from_previous(
+                effective_start=effective_start,
+                effective_end=effective_end,
+                description=description,
+            )
+        except Exception as e:
+            return f"failed_to_create_new: {message_exception_classname(e)}"
         new_value_set_version = ValueSetVersion.load(new_value_set_version_uuid)
 
         # Update the rules targeting the previous version to target the new version
-        new_value_set_version.update_rules_for_terminology(
-            old_terminology_version_uuid=old_terminology_version_uuid,
-            new_terminology_version_uuid=new_terminology_version_uuid,
-        )
+        try:
+            new_value_set_version.update_rules_for_terminology(
+                old_terminology_version_uuid=old_terminology_version_uuid,
+                new_terminology_version_uuid=new_terminology_version_uuid,
+            )
+        except Exception as e:
+            return f"failed_to_update_rules: {message_exception_classname(e)}"
 
         # Expand the previous and new value set versions
-        most_recent_version.expand()
         try:
+            most_recent_version.expand()
             new_value_set_version.expand(force_new=True)
-        except Exception as e:  # uncaught exceptions can be so costly, a 'bare except' is fine, despite PEP 8: E722
-            return "failed_to_expand"
+        except Exception as e:
+            return f"failed_to_expand: {message_exception_classname(e)}"
 
         # Get the diff between the two value set versions
-        diff = ValueSetVersion.diff_for_removed_and_added_codes(
-            most_recent_version.uuid,
-            new_value_set_version_uuid,
-        )
+        try:
+            diff = ValueSetVersion.diff_for_removed_and_added_codes(
+                most_recent_version.uuid,
+                new_value_set_version_uuid,
+            )
+        except Exception as e:
+            return f"failed_to_diff_versions: {message_exception_classname(e)}"
 
         # Update the status of the new value set version
         if not diff["removed_codes"] and not diff["added_codes"]:
@@ -2058,6 +2121,9 @@ class ValueSet:
     def value_set_use_case_link_set_up(
         primary_use_case, secondary_use_cases, value_set_uuid
     ):
+        """
+        Raises any database exceptions to the caller
+        """
         # Insert the value_set and use_case associations into the value_sets.value_set_use_case_link table
         if primary_use_case is not None:
             UseCase.save_value_set_link(
@@ -2435,6 +2501,9 @@ class RuleGroup:
     def update_terminology_version_in_rules(
         self, old_terminology_version_uuid, new_terminology_version_uuid
     ):
+        """
+        Raises NotFoundException if Terminology.load fails on either version
+        """
         old_terminology_version = Terminology.load(old_terminology_version_uuid)
         rules_with_old_terminology = self.rules.get(old_terminology_version)
         if rules_with_old_terminology is None:
@@ -2521,36 +2590,43 @@ class ValueSetVersion:
         version,
         comments,
     ):
+        """
+        Raises any database exceptions to the caller
+        """
         conn = get_db()
         vsv_uuid = uuid.uuid4()
-
-        conn.execute(
-            text(
-                """
-                insert into value_sets.value_set_version
-                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version, comments)
-                values
-                (:uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version, :comments)
-                """
-            ),
-            {
-                "uuid": vsv_uuid,
-                "effective_start": effective_start,
-                "effective_end": effective_end,
-                "value_set_uuid": value_set_uuid,
-                "status": status,
-                "description": description,
-                "created_date": created_date,
-                "version": version,
-                "comments": comments,
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """
+                    insert into value_sets.value_set_version
+                    (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version, comments)
+                    values
+                    (:uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version, :comments)
+                    """
+                ),
+                {
+                    "uuid": vsv_uuid,
+                    "effective_start": effective_start,
+                    "effective_end": effective_end,
+                    "value_set_uuid": value_set_uuid,
+                    "status": status,
+                    "description": description,
+                    "created_date": created_date,
+                    "version": version,
+                    "comments": comments,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
         return cls.load(vsv_uuid)
 
     @classmethod
     def load(cls, uuid):
-        if uuid is None:
-            raise Exception("Cannot load a Value Set Version with None as uuid")
+        """
+        Raises NotFoundException if the uuid does not find a ValueSetVersion
+        """
         conn = get_db()
         vs_version_data = conn.execute(
             text(
@@ -2663,6 +2739,9 @@ class ValueSetVersion:
         return False
 
     def load_current_expansion(self):
+        """
+        Raises NotFoundException if the ValueSetVersion is not found
+        """
         conn = get_db()
 
         expansion_metadata = conn.execute(
@@ -2702,6 +2781,9 @@ class ValueSetVersion:
             self.expansion.add(Code(x.system, x.version, x.code, x.display))
 
     def save_expansion(self, report=None):
+        """
+        Raises any database exceptions to the caller
+        """
         conn = get_db()
         self.expansion_uuid = uuid.uuid1()
 
@@ -2710,42 +2792,50 @@ class ValueSetVersion:
             datetime.now()
         )  # + timedelta(days=1) # Must explicitly create this, since SQLite can't use now()
         self.expansion_timestamp = current_time_string
-        conn.execute(
-            text(
+        try:
+            conn.execute(
+                text(
+                    """
+                insert into value_sets.expansion
+                (uuid, vs_version_uuid, timestamp, report)
+                values
+                (:expansion_uuid, :version_uuid, :curr_time, :report)
                 """
-            insert into value_sets.expansion
-            (uuid, vs_version_uuid, timestamp, report)
-            values
-            (:expansion_uuid, :version_uuid, :curr_time, :report)
-            """
-            ),
-            {
-                "expansion_uuid": str(self.expansion_uuid),
-                "version_uuid": str(self.uuid),
-                "report": report,
-                "curr_time": current_time_string,
-            },
-        )
+                ),
+                {
+                    "expansion_uuid": str(self.expansion_uuid),
+                    "version_uuid": str(self.uuid),
+                    "report": report,
+                    "curr_time": current_time_string,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
 
         if self.expansion:
-            conn.execute(
-                expansion_member.insert(),
-                [
-                    {
-                        "expansion_uuid": str(self.expansion_uuid),
-                        "code": code.code,
-                        "display": code.display,
-                        "system": code.system,
-                        "version": code.version,
-                        "custom_terminology_uuid": str(
-                            code.custom_terminology_code_uuid
-                        )
-                        if code.custom_terminology_code_uuid
-                        else None,
-                    }
-                    for code in self.expansion
-                ],
-            )
+            try:
+                conn.execute(
+                    expansion_member.insert(),
+                    [
+                        {
+                            "expansion_uuid": str(self.expansion_uuid),
+                            "code": code.code,
+                            "display": code.display,
+                            "system": code.system,
+                            "version": code.version,
+                            "custom_terminology_uuid": str(
+                                code.custom_terminology_code_uuid
+                            )
+                            if code.custom_terminology_code_uuid
+                            else None,
+                        }
+                        for code in self.expansion
+                    ],
+                )
+            except Exception as e:
+                conn.rollback()
+                raise e
 
     def create_expansion(self):
         """
@@ -3219,6 +3309,9 @@ class ValueSetVersion:
         previous_version_uuid,
         new_version_uuid,
     ):
+        """
+        Raises NotFoundException if ValueSetVersion.load fails on either version
+        """
         previous_value_set_version = ValueSetVersion.load(previous_version_uuid)
         new_value_set_version = ValueSetVersion.load(new_version_uuid)
 
@@ -3242,7 +3335,6 @@ class ValueSetVersion:
                 "new_expansion": new_value_set_version.expansion_uuid,
             },
         )
-        # removed_codes = [x for x in removed_codes_query]
         removed_codes = [
             {
                 "code": x.code,
@@ -3420,6 +3512,9 @@ class ValueSetVersion:
         new_version_description=None,
         new_terminology_version_uuid=None,
     ):
+        """
+        Raises any database exceptions to the caller
+        """
         # Load the input version of the value set
         input_version = cls.load(version_uuid)
 
@@ -3429,45 +3524,53 @@ class ValueSetVersion:
 
         # Save the new version to the database
         conn = get_db()
-        conn.execute(
-            text(
-                """  
-                INSERT INTO value_sets.value_set_version  
-                (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)  
-                VALUES  
-                (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version)  
-                """
-            ),
-            {
-                "new_version_uuid": new_version_uuid,
-                "effective_start": input_version.effective_start,
-                "effective_end": input_version.effective_end,
-                "value_set_uuid": input_version.value_set.uuid,
-                "status": "pending",
-                "description": new_version_description or input_version.description,
-                "created_date": datetime.now(),
-                "version": new_version_number,
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """  
+                    INSERT INTO value_sets.value_set_version  
+                    (uuid, effective_start, effective_end, value_set_uuid, status, description, created_date, version)  
+                    VALUES  
+                    (:new_version_uuid, :effective_start, :effective_end, :value_set_uuid, :status, :description, :created_date, :version)  
+                    """
+                ),
+                {
+                    "new_version_uuid": new_version_uuid,
+                    "effective_start": input_version.effective_start,
+                    "effective_end": input_version.effective_end,
+                    "value_set_uuid": input_version.value_set.uuid,
+                    "status": "pending",
+                    "description": new_version_description or input_version.description,
+                    "created_date": datetime.now(),
+                    "version": new_version_number,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
 
         # Copy rules from input version to new version
-        conn.execute(
-            text(
-                """  
-                INSERT INTO value_sets.value_set_rule  
-                (position, description, property, operator, value, include, terminology_version, value_set_version, rule_group)  
-                SELECT position, description, property, operator, value, include,  
-                COALESCE(:new_terminology_version_uuid, terminology_version), :new_version_uuid, rule_group  
-                FROM value_sets.value_set_rule  
-                WHERE value_set_version = :input_version_uuid  
-                """
-            ),
-            {
-                "input_version_uuid": version_uuid,
-                "new_version_uuid": new_version_uuid,
-                "new_terminology_version_uuid": new_terminology_version_uuid,
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """  
+                    INSERT INTO value_sets.value_set_rule  
+                    (position, description, property, operator, value, include, terminology_version, value_set_version, rule_group)  
+                    SELECT position, description, property, operator, value, include,  
+                    COALESCE(:new_terminology_version_uuid, terminology_version), :new_version_uuid, rule_group  
+                    FROM value_sets.value_set_rule  
+                    WHERE value_set_version = :input_version_uuid  
+                    """
+                ),
+                {
+                    "input_version_uuid": version_uuid,
+                    "new_version_uuid": new_version_uuid,
+                    "new_terminology_version_uuid": new_terminology_version_uuid,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
 
         # Return the new ValueSetVersion object
         return cls.load(new_version_uuid)
@@ -3485,25 +3588,32 @@ class ExplicitlyIncludedCode:
     uuid: uuid = field(default=uuid.uuid4())
 
     def save(self):
-        """Persist newly created object to database"""
+        """
+        Persist newly created object to database.
+        Raises any database exceptions to the caller
+        """
         conn = get_db()
 
-        conn.execute(
-            text(
-                """
-                insert into value_sets.explicitly_included_code
-                (uuid, vs_version_uuid, code_uuid, review_status)
-                values
-                (:uuid, :vs_version_uuid, :code_uuid, :review_status)
-                """
-            ),
-            {
-                "uuid": self.uuid,
-                "vs_version_uuid": self.value_set_version.uuid,
-                "code_uuid": self.code.uuid,
-                "review_status": self.review_status,
-            },
-        )
+        try:
+            conn.execute(
+                text(
+                    """
+                    insert into value_sets.explicitly_included_code
+                    (uuid, vs_version_uuid, code_uuid, review_status)
+                    values
+                    (:uuid, :vs_version_uuid, :code_uuid, :review_status)
+                    """
+                ),
+                {
+                    "uuid": self.uuid,
+                    "vs_version_uuid": self.value_set_version.uuid,
+                    "code_uuid": self.code.uuid,
+                    "review_status": self.review_status,
+                },
+            )
+        except Exception as e:
+            conn.rollback()
+            raise e
 
     def serialize(self):
         return {
@@ -3701,6 +3811,12 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
     @param exclude_version: newest version of the terminology e.g.
     @return:
     """
+    if terminology_fhir_uri is None:
+        raise BadRequestWithCode(
+            "ValueSet.value_sets_terminology_update_report.no_term_input",
+            "No terminology URI was input"
+        )
+
     conn = get_db()
 
     ready_for_update = []
@@ -3709,28 +3825,19 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
 
     value_sets = ValueSet.load_all_value_set_metadata(active_only=False)
 
-    value_set_most_recent_version_ids = []
-
     # Iterate through all value sets
     for vs in value_sets:
         value_set_uuid = vs.get("uuid")
         value_set_name = vs.get("name")
         value_set_title = vs.get("title")
 
-        versions_metadata = ValueSet.load_version_metadata(value_set_uuid)
-
-        if isinstance(
-            versions_metadata, list
-        ):  # sort the versions and get the most recent even thought versions response is ordered desc
-            sorted_versions = sorted(
-                versions_metadata, key=lambda x: x.get("version"), reverse=True
-            )
-        else:
-            print(
-                "versions_metadata is not a list of dictionaries",
-                value_set_uuid,
-                "failed to load versions metadata",
-            )
+        versions_metadata = ValueSet.load_version_metadata(value_set_uuid) # always returns a list, even if empty
+        if len(versions_metadata) == 0:
+            raise NotFoundException(f"No versions found for Value Set with UUID: {value_set_uuid}")
+        # sort the versions and get the most recent even thought versions response is ordered desc
+        sorted_versions = sorted(
+            versions_metadata, key=lambda x: x.get("version"), reverse=True
+        )
 
         most_recent_version_metadata = sorted_versions[0]
 
@@ -3747,6 +3854,7 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
             ).bindparams(version_uuid=most_recent_version_uuid)
         )
         result_set = most_recent_version_rules_query.fetchall()
+        # there may be no rules, that is not an error
 
         # Perform checks to determine which category this value set should be classified under in the report
         exclude_value_set = False
@@ -3796,36 +3904,6 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
                 "title": value_set_title,
             }
             ready_for_update.append(item_dict)
-        #     value_set_most_recent_version_ids.append(most_recent_version_uuid)
-        #
-        # value_set_most_recent_version_ids = list(set(value_set_most_recent_version_ids))
-        #
-        # value_set_version_jsons = []
-        # for most_recent_version_uuid in value_set_most_recent_version_ids:
-        #     vs_version = ValueSetVersion.load(most_recent_version_uuid)
-        #     vs_version.expand(force_new=True)
-        #     vs_expansion = vs_version.serialize()
-        #
-        #     if vs_expansion is not None:
-        #         if vs_expansion.status_code == 200:
-        #             json_to_store = vs_expansion.json()
-        #             json_to_store["version_uuid"] = most_recent_version_uuid
-        #             value_set_version_jsons.append(json_to_store)
-        #
-        # value_set_version_jsons.sort(key=lambda x: x["name"])
-        # for item in value_set_version_jsons:
-        #     if item is None:
-        #         # here we were printing noe but what do we do now?
-        #     else:
-        #         value_set_uuid = item.get('value_set_uuid')
-        #         value_set_name = item.get('name')
-        #         value_set_title = item.get('title')
-        #         item_dict = {
-        #             'value_set_uuid': value_set_uuid,
-        #             'name': value_set_name,
-        #             'title': value_set_title,
-        #         }
-        #         ready_for_update.append(item_dict)
     return {
         "ready_for_update": ready_for_update,
         "latest_version_not_active": latest_version_not_active,
@@ -3838,6 +3916,9 @@ def perform_terminology_update_for_all_value_sets(
     old_terminology_version_uuid,
     new_terminology_version_uuid,
 ):
+    """
+    Raises NotFoundException if Terminology.load fails on either version
+    """
     new_terminology_version = Terminology.load(new_terminology_version_uuid)
 
     # Get value sets to update
@@ -3852,6 +3933,7 @@ def perform_terminology_update_for_all_value_sets(
 
     value_set_statuses = defaultdict(list)
 
+    # Build a dictionary giving the name, title, and uuid of each value set updated in the loop
     for vs_uuid in value_sets_to_update:
         value_set = ValueSet.load(vs_uuid)
         status = value_set.perform_terminology_update(
