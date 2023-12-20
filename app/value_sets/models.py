@@ -204,8 +204,6 @@ class VSRule:
             self.code_rule()
         if self.property == "display" and self.operator == "regex":
             self.display_regex()
-        elif self.property == "display" and self.operator == "in":
-            self.display_rule()
 
         # RxNorm Specific
         if self.property == "term_type_within_class":
@@ -724,6 +722,19 @@ class LOINCRule(VSRule):
     This class inherits from the VSRule class and provides implementation for LOINC specific value set rules.
     """
 
+    def codes_from_results(self, db_result):
+        results = [
+            Code(
+                self.fhir_system,
+                self.terminology_version.version,
+                x.loinc_num,
+                x.long_common_name,
+            )
+            for x in db_result
+        ]
+
+        return set(results)
+
     def loinc_rule(self, query):
         conn = get_db()
 
@@ -735,16 +746,7 @@ class LOINCRule(VSRule):
                 "terminology_version_uuid": self.terminology_version.uuid,
             },
         )
-        results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.loinc_num,
-                x.long_common_name,
-            )
-            for x in results_data
-        ]
-        self.results = set(results)
+        self.results = self.codes_from_results(results_data)
 
     @property
     def split_value(self):
@@ -758,7 +760,7 @@ class LOINCRule(VSRule):
         if new_value[:1] == "{" and new_value[-1:] == "}":
             new_value = new_value[1:-1]
 
-            # Replace newline characters with a space
+        # Replace newline characters with a space
         new_value = new_value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
 
         # Using csv.reader to handle commas inside quotes
@@ -775,36 +777,6 @@ class LOINCRule(VSRule):
     order by long_common_name
     """
         self.loinc_rule(query)
-
-    def display_rule(self):
-        # Cannot use "ilike any(...)" because thats Postgres specific
-        conn = get_db()
-        query = f"""
-    select * from loinc.code
-    where lower(long_common_name) like '{self.split_value[0].lower()}'"""
-
-        if self.split_value[1:]:
-            for item in self.split_value[1:]:
-                query += f""" or lower(long_common_name) like {item} """
-
-        query += """ and status in ('ACTIVE', 'DISCOURAGED', 'TRIAL')
-    and terminology_version_uuid=:terminology_version_uuid
-    order by long_common_name
-    """
-
-        results_data = conn.execute(
-            text(query), {"terminology_version_uuid": self.terminology_version.uuid}
-        )
-        results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.loinc_num,
-                x.long_common_name,
-            )
-            for x in results_data
-        ]
-        self.results = set(results)
 
     def method_rule(self):
         query = """
@@ -900,16 +872,7 @@ class LOINCRule(VSRule):
         results_data = conn.execute(
             text(query), {"terminology_version_uuid": self.terminology_version.uuid}
         )
-        results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.loinc_num,
-                x.long_common_name,
-            )
-            for x in results_data
-        ]
-        self.results = set(results)
+        self.results = self.codes_from_results(results_data)
 
 
 class ICD10PCSRule(VSRule):
@@ -1190,15 +1153,7 @@ class FHIRRule(VSRule):
 
 
 class CustomTerminologyRule(VSRule):
-    def include_entire_code_system(self):
-        conn = get_db()
-        query = """
-        select * from custom_terminologies.code 
-        where terminology_version_uuid=:terminology_version_uuid
-        """
-        results_data = conn.execute(
-            text(query), {"terminology_version_uuid": self.terminology_version.uuid}
-        )
+    def codes_from_results(self, db_result):
         results = [
             Code(
                 self.fhir_system,
@@ -1211,9 +1166,21 @@ class CustomTerminologyRule(VSRule):
                 depends_on_display=x.depends_on_display,
                 custom_terminology_code_uuid=x.uuid,
             )
-            for x in results_data
+            for x in db_result
         ]
-        self.results = set(results)
+        return set(results)
+
+    def include_entire_code_system(self):
+        conn = get_db()
+        query = """
+        select * from custom_terminologies.code 
+        where terminology_version_uuid=:terminology_version_uuid
+        """
+        results_data = conn.execute(
+            text(query), {"terminology_version_uuid": self.terminology_version.uuid}
+        )
+
+        self.results = self.codes_from_results(results_data)
 
     def display_regex(self):
         conn = get_db()
@@ -1229,21 +1196,8 @@ class CustomTerminologyRule(VSRule):
                 "value": self.value,
             },
         )
-        results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.code,
-                x.display,
-                depends_on_property=x.depends_on_property,
-                depends_on_system=x.depends_on_system,
-                depends_on_value=x.depends_on_value,
-                depends_on_display=x.depends_on_display,
-                custom_terminology_code_uuid=x.uuid,
-            )
-            for x in results_data
-        ]
-        self.results = set(results)
+
+        self.results = self.codes_from_results(results_data)
 
     def code_rule(self):
         conn = get_db()
@@ -1260,21 +1214,8 @@ class CustomTerminologyRule(VSRule):
                 "value": [x.strip() for x in self.value.split(",")],
             },
         )
-        results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.code,
-                x.display,
-                depends_on_property=x.depends_on_property,
-                depends_on_system=x.depends_on_system,
-                depends_on_value=x.depends_on_value,
-                depends_on_display=x.depends_on_display,
-                custom_terminology_code_uuid=x.uuid,
-            )
-            for x in results_data
-        ]
-        self.results = set(results)
+
+        self.results = self.codes_from_results(results_data)
 
 
 #
