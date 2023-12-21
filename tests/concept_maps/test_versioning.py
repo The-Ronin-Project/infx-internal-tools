@@ -10,7 +10,20 @@ from app.database import get_db
 from app.app import create_app
 
 
-class VersioningTests(unittest.TestCase):
+class ConceptMapVersioningTests(unittest.TestCase):
+    """
+    There are known UUID values for concept_maps.concept_map rows that are safe to use in any tests
+    - for these see ConceptMapTests class doc.
+
+     For test cases in ConceptMapVersioningTests, only SELECT operations are needed and many test cases are so
+     complex we could easily introduce confusing errors into any fake test data. Therefore, tests in this class use
+     concept map rows that are not in the "safe to test" group. For example, test_serialized_schema_versions() uses the
+     following concept map. "apposnd" identifies the Epic EHR vendor testing sandbox: "AppOrchardSandbox" or "apposnd"
+    ```
+    concept_map_uuid = "3704f2b0-7a8c-4455-ab2e-ffbcda91e1e3"  # "Apposnd Conditions to SNOMED CT" v1-v4
+    ```
+    """
+
     def setUp(self) -> None:
         self.conn = get_db()
         self.app = create_app()
