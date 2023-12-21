@@ -5,10 +5,6 @@ Please include a summary of the change and which issue is fixed. Please also inc
 Fixes [Ticket](https://projectronin.atlassian.net/browse/INFX-    )
 
 ---
-#### Files Changed or Added:
-Please list affected files or new files added
-
----
 #### Type of change:  
 Please delete options that are not relevant.
 
