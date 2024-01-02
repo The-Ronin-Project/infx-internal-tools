@@ -22,6 +22,8 @@ jobs:
     runs-on: oci-shared
     needs:
       - test
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
     if: github.ref == 'refs/heads/main'
     steps:
       - id: get-version
@@ -41,33 +43,33 @@ jobs:
 
   deploy_dev:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
-    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v4
     needs: [application-image]
     with:
       environment: dev
       application: infx-internal-tools
-      tag: ${{ github.sha }}
+      tag: ${{ needs.application-image.outputs.version }}
       commit-sha: ${{ github.sha }}
     secrets: inherit
 
   deploy_stage:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
-    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v4
     needs: [deploy_dev]
     with:
       environment: stage
       application: infx-internal-tools
-      tag: ${{ github.sha }}
+      tag: ${{ needs.application-image.outputs.version }}
       commit-sha: ${{ github.sha }}
     secrets: inherit
 
   deploy_prod:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
-    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
-    needs: [deploy_stage]
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v4
+    needs: [application-image, deploy_stage]
     with:
       environment: prod
       application: infx-internal-tools
-      tag: ${{ github.sha }}
+      tag: ${{ needs.application-image.outputs.version }}
       commit-sha: ${{ github.sha }}
     secrets: inherit
