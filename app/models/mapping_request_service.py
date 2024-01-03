@@ -521,7 +521,6 @@ class MappingRequestService:
                                     length_of_response = len(resources_with_errors)
                                     if length_of_response < cls.page_size:
                                         all_resources_fetched = True
-                                        continue
                                     else:
                                         last_uuid = resources_with_errors[-1].get("id")
                                         cls.rest_api_params["after"] = last_uuid
