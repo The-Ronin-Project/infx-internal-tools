@@ -33,7 +33,7 @@ jobs:
 
   deploy_dev:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
-    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v5
     needs: [application-image]
     with:
       environment: dev
@@ -44,7 +44,7 @@ jobs:
 
   deploy_stage:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
-    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v5
     needs: [deploy_dev]
     with:
       environment: stage
@@ -55,7 +55,7 @@ jobs:
 
   deploy_prod:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
-    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v5
     needs: [deploy_stage]
     with:
       environment: prod
