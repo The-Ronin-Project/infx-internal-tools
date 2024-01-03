@@ -34,6 +34,11 @@ from app.terminologies.models import (
 )
 import app.tasks
 
+OID_URL_CONVERSIONS = {
+    "urn:oid:2.16.840.1.113883.6.3": "http://hl7.org/fhir/sid/icd-10",  # ICD-10
+    "urn:oid:2.16.840.1.113883.6.90": "http://hl7.org/fhir/sid/icd-10-cm",  # ICD-10 CM
+    "urn:oid:2.16.840.1.113883.6.96": "http://snomed.info/sct",  # SNOMED CT International Edition
+}
 
 # Function for checking if we have a coding array string that used to be JSON
 def is_coding_array(source_code_string):
@@ -1115,6 +1120,11 @@ class ConceptMapVersion:
                             source_code_code = transform_struct_string_to_json(
                                 source_code_code
                             )
+
+                        # Convert OIDs to URLs
+                        for oid, uri in OID_URL_CONVERSIONS.items():
+                            source_code_code = source_code_code.replace(oid, uri)
+
                         new_element = {
                             "id": source_code.id,
                             "code": source_code_code,
