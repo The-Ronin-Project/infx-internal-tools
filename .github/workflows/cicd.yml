@@ -26,6 +26,8 @@ jobs:
       version: ${{ steps.get-version.outputs.version }}
     if: github.ref == 'refs/heads/main'
     steps:
+      - uses: actions/checkout@v4
+
       - id: get-version
         uses: projectronin/github/get-version@get-version/v3
 
