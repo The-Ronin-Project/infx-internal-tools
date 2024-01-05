@@ -57,7 +57,7 @@ jobs:
   deploy_stage:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
     uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v4
-    needs: [deploy_dev]
+    needs: [application_image, deploy_dev]
     with:
       environment: stage
       application: infx-internal-tools
