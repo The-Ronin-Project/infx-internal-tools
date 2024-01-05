@@ -10,7 +10,7 @@ jobs:
   # Run tests and (not yet implemented publish coverage
   #####################################################
   test:
-    runs-on: self-hosted
+    runs-on: oci-shared
     # uses: projectronin/github/.github/workflows/python_test.yml
     # secrets:
     #   (none at this time)
@@ -19,47 +19,57 @@ jobs:
         run: echo "I solemnly swear I am up to no good and have no tests."
 
   application-image:
-    if: github.ref == 'refs/heads/main'
-    name: Push multiplatform application image to Nexus
-    uses: projectronin/github/.github/workflows/image_push_nexus.yml@image_push_nexus/v4
+    runs-on: oci-shared
     needs:
       - test
-    with:
-      image-tag: ${{ github.sha }}
-      repo: "infx-internal-tools"
-    secrets:
-      username: ${{ secrets.NEXUS_DOCKER_USERNAME }}
-      password: ${{ secrets.NEXUS_DOCKER_PASSWORD }}
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - id: get-version
+        uses: projectronin/github/get-version@get-version/v3
+
+      - name: Push multiplatform application image to Nexus
+        uses: projectronin/github/build-image@build-image/v3
+        with:
+          username: ${{ secrets.NEXUS_DOCKER_USERNAME }}
+          password: ${{ secrets.NEXUS_DOCKER_PASSWORD }}
+          tags: ${{ steps.get-version.outputs.version }}
+
+      - id: set-version
+        uses: projectronin/github/set-version@set-version/v2
+        with:
+          semver: "${{ steps.get-version.outputs.version }}"
 
   deploy_dev:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
-    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v4
     needs: [application-image]
     with:
       environment: dev
       application: infx-internal-tools
-      tag: ${{ github.sha }}
+      tag: ${{ needs.application-image.outputs.version }}
       commit-sha: ${{ github.sha }}
     secrets: inherit
 
   deploy_stage:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
-    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v4
     needs: [deploy_dev]
     with:
       environment: stage
       application: infx-internal-tools
-      tag: ${{ github.sha }}
+      tag: ${{ needs.application-image.outputs.version }}
       commit-sha: ${{ github.sha }}
     secrets: inherit
 
   deploy_prod:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
-    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v3
-    needs: [deploy_stage]
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v4
+    needs: [application-image, deploy_stage]
     with:
       environment: prod
       application: infx-internal-tools
-      tag: ${{ github.sha }}
+      tag: ${{ needs.application-image.outputs.version }}
       commit-sha: ${{ github.sha }}
     secrets: inherit
