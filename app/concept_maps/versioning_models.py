@@ -13,7 +13,8 @@ import logging
 
 LOGGER = logging.getLogger()
 
-LOGGER.setLevel("DEBUG")
+# Only to be used for local development; do not commit with this on
+# LOGGER.setLevel("DEBUG")
 
 
 class CustomJSONEncoder(json.JSONEncoder):
