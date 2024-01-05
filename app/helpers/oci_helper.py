@@ -5,7 +5,7 @@ from werkzeug.exceptions import BadRequest
 import datetime
 import json
 
-from app.errors import NotFoundException
+from app.errors import NotFoundException, OCIException
 
 
 def oci_authentication():
@@ -156,12 +156,14 @@ def save_to_object_store(
     @param content: content to publish, with metadata to support publication
     @return: completion message and concept map
     """
-    object_storage_client.put_object(
+    put_object_response = object_storage_client.put_object(
         namespace,
         bucket_name,
         path,
         json.dumps(content, indent=2).encode("utf-8"),
     )
+    if put_object_response.status != 200:
+        raise OCIException(f"Failed to publish {path}. Response status: {put_object_response.status}")
     return {"message": "object pushed to bucket", "object": content}
 
 

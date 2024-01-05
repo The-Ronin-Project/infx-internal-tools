@@ -14,7 +14,7 @@ import app.tasks as tasks
 import app.terminologies.views as terminology_views
 import app.value_sets.views as value_set_views
 from app.database import close_db, rollback_and_close_connection_if_open
-from app.errors import BadRequestWithCode, NotFoundException, BadSourceCodeError, DuplicateTargetError
+from app.errors import BadRequestWithCode, NotFoundException, BadSourceCodeError, DuplicateTargetError, OCIException
 from app.helpers.structlog import config_structlog, common_handler
 from app.models.data_ingestion_registry import (
     DataNormalizationRegistry,
@@ -101,6 +101,15 @@ def create_app(script_info=None):
         rollback_and_close_connection_if_open()
         logger.critical(e.description, stack_info=True)
         return jsonify({"message": e.description}), e.code
+
+    @app.errorhandler(OCIException)
+    def handle_oci_exception(e):
+        """
+        Handles OCI Exception
+        """
+        rollback_and_close_connection_if_open()
+        logger.critical(e.message, stack_info=True)
+        return jsonify({"message": e.message}), 500
 
     @app.errorhandler(NotFoundException)
     def handle_not_found(e):
