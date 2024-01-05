@@ -22,14 +22,19 @@ jobs:
     runs-on: oci-shared
     needs:
       - test
-    outputs:
-      version: ${{ steps.get-version.outputs.version }}
+
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
       - id: get-version
         uses: projectronin/github/get-version@get-version/v3
+
+      - name: Put version into environment
+        id: version_into_environment
+        shell: bash
+        run: |-
+            echo "SERVICE_VERSION=${{ steps.get-version.outputs.version }}" >> "$GITHUB_ENV"
 
       - name: Push multiplatform application image to Nexus
         uses: projectronin/github/build-image@build-image/v3
@@ -43,9 +48,12 @@ jobs:
         with:
           semver: "${{ steps.get-version.outputs.version }}"
 
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+
   deploy_dev:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
-    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v4
+    uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v5
     needs: [application-image]
     with:
       environment: dev
@@ -57,7 +65,7 @@ jobs:
   deploy_stage:
     if: github.ref == 'refs/heads/main' || contains(github.ref, 'hotfix/')
     uses: projectronin/ronin-charts/.github/workflows/deploy.yaml@deploy/v4
-    needs: [application_image, deploy_dev]
+    needs: [application-image, deploy_dev]
     with:
       environment: stage
       application: infx-internal-tools
