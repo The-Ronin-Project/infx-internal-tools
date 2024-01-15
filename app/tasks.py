@@ -7,6 +7,8 @@ from app.errors import NotFoundException
 import app.value_sets.models
 import app.concept_maps.models
 import app.concept_maps.versioning_models
+from app.models.mapping_request_service import get_outstanding_errors
+from app.models.mapping_request_service import MappingRequestService
 from app.database import get_db
 
 
@@ -38,7 +40,7 @@ def load_outstanding_errors_to_custom_terminologies():
     """ """
     conn = get_db()
 
-    load_concepts_from_errors()
+    MappingRequestService.load_concepts_from_errors()
 
     conn.commit()
     conn.close()
@@ -60,6 +62,17 @@ def resolve_errors_after_concept_map_publish(concept_map_version_uuid):
 @celery_app.task
 def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     conn = get_db()
+
+    # Get the number of concepts to insert after the creation of the concept map
+    outstanding_errors = get_outstanding_errors()
+    current_outstanding_error = next(
+        (error for error in outstanding_errors if error['concept_map_uuid'] == concept_map_uuid), None
+    )
+    if current_outstanding_error is not None:
+        outstanding_code_count = current_outstanding_error['outstanding_code_count']
+    else:
+        # Handle the case where current_outstanding_error is None
+        outstanding_code_count = 0
 
     # Step 6: look up source and target value set
     
@@ -136,6 +149,11 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
         require_review_for_non_equivalent_relationships=require_review_for_non_equivalent_relationships,
         require_review_no_maps_not_in_target=require_review_no_maps_not_in_target,
     )
+
+    # After creating the new version, update the count
+    new_version_uuid = version_creator.new_version_uuid
+    app.concept_maps.models.ConceptMapVersion(new_version_uuid, outstanding_code_count)
+
     conn.commit()
     conn.close()
     return version_creator.new_version_uuid
