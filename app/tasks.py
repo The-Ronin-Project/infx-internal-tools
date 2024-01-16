@@ -66,7 +66,7 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     # Get the number of concepts to insert after the creation of the concept map
     outstanding_errors = get_outstanding_errors()
     current_outstanding_error = next(
-        (error for error in outstanding_errors if error['concept_map_uuid'] == concept_map_uuid), None
+        (error for error in outstanding_errors if str(error['concept_map_uuid']) == concept_map_uuid), None
     )
     if current_outstanding_error is not None:
         outstanding_code_count = current_outstanding_error['outstanding_code_count']
@@ -152,7 +152,7 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
 
     # After creating the new version, update the count
     new_version_uuid = version_creator.new_version_uuid
-    app.concept_maps.models.ConceptMapVersion(new_version_uuid, outstanding_code_count)
+    app.concept_maps.models.ConceptMapVersion.update_loaded_concepts_count(new_version_uuid, outstanding_code_count)
 
     conn.commit()
     conn.close()
