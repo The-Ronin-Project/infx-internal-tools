@@ -13,6 +13,11 @@ class NotFoundException(Exception):
         self.message = message
 
 
+class OCIException(Exception):
+    def __init__(self, message):
+        self.message = message
+
+
 class BadDataError(InternalServerError):
     def __init__(self, code, description, errors, http_status_code=409):
         self.code = code
