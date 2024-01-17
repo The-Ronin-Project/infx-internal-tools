@@ -1634,7 +1634,7 @@ class ConceptMapVersion:
             conn.execute(
                 text(
                     """
-                    UPDATE concept_maps.concept_map
+                    UPDATE concept_maps.concept_map_version
                     SET count_loaded_concepts = :loaded_count
                     WHERE uuid = :concept_map_version_uuid
                     """
