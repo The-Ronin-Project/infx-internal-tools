@@ -69,7 +69,7 @@ class ValueSetTerminologyTests(unittest.TestCase):
         new_terminology_version_uuid = self.safe_term_uuid_fake
         with raises(TypeError) as e:
             value_set.perform_terminology_update(old_terminology_version_uuid, new_terminology_version_uuid)
-        assert str(e.value) == "perform_terminology_update() missing 3 required positional arguments: 'effective_start', 'effective_end', and 'description'"
+        assert str(e.value) == "ValueSet.perform_terminology_update() missing 3 required positional arguments: 'effective_start', 'effective_end', and 'description'"
 
     def test_perform_terminology_update_old_is_null(self):
         value_set = app.value_sets.models.ValueSet.load(self.safe_value_set_uuid_obsrv_mirth)
