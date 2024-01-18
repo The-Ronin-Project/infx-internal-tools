@@ -7,7 +7,6 @@ from app.errors import NotFoundException
 import app.value_sets.models
 import app.concept_maps.models
 import app.concept_maps.versioning_models
-from app.models.mapping_request_service import get_outstanding_errors
 from app.models.mapping_request_service import MappingRequestService
 from app.database import get_db
 
@@ -63,16 +62,8 @@ def resolve_errors_after_concept_map_publish(concept_map_version_uuid):
 def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     conn = get_db()
 
-    # Get the number of concepts to insert after the creation of the concept map
-    outstanding_errors = get_outstanding_errors()
-    current_outstanding_error = next(
-        (error for error in outstanding_errors if str(error['concept_map_uuid']) == concept_map_uuid), None
-    )
-    if current_outstanding_error is not None:
-        outstanding_code_count = current_outstanding_error['outstanding_code_count']
-    else:
-        # Handle the case where current_outstanding_error is None
-        outstanding_code_count = 0
+    # Get the number of outstanding codes, this is stored and used after a new version has been created
+    outstanding_code_count = app.models.mapping_request_service.get_count_of_outstanding_codes(concept_map_uuid)
 
     # Step 6: look up source and target value set
     
