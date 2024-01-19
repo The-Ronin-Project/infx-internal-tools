@@ -4,8 +4,11 @@ from oci.object_storage import ObjectStorageClient
 from werkzeug.exceptions import BadRequest
 import datetime
 import json
+import logging
 
 from app.errors import NotFoundException, OCIException
+
+LOGGER = logging.getLogger()
 
 
 def oci_authentication():
@@ -156,12 +159,14 @@ def save_to_object_store(
     @param content: content to publish, with metadata to support publication
     @return: completion message and concept map
     """
+    LOGGER.info(f"Attempting to save {path} to OCI bucket")
     put_object_response = object_storage_client.put_object(
         namespace,
         bucket_name,
         path,
         json.dumps(content, indent=2).encode("utf-8"),
     )
+    LOGGER.info(f"OCI response status code {put_object_response.status}")
     if put_object_response.status != 200:
         raise OCIException(f"Failed to publish {path}. Response status: {put_object_response.status}")
     return {"message": "object pushed to bucket", "object": content}
