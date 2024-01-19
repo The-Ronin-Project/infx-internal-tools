@@ -1569,6 +1569,22 @@ def get_outstanding_errors(
     return list_result
 
 
+def get_count_of_outstanding_codes(concept_map_uuid):
+    """Get the number of concepts inserted after the new version of the concept map has been created"""
+
+    # Returns a list of dictionaries, outstanding_code_count contains the count we want to return from the function
+    outstanding_errors = get_outstanding_errors()
+    current_outstanding_error = next(
+        (error for error in outstanding_errors if str(error['concept_map_uuid']) == concept_map_uuid), None
+    )
+    if current_outstanding_error is not None:
+        outstanding_code_count = current_outstanding_error['outstanding_code_count']
+    else:
+        # Handle case where current_outstanding_error is None
+        outstanding_code_count = None
+    return outstanding_code_count
+
+
 def get_all_unresolved_validation(environment: str):
     """
     Identify all open Data Validation Service resources with unresolved issues
