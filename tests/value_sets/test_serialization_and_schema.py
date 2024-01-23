@@ -53,7 +53,7 @@ class ValueSetVersionSerializationTests(unittest.TestCase):
         self.assertEqual(serialized_data["description"], "no map + diabetes")
         self.assertEqual(
             serialized_data["useContext"],
-            (
+            [
                 [
                     {
                         "code": {
@@ -65,8 +65,8 @@ class ValueSetVersionSerializationTests(unittest.TestCase):
                             "coding": [{"code": "Testing"}, {"code": "test edit"}]
                         },
                     }
-                ],
-            ),
+                ]
+            ],
         )
         self.assertEqual(serialized_data["extension"][0]["valueString"], "5")
 
