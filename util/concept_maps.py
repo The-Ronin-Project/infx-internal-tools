@@ -22,6 +22,7 @@ def test_concept_map_output_to_oci():
 def concept_map_output_to_oci(test_concept_map_version_uuid: str, schema_version: int):
     """
     Helper function for test_concept_map_output_to_oci.
+    @param test_concept_map_version_uuid, see tests/concept_maps/test_concept_maps.py for a list of safe values
     @param schema_version: current and/or next schema version for ConceptMap as input by test_concept_map_output().
     """
     test_concept_map_version = ConceptMapVersion(test_concept_map_version_uuid)

@@ -14,7 +14,9 @@ import app.models.codes
 from app.database import get_db
 from app.app import create_app
 from app.errors import NotFoundException, BadRequestWithCode
-
+from app.value_sets.models import ValueSetVersion, ValueSet
+from app.terminologies.models import Terminology
+from app.database import get_db
 
 class ValueSetTerminologyTests(unittest.TestCase):
     """
@@ -69,7 +71,8 @@ class ValueSetTerminologyTests(unittest.TestCase):
         new_terminology_version_uuid = self.safe_term_uuid_fake
         with raises(TypeError) as e:
             value_set.perform_terminology_update(old_terminology_version_uuid, new_terminology_version_uuid)
-        assert str(e.value) == "ValueSet.perform_terminology_update() missing 3 required positional arguments: 'effective_start', 'effective_end', and 'description'"
+        expected = "perform_terminology_update() missing 3 required positional arguments: 'effective_start', 'effective_end', and 'description'"
+        assert expected in str(e.value)
 
     def test_perform_terminology_update_old_is_null(self):
         value_set = app.value_sets.models.ValueSet.load(self.safe_value_set_uuid_obsrv_mirth)
@@ -375,6 +378,19 @@ class ValueSetTerminologyTests(unittest.TestCase):
                 )
             result = e.value
             assert "No versions found for Value Set with UUID: " in str(result.message)
+
+    def test_lookup_terminologies_in_value_set_version(self):
+        """
+        Legacy unit test from the value_sets folder.
+        """
+        loinc_2_74 = Terminology.load("554805c6-4ad1-4504-b8c7-3bab4e5196fd")  # LOINC 2.74
+
+        value_set_version = ValueSetVersion.load(
+            "2441d5b7-9c64-4cac-b274-b70001f05e3f")  # todo: replace w/ dedicated value set for automated tests
+        value_set_version.expand()
+        terminologies_in_vs = value_set_version.lookup_terminologies_in_value_set_version()
+
+        assert terminologies_in_vs == [loinc_2_74]
 
 
 if __name__ == '__main__':
