@@ -19,7 +19,12 @@ from werkzeug.exceptions import BadRequest, NotFound
 from sqlalchemy.sql.expression import bindparam
 
 
-from app.errors import NotFoundException, BadDataError, DataIntegrityError, BadRequestWithCode
+from app.errors import (
+    NotFoundException,
+    BadDataError,
+    DataIntegrityError,
+    BadRequestWithCode,
+)
 from app.helpers.message_helper import message_exception_classname
 
 from app.helpers.oci_helper import set_up_object_store
@@ -241,7 +246,6 @@ class VSRule:
         # Include entire code system rules
         if self.property == "include_entire_code_system":
             self.include_entire_code_system()
-
 
     def serialize(self):
         """
@@ -1996,7 +2000,9 @@ class ValueSet:
 
         value_set_metadata = ValueSet.load_version_metadata(self.uuid)
         if len(value_set_metadata) == 0:
-            raise NotFoundException(f"No versions found for Value Set with UUID: {self.uuid}")
+            raise NotFoundException(
+                f"No versions found for Value Set with UUID: {self.uuid}"
+            )
         sorted_versions = sorted(
             value_set_metadata, key=lambda x: x["version"], reverse=True
         )
@@ -2976,6 +2982,8 @@ class ValueSetVersion:
         if not use_case_coding:
             use_case_coding = [{"code": "unknown"}]
 
+        extension_value_string = "5" if is_schema_version_5_or_later else "2"
+
         serialized = {
             "resourceType": "ValueSet",
             "id": str(self.value_set.uuid),
@@ -2988,7 +2996,7 @@ class ValueSetVersion:
             "extension": [
                 {
                     "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-valueSetSchema",
-                    "valueString": "2",
+                    "valueString": extension_value_string,
                 }
             ],
             "url": f"http://projectronin.io/fhir/ValueSet/{self.value_set.uuid}",
@@ -3002,26 +3010,39 @@ class ValueSetVersion:
         if is_schema_version_5_or_later:
             serialized["description"] = self.value_set.description or ""
             serialized["versionDescription"] = self.description or ""
+            serialized["useContext"] = [
+                [
+                    {
+                        "code": {
+                            "system": "http://terminology.hl7.org/CodeSystem/usage-context-type",  # static value
+                            "code": "workflow",  # static value
+                            "display": "Workflow Setting",
+                        },
+                        "valueCodeableConcept": {
+                            "coding": use_case_coding,
+                        },
+                    }
+                ]
+            ]
+
         else:
             serialized["description"] = (
                 (self.value_set.description or "") + " " + (self.description or "")
             )
-
-        # continue with the rest of the dictionary
-        serialized["useContext"] = (
-            [
+            serialized["useContext"] = [
                 {
                     "code": {
-                        "system": "http://terminology.hl7.org/CodeSystem/usage-context-type",  # static value
-                        "code": "workflow",  # static value
+                        "system": "http://terminology.hl7.org/CodeSystem/usage-context-type",
+                        "code": "workflow",
                         "display": "Workflow Setting",
                     },
                     "valueCodeableConcept": {
                         "coding": use_case_coding,
                     },
                 }
-            ],
-        )
+            ]
+
+        # continue with the rest of the dictionary
         serialized["immutable"] = self.value_set.immutable
         serialized["experimental"] = self.value_set.experimental
         serialized["purpose"] = self.value_set.purpose
@@ -3755,7 +3776,7 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
     if terminology_fhir_uri is None:
         raise BadRequestWithCode(
             "ValueSet.value_sets_terminology_update_report.no_term_input",
-            "No terminology URI was input"
+            "No terminology URI was input",
         )
 
     conn = get_db()
@@ -3772,9 +3793,13 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
         value_set_name = vs.get("name")
         value_set_title = vs.get("title")
 
-        versions_metadata = ValueSet.load_version_metadata(value_set_uuid) # always returns a list, even if empty
+        versions_metadata = ValueSet.load_version_metadata(
+            value_set_uuid
+        )  # always returns a list, even if empty
         if len(versions_metadata) == 0:
-            raise NotFoundException(f"No versions found for Value Set with UUID: {value_set_uuid}")
+            raise NotFoundException(
+                f"No versions found for Value Set with UUID: {value_set_uuid}"
+            )
         # sort the versions and get the most recent even thought versions response is ordered desc
         sorted_versions = sorted(
             versions_metadata, key=lambda x: x.get("version"), reverse=True
