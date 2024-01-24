@@ -335,40 +335,26 @@ class Registry:
             row_number += 1
             value_set_uuid = str(result.value_set_uuid)
             value_set_version = ValueSet.load_most_recent_active_version(value_set_uuid).version
+            row = {
+                "productGroupLabel": result.group_title,
+                "productItemLabel": result.member_title,
+                "sequence": row_number,
+                "valueSetUuid": value_set_uuid,
+                "valueSetDisplayTitle": result.value_set_title,
+                "valueSetCodeName": result.value_set_name,
+                "valueSetVersion": value_set_version
+            }
             if registry.registry_type == "labs":
-                row = {
-                    "productGroupLabel": result.group_title,
-                    "productItemLabel": result.member_title,
+                row.update({
                     "minimumPanelMembers": result.minimum_panel_members,
-                    "sequence": row_number,
-                    "valueSetUuid": value_set_uuid,
-                    "valueSetDisplayTitle": result.value_set_title,
-                    "valueSetCodeName": result.value_set_name,
-                    "valueSetVersion": value_set_version
-                }
+                })
             elif registry.registry_type == "vitals":
-                row = {
-                    "productGroupLabel": result.group_title,
-                    "productItemLabel": result.member_title,
+                row.update({
                     "ucumRefUnits": result.ucum_ref_units,
                     "refRangeLow": result.ref_range_low,
                     "refRangeHigh": result.ref_range_high,
-                    "sequence": row_number,
-                    "valueSetUuid": value_set_uuid,
-                    "valueSetDisplayTitle": result.value_set_title,
-                    "valueSetCodeName": result.value_set_name,
-                    "valueSetVersion": value_set_version
-                }
-            else:
-                row = {
-                    "productGroupLabel": result.group_title,
-                    "productItemLabel": result.member_title,
-                    "sequence": row_number,
-                    "valueSetUuid": value_set_uuid,
-                    "valueSetDisplayTitle": result.value_set_title,
-                    "valueSetCodeName": result.value_set_name,
-                    "valueSetVersion": value_set_version
-                }
+                })
+
             data.append(row)
 
         if content_type == "csv":
