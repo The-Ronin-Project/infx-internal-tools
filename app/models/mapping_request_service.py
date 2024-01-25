@@ -1504,7 +1504,7 @@ def get_outstanding_errors(
                     terminology,
                     uuid AS latest_version_uuid,
                     -- Rank the versions in descending order for each terminology
-                    ROW_NUMBER() OVER(PARTITION BY terminology ORDER BY version DESC) as rn
+                    ROW_NUMBER() OVER(PARTITION BY terminology ORDER BY cast(version as float) DESC) as rn
                 FROM 
                     public.terminology_versions
                 WHERE
