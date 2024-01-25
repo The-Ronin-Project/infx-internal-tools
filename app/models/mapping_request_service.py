@@ -1507,6 +1507,10 @@ def get_outstanding_errors(
                     ROW_NUMBER() OVER(PARTITION BY terminology ORDER BY version DESC) as rn
                 FROM 
                     public.terminology_versions
+                WHERE
+                    is_standard = false
+                AND fhir_terminology = false
+                AND version != 'N/A'  -- Account for the "Value Sets" terminology, which might be deprecated and worth removing
             ),
             
             -- Use a CTE to link the previous version UUID of a terminology to its latest version UUID
@@ -1752,11 +1756,11 @@ if __name__ == "__main__":
     #     requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
     #     requested_issue_type: must be a type load_concepts_from_errors() already supports (see IssueType enum)
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    # service.load_concepts_from_errors(commit_changes=True)
+    service.load_concepts_from_errors(commit_changes=True, requested_resource_type="Observation", requested_organization_id="mdaoc")
 
     # UNCOMMENT the 2 lines below for GitHub merges and testing; comment them when running the temporary error load task
-    service.load_concepts_from_errors(commit_changes=False)
-    conn.rollback()
+    # service.load_concepts_from_errors(commit_changes=False)
+    # conn.rollback()
 
     # We have run rollback() and commit() where and as needed; now ask the DatabaseHandler to close() the connection
     conn.close()
