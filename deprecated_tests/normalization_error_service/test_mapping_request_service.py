@@ -1,6 +1,7 @@
 import unittest
 import uuid
 
+import app.helpers.format_helper
 from app.database import get_db
 
 import app.models.mapping_request_service
@@ -55,7 +56,7 @@ class NormalizationErrorServiceUnitTests(unittest.TestCase):
             resource="N/A",
             status="REPORTED",
             severity="FAILED",
-            create_dt_tm=app.models.mapping_request_service.convert_string_to_datetime_or_none("2023-03-16T21:45:10.173667Z"),
+            create_dt_tm=app.helpers.format_helper.convert_string_to_datetime_or_none("2023-03-16T21:45:10.173667Z"),
             update_dt_tm=None,
             reprocess_dt_tm=None,
             reprocessed_by=None,
@@ -68,7 +69,7 @@ class NormalizationErrorServiceUnitTests(unittest.TestCase):
             type="NOV_CONMAP_LOOKUP",
             description="Sample description",
             status="REPORTED",
-            create_dt_tm=app.models.mapping_request_service.convert_string_to_datetime_or_none(
+            create_dt_tm=app.helpers.format_helper.convert_string_to_datetime_or_none(
                 "2023-03-16T21:45:10.316956Z"
             ),
             location="Condition.code",
@@ -83,7 +84,7 @@ class NormalizationErrorServiceUnitTests(unittest.TestCase):
             type="SAMPLE_ERROR_TYPE",
             description="Sample description",
             status="REPORTED",
-            create_dt_tm=app.models.mapping_request_service.convert_string_to_datetime_or_none(
+            create_dt_tm=app.helpers.format_helper.convert_string_to_datetime_or_none(
                 "2023-07-18T21:45:10.316956Z"
             ),
             location="Condition.code",

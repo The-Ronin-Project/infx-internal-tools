@@ -7,6 +7,7 @@ from app.errors import NotFoundException
 import app.value_sets.models
 import app.concept_maps.models
 import app.concept_maps.versioning_models
+import app.proofs_of_concept.data_migration
 from app.models.mapping_request_service import MappingRequestService
 from app.database import get_db
 
@@ -25,24 +26,26 @@ celery_app = Celery("infx-tasks", broker=BROKER_URL)
 # celery_app.conf.broker_url = config('CELERY_BROKER_URL')
 
 
-@celery_app.on_after_configure.connect
-def setup_periodic_tasks(sender, **kwargs):
-    # Executes every 4hrs
-    sender.add_periodic_task(
-        crontab(hour="4"),
-        load_outstanding_errors_to_custom_terminologies.s(),
-    )
+# Deprecated because error service / mapping request process is being ran from local dev
+# @celery_app.on_after_configure.connect
+# def setup_periodic_tasks(sender, **kwargs):
+#     # Executes every 4hrs
+#     sender.add_periodic_task(
+#         crontab(hour="4"),
+#         load_outstanding_errors_to_custom_terminologies.s(),
+#     )
 
 
-@celery_app.task
-def load_outstanding_errors_to_custom_terminologies():
-    """ """
-    conn = get_db()
-
-    MappingRequestService.load_concepts_from_errors()
-
-    conn.commit()
-    conn.close()
+# Deprecated because error service / mapping request process is being ran from local dev
+# @celery_app.task
+# def load_outstanding_errors_to_custom_terminologies():
+#     """ """
+#     conn = get_db()
+#
+#     load_concepts_from_errors()
+#
+#     conn.commit()
+#     conn.close()
 
 
 @celery_app.task
@@ -160,6 +163,11 @@ def back_fill_concept_maps_to_simplifier():
         concept_map_object.to_simplifier()
 
     return "Active concept map versions back fill to Simplifier complete."
+
+
+@celery_app.task
+def perform_poc_database_migration():
+    app.proofs_of_concept.data_migration.perform_migration()
 
 
 @celery_app.task

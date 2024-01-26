@@ -372,6 +372,8 @@ def create_app(script_info=None):
         """
         Trigger the error validation load process via an API call.
         """
+        # todo: fix this if we ever need it again, otherwise remove
+        # Fix needed in tasks file
         tasks.load_outstanding_errors_to_custom_terminologies.apply_async()
         return "Started"
 
@@ -442,6 +444,11 @@ def create_app(script_info=None):
     @app.route("/CeleryTask/Demo", methods=["GET"])
     def celery_task_demo():
         result = tasks.hello_world.delay()
+        return "Task Created"
+
+    @app.route("/data_migration_poc", methods=["POST"])
+    def perform_poc_data_migration_endpoint():
+        tasks.perform_poc_database_migration.delay()
         return "Task Created"
 
     return app
