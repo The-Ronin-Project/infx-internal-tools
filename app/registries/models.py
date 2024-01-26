@@ -319,7 +319,7 @@ class Registry:
                     S.uuid AS value_set_uuid, S.title AS value_set_title, S.name AS value_set_name,
                     M.title AS member_title, M.sequence AS member_sequence,
                     G.title AS group_title, G.sequence AS group_sequence,
-                    V.product_item_long_label AS product_item_long_label, 
+                    V.product_item_long_label AS product_item_long_label 
                     FROM flexible_registry."group" G
                     JOIN flexible_registry.group_member M ON M.group_uuid = G.uuid
                     JOIN flexible_registry.observation_interpretation_group_member V ON V.group_member_uuid = M.uuid
@@ -377,7 +377,7 @@ class Registry:
                 })
             elif registry.registry_type == "observation_interpretation":
                 row.update({
-                    "product_item_long_label": result.product_item_long_label
+                    "productItemLongLabel": result.product_item_long_label
                 })
 
             data.append(row)
