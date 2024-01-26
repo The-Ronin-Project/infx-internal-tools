@@ -9,7 +9,6 @@ import app.concept_maps.models
 import app.concept_maps.versioning_models
 import app.models.mapping_request_service
 import app.proofs_of_concept.data_migration
-from app.models.mapping_request_service
 from app.database import get_db
 
 
