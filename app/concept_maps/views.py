@@ -304,6 +304,9 @@ def create_new_concept_map_version_from_previous(previous_version_uuid):
     require_review_no_maps_not_in_target = request.json.get(
         "require_review_no_maps_not_in_target"
     )
+    require_review_all_other_no_map_reasons = request.json.get(
+        "require_review_all_other_no_map_reasons"
+    )
 
     version_creator = ConceptMapVersionCreator()
     version_creator.new_version_from_previous(
@@ -313,6 +316,7 @@ def create_new_concept_map_version_from_previous(previous_version_uuid):
         new_target_value_set_version_uuid,
         require_review_for_non_equivalent_relationships,
         require_review_no_maps_not_in_target,
+        require_review_all_other_no_map_reasons,
     )
     return "Created", 201
 
