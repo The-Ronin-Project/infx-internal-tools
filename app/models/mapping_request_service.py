@@ -26,7 +26,12 @@ import app.concept_maps.models
 import app.models.data_ingestion_registry
 import app.value_sets.models
 from app.errors import BadDataError, NotFoundException
-from app.helpers.api_helper import get_token, make_get_request_async, make_get_request, make_post_request_async
+from app.helpers.api_helper import (
+    get_token,
+    make_get_request_async,
+    make_get_request,
+    make_post_request_async,
+)
 from app.helpers.format_helper import convert_string_to_datetime_or_none
 from app.helpers.message_helper import (
     message_exception_summary,
@@ -76,6 +81,7 @@ class IssueType(Enum):
     multiple validation Issues, only 1 Error resource is created for that FHIR resource. Multiple Issues are attached
     to the 1 Error. Each Issue has an Issue Type, and each is likely to have a different Issue Type from the others.
     """
+
     NOV_CONMAP_LOOKUP = "NOV_CONMAP_LOOKUP"
 
 
@@ -84,6 +90,7 @@ class IncludeTenant(Enum):
     Tenant IDs confirmed by Content and Interops to be of interest. Subset of "Organization Ids" list on Confluence.
     Link if needed: https://projectronin.atlassian.net/wiki/spaces/ENG/pages/1737556005/Organization+Ids
     """
+
     MD_ANDERSON = "mdaoc"
     MD_ANDERSON_TEST = "5jzj62vp"
     PROVIDENCE_ST_JOHNS_PROD = "v7r1eczk"
@@ -99,6 +106,7 @@ class ExcludeTenant(Enum):
     """
     Tenant IDs confirmed by Content as intentionally not having concept maps created. Also listed on "Organization Ids".
     """
+
     CERNER_SALES_DOMAIN = "tv6fx8pm"
     LEGACY_RONIN_DEMO = "demo"
     LEGACY_RONIN_DEV = "peeng"
@@ -126,7 +134,9 @@ class ErrorServiceResource:
         self.issues = []
         if self.token is None:
             try:
-                self.token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
+                self.token = get_token(
+                    AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE
+                )
             except (KeyError, ValueError) as e:
                 LOGGER.error(
                     f"Failed to get token:\nAUTH_URL: {AUTH_URL}\nCLIENT_ID: {CLIENT_ID}\nAUTH_AUDIENCE: {AUTH_AUDIENCE})"
@@ -302,38 +312,63 @@ class MappingRequestService:
     Implements functions for the MappingRequestService.
     The callable function for consumers is load_concepts_from_errors() which directs all other functions in the service.
     """
+
     # API values
-    environment: str            # Prod, Stage, Dev
-    token: str                  # this access token will be populated at the start of load_concepts_from_errors()
+    environment: str  # Prod, Stage, Dev
+    token: str  # this access token will be populated at the start of load_concepts_from_errors()
     error_service_url: str = DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL
     error_service_api: str = "/resources"
-    status: str = "REPORTED"    # issue status to request: exclude: IGNORED - ADDRESSING - REPROCESSED - CORRECTED
-    rest_api_params: dict       # input parameters based on current control values from the main loop
+    status: str = "REPORTED"  # issue status to request: exclude: IGNORED - ADDRESSING - REPROCESSED - CORRECTED
+    rest_api_params: dict  # input parameters based on current control values from the main loop
 
     # Control values
-    commit_changes: bool = False            # true/false to commit to database: control value from the main loop
-    page_size: int                          # set in the hundreds to throttle the service based on network factors
-    organization_id: str                    # tenant organization: control value from the main loop
-    input_issue_type: str                   # IssueType.value from the Error Service: control value from the main loop
-    fhir_resource_type: str                 # FHIR canonical resource type based on a control value from the main loop
-    resource_type_enum: ResourceType        # ResourceType enum object based on a control value from the main loop
+    commit_changes: bool = (
+        False  # true/false to commit to database: control value from the main loop
+    )
+    page_size: int  # set in the hundreds to throttle the service based on network factors
+    organization_id: str  # tenant organization: control value from the main loop
+    input_issue_type: str  # IssueType.value from the Error Service: control value from the main loop
+    fhir_resource_type: str  # FHIR canonical resource type based on a control value from the main loop
+    resource_type_enum: ResourceType  # ResourceType enum object based on a control value from the main loop
 
     # Local caches
-    terminology_version = dict()                        # for deduplication, Key: terminology_uuid, Value: Terminology
-    new_codes_to_deduplicate_by_terminology = dict()    # codes that need deduplication, Key: uuid, Value: list[str]
-    deduped_codes_by_terminology = dict()               # codes that have been deduplicated, Key: uuid, Value: list[str]
-    error_code_link_data = []                           # data linking codes back to issues/error IDs they came from
-    error_service_resource_ids = []                     # resources we have already processed in this environment
-    tenant_load_json_format_error_reported = []         # unique JSON formatting errors to reporting (report each once)
-    data_normalization_registry = dict()                # DataNormalizationRegistry entries we already fetched
-    source_value_set = dict()                           # source_value_set_uuid values we already saw in concept maps
-    terminology_for_value_set = dict()                  # deduplication, Key: source_value_set_uuid, Value: Terminology
+    terminology_version = (
+        dict()
+    )  # for deduplication, Key: terminology_uuid, Value: Terminology
+    new_codes_to_deduplicate_by_terminology = (
+        dict()
+    )  # codes that need deduplication, Key: uuid, Value: list[str]
+    deduped_codes_by_terminology = (
+        dict()
+    )  # codes that have been deduplicated, Key: uuid, Value: list[str]
+    error_code_link_data = (
+        []
+    )  # data linking codes back to issues/error IDs they came from
+    error_service_resource_ids = (
+        []
+    )  # resources we have already processed in this environment
+    tenant_load_json_format_error_reported = (
+        []
+    )  # unique JSON formatting errors to reporting (report each once)
+    data_normalization_registry = (
+        dict()
+    )  # DataNormalizationRegistry entries we already fetched
+    source_value_set = (
+        dict()
+    )  # source_value_set_uuid values we already saw in concept maps
+    terminology_for_value_set = (
+        dict()
+    )  # deduplication, Key: source_value_set_uuid, Value: Terminology
 
     # Logging
-    all_skip_count = 0                      # total count of resources skipped due to transitory issues
-    total_count_loaded_codes = 0            # total count of codes processed by the service
-    error_service_resource_id: str = None   # current error service resource ID being processed by the main loop
-    error_service_issue_id: str = None      # current error service issue ID being processed by the main loop
+    all_skip_count = 0  # total count of resources skipped due to transitory issues
+    total_count_loaded_codes = 0  # total count of codes processed by the service
+    error_service_resource_id: str = (
+        None  # current error service resource ID being processed by the main loop
+    )
+    error_service_issue_id: str = (
+        None  # current error service issue ID being processed by the main loop
+    )
 
     @classmethod
     def load_concepts_from_errors(
@@ -393,7 +428,7 @@ class MappingRequestService:
             4. Load the unique codes into their respective terminologies.
         """
         # Step 0: Initialize and setup
-        
+
         # API call paging
         if page_size is None:
             page_size = PAGE_SIZE
@@ -405,7 +440,10 @@ class MappingRequestService:
         # resource type
         unsupported_resource_types = []
         supported_resource_types = [r.value for r in ResourceType]
-        if requested_resource_type is not None and requested_resource_type not in supported_resource_types:
+        if (
+            requested_resource_type is not None
+            and requested_resource_type not in supported_resource_types
+        ):
             LOGGER.warning(
                 f"Support for the {requested_resource_type} resource type has not been implemented"
             )
@@ -417,7 +455,10 @@ class MappingRequestService:
 
         # issue type
         supported_issue_types = [u.value for u in IssueType]
-        if requested_issue_type is not None and requested_issue_type not in supported_issue_types:
+        if (
+            requested_issue_type is not None
+            and requested_issue_type not in supported_issue_types
+        ):
             LOGGER.warning(
                 f"Support for the {requested_issue_type} issue type has not been implemented"
             )
@@ -431,7 +472,7 @@ class MappingRequestService:
         unsupported_organization_ids = [x.value for x in ExcludeTenant]
         supported_organization_ids = [i.value for i in IncludeTenant]
         if requested_organization_id in unsupported_organization_ids or (
-             requested_organization_id not in supported_organization_ids
+            requested_organization_id not in supported_organization_ids
         ):
             if requested_organization_id is not None:
                 LOGGER.warning(
@@ -486,7 +527,9 @@ class MappingRequestService:
         cls.error_service_resource_ids = get_all_unresolved_validation(cls.environment)
 
         # Timeouts for API calls to the error service
-        timeout_config = httpx.Timeout(timeout=600.0, pool=600.0, read=600.0, connect=600.0)
+        timeout_config = httpx.Timeout(
+            timeout=600.0, pool=600.0, read=600.0, connect=600.0
+        )
 
         # Main loop
         try:
@@ -506,7 +549,9 @@ class MappingRequestService:
                         )
                         try:
                             # Step 1: Fetch resources that have encountered errors.
-                            cls.token = get_token(AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE)
+                            cls.token = get_token(
+                                AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE
+                            )
                             with (httpx.Client(timeout=timeout_config) as client):
 
                                 # Collecting all resources with errors through paginated API calls.
@@ -517,7 +562,9 @@ class MappingRequestService:
                                 while all_resources_fetched is False:
 
                                     # Here is the page of resources
-                                    resources_with_errors = cls.fetch_error_resource_data(client)
+                                    resources_with_errors = (
+                                        cls.fetch_error_resource_data(client)
+                                    )
                                     length_of_response = len(resources_with_errors)
                                     if length_of_response < cls.page_size:
                                         all_resources_fetched = True
@@ -534,7 +581,9 @@ class MappingRequestService:
                                     step_1_total += since_last_time
 
                                     # Convert API response data to ErrorServiceResource objects.
-                                    error_resources = cls.transform_to_error_resources(resources_with_errors)
+                                    error_resources = cls.transform_to_error_resources(
+                                        resources_with_errors
+                                    )
 
                                     # Load issues for all error service resources
                                     cls.load_issues_for_error_resources(error_resources)
@@ -549,7 +598,9 @@ class MappingRequestService:
 
                                     # Walk through all the error service resources
                                     for error_service_resource in error_resources:
-                                        cls.process_error_resource(error_service_resource)
+                                        cls.process_error_resource(
+                                            error_service_resource
+                                        )
 
                                     # Deduplicate and process all issues found
                                     cls.deduplicate_and_process_all_issues()
@@ -633,7 +684,16 @@ class MappingRequestService:
                 api_url=cls.error_service_api,
                 params=cls.rest_api_params,
             )
-        except (httpx.ConnectError or HttpxPoolTimeout or HttpcorePoolTimeout or BadDataError or asyncio.exceptions.CancelledError or TimeoutError or ReadTimeout or JSONDecodeError) as e:
+        except (
+            httpx.ConnectError
+            or HttpxPoolTimeout
+            or HttpcorePoolTimeout
+            or BadDataError
+            or asyncio.exceptions.CancelledError
+            or TimeoutError
+            or ReadTimeout
+            or JSONDecodeError
+        ) as e:
             intro = message_exception_summary(e)
             if "Expecting value: line 1 column 1 (char 0)" in intro:
                 tip = f"\nThis error means a required value was empty."
@@ -700,6 +760,7 @@ class MappingRequestService:
                         for error_resource in error_resources
                     )
                 )
+
         asyncio.run(load_all_issues())
 
     @classmethod
@@ -729,7 +790,7 @@ class MappingRequestService:
                 raw_resource,
                 location,
                 element,
-                index
+                index,
             )
 
     @classmethod
@@ -739,9 +800,7 @@ class MappingRequestService:
         except Exception as e:
             intro = f"{message_exception_classname(e)} loading {cls.fhir_resource_type} data for issue {cls.input_issue_type} for {cls.organization_id}: 1 report for 1+ cases"
             if intro not in cls.tenant_load_json_format_error_reported:
-                error_code = (
-                    "NormalizationErrorService.load_concepts_from_errors"
-                )
+                error_code = "NormalizationErrorService.load_concepts_from_errors"
                 info = "".join(traceback.format_exception(*sys.exc_info()))
                 LOGGER.warning(f"{intro}\n{info}\n")
                 cls.tenant_load_json_format_error_reported.append(intro)
@@ -778,14 +837,14 @@ class MappingRequestService:
 
     @classmethod
     def process_issue_by_type(
-            cls,
-            error_service_resource: ErrorServiceResource,
-            issue: ErrorServiceIssue,
-            resource_type: ResourceType,
-            raw_resource,
-            location: str,
-            element: str,
-            index: int
+        cls,
+        error_service_resource: ErrorServiceResource,
+        issue: ErrorServiceIssue,
+        resource_type: ResourceType,
+        raw_resource,
+        location: str,
+        element: str,
+        index: int,
     ):
         """
         Process the issue type using the FHIR resource data at the indicated location in the model
@@ -801,16 +860,16 @@ class MappingRequestService:
 
         if issue.type == IssueType.NOV_CONMAP_LOOKUP.value:
             # Based on resource_type, identify coding that needs to get into the concept map
-            (
-                found,
-                processed_code,
-                processed_display
-            ) = cls.extract_coding_attributes(resource_type, raw_resource, location, element, index)
+            (found, processed_code, processed_display) = cls.extract_coding_attributes(
+                resource_type, raw_resource, location, element, index
+            )
             if not found:
                 return
 
             # which terminology should we load this code into?
-            terminology_to_load_to = cls.find_terminology_to_load_to(error_service_resource, element)
+            terminology_to_load_to = cls.find_terminology_to_load_to(
+                error_service_resource, element
+            )
             if terminology_to_load_to is None:
                 return
 
@@ -820,17 +879,17 @@ class MappingRequestService:
                 error_service_resource,
                 terminology_to_load_to,
                 processed_code,
-                processed_display
+                processed_display,
             )
 
     @classmethod
     def extract_coding_attributes(
-            cls,
-            resource_type: ResourceType,
-            raw_resource,
-            location: str,
-            element: str,
-            index: int
+        cls,
+        resource_type: ResourceType,
+        raw_resource,
+        location: str,
+        element: str,
+        index: int,
     ) -> (bool, str, str):
         """
         There's something unique about the handling for every resource_type we support
@@ -880,14 +939,22 @@ class MappingRequestService:
                 processed_code = raw_code
                 processed_display = raw_code.get("text")
 
+            # Observation.interpretation is a CodeableConcept
+            elif element == "Observation.interpretation":
+                if "interpretation" not in raw_resource:
+                    return false_result
+                raw_code = raw_resource["code"]
+                processed_code = raw_code
+                processed_display = raw_code.get("text")
+
             # Observation.component.code is a CodeableConcept - location has an index
             elif element == "Observation.component.code":
                 if index is None:
                     return false_result
                 if (
-                        "component" not in raw_resource
-                        or len(raw_resource["component"]) < (index + 1)
-                        or "code" not in raw_resource["component"][index]
+                    "component" not in raw_resource
+                    or len(raw_resource["component"]) < (index + 1)
+                    or "code" not in raw_resource["component"][index]
                 ):
                     return false_result
                 raw_code = raw_resource["component"][index]["code"]
@@ -899,15 +966,12 @@ class MappingRequestService:
                 if index is None:
                     return false_result
                 if (
-                        "component" not in raw_resource
-                        or len(raw_resource["component"]) < (index + 1)
-                        or "valueCodeableConcept"
-                        not in raw_resource["component"][index]
+                    "component" not in raw_resource
+                    or len(raw_resource["component"]) < (index + 1)
+                    or "valueCodeableConcept" not in raw_resource["component"][index]
                 ):
                     return false_result
-                raw_code = raw_resource["component"][index][
-                    "valueCodeableConcept"
-                ]
+                raw_code = raw_resource["component"][index]["valueCodeableConcept"]
                 processed_code = raw_code
                 processed_display = raw_code.get("text")
             else:
@@ -980,9 +1044,7 @@ class MappingRequestService:
 
     @classmethod
     def find_terminology_to_load_to(
-            cls,
-            error_service_resource: ErrorServiceResource,
-            element: str
+        cls, error_service_resource: ErrorServiceResource, element: str
     ):
         """
         Lookup the concept map version used to normalize this type of resource
@@ -993,10 +1055,7 @@ class MappingRequestService:
         """
 
         # Note that some normalization registry data_element strings need adjustment.
-        if (
-                element == "Observation.value"
-                or element == "Observation.component.value"
-        ):
+        if element == "Observation.value" or element == "Observation.component.value":
             data_element = f"{element}CodeableConcept"
         else:
             data_element = element
@@ -1015,9 +1074,9 @@ class MappingRequestService:
             )
 
         # Is the concept_map_version_for_normalization valid?
-        concept_map_version_for_normalization = (
-            cls.data_normalization_registry[registry_key]
-        )
+        concept_map_version_for_normalization = cls.data_normalization_registry[
+            registry_key
+        ]
         if concept_map_version_for_normalization is None:
             # per Content team, desired action is continue (stop loop, process next error)
             return None
@@ -1031,13 +1090,9 @@ class MappingRequestService:
                 most_recent_active_source_value_set_version = app.value_sets.models.ValueSet.load_most_recent_active_version_with_cache(
                     source_value_set_uuid
                 )
-                most_recent_active_source_value_set_version.expand(
-                    no_repeat=True
-                )
+                most_recent_active_source_value_set_version.expand(no_repeat=True)
                 cls.source_value_set.update(
-                    {
-                        source_value_set_uuid: most_recent_active_source_value_set_version
-                    }
+                    {source_value_set_uuid: most_recent_active_source_value_set_version}
                 )
             except BadRequest:
                 cls.source_value_set.update({source_value_set_uuid: None})
@@ -1076,18 +1131,12 @@ class MappingRequestService:
                     f"No terminologies in source value set {most_recent_active_source_value_set_version.uuid}"
                 )
 
-            current_terminology_version = (
-                terminologies_in_source_value_set[0]
-            )
+            current_terminology_version = terminologies_in_source_value_set[0]
             cls.terminology_for_value_set.update(
                 {source_value_set_uuid: current_terminology_version}
             )
             cls.terminology_version.update(
-                {
-                    str(
-                        current_terminology_version.uuid
-                    ): current_terminology_version
-                }
+                {str(current_terminology_version.uuid): current_terminology_version}
             )
         current_terminology_version = cls.terminology_for_value_set[
             source_value_set_uuid
@@ -1101,12 +1150,12 @@ class MappingRequestService:
 
     @classmethod
     def prepare_code_for_terminology(
-            cls,
-            raw_resource,
-            error_service_resource: ErrorServiceResource,
-            terminology_to_load_to: Terminology,
-            processed_code: str,
-            processed_display: str
+        cls,
+        raw_resource,
+        error_service_resource: ErrorServiceResource,
+        terminology_to_load_to: Terminology,
+        processed_code: str,
+        processed_display: str,
     ):
         """
         Prepare to load the code into the terminology, but do not load yet, in case of duplicates
@@ -1161,22 +1210,17 @@ class MappingRequestService:
             value_boolean=raw_resource.get("valueBoolean"),
             value_string=raw_resource.get("valueString"),
             value_date_time=raw_resource.get("valueDateTime"),
-            value_codeable_concept=raw_resource.get(
-                "valueCodeableConcept"
-            ),
+            value_codeable_concept=raw_resource.get("valueCodeableConcept"),
         )
 
-        if (
-                terminology_to_load_to.uuid
-                in cls.new_codes_to_deduplicate_by_terminology
-        ):
+        if terminology_to_load_to.uuid in cls.new_codes_to_deduplicate_by_terminology:
             cls.new_codes_to_deduplicate_by_terminology[
                 terminology_to_load_to.uuid
             ].append(new_code)
         else:
-            cls.new_codes_to_deduplicate_by_terminology[
-                terminology_to_load_to.uuid
-            ] = [new_code]
+            cls.new_codes_to_deduplicate_by_terminology[terminology_to_load_to.uuid] = [
+                new_code
+            ]
 
     @classmethod
     def deduplicate_and_process_all_issues(cls):
@@ -1205,8 +1249,8 @@ class MappingRequestService:
         Loop through codes, identify duplicates, and merge them.
         """
         for (
-                terminology_uuid,
-                new_codes_to_deduplicate,
+            terminology_uuid,
+            new_codes_to_deduplicate,
         ) in cls.new_codes_to_deduplicate_by_terminology.items():
             # Store duplicates in a dictionary with lists
             dedup_dict = {}
@@ -1268,12 +1312,8 @@ class MappingRequestService:
             code_list,
         ) in cls.deduped_codes_by_terminology.items():
             if terminology_version_uuid not in cls.terminology_version.keys():
-                terminology = Terminology.load_from_cache(
-                    terminology_version_uuid
-                )
-                cls.terminology_version.update(
-                    {terminology_version_uuid: terminology}
-                )
+                terminology = Terminology.load_from_cache(terminology_version_uuid)
+                cls.terminology_version.update({terminology_version_uuid: terminology})
             terminology = cls.terminology_version[terminology_version_uuid]
 
             if len(code_list) > 0:
@@ -1579,10 +1619,15 @@ def get_count_of_outstanding_codes(concept_map_uuid):
     # Returns a list of dictionaries, outstanding_code_count contains the count we want to return from the function
     outstanding_errors = get_outstanding_errors()
     current_outstanding_error = next(
-        (error for error in outstanding_errors if str(error['concept_map_uuid']) == concept_map_uuid), None
+        (
+            error
+            for error in outstanding_errors
+            if str(error["concept_map_uuid"]) == concept_map_uuid
+        ),
+        None,
     )
     if current_outstanding_error is not None:
-        outstanding_code_count = current_outstanding_error['outstanding_code_count']
+        outstanding_code_count = current_outstanding_error["outstanding_code_count"]
     else:
         # Handle case where current_outstanding_error is None
         outstanding_code_count = None
