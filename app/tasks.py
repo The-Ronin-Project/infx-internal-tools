@@ -7,8 +7,8 @@ from app.errors import NotFoundException
 import app.value_sets.models
 import app.concept_maps.models
 import app.concept_maps.versioning_models
+import app.models.mapping_request_service
 import app.proofs_of_concept.data_migration
-from app.models.mapping_request_service import MappingRequestService
 from app.database import get_db
 
 
@@ -42,7 +42,7 @@ celery_app = Celery("infx-tasks", broker=BROKER_URL)
 #     """ """
 #     conn = get_db()
 #
-#     load_concepts_from_errors()
+#     app.models.mapping_request_service.MappingRequestService.load_concepts_from_errors()
 #
 #     conn.commit()
 #     conn.close()
