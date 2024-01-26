@@ -271,6 +271,7 @@ class Registry:
         registry = Registry.load(registry_uuid)
 
         conn = get_db()
+        # Make sure to override here if implementing a new registry type
         if registry.registry_type == "labs":
             results = conn.execute(
                 text(
@@ -310,6 +311,25 @@ class Registry:
                 ),
                 {"registry_uuid": registry_uuid},
             ).fetchall()
+        elif registry.registry_type == "observation_interpretation":
+            results = conn.execute(
+                text(
+                    """  
+                    SELECT 
+                    S.uuid AS value_set_uuid, S.title AS value_set_title, S.name AS value_set_name,
+                    M.title AS member_title, M.sequence AS member_sequence,
+                    G.title AS group_title, G.sequence AS group_sequence,
+                    V.product_item_long_label AS product_item_long_label 
+                    FROM flexible_registry."group" G
+                    JOIN flexible_registry.group_member M ON M.group_uuid = G.uuid
+                    JOIN flexible_registry.observation_interpretation_group_member V ON V.group_member_uuid = M.uuid
+                    JOIN value_sets.value_set S ON S.uuid = M.value_set_uuid
+                    WHERE G.registry_uuid = :registry_uuid
+                    ORDER BY G.sequence, M.sequence  
+                    """
+                ),
+                {"registry_uuid": registry_uuid},
+            ).fetchall()
         else:
             results = conn.execute(
                 text(
@@ -335,40 +355,31 @@ class Registry:
             row_number += 1
             value_set_uuid = str(result.value_set_uuid)
             value_set_version = ValueSet.load_most_recent_active_version(value_set_uuid).version
+            row = {
+                "productGroupLabel": result.group_title,
+                "productItemLabel": result.member_title,
+                "sequence": row_number,
+                "valueSetUuid": value_set_uuid,
+                "valueSetDisplayTitle": result.value_set_title,
+                "valueSetCodeName": result.value_set_name,
+                "valueSetVersion": value_set_version
+            }
+            # Make sure to override here if implementing a new registry type
             if registry.registry_type == "labs":
-                row = {
-                    "productGroupLabel": result.group_title,
-                    "productItemLabel": result.member_title,
+                row.update({
                     "minimumPanelMembers": result.minimum_panel_members,
-                    "sequence": row_number,
-                    "valueSetUuid": value_set_uuid,
-                    "valueSetDisplayTitle": result.value_set_title,
-                    "valueSetCodeName": result.value_set_name,
-                    "valueSetVersion": value_set_version
-                }
+                })
             elif registry.registry_type == "vitals":
-                row = {
-                    "productGroupLabel": result.group_title,
-                    "productItemLabel": result.member_title,
+                row.update({
                     "ucumRefUnits": result.ucum_ref_units,
                     "refRangeLow": result.ref_range_low,
                     "refRangeHigh": result.ref_range_high,
-                    "sequence": row_number,
-                    "valueSetUuid": value_set_uuid,
-                    "valueSetDisplayTitle": result.value_set_title,
-                    "valueSetCodeName": result.value_set_name,
-                    "valueSetVersion": value_set_version
-                }
-            else:
-                row = {
-                    "productGroupLabel": result.group_title,
-                    "productItemLabel": result.member_title,
-                    "sequence": row_number,
-                    "valueSetUuid": value_set_uuid,
-                    "valueSetDisplayTitle": result.value_set_title,
-                    "valueSetCodeName": result.value_set_name,
-                    "valueSetVersion": value_set_version
-                }
+                })
+            elif registry.registry_type == "observation_interpretation":
+                row.update({
+                    "productItemLongLabel": result.product_item_long_label
+                })
+
             data.append(row)
 
         if content_type == "csv":
@@ -377,6 +388,7 @@ class Registry:
                 "productGroupLabel",
                 "productItemLabel",
             ]
+            # Make sure to override here if implementing a new registry type
             if registry.registry_type == "labs":
                 fieldnames += ["minimumPanelMembers"]
             if registry.registry_type == "vitals":
@@ -384,6 +396,10 @@ class Registry:
                     "ucumRefUnits",
                     "refRangeLow",
                     "refRangeHigh"
+                ]
+            if registry.registry_type == "observation_interpretation":
+                fieldnames += [
+                    "product_item_long_label"
                 ]
             fieldnames += [
                 "sequence",
@@ -852,6 +868,47 @@ class VitalsGroup(Group):
 
 
 @dataclass
+class ObservationInterpretationGroup(Group):
+    def load_members(self):
+        """
+        Join all the data from group_member and vitals_group_member and return a VitalsGroupMember
+        """
+        conn = get_db()
+        results = conn.execute(
+            text(
+                """  
+                SELECT * FROM flexible_registry.group_member 
+                JOIN flexible_registry.observation_interpretation_group_member
+                ON group_member.uuid = observation_interpretation_group_member.group_member_uuid
+                WHERE group_member.group_uuid = :group_uuid
+                order by sequence  
+                """
+            ),
+            {"group_uuid": self.uuid},
+        ).fetchall()
+
+        if results is None:
+            raise NotFoundException(
+                f"No Members found for Observation Interpretation Group with UUID: {self.uuid}"
+            )
+
+        members = []
+        for result in results:
+            value_set = ValueSet.load(result.value_set_uuid)
+            member = ObservationInterpretationGroupMember(
+                uuid=result.uuid,
+                group=self,
+                title=result.title,
+                sequence=result.sequence,
+                value_set=value_set,
+                product_item_long_label=result.product_item_long_label,
+            )
+            members.append(member)
+
+        self.members = members
+
+
+@dataclass
 class GroupMember:
     uuid: uuid.UUID
     group: Group
@@ -1164,6 +1221,92 @@ class VitalsGroupMember(GroupMember):
         serialized["ucum_ref_units"] = self.ucum_ref_units
         serialized["ref_range_high"] = self.ref_range_high
         serialized["ref_range_low"] = self.ref_range_low
+        return serialized
+
+
+@dataclass
+class ObservationInterpretationGroupMember(GroupMember):
+    product_item_long_label: Optional[str]
+
+    @classmethod
+    def post_create_hook(cls, group_member_uuid, **kwargs):
+        """
+        Provide create overrides for this subclass
+        """
+
+        conn = get_db()
+        conn.execute(
+            text(
+                """
+                INSERT INTO flexible_registry.observation_interpretation_group_member
+                (group_member_uuid, product_item_long_label)
+                values
+                (:group_member_uuid, :product_item_long_label)
+                """
+            ),
+            {
+                "group_member_uuid": group_member_uuid,
+                "product_item_long_label": kwargs["product_item_long_label"],
+            },
+        )
+
+        return cls.load(group_member_uuid)
+
+    @classmethod
+    def fetch_data(cls, group_member_uuid):
+        data = super().fetch_data(group_member_uuid)
+
+        # If there's no data for the given uuid, return None
+        if not data:
+            return None
+
+        # Load additional data or modify existing data
+        conn = get_db()
+        result = conn.execute(
+            text(
+                """
+                select * from flexible_registry.observation_interpretation_group_member
+                where group_member_uuid=:group_member_uuid
+                """
+            ),
+            {"group_member_uuid": group_member_uuid},
+        ).fetchone()
+        data["product_item_long_label"] = result.product_item_long_label
+
+        return data
+
+    @classmethod
+    def create_instance_from_data(cls, **data):
+        return cls(
+            uuid=data["uuid"],
+            group=data["group"],
+            title=data["title"],
+            sequence=data["sequence"],
+            value_set=data["value_set"],
+            product_item_long_label=data["product_item_long_label"],
+        )
+
+    def post_update_hook(self, **kwargs):
+        product_item_long_label = kwargs.get("product_item_long_label")
+        conn = get_db()
+        conn.execute(
+            text(
+                """    
+                UPDATE flexible_registry.observation_interpretation_group_member
+                SET product_item_long_label=:product_item_long_label
+                WHERE group_member_uuid=:group_member_uuid    
+                """
+            ),
+            {
+                "product_item_long_label": product_item_long_label,
+                "group_member_uuid": self.uuid,
+            },
+        )
+        self.product_item_long_label = product_item_long_label
+
+    def serialize(self):
+        serialized = super().serialize()
+        serialized["product_item_long_label"] = self.product_item_long_label
         return serialized
 
 

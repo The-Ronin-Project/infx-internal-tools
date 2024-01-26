@@ -6,6 +6,7 @@ from app.registries.models import (
     Registry,
     LabsGroup,
     VitalsGroupMember, VitalsGroup,
+    ObservationInterpretationGroup, ObservationInterpretationGroupMember
 )
 from app.terminologies.models import *
 
@@ -188,12 +189,14 @@ def create_group_member(registry_uuid, group_uuid):
     registry = Registry.load(registry_uuid)
 
     if request.method == "POST":
+
         title = request.json.get("title")
         if title is None:
             raise BadRequestWithCode(
                 "GroupMember.title.required",
                 "Group member title was not provided",
             )
+
         value_set_uuid = request.json.get("value_set_uuid")
         if value_set_uuid is None:
             raise BadRequestWithCode(
@@ -211,7 +214,13 @@ def create_group_member(registry_uuid, group_uuid):
                 ref_range_high=request.json.get("ref_range_high"),
                 ref_range_low=request.json.get("ref_range_low"),
             )
-            return jsonify(new_group_member.serialize())
+        elif registry.registry_type == "observation_interpretation":
+            new_group_member = ObservationInterpretationGroupMember.create(
+                group_uuid=group_uuid,
+                title=title,
+                value_set_uuid=value_set_uuid,
+                product_item_long_label=request.json.get("product_item_long_label")
+            )
         else:
             # labs, documents, and all others can use the generic class
             # because they have no additional data on the member
@@ -220,7 +229,7 @@ def create_group_member(registry_uuid, group_uuid):
                 title=title,
                 value_set_uuid=value_set_uuid,
             )
-            return jsonify(new_group_member.serialize())
+        return jsonify(new_group_member.serialize())
 
     elif request.method == "GET":
         # Load all the members associated with the group
