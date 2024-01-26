@@ -7,7 +7,7 @@ from app.errors import NotFoundException
 import app.value_sets.models
 import app.concept_maps.models
 import app.concept_maps.versioning_models
-from app.models.mapping_request_service import MappingRequestService
+import app.models.mapping_request_service
 from app.database import get_db
 
 
@@ -39,7 +39,7 @@ def load_outstanding_errors_to_custom_terminologies():
     """ """
     conn = get_db()
 
-    MappingRequestService.load_concepts_from_errors()
+    app.models.mapping_request_service.MappingRequestService.load_concepts_from_errors()
 
     conn.commit()
     conn.close()

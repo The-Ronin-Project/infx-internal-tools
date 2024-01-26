@@ -865,7 +865,7 @@ class MappingRequestService:
         # Observation
         elif resource_type == ResourceType.OBSERVATION:
             # Observation.value is a CodeableConcept
-            if element == "Observation.value":
+            if element == "Observation.value" or element == "Observation.valueCodeableConcept":
                 if "valueCodeableConcept" not in raw_resource:
                     return false_result
                 raw_code = raw_resource["valueCodeableConcept"]
@@ -895,7 +895,7 @@ class MappingRequestService:
                 processed_display = raw_code.get("text")
 
             # Observation.component.value is a CodeableConcept - location will have an index
-            elif element == "Observation.component.value":
+            elif element == "Observation.component.value" or element == "Observation.component.valueCodeableConcept":
                 if index is None:
                     return false_result
                 if (
