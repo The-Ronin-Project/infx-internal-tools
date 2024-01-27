@@ -237,6 +237,8 @@ def create_group_member(registry_uuid, group_uuid):
             group = VitalsGroup.load(group_uuid)
         elif registry.registry_type == "labs":
             group = LabsGroup.load(group_uuid)
+        elif registry.registry_type == "observation_interpretation":
+            group = ObservationInterpretationGroup.load(group_uuid)
         else:
             group = Group.load(group_uuid)
         group.load_members()
@@ -251,6 +253,8 @@ def update_group_member(registry_uuid, group_uuid, member_uuid):
     registry = Registry.load(registry_uuid)
     if registry.registry_type == "vitals":
         group_member = VitalsGroupMember.load(member_uuid)
+    elif registry.registry_type == "observation_interpretation":
+        group_member = ObservationInterpretationGroupMember.load(member_uuid)
     else:
         group_member = GroupMember.load(member_uuid)
 
@@ -262,6 +266,11 @@ def update_group_member(registry_uuid, group_uuid, member_uuid):
                 ucum_ref_units=request.json.get("ucum_ref_units"),
                 ref_range_high=request.json.get("ref_range_high"),
                 ref_range_low=request.json.get("ref_range_low"),
+            )
+        elif registry.registry_type == "observation_interpretation":
+            group_member.update(
+                title=title,
+                product_item_long_label=request.json.get("product_item_long_label")
             )
         else:
             group_member.update(title)
