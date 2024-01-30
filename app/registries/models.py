@@ -29,6 +29,7 @@ class Registry:
         database_schema_version (int): The current output schema version for Registry JSON files in OCI.
         object_storage_folder_name (str): "Registries" folder name for OCI storage, for easy retrieval by utilities.
     """
+
     uuid: uuid.UUID
     title: str
     registry_type: str  # not an enum so users can create new types of registries w/o code change
@@ -40,14 +41,8 @@ class Registry:
     def __post_init__(cls):
         cls.groups = []
 
-
     @classmethod
-    def create(
-        cls,
-        title: str,
-        registry_type: str,
-        sorting_enabled: bool
-    ):
+    def create(cls, title: str, registry_type: str, sorting_enabled: bool):
         conn = get_db()
         # Check for duplicate registry names
         existing_registry = conn.execute(
@@ -145,7 +140,7 @@ class Registry:
                     limit 1
                     """
                 ),
-                {"uuid": registry_uuid}
+                {"uuid": registry_uuid},
             )
         else:
             results = conn.execute(
@@ -157,14 +152,13 @@ class Registry:
                     limit 1
                     """
                 ),
-                {
-                    "registry_uuid": registry_uuid,
-                    "environment": f"%{environment}%"
-                }
+                {"registry_uuid": registry_uuid, "environment": f"%{environment}%"},
             )
         recent_version = results.first()
         if recent_version is None:
-            raise NotFoundException(f"No {environment} version(s) published in OCI for Registry with UUID: {registry_uuid}")
+            raise NotFoundException(
+                f"No {environment} version(s) published in OCI for Registry with UUID: {registry_uuid}"
+            )
 
         return RegistryVersion.load(recent_version.uuid)
 
@@ -250,22 +244,22 @@ class Registry:
             "registry_type": self.registry_type,
             "sorting_enabled": self.sorting_enabled,
         }
-    
+
     @classmethod
     def export(cls, registry_uuid, environment="pending", content_type="csv"):
         """
-            CSV column labels for Product, and corresponding table column names, are
-            - "productGroupLabel" group.title
-            - "productItemLabel" group_member.title
-            - "minimum_panel_members" lab_group.minimum_panel_members (labs only)
-            - "ucum_ref_units" vitals_group_member.ucum_ref_units (vitals only)
-            - "ref_range_low" vitals_group_member.ref_range_low (vitals only)
-            - "ref_range_low" vitals_group_member.ref_range_low (vitals only)
-            - "sequence" ORDER BY group.sequence, member.sequence (display as numbers starting at 1)
-            - "valueSetUuid" group_member.value_set_uuid
-            - "valueSetDisplayTitle" value_set.title
-            - "valueSetCodeName" value_set.name
-            - "valueSetVersion" value_set_version.version
+        CSV column labels for Product, and corresponding table column names, are
+        - "productGroupLabel" group.title
+        - "productItemLabel" group_member.title
+        - "minimum_panel_members" lab_group.minimum_panel_members (labs only)
+        - "ucum_ref_units" vitals_group_member.ucum_ref_units (vitals only)
+        - "ref_range_low" vitals_group_member.ref_range_low (vitals only)
+        - "ref_range_low" vitals_group_member.ref_range_low (vitals only)
+        - "sequence" ORDER BY group.sequence, member.sequence (display as numbers starting at 1)
+        - "valueSetUuid" group_member.value_set_uuid
+        - "valueSetDisplayTitle" value_set.title
+        - "valueSetCodeName" value_set.name
+        - "valueSetVersion" value_set_version.version
         """
         # Get the row data from the current flexible_registry.registry table
         registry = Registry.load(registry_uuid)
@@ -354,7 +348,9 @@ class Registry:
         for result in results:
             row_number += 1
             value_set_uuid = str(result.value_set_uuid)
-            value_set_version = ValueSet.load_most_recent_active_version(value_set_uuid).version
+            value_set_version = ValueSet.load_most_recent_active_version(
+                value_set_uuid
+            ).version
             row = {
                 "productGroupLabel": result.group_title,
                 "productItemLabel": result.member_title,
@@ -362,23 +358,25 @@ class Registry:
                 "valueSetUuid": value_set_uuid,
                 "valueSetDisplayTitle": result.value_set_title,
                 "valueSetCodeName": result.value_set_name,
-                "valueSetVersion": value_set_version
+                "valueSetVersion": value_set_version,
             }
             # Make sure to override here if implementing a new registry type
             if registry.registry_type == "labs":
-                row.update({
-                    "minimumPanelMembers": result.minimum_panel_members,
-                })
+                row.update(
+                    {
+                        "minimumPanelMembers": result.minimum_panel_members,
+                    }
+                )
             elif registry.registry_type == "vitals":
-                row.update({
-                    "ucumRefUnits": result.ucum_ref_units,
-                    "refRangeLow": result.ref_range_low,
-                    "refRangeHigh": result.ref_range_high,
-                })
+                row.update(
+                    {
+                        "ucumRefUnits": result.ucum_ref_units,
+                        "refRangeLow": result.ref_range_low,
+                        "refRangeHigh": result.ref_range_high,
+                    }
+                )
             elif registry.registry_type == "observation_interpretation":
-                row.update({
-                    "productItemLongLabel": result.product_item_long_label
-                })
+                row.update({"productItemLongLabel": result.product_item_long_label})
 
             data.append(row)
 
@@ -392,15 +390,9 @@ class Registry:
             if registry.registry_type == "labs":
                 fieldnames += ["minimumPanelMembers"]
             if registry.registry_type == "vitals":
-                fieldnames += [
-                    "ucumRefUnits",
-                    "refRangeLow",
-                    "refRangeHigh"
-                ]
+                fieldnames += ["ucumRefUnits", "refRangeLow", "refRangeHigh"]
             if registry.registry_type == "observation_interpretation":
-                fieldnames += [
-                    "product_item_long_label"
-                ]
+                fieldnames += ["productItemLongLabel"]
             fieldnames += [
                 "sequence",
                 "valueSetUuid",
@@ -425,7 +417,6 @@ class Registry:
             return output.getvalue()
         else:
             return data
-
 
     @classmethod
     def publish_to_object_store(cls, registry_uuid, environment):
@@ -454,14 +445,16 @@ class Registry:
         else:
             previous = "pending"
             output = registry.export(
-                registry_uuid,
-                environment=previous,
-                content_type="csv"
+                registry_uuid, environment=previous, content_type="csv"
             )
 
         # write current version CSV output to OCI
-        resource_schema_version = f"{Registry.database_schema_version}/{registry.registry_type}"
-        registry_version = Registry.load_most_recent_version(registry_uuid, environment=previous)
+        resource_schema_version = (
+            f"{Registry.database_schema_version}/{registry.registry_type}"
+        )
+        registry_version = Registry.load_most_recent_version(
+            registry_uuid, environment=previous
+        )
         publish_version_number = registry_version.version
         for env in environment_options:
             put_data_to_oci(
@@ -471,13 +464,15 @@ class Registry:
                 release_status=env,
                 resource_id=registry_uuid,
                 resource_version=publish_version_number,
-                content_type="csv"
+                content_type="csv",
             )
 
         # if write did not raise an exception, update current version and (if dev) create new version in database
         registry_version.update(environment)
         if environment_options[0] == "dev":
-            registry_version.create_new_version_from_specified_previous(registry_version.uuid)
+            registry_version.create_new_version_from_specified_previous(
+                registry_version.uuid
+            )
 
         # return CSV to the caller
         return output
@@ -489,8 +484,12 @@ class Registry:
         environment 'dev', 'stage', or 'prod', or if the environment is 'pending', the most recent draft in the database
         """
         registry = Registry.load(registry_uuid)
-        registry_version_number = Registry.load_most_recent_version(registry_uuid, environment).version
-        resource_schema_version = f"{Registry.database_schema_version}/{registry.registry_type}"
+        registry_version_number = Registry.load_most_recent_version(
+            registry_uuid, environment
+        ).version
+        resource_schema_version = (
+            f"{Registry.database_schema_version}/{registry.registry_type}"
+        )
         return get_data_from_oci(
             oci_root=Registry.object_storage_folder_name,
             resource_schema_version=resource_schema_version,
@@ -498,7 +497,7 @@ class Registry:
             resource_id=registry_uuid,
             resource_version=registry_version_number,
             content_type="csv",
-            return_content=True
+            return_content=True,
         )
 
 
@@ -1335,11 +1334,7 @@ class RegistryVersion:
         return f"<RegistryVersion uuid={self.uuid}, title={self.registry.title}, version={self.version}>"
 
     @classmethod
-    def create(
-        cls,
-        registry_uuid,
-        version: int
-    ):
+    def create(cls, registry_uuid, version: int):
         """
         Only the essential fields are used at this time. created_date is now() and uuid is generated during create.
         Initial status is "pending".
@@ -1386,7 +1381,9 @@ class RegistryVersion:
             {"uuid": version_uuid},
         ).first()
         if version_data is None:
-            raise NotFoundException(f"Unable to find Registry Version with UUID: {version_uuid}")
+            raise NotFoundException(
+                f"Unable to find Registry Version with UUID: {version_uuid}"
+            )
 
         registry = Registry.load(version_data.registry_uuid)
         registry_version = cls(
@@ -1402,10 +1399,7 @@ class RegistryVersion:
         return registry_version
 
     @classmethod
-    def create_new_version_from_specified_previous(
-        cls,
-        version_uuid
-    ):
+    def create_new_version_from_specified_previous(cls, version_uuid):
         """
         Only the essential fields are used at this time. created_date is now() and uuid is generated during create.
         Initial status is "pending".
@@ -1466,7 +1460,7 @@ class RegistryVersion:
                 "status": status_update,
                 "version": self.version,
                 "uuid": self.uuid,
-            }
+            },
         )
 
         return status_update
