@@ -260,10 +260,10 @@ class ErrorServiceIssue:
 @dataclass
 class DependsOnData:
     """ A simple data class to hold depends on data for an item which needs to be mapped. """
-    depends_on_property: Optional[str]
-    depends_on_system: Optional[str]
-    depends_on_value: Optional[str]
-    depend_on_display: Optional[str]
+    depends_on_property: Optional[str] = None
+    depends_on_system: Optional[str] = None
+    depends_on_value: Optional[str] = None
+    depends_on_display: Optional[str] = None
 
 
 metadata = MetaData()
@@ -869,7 +869,7 @@ class MappingRequestService:
 
         if issue.type == IssueType.NOV_CONMAP_LOOKUP.value:
             # Based on resource_type, identify coding that needs to get into the concept map
-            (found, processed_code, processed_display) = cls.extract_coding_attributes(
+            (found, processed_code, processed_display, depends_on) = cls.extract_coding_attributes(
                 resource_type, raw_resource, location, element, index
             )
             if not found:
@@ -889,6 +889,7 @@ class MappingRequestService:
                 terminology_to_load_to,
                 processed_code,
                 processed_display,
+                depends_on
             )
 
     @classmethod
@@ -1189,8 +1190,7 @@ class MappingRequestService:
         terminology_to_load_to: Terminology,
         processed_code: str,
         processed_display: str,
-        depends_on_value: str,
-        depends_on_property: str,
+        depends_on: Optional[DependsOnData]
     ):
         """
         Prepare to load the code into the terminology, but do not load yet, in case of duplicates
@@ -1199,8 +1199,7 @@ class MappingRequestService:
         @param terminology_to_load_to: Terminology object to load to
         @param processed_code: code is a critically important str attribute of a Coding data type
         @param processed_display: display is a critically important str attribute of a Coding data type
-        @param depends_on_value: currently populated for staging data via Observation.code
-        @param depends_on_property: "Observation.code"
+        @param depends_on: the depends on data, or None
         """
         new_code_uuid = uuid.uuid4()
         if processed_display is None:
@@ -1230,10 +1229,10 @@ class MappingRequestService:
                     "terminology_version_uuid": terminology_to_load_to.uuid,
                     # todo: no currently supported resource requires the dependsOn data
                     # but it is part of the unique constraint to look up a row, so use it
-                    "depends_on_property": None,
-                    "depends_on_system": None,
-                    "depends_on_value": depends_on_value,
-                    "depends_on_display": depends_on_property,
+                    "depends_on_property": depends_on.depends_on_property if depends_on else None,
+                    "depends_on_system": depends_on.depends_on_system if depends_on else None,
+                    "depends_on_value": depends_on.depends_on_value if depends_on else None,
+                    "depends_on_display": depends_on.depends_on_display if depends_on else None,
                 }
             )
 
@@ -1838,11 +1837,11 @@ if __name__ == "__main__":
     #     requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
     #     requested_issue_type: must be a type load_concepts_from_errors() already supports (see IssueType enum)
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    service.load_concepts_from_errors(commit_changes=True, requested_resource_type="DocumentReference", requested_organization_id="mdaoc")
+    # service.load_concepts_from_errors(commit_changes=True)
 
     # UNCOMMENT the 2 lines below for GitHub merges and testing; comment them when running the temporary error load task
-    # service.load_concepts_from_errors(commit_changes=False)
-    # conn.rollback()
+    service.load_concepts_from_errors(commit_changes=False)
+    conn.rollback()
 
     # We have run rollback() and commit() where and as needed; now ask the DatabaseHandler to close() the connection
     conn.close()
