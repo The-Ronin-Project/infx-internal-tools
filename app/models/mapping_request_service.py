@@ -938,7 +938,7 @@ class MappingRequestService:
                 ):
                     return false_result
 
-                    # Process non-empty Observation.component[0].code
+                # Process non-empty Observation.component[0].code
                 processed_code = raw_resource["component"][0]["code"]
                 processed_display = raw_resource["component"][0]["code"]["text"]
                 depends_on_value = json.dumps(raw_resource["code"])
@@ -1218,10 +1218,10 @@ class MappingRequestService:
                     "terminology_version_uuid": terminology_to_load_to.uuid,
                     # todo: no currently supported resource requires the dependsOn data
                     # but it is part of the unique constraint to look up a row, so use it
-                    "depends_on_property": "",
-                    "depends_on_system": "",
-                    "depends_on_value": depends_on_value if depends_on_value else "",
-                    "depends_on_display": depends_on_property if depends_on_property else "",
+                    "depends_on_property": None,
+                    "depends_on_system": None,
+                    "depends_on_value": depends_on_value,
+                    "depends_on_display": depends_on_property,
                 }
             )
 
