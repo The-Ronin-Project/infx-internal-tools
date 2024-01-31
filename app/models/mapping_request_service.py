@@ -257,6 +257,15 @@ class ErrorServiceIssue:
         )
 
 
+@dataclass
+class DependsOnData:
+    """ A simple data class to hold depends on data for an item which needs to be mapped. """
+    depends_on_property: Optional[str]
+    depends_on_system: Optional[str]
+    depends_on_value: Optional[str]
+    depend_on_display: Optional[str]
+
+
 metadata = MetaData()
 
 # Define the table using the Table syntax
@@ -906,6 +915,7 @@ class MappingRequestService:
         processed_code = ""
         processed_display = ""
         false_result = False, processed_code, processed_display
+        depends_on = None
 
         # Condition
         if resource_type == ResourceType.CONDITION:
@@ -941,8 +951,10 @@ class MappingRequestService:
                 # Process non-empty Observation.component[0].code
                 processed_code = raw_resource["component"][0]["code"]
                 processed_display = raw_resource["component"][0]["code"]["text"]
-                depends_on_value = json.dumps(raw_resource["code"])
-                depends_on_property = "Observation.code"
+                depends_on = DependsOnData(
+                    depends_on_value=json.dumps(raw_resource["code"]),
+                    depends_on_property="Observation.code"
+                )  # todo: does this need more depends on data?
 
             # Observation.value is a CodeableConcept
             if element == "Observation.value" or element == "Observation.valueCodeableConcept":
@@ -1061,7 +1073,7 @@ class MappingRequestService:
             cls.all_skip_count += 1
             return false_result
 
-        return True, processed_code, processed_display, depends_on_value, depends_on_property
+        return True, processed_code, processed_display, depends_on
 
     @classmethod
     def find_terminology_to_load_to(
@@ -1826,11 +1838,11 @@ if __name__ == "__main__":
     #     requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
     #     requested_issue_type: must be a type load_concepts_from_errors() already supports (see IssueType enum)
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    # service.load_concepts_from_errors(commit_changes=True)
+    service.load_concepts_from_errors(commit_changes=True, requested_resource_type="DocumentReference", requested_organization_id="mdaoc")
 
     # UNCOMMENT the 2 lines below for GitHub merges and testing; comment them when running the temporary error load task
-    service.load_concepts_from_errors(commit_changes=False)
-    conn.rollback()
+    # service.load_concepts_from_errors(commit_changes=False)
+    # conn.rollback()
 
     # We have run rollback() and commit() where and as needed; now ask the DatabaseHandler to close() the connection
     conn.close()
