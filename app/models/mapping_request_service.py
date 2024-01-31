@@ -930,7 +930,7 @@ class MappingRequestService:
                     and "text" in raw_resource["category"][0]
                     and raw_resource["category"][0]["text"] == "SmartData"
             ):
-                # Make sure Observation.component[0].code is empty
+                # Make sure Observation.component[0].code is not empty
                 if (
                         "component" not in raw_resource
                         or len(raw_resource["component"]) == 0
