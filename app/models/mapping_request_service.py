@@ -923,6 +923,27 @@ class MappingRequestService:
 
         # Observation
         elif resource_type == ResourceType.OBSERVATION:
+            # Observation.category.text is SmartData
+            if (
+                    "category" in raw_resource
+                    and len(raw_resource["category"]) > 0
+                    and "text" in raw_resource["category"][0]
+                    and raw_resource["category"][0]["text"] == "SmartData"
+            ):
+                # Make sure Observation.component[0].code is empty
+                if (
+                        "component" not in raw_resource
+                        or len(raw_resource["component"]) == 0
+                        or "code" not in raw_resource["component"][0]
+                ):
+                    return false_result
+
+                    # Process non-empty Observation.component[0].code
+                processed_code = raw_resource["component"][0]["code"]
+                processed_display = None
+                depends_on_value = json.dumps(raw_resource["code"])
+                depends_on_property = "Observation.code"
+
             # Observation.value is a CodeableConcept
             if element == "Observation.value" or element == "Observation.valueCodeableConcept":
                 if "valueCodeableConcept" not in raw_resource:
@@ -1040,7 +1061,7 @@ class MappingRequestService:
             cls.all_skip_count += 1
             return false_result
 
-        return True, processed_code, processed_display
+        return True, processed_code, processed_display, depends_on_value, depends_on_property
 
     @classmethod
     def find_terminology_to_load_to(
@@ -1156,6 +1177,8 @@ class MappingRequestService:
         terminology_to_load_to: Terminology,
         processed_code: str,
         processed_display: str,
+        depends_on_value: str,
+        depends_on_property: str,
     ):
         """
         Prepare to load the code into the terminology, but do not load yet, in case of duplicates
@@ -1164,6 +1187,8 @@ class MappingRequestService:
         @param terminology_to_load_to: Terminology object to load to
         @param processed_code: code is a critically important str attribute of a Coding data type
         @param processed_display: display is a critically important str attribute of a Coding data type
+        @param depends_on_value: currently populated for staging data via Observation.code
+        @param depends_on_property: "Observation.code"
         """
         new_code_uuid = uuid.uuid4()
         if processed_display is None:
@@ -1195,8 +1220,8 @@ class MappingRequestService:
                     # but it is part of the unique constraint to look up a row, so use it
                     "depends_on_property": "",
                     "depends_on_system": "",
-                    "depends_on_value": "",
-                    "depends_on_display": "",
+                    "depends_on_value": depends_on_value if depends_on_value else "",
+                    "depends_on_display": depends_on_property if depends_on_property else "",
                 }
             )
 
@@ -1801,11 +1826,11 @@ if __name__ == "__main__":
     #     requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
     #     requested_issue_type: must be a type load_concepts_from_errors() already supports (see IssueType enum)
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    service.load_concepts_from_errors(commit_changes=True, requested_resource_type="Observation", requested_organization_id="mdaoc")
+    # service.load_concepts_from_errors(commit_changes=True)
 
     # UNCOMMENT the 2 lines below for GitHub merges and testing; comment them when running the temporary error load task
-    # service.load_concepts_from_errors(commit_changes=False)
-    # conn.rollback()
+    service.load_concepts_from_errors(commit_changes=False)
+    conn.rollback()
 
     # We have run rollback() and commit() where and as needed; now ask the DatabaseHandler to close() the connection
     conn.close()
