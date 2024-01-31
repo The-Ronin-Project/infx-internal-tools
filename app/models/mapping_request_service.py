@@ -940,7 +940,7 @@ class MappingRequestService:
 
                     # Process non-empty Observation.component[0].code
                 processed_code = raw_resource["component"][0]["code"]
-                processed_display = None
+                processed_display = raw_resource["component"][0]["code"]["text"]
                 depends_on_value = json.dumps(raw_resource["code"])
                 depends_on_property = "Observation.code"
 
