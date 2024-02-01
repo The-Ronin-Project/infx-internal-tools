@@ -1,4 +1,5 @@
 # import asyncio
+import asyncio
 import datetime
 import logging
 import time
@@ -11,25 +12,91 @@ import sys
 from sqlalchemy import text
 
 from app.helpers.data_helper import serialize_json_object
-from app.helpers.format_helper import prepare_dynamic_value_for_sql_issue, prepare_data_dictionary_for_sql, IssuePrefix
+from app.helpers.format_helper import prepare_dynamic_value_for_sql_issue, prepare_data_dictionary_for_sql, IssuePrefix, \
+    prepare_additional_data_for_sql
 from app.helpers.id_helper import hash_for_code_id
-from app.helpers.message_helper import message_exception_summary
+from app.helpers.message_helper import message_exception_summary, message_exception_classname
 
 # from sqlalchemy.dialects.postgresql import UUID as UUID_column_type
 # from werkzeug.exceptions import BadRequest
 
 LOGGER = logging.getLogger()
-TOTAL_LIMIT = 1100000    # overall limit on number of records processed by the demo
-QUERY_LIMIT = 500       # per-request limit on number of records to process
-RETRY_LIMIT = 60        # number of times to retry database connection when it drops mid-loop on long runs
-IS_DEMO = False         # when True, do extra logging as a proof of concept "demo"
+TOTAL_LIMIT = 1300000   # overall limit on number of records processed
+QUERY_LIMIT = 500       # per-request limit on number of records to process - neither smaller nor larger values help
+REPORT_LIMIT = 500     # how often to log statistics while in progress
+RETRY_LIMIT = 40        # number of times to retry database connection when it drops mid-loop on long runs, >30 helps
+RETRY_SLEEP = 120       # time between retries - the most successful interval has consistently been 120, not more/less
 FIRST_UUID = uuid.UUID("00000000-0000-0000-0000-000000000000")
+LAST_UUID = uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
 DUPLICATE_CODE_PREFIX = "duplicate code_id: "
 
-# When testing, you can specify which UUID to start with, this time around, or use the FIRST_UUID
-START_UUID = uuid.UUID("6c4bc04e-9cd7-4691-a839-2c60cb978388")
-# START_UUID = FIRST_UUID
+# Values for breaking into UUID groups
+UUID_START = [
+    uuid.UUID("00000000-0000-0000-0000-000000000000"),
+    uuid.UUID("10000000-0000-0000-0000-000000000000"),
+    uuid.UUID("20000000-0000-0000-0000-000000000000"),
+    uuid.UUID("30000000-0000-0000-0000-000000000000"),
+    uuid.UUID("40000000-0000-0000-0000-000000000000"),
+    uuid.UUID("50000000-0000-0000-0000-000000000000"),
+    uuid.UUID("60000000-0000-0000-0000-000000000000"),
+    uuid.UUID("70000000-0000-0000-0000-000000000000"),
+    uuid.UUID("80000000-0000-0000-0000-000000000000"),
+    uuid.UUID("90000000-0000-0000-0000-000000000000"),
+    uuid.UUID("a0000000-0000-0000-0000-000000000000"),
+    uuid.UUID("b0000000-0000-0000-0000-000000000000"),
+    uuid.UUID("c0000000-0000-0000-0000-000000000000"),
+    uuid.UUID("d0000000-0000-0000-0000-000000000000"),
+    uuid.UUID("e0000000-0000-0000-0000-000000000000"),
+    uuid.UUID("f0000000-0000-0000-0000-000000000000")
+]
+# Full runs
+UUID_END = [
+    uuid.UUID("0fffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("1fffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("2fffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("3fffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("4fffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("5fffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("6fffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("7fffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("8fffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("9fffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("afffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("bfffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("cfffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("dfffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("efffffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff"),
+]
+# Partial runs
+UUID_END_SHORT = [
+    uuid.UUID("000fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("100fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("200fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("300fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("400fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("500fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("600fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("700fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("800fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("900fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("a00fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("b00fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("c00fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("d00fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("e00fffff-ffff-ffff-ffff-ffffffffffff"),
+    uuid.UUID("f00fffff-ffff-ffff-ffff-ffffffffffff"),
+]
 
+# When testing, you can specify which UUID to start or end with, this time around
+#     the classics:
+START_UUID = UUID_START[0]
+END_UUID = UUID_END[-1]
+#     other examples:
+# START_UUID = uuid.UUID("03659ed9-c591-4bbc-9bcf-37260e0e402f")
+# END_UUID = uuid.UUID("6c4fc33-c94c-49bf-91e8-839c2f934e84")
+# START_UUID = UUID_START[8]
+# END_UUID = UUID_END[8]
 
 class ConceptMapsForContent(Enum):
     """
@@ -77,7 +144,7 @@ class ConceptMapsForContent(Enum):
     MDATST_CONTACT_POINT_SYSTEM = "6b737eda-0c55-40d9-8393-808b46b9e80a"
     RONINEPIC_CARE_PLAN_CATEGORY = "6df05955-4e0c-4a53-870a-66f5daa5b67b"
     APPOSND_MEDICATION = "7002458e-e4e6-4eef-9a17-8cec74d5befe"
-    PSJTST_OBSERVATION =  "71cc7cd1-55fc-460f-92e1-6f70ea212aa1"
+    PSJTST_OBSERVATION = "71cc7cd1-55fc-460f-92e1-6f70ea212aa1"
     RONINEPIC_CONTACT_POINT_USE = "724e5ab7-d561-4d2a-90fd-8ca56fd521e6"
     RONINEPIC_OBSERVATION = "76c0e95e-5459-416d-8190-f9cb45d8814b"
     APPOSND_OBSERVATION_VALUE = "7b7541e7-3b1b-4864-a6b3-d992214b3b2b"
@@ -160,6 +227,9 @@ class ConceptMapsForSystems(Enum):
 
 
 def query_code_uuid_latest_versions() -> str:
+    """
+    Gets test concept map codes for the typical cases, using only codes from the latest version of each terminology
+    """
     return """
         WITH RankedVersions AS (
             SELECT 
@@ -189,11 +259,14 @@ def query_code_uuid_latest_versions() -> str:
             RankedVersions rv
             on rv.uuid = ctc.terminology_version_uuid
         WHERE 
-            rv.rn = 1;
+            rv.rn = 1
     """
 
 
 def query_code_uuid_string_versions() -> str:
+    """
+    Gets test concept map codes for the non-typical cases, using only codes from the latest version of each terminology
+    """
     return """
         WITH StringVersions AS (
         SELECT 
@@ -220,21 +293,67 @@ def query_code_uuid_string_versions() -> str:
     """
 
 
-def print_start(time_start):
-    LOGGER.warning(f"START TIME: {time_start} - at old_uuid: {START_UUID}\n")
+def query_code_uuid_test_only() -> str:
+    """
+    Gets UUIDs for a small number of codes used in INFX Systems "Test ONLY" concept maps.
+    Does not screen out older terminology versions as the other query_code_uuid_* functions do.
+    """
+    return """
+        select distinct
+        ctc.uuid
+        from concept_maps.concept_relationship cr
+        join concept_maps.source_concept sc on cr.source_concept_uuid = sc.uuid
+        join concept_maps.concept_map_version cmv on sc.concept_map_version_uuid = cmv.uuid
+        join concept_maps.concept_map cm on cmv.concept_map_uuid = cm.uuid	
+        join custom_terminologies.code ctc on sc.custom_terminology_uuid = ctc.uuid
+        join public.terminology_versions ptv on ctc.terminology_version_uuid = ptv.uuid
+        where cm.title like 'Test ONLY%' 
+    """
 
 
-def print_progress(time_start, total_processed, total_found, last_previous_uuid):
+def print_start(time_start, uuid_start, uuid_end):
+    LOGGER.warning(
+        f"START:\n{time_start} - at old_uuid: {uuid_start} - with planned end: {uuid_end}"
+        f" - page size: {QUERY_LIMIT} - report every: {REPORT_LIMIT} rows processed\n")
+
+
+def print_progress(time_start, total_processed, last_previous_uuid, statistics=None):
+    # Save a bit of time for log runs now:
+    statistics = None
+
     time_end = datetime.datetime.now()
     time_elapsed = time_end - time_start
     if total_processed > 0:
         row_average_time = time_elapsed / total_processed
     else:
         row_average_time = 0
+    if statistics is None:
+        stat_report = ""
+    else:
+        summary = datetime.timedelta(0)
+        for s in statistics:
+            summary += s
+        stat_report = (
+            f"     Execution time breakdown:\n"
+            f"       stat_select_batch:          {statistics[0]}\n"
+            f"       stat_migrate_code_value:    {statistics[1]}\n"
+            f"       stat_migrate_depends_on:    {statistics[2]}\n"
+            f"       stat_migrate_advisory_data: {statistics[3]}\n"
+            f"       stat_id_formation:          {statistics[4]}\n"
+            f"       stat_insert_formation:      {statistics[5]}\n"
+            f"       stat_values_formation:      {statistics[6]}\n"
+            f"       stat_insert_success:        {statistics[7]}\n"
+            f"       stat_insert_fail:           {statistics[8]}\n"
+            f"       stat_fail_cause_dup_case_1: {statistics[9]}\n"
+            f"       stat_fail_cause_dup_case_2: {statistics[10]}\n"
+            f"     Total:                        {summary}"
+        )
     LOGGER.warning(
-        f"Total rows processed since start: {total_processed} - total rows of interest found: {total_found}"
-        f" - time/1K rows: ({1000 * row_average_time})"
-        f" - time/1M rows: ({1000000 * row_average_time}) - last old_uuid processed: {last_previous_uuid}"
+        f"{time_end} - Accumulated rows of interest: {total_processed}"
+        f" - Time/1K: ({1000 * row_average_time})"
+        f" - /100K: ({100000 * row_average_time})"
+        f" - /1M: ({1000000 * row_average_time})"
+        f" - Last old_uuid processed: {last_previous_uuid}\n{stat_report}"
     )
 
 
@@ -242,13 +361,13 @@ def convert_empty_to_null(input_string: str):
     """
     conversion helper for data migration: when an empty column was represented as "" (empty string) return None
     """
-    if input_string == "":
+    if input_string == "" or input_string == "null":
         return None
     else:
         return input_string
 
 
-def migrate_custom_terminologies_code():
+def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
     """
     As an Informatics Systems developer, you can run this from the MacOS terminal just like the
     mapping_request_service using commands like this:
@@ -270,8 +389,7 @@ def migrate_custom_terminologies_code():
         LOGGER.addHandler(ch)
 
     total_processed = 0
-    total_found = 0
-    last_previous_uuid = START_UUID
+    last_previous_uuid = uuid_start
     total_limit = TOTAL_LIMIT
     query_limit = QUERY_LIMIT
     retry_count = 0
@@ -338,9 +456,7 @@ def migrate_custom_terminologies_code():
             depends_on_system, 
             depends_on_display,
             old_uuid,
-            issue_type,
-            accept_unchanged,
-            note
+            issue_type
         )
         VALUES
         (
@@ -362,48 +478,60 @@ def migrate_custom_terminologies_code():
             :depends_on_system, 
             :depends_on_display,
             :old_uuid,
-            :issue_type,
-            :accept_unchanged,
-            :note
+            :issue_type
         )      
     """
-
-    # list of desired uuids
-    code_uuid_list = []
-    try:
-        conn = get_db()
-        latest_terminology_versions = conn.execute(
-            text(query_code_uuid_latest_versions())
-        ).fetchall()
-        for row in latest_terminology_versions:
-            code_uuid_list.append(str(row.uuid))
-        string_terminology_versions = conn.execute(
-            text(query_code_uuid_string_versions())
-        ).fetchall()
-        for row in string_terminology_versions:
-            code_uuid_list.append(str(row.uuid))
-        code_uuid_list = sorted(code_uuid_list)
-    except Exception as e:
-        conn.close()
-        raise e
 
     # main loop
     time_start = datetime.datetime.now()
     try:
-        print_start(time_start)
+        print_start(time_start, uuid_start, uuid_end)
         while not done:
+            time_00: datetime = None
+            time_01: datetime = None
+            time_02: datetime = None
+            time_03: datetime = None
+            time_04: datetime = None
+            time_05: datetime = None
+            time_06: datetime = None
+            time_07: datetime = None
+            time_08: datetime = None
+            time_09: datetime = None
+            time_10: datetime = None
+            time_11: datetime = None
+            time_12: datetime = None
+            delta_zero = datetime.timedelta(0)
+            stat_select_batch = delta_zero
+            stat_migrate_code_value = delta_zero
+            stat_migrate_depends_on = delta_zero
+            stat_migrate_advisory_data = delta_zero
+            stat_id_formation = delta_zero
+            stat_insert_formation = delta_zero
+            stat_values_formation = delta_zero
+            stat_insert_success = delta_zero
+            stat_insert_fail = delta_zero
+            stat_fail_cause_dup_case_1 = delta_zero
+            stat_fail_cause_dup_case_2 = delta_zero
             try:
+                time_00 = datetime.datetime.now()
                 conn = get_db()
 
                 # processing by sequential UUID is non-optimal as it could miss new codes;
                 # the right way is by created_date, and also to make users stop using the database during migration;
                 # however, processing by sequential UUIDs rapidly discovers a rich gumbo of formatting cases
-                query = """
+                query = f"""
                         select uuid, display, code, terminology_version_uuid,
                         created_date, additional_data, 
                         depends_on_property, depends_on_system, depends_on_value, depends_on_display
                         from custom_terminologies.code 
-                        where uuid >= :last_previous_uuid
+                        where uuid >= :last_previous_uuid 
+                        and (
+                        uuid in ({query_code_uuid_latest_versions()}) or
+                        uuid in ({query_code_uuid_string_versions()}) or
+                        uuid in ({query_code_uuid_test_only()})
+                        )
+                        and uuid not in (select old_uuid from custom_terminologies.code_poc) 
+                        and uuid not in (select old_uuid from custom_terminologies.code_poc_issue)
                         order by uuid asc
                         limit :query_limit
                         """
@@ -414,74 +542,62 @@ def migrate_custom_terminologies_code():
                         "query_limit": query_limit,
                     },
                 ).fetchall()
+                time_01 = datetime.datetime.now()
+                stat_select_batch = time_01 - time_00
 
                 # process the results from this batch
                 count = len(result)
-                if count == 0:
+                if count == 0 or (
+                    count == 1 and result[0].uuid == last_previous_uuid
+                ):
                     done = True
                 else:
                     for row in result:
 
                         # init
                         last_previous_uuid = row.uuid
+                        if last_previous_uuid > uuid_end:
+                            done = True
+                            break  # for row in result
                         skip = False
                         duplicate_code = False
                         old_uuid_duplicate = "duplicate key value violates unique constraint \"old_uuid\""
                         issue_old_uuid_duplicate = "duplicate key value violates unique constraint \"issue_old_uuid\""
                         code_duplicate = f"duplicate key value violates unique constraint \"code_id\""
                         issue_type = "unknown"
-                        if total_processed % 1000 == 0:
-                            print_progress(time_start, total_processed, total_found, last_previous_uuid)
                         total_processed += 1
-
-                        # do we want this row? (is the code in this row from the most recent version of its terminology)
-                        if str(row.uuid) not in code_uuid_list:
-                            continue  # for row in result
-
-                        # does the row already exist in the target table(s)?
-                        exists = """
-                            select (
-                            (select count(*) from custom_terminologies.code_poc where old_uuid = :old_uuid) +
-                            (select count(*) from custom_terminologies.code_poc_issue where old_uuid = :old_uuid)
-                            )
-                            """
-                        result = conn.execute(
-                            text(exists),
-                            {
-                                "old_uuid": str(row.uuid),
-                            },
-                        ).scalar()
-                        if result is not None and (result > 0):
-                            continue  # for row in result
-
-                        # log
-                        total_found += 1
-                        if IS_DEMO:
-                            LOGGER.warning(f"\n    was:  {row}")
 
                         # code - migrate 1 old code column to 4 new columns
                         (
                             code_schema,
                             code_simple,
                             code_jsonb,
-                            code_string
+                            code_string,
+                            rejected
                         ) = prepare_dynamic_value_for_sql_issue(row.code, row.display)
-
-                        # additional data
-                        info = prepare_data_dictionary_for_sql(row.additional_data)
+                        time_03 = datetime.datetime.now()
+                        stat_migrate_code_value = time_03 - time_01  # no time_02
 
                         # depends_on_value - migrate 1 old depends_on_value column to 3 new columns
+                        # also copy the other depends_on columns - convert all invalid "" values to None
                         (
                             depends_on_value_schema,
                             depends_on_value_simple,
                             depends_on_value_jsonb,
-                            depends_on_value_string
+                            depends_on_value_string,
+                            rejected_depends_on_value
                         ) = prepare_dynamic_value_for_sql_issue(row.depends_on_value)
+                        has_depends_on = rejected_depends_on_value is None
+                        depends_on_property = convert_empty_to_null(row.depends_on_property) if has_depends_on else None
+                        depends_on_system = convert_empty_to_null(row.depends_on_system) if has_depends_on else None
+                        depends_on_display = convert_empty_to_null(row.depends_on_display) if has_depends_on else None
+                        time_04 = datetime.datetime.now()
+                        stat_migrate_depends_on = time_04 - time_03
 
-                        # depends_on_ other
-                        depends_on_property = convert_empty_to_null(row.depends_on_property)
-                        depends_on_system = convert_empty_to_null(row.depends_on_system)
-                        depends_on_display = convert_empty_to_null(row.depends_on_display)
+                        # additional data
+                        info = prepare_additional_data_for_sql(row.additional_data, rejected_depends_on_value)
+                        time_05 = datetime.datetime.now()
+                        stat_migrate_advisory_data = time_05 - time_04
 
                         # code_id
                         code_id = hash_for_code_id(
@@ -492,6 +608,8 @@ def migrate_custom_terminologies_code():
                             depends_on_system,
                             depends_on_display
                         )
+                        time_06 = datetime.datetime.now()
+                        stat_id_formation = time_06 - time_05
 
                         # uuid
                         new_uuid = uuid.uuid4()
@@ -521,6 +639,8 @@ def migrate_custom_terminologies_code():
                             + insert_depends_on_value_jsonb
                             + insert_issue_end
                         )
+                        time_07 = datetime.datetime.now()
+                        stat_insert_formation = time_07 - time_06
 
                         # insert values - jsonb columns get special handling
                         insert_values = {
@@ -544,33 +664,23 @@ def migrate_custom_terminologies_code():
                         if depends_on_value_jsonb is None:
                             insert_values.update({"depends_on_value_jsonb": depends_on_value_jsonb})
                         has_issue = False
+                        code_issue = None
                         if code_schema is not None and (
-                                IssuePrefix.COLUMN_VALUE_FORMAT.value in code_schema
+                            IssuePrefix.COLUMN_VALUE_FORMAT.value in code_schema
                         ):
                             has_issue = True
                             insert_values["code_schema"] = None
                             code_issue = code_schema + " (code)"
                             issue_type = code_issue
-                        if depends_on_value_schema is not None and (
-                                IssuePrefix.COLUMN_VALUE_FORMAT.value in depends_on_value_schema
-                        ):
-                            has_issue = True
-                            insert_values["depends_on_value_schema"] = None
-                            depends_on_issue = depends_on_value_schema + " (depends_on)"
-                            issue_type = insert_values.get("issue_type")
-                            if issue_type is None:
-                                issue_type = depends_on_issue
-                            else:
-                                issue_type = ", ".join([issue_type, depends_on_issue])
                         if has_issue is True:
                             query = insert_issue_query
                             insert_values.update({
-                                "issue_type": issue_type,
-                                "accept_unchanged": None,
-                                "note": None
+                                "issue_type": issue_type
                             })
                         else:
                             query = insert_query
+                        time_08 = datetime.datetime.now()
+                        stat_values_formation = time_08 - time_07
 
                         # query
                         try:
@@ -579,70 +689,44 @@ def migrate_custom_terminologies_code():
                                 insert_values
                             )
                             conn.commit()
+                            time_09 = datetime.datetime.now()
+                            stat_insert_success = time_09 - time_08
+
                         except Exception as e:
                             conn.rollback()
                             error_summary = message_exception_summary(e)
+                            time_10 = datetime.datetime.now()
+                            stat_insert_fail = time_10 - time_09
+
                             if old_uuid_duplicate in error_summary or issue_old_uuid_duplicate in error_summary:
                                 skip = True
                             elif code_duplicate in error_summary:
                                 duplicate_code = True
                                 try:
-                                    issue_type = insert_values.get("issue_type")
-                                    if issue_type is not None:
-                                        insert_values["issue_type"] = ", ".join([issue_type, code_duplicate])
-                                    else:
-                                        insert_values.update({
-                                            "issue_type": f"{DUPLICATE_CODE_PREFIX}{code_id}",
-                                            "accept_unchanged": None,
-                                            "note": None
-                                        })
+                                    insert_values.update({
+                                        "issue_type": f"{DUPLICATE_CODE_PREFIX}{code_id}"
+                                    })
                                     result = conn.execute(
                                         text(insert_issue_query),
                                         insert_values
                                     )
                                     conn.commit()
+                                    time_11 = datetime.datetime.now()
+                                    stat_fail_cause_dup_case_1 = time_11 - time_10
+
                                 except Exception as ex:
                                     conn.rollback()
                                     error_summary = message_exception_summary(e)
+                                    time_12 = datetime.datetime.now()
+                                    stat_fail_cause_dup_case_2 = time_12 - time_11
+
                                     if issue_old_uuid_duplicate in error_summary:
                                         skip = True
                                     else:
                                         raise ex
                             else:
                                 raise e
-
-
-                        # for demo purposes, show we can also read the jsonb data that we inserted
-                        if IS_DEMO:
-                            if not skip and not duplicate_code:
-                                query = """
-                                    select code_id, 
-                                    display, 
-                                    code_schema,
-                                    code_jsonb, 
-                                    terminology_version_uuid, 
-                                    created_date
-                                    from custom_terminologies.code_poc 
-                                    where uuid = :new_uuid
-                                    """
-                                result = conn.execute(
-                                    text(query),
-                                    {
-                                        "new_uuid": str(new_uuid),
-                                    },
-                                ).fetchall()
-                                if result is not None:
-                                    LOGGER.warning(f"    now:    code_id {result[0]}")
-                                    if code_jsonb is not None:
-                                        code_jsonb_object = result[0].code_jsonb
-                                        LOGGER.warning(f"                   code_jsonb data was read successfully from the new row at uuid {new_uuid}: ")
-                                        LOGGER.warning(f"                       CodeableConcept: {serialize_json_object(code_jsonb_object)}")
-                                        coding_jsonb_object = code_jsonb_object.get("coding")
-                                        if coding_jsonb_object is not None:
-                                            LOGGER.warning(f"""                       CodeableConcept.coding: {serialize_json_object(coding_jsonb_object)}""")
-                                            for coding_object in coding_jsonb_object:
-                                                LOGGER.warning(f"""                           {serialize_json_object(coding_object)}""")
-                    # end: for r in results
+                    # end: for r in result
 
             except Exception as e:
                 error_summary = message_exception_summary(e)
@@ -650,16 +734,36 @@ def migrate_custom_terminologies_code():
                 connection_dropped = "connection to server"
                 if (call_ended in error_summary or connection_dropped in error_summary) and retry_count < RETRY_LIMIT:
                     conn.close()
-                    LOGGER.warning(f"RETRY - pause and try to reconnect: retry #{retry_count} of {RETRY_LIMIT}")
+                    LOGGER.warning(f"RETRY - retry #{retry_count} of {RETRY_LIMIT}, at interval {RETRY_SLEEP} seconds")
                     retry_count += 1
-                    time.sleep(120)
+                    time.sleep(RETRY_SLEEP)
                     done = False
                 else:
                     done = True
                     raise e
             finally:
+                if done or total_processed > 0 and (total_processed % REPORT_LIMIT == 0):
+                    statistics = [
+                        stat_select_batch,
+                        stat_migrate_code_value,
+                        stat_migrate_depends_on,
+                        stat_migrate_advisory_data,
+                        stat_id_formation,
+                        stat_insert_formation,
+                        stat_values_formation,
+                        stat_insert_success,
+                        stat_insert_fail,
+                        stat_fail_cause_dup_case_1,
+                        stat_fail_cause_dup_case_2,
+                    ]
+                    print_progress(
+                        time_start,
+                        total_processed,
+                        last_previous_uuid,
+                        statistics
+                    )
                 if not done:
-                    done = total_found >= total_limit
+                    done = total_processed >= total_limit
         # end: while not done
 
     except Exception as e:
@@ -667,12 +771,29 @@ def migrate_custom_terminologies_code():
         LOGGER.warning(f"""\nERROR: {message_exception_summary(e)}\n\n{info}""")
 
     finally:
-        print_progress(time_start, total_processed, total_found, last_previous_uuid)
+        print_progress(time_start, total_processed, last_previous_uuid)
+        LOGGER.warning("DONE.\n")
 
 
 def perform_migration():
-    migrate_custom_terminologies_code()
+    parallel_custom_terminologies_code()
+
+
+def parallel_custom_terminologies_code():
+    # Draft. It does no harm, but doesn't parallelize: it starts each chunk after the previous chunk finishes.
+    async def process_all_custom_terminologies_code():
+        await asyncio.gather(
+            *(
+                migrate_custom_terminologies_code(UUID_START[i], UUID_END[i])
+                for i in range(0, 16)
+            )
+        )
+    asyncio.run(process_all_custom_terminologies_code())
 
 
 if __name__=="__main__":
+    LOGGER.setLevel("WARNING")
+    if not LOGGER.hasHandlers():
+        ch = logging.StreamHandler()
+        LOGGER.addHandler(ch)
     perform_migration()

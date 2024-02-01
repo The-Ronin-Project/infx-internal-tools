@@ -3,8 +3,8 @@ import json
 import re
 from enum import Enum
 
-from app.helpers.data_helper import is_uuid_format, is_spark_format, is_json_format, load_json_string, \
-    normalize_source_ratio, serialize_json_object, escape_for_sql, normalize_source_codeable_concept, \
+from app.helpers.data_helper import is_uuid4_format, is_spark_format, is_json_format, load_json_string, \
+    normalize_source_ratio, serialize_json_object, escape_sql_input_value, normalize_source_codeable_concept, \
     cleanup_json_string
 from app.helpers.message_helper import message_exception_classname
 
@@ -15,6 +15,7 @@ class DataExtensionUrl(Enum):
     """
     SOURCE_CODEABLE_CONCEPT = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept"
     SOURCE_RATIO = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceRatio"
+    NEEDS_EXAMPLE_DATA = "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData"
 
 
 class IssuePrefix(Enum):
@@ -37,6 +38,7 @@ def convert_string_to_datetime_or_none(input_string):
 def prepare_dynamic_value_for_sql(old_value: str, old_display: str = None) -> (str, str, str, str):
     """
     For inserting a code value into a table that has already been migrated to the ConceptMap v5 schema.
+    Not called during v5 data migration. It is intended for use after the database migration is complete.
 
     Calls the helper function prepare_dynamic_value_for_sql_issue() to process the inputs.
 
@@ -44,7 +46,7 @@ def prepare_dynamic_value_for_sql(old_value: str, old_display: str = None) -> (s
     @param old_display - IMPORTANT - caller must supply this value if the old_value is a FHIR code - used for some tests
     @raise ValueError if the old_value cannot be correctly stored, so the caller should not insert it into the database.
     """
-    (value_schema, value_simple, value_jsonb, value_string) = prepare_dynamic_value_for_sql(old_value, old_display)
+    (value_schema, value_simple, value_jsonb, value_string) = prepare_dynamic_value_for_sql_issue(old_value, old_display)
     if value_schema is None:
         raise ValueError("Value cannot be stored: format issues found")
     if IssuePrefix.COLUMN_VALUE_FORMAT.value in value_schema:
@@ -52,15 +54,14 @@ def prepare_dynamic_value_for_sql(old_value: str, old_display: str = None) -> (s
     return value_schema, value_simple, value_jsonb, value_string
 
 
-def prepare_dynamic_value_for_sql_issue(old_value: str, old_display: str = None) -> (str, str, str, str):
+def prepare_dynamic_value_for_sql_issue(old_value: str, old_display: str = None) -> (str, str, str, str, str):
     """
     Converts 1 input string value into 4 strings to use in forming correct syntax for a subsequent SQL INSERT query.
     This function is intended to support multiple data types for FHIR dynamic values: code, CodeableConcept, Ratio, etc.
 
-    For CodeableConcept only, old_display (the associated display value) may be provided and an extra error check
-    happens. For other FHIR dynamic value data types, the old_display is ignored.
+    If old_display is supplied by the caller, the old_value is treated as a code value; otherwise as a depends_on value.
 
-    @param old_value - may be a string, or may be a FHIR code which as data is a string value
+    @param old_value - may be a string, or may be a FHIR code or serialized FHIR object.
     @param old_display - IMPORTANT - caller must supply this value if the old_value is a FHIR code - used for some tests
 
     @return
@@ -70,94 +71,87 @@ def prepare_dynamic_value_for_sql_issue(old_value: str, old_display: str = None)
             - note: because this function prepares these values for SQL INSERT query formation, this value is a string -
             all JSON uses double quotes, and if there is a single quote value in the JSON, it is '' for SQL escaping
         value_string (string) - either value_simple, or value_jsonb binary JSON value, correctly serialized to a string
-            - this returned value_string value is ready for the  caller to input to hash_string to create the code_id
+            - this returned value_string value is ready for the caller to input to hash_string to create the code_id
+        rejected_value (string) - in the case of depends_on, the old_value is returned here if too malformed to use
     """
     # init
     value_schema = None
     value_simple = None
     value_jsonb = None
     value_string = None
+    rejected_value = None
 
     # unwrap any wrappers in the JSON
     if old_value is not None and '"valueCodeableConcept"' in old_value:
+        # code
         old_value = remove_deprecated_wrapper(old_value)
 
-    # begin: detect code issue cases
+    # begin: detect code and depends_on issue cases
     # handle None (bad)
     if old_value is None:
+        # code or depends_on
         (value_schema, value_simple, value_jsonb, value_string) = prepare_code_none_issue_for_sql(
             issue="value is None",
             id="value is null"
         )
 
-    # handle '' (bad if this is a code; fine for string)
-    elif old_display is not None and old_value == "":
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_sql(
-            issue="value is ''",
-            code_string=old_value
-        )
+    # handle '' (bad)
+    elif old_value == "":
+        # depends_on: correct to null
+        if old_display is None:
+            (value_schema, value_simple, value_jsonb, value_string) = (None, None, None, None)
+        # code: report format issue
+        else:
+            (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_sql(
+                issue="value is ''",
+                code_string=old_value
+            )
 
     # handle uuid case (bad)
-    elif is_uuid_format(old_value):
+    elif old_display is not None and is_uuid4_format(old_value):
+        # code
         (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_sql(
             issue="uuid",
             code_string=old_value
         )
 
-    # handle '[]' (bad)
-    elif old_value == "[]":
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_sql(
-            issue="value is '[]'",
-            code_string=old_value
-        )
+    # handle Ronin cancer staging pattern as spark (good)
+    elif old_display is not None and re.search(r"\{Line \d}", old_value):
+        # code: convert to json
+        json_string = convert_source_concept_text_only_spark_export_string_to_json_string(old_value)
+        (value_schema, value_simple, value_jsonb, value_string) = prepare_json_format_for_sql(json_string)
 
-    # handle '{}' (bad)
-    elif old_value == "{}":
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_sql(
-            issue="value is " + "'{}'",
-            code_string=old_value
-        )
-
-    # handle '[null]' (bad)
-    elif old_value == "[null]":
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_sql(
-            issue="value is '[null]'",
-            code_string=old_value
-        )
-
-    # handle 'null' (bad)
-    elif old_value == "null":
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_sql(
-            issue="value is 'null'",
-            code_string=old_value
-        )
-
-    # handle {"text":"Line 1"} spark or JSON (bad)
-    elif "{Line 1}" in old_value or ('"text"' in old_value and '"Line 1"' in old_value):
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_sql(
-            issue='{"text":"Line 1"}',
-            code_string=old_value
-        )
-
-    # handle coding not present in CodeableConcept (bad)
-    elif '"text"' in old_value and '"coding"' not in old_value:
-        (value_schema, value_simple, value_jsonb,value_string) = prepare_string_format_issue_for_sql(
-            issue="CodeableConcept with only text",
-            code_string=old_value
-        )
+    # handle '[null]' variants (bad)
+    elif old_value == "[null]" or re.search(r"\[null, ", old_value):
+        # depends_on: discard
+        if old_display is None:
+            (value_schema, value_simple, value_jsonb, value_string, rejected_value) = (None, None, None, None, old_value)
+        # code: report format issue
+        else:
+            (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_sql(
+                issue="value is '[null]' or '[null, null]' or '[null, null, null]'",
+                code_string=old_value
+            )
 
     # handle spark case (bad)
     elif is_spark_format(old_value):
+        # 2 steps to final: convert spark to JSON, then process as in the JSON case
         # try to convert to json
-        json_string = convert_source_concept_spark_export_string_to_json_string(old_value)
-        # failed to convert to json: report format issue
+        json_string = convert_source_concept_spark_export_string_to_json_string_unordered(old_value)
+        # failed to convert to json
         if json_string == old_value:
-            (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_sql(
-                issue="spark",
-                code_string=old_value
-            )
-        # converted to json: handle the json
+            # depends_on: discard
+            if old_display is None:
+                (value_schema, value_simple, value_jsonb, value_string, rejected_value) = (None, None, None, None, old_value)
+            # code: report format issue
+            else:
+                (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_sql(
+                    issue="spark",
+                    code_string=old_value
+                )
+        # converted to json
         else:
+            # code or depends_on
             (value_schema, value_simple, value_jsonb, value_string) = prepare_json_format_for_sql(json_string)
 
     # handle json case (good or bad)
@@ -166,6 +160,7 @@ def prepare_dynamic_value_for_sql_issue(old_value: str, old_display: str = None)
 
     # see if code and display columns were reversed
     elif old_display is not None and is_code_display_reversed(old_value, old_display):
+        # code
         if value_schema is not None and len(value_schema) > 0:
             value_schema += ", code and display might be reversed"
         else:
@@ -174,20 +169,22 @@ def prepare_dynamic_value_for_sql_issue(old_value: str, old_display: str = None)
                 code_string=old_value
             )
 
-    # string case (good) - if there is no old_display supplied by the caller, it is not a code: it is a depends_on
+    # depends on: string (good)
     elif old_display is None:
+        # depends_on
         (value_schema, value_simple, value_jsonb, value_string) = prepare_string_depends_on_for_sql(
             code_string=old_value
         )
 
-    # handle code case (good)
+    # code: string (good)
     else:
+        # code
         (value_schema, value_simple, value_jsonb, value_string) = prepare_string_source_code_for_sql(
             code_string=old_value
         )
-    # end: detect code issue cases
+    # end: detect code and depends_on issue cases
 
-    return value_schema, value_simple, value_jsonb, value_string
+    return value_schema, value_simple, value_jsonb, value_string, rejected_value
 
 
 def prepare_json_format_for_sql(json_string: str) -> (str, str, str, str):
@@ -263,34 +260,55 @@ def prepare_object_source_ratio_for_sql(code_object) -> (str, str, str, str):
     return (
         DataExtensionUrl.SOURCE_RATIO.value,
         None,
-        escape_for_sql(rcdm_string),
+        escape_sql_input_value(rcdm_string),
         rcdm_string
     )
 
 
 def prepare_object_source_code_for_sql(code_object) -> (str, str, str, str):
     """
-    @throws BadDataError if the value does not match the sourceCodeableConcept schema
+    @raise BadDataError if the value does not match the sourceCodeableConcept schema
     """
     rcdm_object = normalize_source_codeable_concept(code_object)
     rcdm_string = serialize_json_object(rcdm_object)
     return (
         DataExtensionUrl.SOURCE_CODEABLE_CONCEPT.value,
         None,
-        escape_for_sql(rcdm_string),
+        escape_sql_input_value(rcdm_string),
         rcdm_string
     )
 
 
-def prepare_data_dictionary_for_sql(info_dict) -> str:
+def prepare_additional_data_for_sql(additional_data, rejected_depends_on_value: str = None):
+    if additional_data is None or len(additional_data) == 0 or additional_data == "{}" or additional_data == "null":
+        return None
+    if rejected_depends_on_value is not None:
+        warning = [
+            "The depends_on data format provided with this code is NOT SAFE for clinical use",
+            "Do not attempt to interpret or use these values",
+            "Each may have ANY ORDER and ANY MEANING"
+        ]
+        additional_data.update(
+            {
+                "warning_unsafe_rejected_data": " - ".join(warning),
+                "rejected_data_do_not_use": rejected_depends_on_value
+            }
+        )
+    return prepare_data_dictionary_for_sql(additional_data)
+
+
+def prepare_data_dictionary_for_sql(info_dict):
     """
     Serialize a python data dictionary for a string valued column - like additional_data for INFX internal use only
+    @return the string, or None if the dictionary was empty
     """
-    if info_dict is None:
+    if info_dict is None or len(info_dict) == 0:
         return None
     info_string = json.dumps(info_dict)
     clean_info = cleanup_json_string(info_string)
-    sql_escaped = escape_for_sql(clean_info)
+    sql_escaped = escape_sql_input_value(clean_info)
+    if len(sql_escaped) == 0:
+        return None
     return sql_escaped
 
 
@@ -451,10 +469,52 @@ def is_code_display_reversed(code_string: str, display_string: str):
     return False
 
 
-def convert_source_concept_spark_export_string_to_json_string(spark_export_string: str) -> str:
+def convert_source_concept_text_only_spark_export_string_to_json_string(spark_export_string: str) -> str:
     """
+    These strings in format {Line n} were created during early days of cancer staging work.
+    Many examples of the more desired JSON format, {"text":"Line n"} exist in other data in the same table.
+    The value of n does not matter in this case but is usually 1. There are no other cases of spark export data being
+    text-only CodeableConcepts like this, so all cases of this spark format in current data are in this form: {Line n}
+    @param spark_export_string is a string in the format {anything}. The string inside the braces is not examined.
+    @return The string inside the pair of braces (in this case, anything) in this format: {"text":"anything"}
     @raise exception if parsing hits any snags, which it should not
     """
+    json_string = "{" + f'"text":"{spark_export_string[1:-1]}"' + "}"
+    return json_string
+
+
+def convert_source_concept_spark_export_string_to_json_string_normalized_ordered(spark_export_string: str) -> str:
+    """
+    The standard function for converting spark export format data to an ordered, RCDM compliant sourceCodeableConcept.
+    Always call is_spark_format(spark_export_string) first to ensure this function will work. See @return notes below.
+
+    @param spark_export_string is an artifact of a legacy issue during an ETL operation, details omitted here.
+        Possible values are a malformed FHIR Medication.ingredient.strength Ratio for a target dependsOn (do not
+        process, return the input string unchanged) or a CodeableConcept (process and return a serialized JSON string).
+    @return JSON serialized string for a FHIR CodeableConcept, if successful. Otherwise, returns the input string.
+        This function calls normalize_source_codeable_concept() and serialize_json_object() to return an RCDM model
+        compliant sourceCodeableConcept serialized as a string with correctly ordered JSON keys and list members.
+        This output is suitable as input to id_helper.py functions as a code_string to create a code_id or mapping_id.
+    """
+    code_string = convert_source_concept_spark_export_string_to_json_string_unordered(spark_export_string)
+    code_object = load_json_string(code_string)
+    rcdm_object = normalize_source_codeable_concept(code_object)
+    rcdm_string = serialize_json_object(rcdm_object)
+    return rcdm_string
+
+
+def convert_source_concept_spark_export_string_to_json_string_unordered(spark_export_string: str) -> str:
+    """
+    Always call is_spark_format(spark_export_string) first to ensure this good-enough function will work.
+    @param spark_export_string is an artifact of a legacy issue during an ETL operation, details omitted here.
+        Possible values are a malformed FHIR Medication.ingredient.strength Ratio for a target dependsOn (do not
+        process, return the input string unchanged) or a CodeableConcept (process and return a serialized JSON string).
+    @return JSON serialized string for a FHIR CodeableConcept, if successful. Otherwise, returns the input string.
+    """
+    # reject a malformed Medication.ingredient in spark format
+    if re.search("http://unitsofmeasure.org", spark_export_string):
+        return spark_export_string
+
     # init
     json_object: dict = {}
     coding_list = []
