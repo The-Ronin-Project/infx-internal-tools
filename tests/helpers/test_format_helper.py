@@ -92,7 +92,6 @@ class DataMigrationTests(unittest.TestCase):
         assert result[2] is None
         assert result[3] == ""
 
-
     def test_prepare_dynamic_values_for_sql_bracketed_null(self):
         code = "[null]"
         display = "Potassium Level"
@@ -207,6 +206,26 @@ class DataMigrationTests(unittest.TestCase):
         assert result[0] == DataExtensionUrl.SOURCE_CODEABLE_CONCEPT.value
         assert result[1] is None
         assert result[2] == sql_escaped
+        assert result[3] == normalized_code
+
+    def test_prepare_dynamic_values_for_sql_good_json_code_with_version(self):
+        code = '{"coding": [{"system": "http://projectronin.io/fhir/CodeSystem/mock/condition", "version": "1.0", "code": "test_concept_1", "display": "Test Concept 2023-06-27 13:51:27.236517"}], "text": "Test Concept 2023-06-27 13:51:27.236540"}'
+        normalized_code = '{"coding":[{"code":"test_concept_1","display":"Test Concept 2023-06-27 13:51:27.236517","system":"http://projectronin.io/fhir/CodeSystem/mock/condition","version":"1.0"}],"text":"Test Concept 2023-06-27 13:51:27.236540"}'
+        display = "Test Concept 2023-06-27 13:51:27.236540"
+        result = prepare_dynamic_value_for_sql_issue(code, display)
+        assert result[0] == DataExtensionUrl.SOURCE_CODEABLE_CONCEPT.value
+        assert result[1] is None
+        assert result[2] == normalized_code
+        assert result[3] == normalized_code
+
+    def test_prepare_dynamic_values_for_sql_good_json_code_with_long_coding_list_1(self):
+        code = '{"coding": [{"system": "http://projectronin.io/fhir/CodeSystem/mock/condition", "version": "1.0", "code": "test_concept_1", "display": "Test Concept 2023-06-27 13:51:27.236517"}], "text": "Test Concept 2023-06-27 13:51:27.236540"}'
+        normalized_code = '{"coding":[{"code":"test_concept_1","display":"Test Concept 2023-06-27 13:51:27.236517","system":"http://projectronin.io/fhir/CodeSystem/mock/condition","version":"1.0"}],"text":"Test Concept 2023-06-27 13:51:27.236540"}'
+        display = "Test Concept 2023-06-27 13:51:27.236540"
+        result = prepare_dynamic_value_for_sql_issue(code, display)
+        assert result[0] == DataExtensionUrl.SOURCE_CODEABLE_CONCEPT.value
+        assert result[1] is None
+        assert result[2] == normalized_code
         assert result[3] == normalized_code
 
     def test_prepare_dynamic_values_for_sql_bad_json_single_quotes(self):

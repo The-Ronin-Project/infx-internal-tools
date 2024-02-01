@@ -36,8 +36,8 @@ UUID_START = [
     uuid.UUID("10000000-0000-0000-0000-000000000000"),
     uuid.UUID("20000000-0000-0000-0000-000000000000"),
     uuid.UUID("30000000-0000-0000-0000-000000000000"),
-    uuid.UUID("40000000-0000-0000-0000-000000000000"),
-    uuid.UUID("50000000-0000-0000-0000-000000000000"),
+    uuid.UUID("449bcea5-cb3b-42fb-9998-b941177c9e4c"),
+    uuid.UUID("5a2225fa-4bb6-4d99-8f39-c0fb5e108208"),
     uuid.UUID("60000000-0000-0000-0000-000000000000"),
     uuid.UUID("70000000-0000-0000-0000-000000000000"),
     uuid.UUID("80000000-0000-0000-0000-000000000000"),
@@ -318,7 +318,7 @@ def print_start(time_start, uuid_start, uuid_end):
 
 
 def print_progress(time_start, total_processed, last_previous_uuid, statistics=None):
-    # Save a bit of time for log runs now:
+    # Save a bit of time for big runs (maybe?) by un-commenting this line
     statistics = None
 
     time_end = datetime.datetime.now()
@@ -487,19 +487,18 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
     try:
         print_start(time_start, uuid_start, uuid_end)
         while not done:
-            time_00: datetime = None
-            time_01: datetime = None
-            time_02: datetime = None
-            time_03: datetime = None
-            time_04: datetime = None
-            time_05: datetime = None
-            time_06: datetime = None
-            time_07: datetime = None
-            time_08: datetime = None
-            time_09: datetime = None
-            time_10: datetime = None
-            time_11: datetime = None
-            time_12: datetime = None
+            time_zero: datetime = None
+            time_select_batch: datetime = None
+            time_migrate_code_value: datetime = None
+            time_migrate_depends_on: datetime = None
+            time_migrate_advisory_data: datetime = None
+            time_id_formation: datetime = None
+            time_insert_formation: datetime = None
+            time_values_formation: datetime = None
+            time_insert_success: datetime = None
+            time_insert_fail: datetime = None
+            time_fail_cause_dup_case_1: datetime = None
+            time_fail_cause_dup_case_2: datetime = None
             delta_zero = datetime.timedelta(0)
             stat_select_batch = delta_zero
             stat_migrate_code_value = delta_zero
@@ -513,7 +512,7 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
             stat_fail_cause_dup_case_1 = delta_zero
             stat_fail_cause_dup_case_2 = delta_zero
             try:
-                time_00 = datetime.datetime.now()
+                time_zero = datetime.datetime.now()
                 conn = get_db()
 
                 # processing by sequential UUID is non-optimal as it could miss new codes;
@@ -542,8 +541,8 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
                         "query_limit": query_limit,
                     },
                 ).fetchall()
-                time_01 = datetime.datetime.now()
-                stat_select_batch = time_01 - time_00
+                time_select_batch = datetime.datetime.now()
+                stat_select_batch = time_select_batch - time_zero
 
                 # process the results from this batch
                 count = len(result)
@@ -575,8 +574,8 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
                             code_string,
                             rejected
                         ) = prepare_dynamic_value_for_sql_issue(row.code, row.display)
-                        time_03 = datetime.datetime.now()
-                        stat_migrate_code_value = time_03 - time_01  # no time_02
+                        time_migrate_code_value = datetime.datetime.now()
+                        stat_migrate_code_value = time_migrate_code_value - time_select_batch  # no time_02
 
                         # depends_on_value - migrate 1 old depends_on_value column to 3 new columns
                         # also copy the other depends_on columns - convert all invalid "" values to None
@@ -591,13 +590,13 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
                         depends_on_property = convert_empty_to_null(row.depends_on_property) if has_depends_on else None
                         depends_on_system = convert_empty_to_null(row.depends_on_system) if has_depends_on else None
                         depends_on_display = convert_empty_to_null(row.depends_on_display) if has_depends_on else None
-                        time_04 = datetime.datetime.now()
-                        stat_migrate_depends_on = time_04 - time_03
+                        time_migrate_depends_on = datetime.datetime.now()
+                        stat_migrate_depends_on = time_migrate_depends_on - time_migrate_code_value
 
                         # additional data
                         info = prepare_additional_data_for_sql(row.additional_data, rejected_depends_on_value)
-                        time_05 = datetime.datetime.now()
-                        stat_migrate_advisory_data = time_05 - time_04
+                        time_migrate_advisory_data = datetime.datetime.now()
+                        stat_migrate_advisory_data = time_migrate_advisory_data - time_migrate_depends_on
 
                         # code_id
                         code_id = hash_for_code_id(
@@ -608,8 +607,8 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
                             depends_on_system,
                             depends_on_display
                         )
-                        time_06 = datetime.datetime.now()
-                        stat_id_formation = time_06 - time_05
+                        time_id_formation = datetime.datetime.now()
+                        stat_id_formation = time_id_formation - time_migrate_advisory_data
 
                         # uuid
                         new_uuid = uuid.uuid4()
@@ -639,8 +638,8 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
                             + insert_depends_on_value_jsonb
                             + insert_issue_end
                         )
-                        time_07 = datetime.datetime.now()
-                        stat_insert_formation = time_07 - time_06
+                        time_insert_formation = datetime.datetime.now()
+                        stat_insert_formation = time_insert_formation - time_id_formation
 
                         # insert values - jsonb columns get special handling
                         insert_values = {
@@ -679,8 +678,8 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
                             })
                         else:
                             query = insert_query
-                        time_08 = datetime.datetime.now()
-                        stat_values_formation = time_08 - time_07
+                        time_values_formation = datetime.datetime.now()
+                        stat_values_formation = time_values_formation - time_insert_formation
 
                         # query
                         try:
@@ -689,38 +688,42 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
                                 insert_values
                             )
                             conn.commit()
-                            time_09 = datetime.datetime.now()
-                            stat_insert_success = time_09 - time_08
+                            time_insert_success = datetime.datetime.now()
+                            stat_insert_success = time_insert_success - time_values_formation
 
                         except Exception as e:
                             conn.rollback()
                             error_summary = message_exception_summary(e)
-                            time_10 = datetime.datetime.now()
-                            stat_insert_fail = time_10 - time_09
+                            time_insert_fail = datetime.datetime.now()
+                            stat_insert_fail = time_insert_fail - time_values_formation
 
                             if old_uuid_duplicate in error_summary or issue_old_uuid_duplicate in error_summary:
                                 skip = True
                             elif code_duplicate in error_summary:
                                 duplicate_code = True
                                 try:
-                                    insert_values.update({
-                                        "issue_type": f"{DUPLICATE_CODE_PREFIX}{code_id}"
-                                    })
+                                    issue_type = insert_values.get("issue_type")
+                                    if issue_type is not None:
+                                        insert_values["issue_type"] = ", ".join([issue_type, code_duplicate])
+                                    else:
+                                        insert_values.update({
+                                            "issue_type": f"{DUPLICATE_CODE_PREFIX}{code_id}",
+                                        })
                                     result = conn.execute(
                                         text(insert_issue_query),
                                         insert_values
                                     )
                                     conn.commit()
-                                    time_11 = datetime.datetime.now()
-                                    stat_fail_cause_dup_case_1 = time_11 - time_10
+                                    time_fail_cause_dup_case_1 = datetime.datetime.now()
+                                    stat_fail_cause_dup_case_1 = time_fail_cause_dup_case_1 - time_insert_fail
 
                                 except Exception as ex:
                                     conn.rollback()
                                     error_summary = message_exception_summary(e)
-                                    time_12 = datetime.datetime.now()
-                                    stat_fail_cause_dup_case_2 = time_12 - time_11
+                                    time_fail_cause_dup_case_2 = datetime.datetime.now()
+                                    stat_fail_cause_dup_case_2 = time_fail_cause_dup_case_2 - time_insert_fail
 
-                                    if issue_old_uuid_duplicate in error_summary:
+                                    if issue_old_uuid_duplicate in error_summary or code_duplicate in error_summary:
                                         skip = True
                                     else:
                                         raise ex
@@ -785,7 +788,7 @@ def parallel_custom_terminologies_code():
         await asyncio.gather(
             *(
                 migrate_custom_terminologies_code(UUID_START[i], UUID_END[i])
-                for i in range(0, 16)
+                for i in range(4, 16)
             )
         )
     asyncio.run(process_all_custom_terminologies_code())
