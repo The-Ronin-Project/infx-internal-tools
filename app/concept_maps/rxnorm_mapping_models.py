@@ -16,7 +16,7 @@ def parse_rxnorm_codes_from_source_code(source_code):
         )
 
     if is_spark_format:
-        converted_input = app.helpers.format_helper.convert_source_concept_spark_export_string_to_json_string(
+        converted_input = app.helpers.format_helper.convert_source_concept_spark_export_string_to_json_string_unordered(
             source_code
         )
         json_codeable_concept = json.loads(converted_input)
