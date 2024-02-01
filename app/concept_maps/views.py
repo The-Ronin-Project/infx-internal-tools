@@ -13,6 +13,7 @@ import app.tasks as tasks
 from app.concept_maps.models import *
 from app.concept_maps.versioning_models import *
 from app.helpers.oci_helper import get_data_from_oci
+import app.concept_maps.rxnorm_mapping_models
 
 from app.errors import NotFoundException
 
@@ -502,3 +503,12 @@ def new_concept_map_version_map_no_maps():
     creator.create_no_map_mappings(new_version_uuid)
 
     return "Concept map version processed successfully."
+
+
+@concept_maps_blueprint.route("/ConceptMaps/reference_data/RxNorm", methods=["POST"])
+def get_rxnorm_data_for_source_code_endpoint():
+    source_code = request.json.get("source_code")
+    response = app.concept_maps.rxnorm_mapping_models.get_rxnorm_data_for_source_code(
+        source_code
+    )
+    return jsonify(response)
