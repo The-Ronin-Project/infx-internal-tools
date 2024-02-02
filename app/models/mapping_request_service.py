@@ -1245,7 +1245,10 @@ class MappingRequestService:
             if type(additional_data) != dict:
                 raise ValueError("additional_data parameter must be dict or None type")
             else:
-                new_code.additional_data.update(additional_data)
+                if new_code.additional_data is None:
+                    new_code.additional_data = additional_data
+                else:
+                    new_code.additional_data.update(additional_data)
 
         # Assemble additionalData from the raw resource.
         # This is where we'll extract unit, value, referenceRange, and value[x] if available
