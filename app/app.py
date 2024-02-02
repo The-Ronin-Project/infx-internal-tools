@@ -448,7 +448,9 @@ def create_app(script_info=None):
 
     @app.route("/data_migration_poc", methods=["POST"])
     def perform_poc_data_migration_endpoint():
-        tasks.perform_poc_database_migration.delay()
+        granularity = request.json.get('granularity')
+        uuid_segment = request.json.get('uuid_segment')
+        tasks.perform_poc_database_migration.delay(granularity, uuid_segment)
         return "Task Created"
 
     return app

@@ -166,8 +166,11 @@ def back_fill_concept_maps_to_simplifier():
 
 
 @celery_app.task
-def perform_poc_database_migration():
-    app.proofs_of_concept.data_migration.perform_migration()
+def perform_poc_database_migration(granularity, uuid_segment):
+    app.proofs_of_concept.data_migration.migrate_custom_terminologies_code(
+        granularity=granularity,
+        uuid_segment=uuid_segment
+    )
 
 
 @celery_app.task

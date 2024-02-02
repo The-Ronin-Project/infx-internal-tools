@@ -2,6 +2,7 @@
 import asyncio
 import datetime
 import logging
+import random
 import time
 import uuid
 from enum import Enum
@@ -36,8 +37,8 @@ UUID_START = [
     uuid.UUID("10000000-0000-0000-0000-000000000000"),
     uuid.UUID("20000000-0000-0000-0000-000000000000"),
     uuid.UUID("30000000-0000-0000-0000-000000000000"),
-    uuid.UUID("449bcea5-cb3b-42fb-9998-b941177c9e4c"),
-    uuid.UUID("5a2225fa-4bb6-4d99-8f39-c0fb5e108208"),
+    uuid.UUID("40000000-0000-0000-0000-000000000000"),
+    uuid.UUID("50000000-0000-0000-0000-000000000000"),
     uuid.UUID("60000000-0000-0000-0000-000000000000"),
     uuid.UUID("70000000-0000-0000-0000-000000000000"),
     uuid.UUID("80000000-0000-0000-0000-000000000000"),
@@ -49,7 +50,7 @@ UUID_START = [
     uuid.UUID("e0000000-0000-0000-0000-000000000000"),
     uuid.UUID("f0000000-0000-0000-0000-000000000000")
 ]
-# Full runs
+# Top level group of 16
 UUID_END = [
     uuid.UUID("0fffffff-ffff-ffff-ffff-ffffffffffff"),
     uuid.UUID("1fffffff-ffff-ffff-ffff-ffffffffffff"),
@@ -67,25 +68,6 @@ UUID_END = [
     uuid.UUID("dfffffff-ffff-ffff-ffff-ffffffffffff"),
     uuid.UUID("efffffff-ffff-ffff-ffff-ffffffffffff"),
     uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff"),
-]
-# Partial runs
-UUID_END_SHORT = [
-    uuid.UUID("000fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("100fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("200fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("300fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("400fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("500fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("600fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("700fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("800fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("900fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("a00fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("b00fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("c00fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("d00fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("e00fffff-ffff-ffff-ffff-ffffffffffff"),
-    uuid.UUID("f00fffff-ffff-ffff-ffff-ffffffffffff"),
 ]
 
 # When testing, you can specify which UUID to start or end with, this time around
@@ -367,7 +349,7 @@ def convert_empty_to_null(input_string: str):
         return input_string
 
 
-def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
+def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None):
     """
     As an Informatics Systems developer, you can run this from the MacOS terminal just like the
     mapping_request_service using commands like this:
@@ -376,6 +358,13 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
     pyenv activate infx-internal-tools                                        
     python -m app.proofs_of_concept.data_migration 1> ../log/data_with_some_timestamp.log 2>&1
     ```
+    @param uuid_segment - which segment of UUIDs to process; input 0-15 to indicate first character 1, 2, 3....d, e, f
+        If granularity is 1, only 1 segment is processed. If no uuid_segment is supplied, a random choice is made.
+        If granularity is 0, all segments are processed from the uuid_segment int up to 15. If no uuid_segment, uses 0.
+    @param granularity - how much to break up segments internally, as shown.
+        granularity 0 = 0x16 = 0 levels = do not segment UUIDs at all = process ALL UUIDs from uuid_segment to 15 (last).
+        granularity 1 = 1 level per segment = 1x16 groups (16 segments) - process 1 segment, given by uuid_segment
+        for now, 1 is the only level of granularity greater than 0 that is supported; we can add more levels if needed
     """
     from app.database import get_db
 
@@ -387,6 +376,19 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
     if not LOGGER.hasHandlers():
         ch = logging.StreamHandler()
         LOGGER.addHandler(ch)
+
+    # adjust UUID inputs if unsupported values - note - range is (>= start, < end) - randint is (>= start, <= end)
+    if uuid_segment is None or uuid_segment not in range(0, 16):
+        if granularity > 0:
+            uuid_segment = random.randint(0, 15)
+        else:
+            uuid_segment = 0
+    if granularity <= 0:
+        uuid_start = UUID_START[uuid_segment]
+        uuid_end = UUID_END[-1]
+    elif granularity >= 1:
+        uuid_start = UUID_START[uuid_segment]
+        uuid_end = UUID_END[uuid_segment]
 
     total_processed = 0
     last_previous_uuid = uuid_start
@@ -575,7 +577,7 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
                             rejected
                         ) = prepare_dynamic_value_for_sql_issue(row.code, row.display)
                         time_migrate_code_value = datetime.datetime.now()
-                        stat_migrate_code_value = time_migrate_code_value - time_select_batch  # no time_02
+                        stat_migrate_code_value = time_migrate_code_value - time_select_batch
 
                         # depends_on_value - migrate 1 old depends_on_value column to 3 new columns
                         # also copy the other depends_on columns - convert all invalid "" values to None
@@ -779,24 +781,8 @@ def migrate_custom_terminologies_code(uuid_start=START_UUID, uuid_end=END_UUID):
 
 
 def perform_migration():
-    parallel_custom_terminologies_code()
-
-
-def parallel_custom_terminologies_code():
-    # Draft. It does no harm, but doesn't parallelize: it starts each chunk after the previous chunk finishes.
-    async def process_all_custom_terminologies_code():
-        await asyncio.gather(
-            *(
-                migrate_custom_terminologies_code(UUID_START[i], UUID_END[i])
-                for i in range(4, 16)
-            )
-        )
-    asyncio.run(process_all_custom_terminologies_code())
+    migrate_custom_terminologies_code(0, 0)
 
 
 if __name__=="__main__":
-    LOGGER.setLevel("WARNING")
-    if not LOGGER.hasHandlers():
-        ch = logging.StreamHandler()
-        LOGGER.addHandler(ch)
     perform_migration()
