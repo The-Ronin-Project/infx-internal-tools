@@ -955,7 +955,7 @@ class MappingRequestService:
                 depends_on = DependsOnData(
                     depends_on_value=json.dumps(raw_resource["code"]),
                     depends_on_property="Observation.code"
-                )  # todo: does this need more depends on data?
+                )
 
             # Observation.value is a CodeableConcept
             if element == "Observation.value" or element == "Observation.valueCodeableConcept":
