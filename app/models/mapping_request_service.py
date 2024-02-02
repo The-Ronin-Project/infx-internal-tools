@@ -266,6 +266,12 @@ class DependsOnData:
     depends_on_display: Optional[str] = None
 
 
+@dataclass
+class AdditionalData:
+    """ A simple data class to additional on data for an item which needs to be mapped. """
+    additional_data: Optional[str] = None
+
+
 metadata = MetaData()
 
 # Define the table using the Table syntax
@@ -869,7 +875,7 @@ class MappingRequestService:
 
         if issue.type == IssueType.NOV_CONMAP_LOOKUP.value:
             # Based on resource_type, identify coding that needs to get into the concept map
-            (found, processed_code, processed_display, depends_on) = cls.extract_coding_attributes(
+            (found, processed_code, processed_display, depends_on, additional_data) = cls.extract_coding_attributes(
                 resource_type, raw_resource, location, element, index
             )
             if not found:
@@ -889,7 +895,8 @@ class MappingRequestService:
                 terminology_to_load_to,
                 processed_code,
                 processed_display,
-                depends_on
+                depends_on,
+                additional_data
             )
 
     @classmethod
@@ -900,7 +907,7 @@ class MappingRequestService:
         location: str,
         element: str,
         index: int,
-    ) -> (bool, str, str):
+    ) -> (bool, str, str, Optional[DependsOnData], Optional[str]):
         """
         There's something unique about the handling for every resource_type we support
         @param resource_type: a FHIR resource canonical name from the ResourceType enum
@@ -915,8 +922,9 @@ class MappingRequestService:
         """
         processed_code = ""
         processed_display = ""
-        false_result = False, processed_code, processed_display
+        false_result = False, processed_code, processed_display, None, None
         depends_on = None
+        additional_data = None
 
         # Condition
         if resource_type == ResourceType.CONDITION:
@@ -934,12 +942,15 @@ class MappingRequestService:
 
         # Observation
         elif resource_type == ResourceType.OBSERVATION:
-            # Observation.category.text is SmartData
+            # get the category text into additional data for all Observations
+            additional_data = raw_resource["category"][0]["text"] if "category" in raw_resource and len(
+                raw_resource["category"]) > 0 and "text" in raw_resource["category"][0] else None
+            # Observation.category.text is SmartData.json
             if (
                     "category" in raw_resource
                     and len(raw_resource["category"]) > 0
                     and "text" in raw_resource["category"][0]
-                    and raw_resource["category"][0]["text"] == "SmartData"
+                    and raw_resource["category"][0]["text"] == "SmartData.json"
             ):
                 # Make sure Observation.component[0].code is not empty
                 if (
@@ -952,6 +963,7 @@ class MappingRequestService:
                 # Process non-empty Observation.component[0].code
                 processed_code = raw_resource["component"][0]["code"]
                 processed_display = raw_resource["component"][0]["code"]["text"]
+                # Set depends_on data
                 depends_on = DependsOnData(
                     depends_on_value=json.dumps(raw_resource["code"]),
                     depends_on_property="Observation.code"
@@ -1012,8 +1024,9 @@ class MappingRequestService:
                 LOGGER.warning(
                     f"Unrecognized location for Observation error: {location}"
                 )
-
-        # Procedure
+            print(f"raw_resource: {raw_resource}")
+            print(f"depends_on: {depends_on}")
+            # Procedure
         elif resource_type == ResourceType.PROCEDURE:
             # Procedure.code is a CodeableConcept
             if element == "Procedure.code":
@@ -1074,7 +1087,7 @@ class MappingRequestService:
             cls.all_skip_count += 1
             return false_result
 
-        return True, processed_code, processed_display, depends_on
+        return True, processed_code, processed_display, depends_on, additional_data
 
     @classmethod
     def find_terminology_to_load_to(
