@@ -1,0 +1,64 @@
+{
+    "resourceType": "Observation",
+    "id": "elm4BVYubI16UGX4Tr1KZmTg9woQK1eL.Ovfl8.TQvO28jgzEGXU2H0OrLRjq.HDQareRu3tZA7.heeQpgBe4VQ3",
+    "status": "unknown",
+    "category": [
+        {
+            "coding": [
+                {
+                    "system": "http://open.epic.com/FHIR/StructureDefinition/observation-category",
+                    "code": "smartdata",
+                    "display": "SmartData"
+                }
+            ],
+            "text": "SmartData"
+        }
+    ],
+    "code": {
+        "coding": [
+            {
+                "system": "http://snomed.info/sct",
+                "code": "SNOMED#260767000"
+            },
+            {
+                "system": "urn:oid:1.2.840.114350.1.13.412.2.7.2.727688",
+                "code": "EPIC#42384",
+                "display": "regional lymph nodes (N)"
+            }
+        ],
+        "text": "FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - TNM CLASSIFICATION - AJCC N - REGIONAL LYMPH NODES (N)"
+    },
+    "subject": {
+        "reference": "Patient/kjs5bliyT5sKJBY3F7UY",
+        "display": "Person, Name"
+    },
+    "focus": [
+        {
+            "reference": "Condition/jhvd87JKBDIV"
+        }
+    ],
+    "issued": "2023-10-15T23:36:51Z",
+    "performer": [
+        {
+            "reference": "Practitioner/bid688HFV86",
+            "display": "PERSON, NAME"
+        }
+    ],
+    "component": [
+        {
+            "code": {
+                "text": "Line 1"
+            },
+            "valueCodeableConcept": {
+                "coding": [
+                    {
+                        "system": "urn:oid:1.2.840.114350.1.13.412.2.7.4.838471.110",
+                        "code": "20000",
+                        "display": "pN0"
+                    }
+                ],
+                "text": "pN0"
+            }
+        }
+    ]
+}

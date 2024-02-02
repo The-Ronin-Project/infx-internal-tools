@@ -257,6 +257,21 @@ class ErrorServiceIssue:
         )
 
 
+@dataclass
+class DependsOnData:
+    """ A simple data class to hold depends on data for an item which needs to be mapped. """
+    depends_on_property: Optional[str] = None
+    depends_on_system: Optional[str] = None
+    depends_on_value: Optional[str] = None  # This could be a string or stringified JSON
+    depends_on_display: Optional[str] = None
+
+
+@dataclass
+class AdditionalData:
+    """ A simple data class to additional on data for an item which needs to be mapped. """
+    additional_data: Optional[str] = None
+
+
 metadata = MetaData()
 
 # Define the table using the Table syntax
@@ -860,7 +875,7 @@ class MappingRequestService:
 
         if issue.type == IssueType.NOV_CONMAP_LOOKUP.value:
             # Based on resource_type, identify coding that needs to get into the concept map
-            (found, processed_code, processed_display) = cls.extract_coding_attributes(
+            (found, processed_code, processed_display, depends_on, additional_data) = cls.extract_coding_attributes(
                 resource_type, raw_resource, location, element, index
             )
             if not found:
@@ -880,6 +895,8 @@ class MappingRequestService:
                 terminology_to_load_to,
                 processed_code,
                 processed_display,
+                depends_on,
+                additional_data
             )
 
     @classmethod
@@ -890,7 +907,7 @@ class MappingRequestService:
         location: str,
         element: str,
         index: int,
-    ) -> (bool, str, str):
+    ) -> (bool, str, str, Optional[DependsOnData], Optional[str]):
         """
         There's something unique about the handling for every resource_type we support
         @param resource_type: a FHIR resource canonical name from the ResourceType enum
@@ -905,7 +922,9 @@ class MappingRequestService:
         """
         processed_code = ""
         processed_display = ""
-        false_result = False, processed_code, processed_display
+        depends_on = None
+        additional_data = {}
+        false_result = False, processed_code, processed_display, depends_on, additional_data
 
         # Condition
         if resource_type == ResourceType.CONDITION:
@@ -923,26 +942,13 @@ class MappingRequestService:
 
         # Observation
         elif resource_type == ResourceType.OBSERVATION:
-            # Observation.category.text is SmartData
-            if (
-                    "category" in raw_resource
-                    and len(raw_resource["category"]) > 0
-                    and "text" in raw_resource["category"][0]
-                    and raw_resource["category"][0]["text"] == "SmartData"
-            ):
-                # Make sure Observation.component[0].code is not empty
-                if (
-                        "component" not in raw_resource
-                        or len(raw_resource["component"]) == 0
-                        or "code" not in raw_resource["component"][0]
-                ):
-                    return false_result
+            category_for_additional_data = None
 
-                # Process non-empty Observation.component[0].code
-                processed_code = raw_resource["component"][0]["code"]
-                processed_display = raw_resource["component"][0]["code"]["text"]
-                depends_on_value = json.dumps(raw_resource["code"])
-                depends_on_property = "Observation.code"
+            # get the category text into additional data for all Observations
+            if "category" in raw_resource:
+                if raw_resource["category"] and "text" in raw_resource["category"][0]:
+                    category_for_additional_data = raw_resource["category"][0]["text"]
+                    additional_data['category'] = category_for_additional_data
 
             # Observation.value is a CodeableConcept
             if element == "Observation.value" or element == "Observation.valueCodeableConcept":
@@ -982,6 +988,14 @@ class MappingRequestService:
                 processed_code = raw_code
                 processed_display = raw_code.get("text")
 
+                # Only SmartData category gets depends on
+                if category_for_additional_data == "SmartData":
+                    # Set depends_on data
+                    depends_on = DependsOnData(
+                        depends_on_value=json.dumps(raw_resource["code"]),
+                        depends_on_property="Observation.code"
+                    )
+
             # Observation.component.value is a CodeableConcept - location will have an index
             elif element == "Observation.component.value" or element == "Observation.component.valueCodeableConcept":
                 if index is None:
@@ -999,8 +1013,9 @@ class MappingRequestService:
                 LOGGER.warning(
                     f"Unrecognized location for Observation error: {location}"
                 )
-
-        # Procedure
+            print(f"raw_resource: {raw_resource}")
+            print(f"depends_on: {depends_on}")
+            # Procedure
         elif resource_type == ResourceType.PROCEDURE:
             # Procedure.code is a CodeableConcept
             if element == "Procedure.code":
@@ -1061,7 +1076,7 @@ class MappingRequestService:
             cls.all_skip_count += 1
             return false_result
 
-        return True, processed_code, processed_display, depends_on_value, depends_on_property
+        return True, processed_code, processed_display, depends_on, additional_data
 
     @classmethod
     def find_terminology_to_load_to(
@@ -1177,8 +1192,8 @@ class MappingRequestService:
         terminology_to_load_to: Terminology,
         processed_code: str,
         processed_display: str,
-        depends_on_value: str,
-        depends_on_property: str,
+        depends_on: Optional[DependsOnData],
+        additional_data: Optional[dict]
     ):
         """
         Prepare to load the code into the terminology, but do not load yet, in case of duplicates
@@ -1187,8 +1202,8 @@ class MappingRequestService:
         @param terminology_to_load_to: Terminology object to load to
         @param processed_code: code is a critically important str attribute of a Coding data type
         @param processed_display: display is a critically important str attribute of a Coding data type
-        @param depends_on_value: currently populated for staging data via Observation.code
-        @param depends_on_property: "Observation.code"
+        @param depends_on: the depends on data, or None
+        @param additional_data: a dict of arbitrary additional_data to store with the code in the custom terminology
         """
         new_code_uuid = uuid.uuid4()
         if processed_display is None:
@@ -1218,12 +1233,19 @@ class MappingRequestService:
                     "terminology_version_uuid": terminology_to_load_to.uuid,
                     # todo: no currently supported resource requires the dependsOn data
                     # but it is part of the unique constraint to look up a row, so use it
-                    "depends_on_property": None,
-                    "depends_on_system": None,
-                    "depends_on_value": depends_on_value,
-                    "depends_on_display": depends_on_property,
+                    "depends_on_property": depends_on.depends_on_property if depends_on else None,
+                    "depends_on_system": depends_on.depends_on_system if depends_on else None,
+                    "depends_on_value": depends_on.depends_on_value if depends_on else None,
+                    "depends_on_display": depends_on.depends_on_display if depends_on else None,
                 }
             )
+
+        # Add non-example additional_data to the new code
+        if additional_data:
+            if type(additional_data) != dict:
+                raise ValueError("additional_data parameter must be dict or None type")
+            else:
+                new_code.additional_data.update(additional_data)
 
         # Assemble additionalData from the raw resource.
         # This is where we'll extract unit, value, referenceRange, and value[x] if available

@@ -2,7 +2,7 @@ import datetime
 import uuid
 import unittest
 import json
-
+from app.helpers.file_helper import resources_folder
 import app.models.mapping_request_service
 
 
@@ -38,57 +38,49 @@ class MappingRequestServiceTests(unittest.TestCase):
         )
         resource_type = app.models.mapping_request_service.ResourceType.OBSERVATION
 
+        with open(resources_folder(__file__, "ObservationWithSmartData.json")) as raw_resource_file:
+            raw_resource = json.load(raw_resource_file)
+            location = "Observation.component[0].code"
+            element = "Observation.component.code"
+            index = 0
+
+            (
+                found,
+                processed_code,
+                processed_display,
+                depends_on,
+                additional_data,
+            ) = mapping_request_service.extract_coding_attributes(
+                resource_type, raw_resource, location, element, index
+            )
+
+            self.assertTrue(found)
+            self.assertEqual(processed_code, raw_resource["component"][index]["code"])
+            self.assertEqual(
+                processed_display, raw_resource["component"][index]["code"]["text"]
+            )
+            self.assertEqual(
+                depends_on.depends_on_value, json.dumps(raw_resource["code"])
+            )
+            self.assertEqual(depends_on.depends_on_property, "Observation.code")
+
+            self.assertIn("category", additional_data)
+            self.assertEqual(
+                additional_data.get("category"),
+                "SmartData",
+            )
+
+    def test_extract_coding_attributes_observation_empty_component(self):
+        mapping_request_service = (
+            app.models.mapping_request_service.MappingRequestService()
+        )
+        resource_type = app.models.mapping_request_service.ResourceType.OBSERVATION
+
         raw_resource = {
             "resourceType": "Observation",
-            "id": "elm4BVYubI16UGX4Tr1KZmTg9woQK1eL.Ovfl8.TQvO28jgzEGXU2H0OrLRjq.HDQareRu3tZA7.heeQpgBe4VQ3",
-            "status": "unknown",
-            "category": [
-                {
-                    "coding": [
-                        {
-                            "system": "http://open.epic.com/FHIR/StructureDefinition/observation-category",
-                            "code": "smartdata",
-                            "display": "SmartData",
-                        }
-                    ],
-                    "text": "SmartData",
-                }
-            ],
-            "code": {
-                "coding": [
-                    {"system": "http://snomed.info/sct", "code": "SNOMED#260767000"},
-                    {
-                        "system": "urn:oid:1.2.840.114350.1.13.412.2.7.2.727688",
-                        "code": "EPIC#42384",
-                        "display": "regional lymph nodes (N)",
-                    },
-                ],
-                "text": "FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - TNM CLASSIFICATION - AJCC N - REGIONAL LYMPH NODES (N)",
-            },
-            "subject": {
-                "reference": "Patient/kjs5bliyT5sKJBY3F7UY",
-                "display": "Person, Name",
-            },
-            "focus": [{"reference": "Condition/jhvd87JKBDIV"}],
-            "issued": "2023-10-15T23:36:51Z",
-            "performer": [
-                {"reference": "Practitioner/bid688HFV86", "display": "PERSON, NAME"}
-            ],
-            "component": [
-                {
-                    "code": {"text": "Line 1"},
-                    "valueCodeableConcept": {
-                        "coding": [
-                            {
-                                "system": "urn:oid:1.2.840.114350.1.13.412.2.7.4.838471.110",
-                                "code": "20000",
-                                "display": "pN0",
-                            }
-                        ],
-                        "text": "pN0",
-                    },
-                }
-            ],
+            "category": [{"text": "SmartData"}],
+            "code": {"text": "Example Code"},
+            "component": [],
         }
         location = "Observation.component[0].code"
         element = "Observation.component.code"
@@ -98,16 +90,37 @@ class MappingRequestServiceTests(unittest.TestCase):
             found,
             processed_code,
             processed_display,
-            depends_on_value,
-            depends_on_property,
+            depends_on,
+            additional_data,
         ) = mapping_request_service.extract_coding_attributes(
             resource_type, raw_resource, location, element, index
         )
 
-        self.assertTrue(found)
-        self.assertEqual(processed_code, raw_resource["component"][index]["code"])
-        self.assertEqual(
-            processed_display, raw_resource["component"][index]["code"]["text"]
+        self.assertFalse(found)
+
+    def test_extract_coding_attributes_observation_missing_component(self):
+        mapping_request_service = (
+            app.models.mapping_request_service.MappingRequestService()
         )
-        self.assertEqual(depends_on_value, json.dumps(raw_resource["code"]))
-        self.assertEqual(depends_on_property, "Observation.code")
+        resource_type = app.models.mapping_request_service.ResourceType.OBSERVATION
+
+        raw_resource = {
+            "resourceType": "Observation",
+            "category": [{"text": "SmartData"}],
+            "code": {"text": "Example Code"},
+        }
+        location = "Observation.component[0].code"
+        element = "Observation.component.code"
+        index = 0
+
+        (
+            found,
+            processed_code,
+            processed_display,
+            depends_on,
+            additional_data,
+        ) = mapping_request_service.extract_coding_attributes(
+            resource_type, raw_resource, location, element, index
+        )
+
+        self.assertFalse(found)
