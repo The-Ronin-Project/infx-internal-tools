@@ -922,9 +922,9 @@ class MappingRequestService:
         """
         processed_code = ""
         processed_display = ""
-        false_result = False, processed_code, processed_display, None, None
         depends_on = None
-        additional_data = None
+        additional_data = {}
+        false_result = False, processed_code, processed_display, depends_on, additional_data
 
         # Condition
         if resource_type == ResourceType.CONDITION:
@@ -942,32 +942,13 @@ class MappingRequestService:
 
         # Observation
         elif resource_type == ResourceType.OBSERVATION:
-            # get the category text into additional data for all Observations
-            additional_data = raw_resource["category"][0]["text"] if "category" in raw_resource and len(
-                raw_resource["category"]) > 0 and "text" in raw_resource["category"][0] else None
-            # Observation.category.text is SmartData.json
-            if (
-                    "category" in raw_resource
-                    and len(raw_resource["category"]) > 0
-                    and "text" in raw_resource["category"][0]
-                    and raw_resource["category"][0]["text"] == "SmartData.json"
-            ):
-                # Make sure Observation.component[0].code is not empty
-                if (
-                        "component" not in raw_resource
-                        or len(raw_resource["component"]) == 0
-                        or "code" not in raw_resource["component"][0]
-                ):
-                    return false_result
+            category_for_additional_data = None
 
-                # Process non-empty Observation.component[0].code
-                processed_code = raw_resource["component"][0]["code"]
-                processed_display = raw_resource["component"][0]["code"]["text"]
-                # Set depends_on data
-                depends_on = DependsOnData(
-                    depends_on_value=json.dumps(raw_resource["code"]),
-                    depends_on_property="Observation.code"
-                )
+            # get the category text into additional data for all Observations
+            if "category" in raw_resource:
+                if raw_resource["category"] and "text" in raw_resource["category"][0]:
+                    category_for_additional_data = raw_resource["category"][0]["text"]
+                    additional_data['category'] = category_for_additional_data
 
             # Observation.value is a CodeableConcept
             if element == "Observation.value" or element == "Observation.valueCodeableConcept":
@@ -1006,6 +987,14 @@ class MappingRequestService:
                 raw_code = raw_resource["component"][index]["code"]
                 processed_code = raw_code
                 processed_display = raw_code.get("text")
+
+                # Only SmartData category gets depends on
+                if category_for_additional_data == "SmartData":
+                    # Set depends_on data
+                    depends_on = DependsOnData(
+                        depends_on_value=json.dumps(raw_resource["code"]),
+                        depends_on_property="Observation.code"
+                    )
 
             # Observation.component.value is a CodeableConcept - location will have an index
             elif element == "Observation.component.value" or element == "Observation.component.valueCodeableConcept":
@@ -1203,7 +1192,8 @@ class MappingRequestService:
         terminology_to_load_to: Terminology,
         processed_code: str,
         processed_display: str,
-        depends_on: Optional[DependsOnData]
+        depends_on: Optional[DependsOnData],
+        additional_data: Optional[dict]
     ):
         """
         Prepare to load the code into the terminology, but do not load yet, in case of duplicates
@@ -1213,6 +1203,7 @@ class MappingRequestService:
         @param processed_code: code is a critically important str attribute of a Coding data type
         @param processed_display: display is a critically important str attribute of a Coding data type
         @param depends_on: the depends on data, or None
+        @param additional_data: a dict of arbitrary additional_data to store with the code in the custom terminology
         """
         new_code_uuid = uuid.uuid4()
         if processed_display is None:
@@ -1248,6 +1239,13 @@ class MappingRequestService:
                     "depends_on_display": depends_on.depends_on_display if depends_on else None,
                 }
             )
+
+        # Add non-example additional_data to the new code
+        if additional_data:
+            if type(additional_data) != dict:
+                raise ValueError("additional_data parameter must be dict or None type")
+            else:
+                new_code.additional_data.update(additional_data)
 
         # Assemble additionalData from the raw resource.
         # This is where we'll extract unit, value, referenceRange, and value[x] if available
