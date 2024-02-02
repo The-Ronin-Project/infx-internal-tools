@@ -3239,7 +3239,10 @@ class ValueSetVersion:
 
             # Set the 'total' field to the original total
             value_set_to_json["expansion"]["total"] = original_total
-        publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json)
+        try:
+            publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json)
+        except Exception as e:  # Publishing to Simplifier will be treated as optional, not required
+            pass
 
     @classmethod
     def load_expansion_report(cls, expansion_uuid):
