@@ -408,12 +408,16 @@ def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None
             terminology_version_uuid,
             created_date,
             additional_data, 
+    """
+    insert_depends_on = f"""
+            depends_on_value_jsonb,
             depends_on_value_schema,  
             depends_on_value_simple, 
-            depends_on_value_jsonb,
             depends_on_property, 
             depends_on_system, 
             depends_on_display,
+    """
+    insert_old_uuid = f"""
             old_uuid
         )
         VALUES
@@ -423,18 +427,22 @@ def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None
             :code_schema,
             :code_simple,
     """
-    insert_middle = f"""
+    # :code_jsonb is added here at runtime
+    insert_code_id = f"""
             :code_id,
             :terminology_version_uuid,
             :created_date,
-            :additional_data, 
+            :additional_data,
+    """
+    # :depends_on_value_jsonb is added here at runtime
+    insert_depends_on_binding = f""" 
             :depends_on_value_schema,
             :depends_on_value_simple,
-    """
-    insert_end = f"""
             :depends_on_property, 
             :depends_on_system, 
             :depends_on_display,
+    """
+    insert_end = f"""
             :old_uuid
         )      
     """
@@ -451,12 +459,16 @@ def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None
             terminology_version_uuid,
             created_date,
             additional_data, 
+    """
+    insert_issue_depends_on = f"""
+            depends_on_value_jsonb,
             depends_on_value_schema,  
             depends_on_value_simple, 
-            depends_on_value_jsonb,
             depends_on_property, 
             depends_on_system, 
             depends_on_display,
+    """
+    insert_issue_old_uuid = f"""
             old_uuid,
             issue_type
         )
@@ -467,18 +479,22 @@ def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None
             :code_schema,
             :code_simple,
     """
-    insert_issue_middle = f"""
+    # :code_jsonb is added here at runtime
+    insert_issue_code_id = f"""
             :code_id,
             :terminology_version_uuid,
             :created_date,
-            :additional_data, 
+            :additional_data,
+    """
+    # :depends_on_value_jsonb is added here at runtime
+    insert_depends_on_binding = f""" 
             :depends_on_value_schema,
             :depends_on_value_simple,
-    """
-    insert_issue_end = f"""
             :depends_on_property, 
             :depends_on_system, 
             :depends_on_display,
+    """
+    insert_issue_end = f"""
             :old_uuid,
             :issue_type
         )      
@@ -588,10 +604,10 @@ def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None
                             depends_on_value_string,
                             rejected_depends_on_value
                         ) = prepare_dynamic_value_for_sql_issue(row.depends_on_value)
-                        has_depends_on = rejected_depends_on_value is None
-                        depends_on_property = convert_empty_to_null(row.depends_on_property) if has_depends_on else None
-                        depends_on_system = convert_empty_to_null(row.depends_on_system) if has_depends_on else None
-                        depends_on_display = convert_empty_to_null(row.depends_on_display) if has_depends_on else None
+                        has_depends_on = (rejected_depends_on_value is None and (depends_on_value_string is not None))
+                        depends_on_property = convert_empty_to_null(row.depends_on_property)
+                        depends_on_system = convert_empty_to_null(row.depends_on_system)
+                        depends_on_display = convert_empty_to_null(row.depends_on_display)
                         time_migrate_depends_on = datetime.datetime.now()
                         stat_migrate_depends_on = time_migrate_depends_on - time_migrate_code_value
 
@@ -620,30 +636,61 @@ def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None
                             insert_code_jsonb = " :code_jsonb, "
                         else:
                             insert_code_jsonb = f" '{code_jsonb}'::jsonb, "
-                        if depends_on_value_jsonb is None:
-                            insert_depends_on_value_jsonb = " :depends_on_value_jsonb, "
-                        else:
-                            insert_depends_on_value_jsonb = f" '{depends_on_value_jsonb}'::jsonb, "
+                        if has_depends_on:
+                            if depends_on_value_jsonb is None:
+                                insert_depends_on_value_jsonb = " :depends_on_value_jsonb, "
+                            else:
+                                insert_depends_on_value_jsonb = f" '{depends_on_value_jsonb}'::jsonb, "
 
-                        # insert_query vs. insert_issue_query: send issue rows to the issue table
-                        insert_query = (
-                            insert_start
-                            + insert_code_jsonb
-                            + insert_middle
-                            + insert_depends_on_value_jsonb
-                            + insert_end
-                        )
-                        insert_issue_query = (
-                            insert_issue_start
-                            + insert_code_jsonb
-                            + insert_issue_middle
-                            + insert_depends_on_value_jsonb
-                            + insert_issue_end
-                        )
+                        # insert_query vs. insert_issue_query - send issue rows to the issue table - segment order:
+                        #   insert_start
+                        #   insert_depends_on (if has_depends_on)
+                        #   insert_old_uuid
+                        #   insert_code_jsonb
+                        #   insert_code_id
+                        #   insert_depends_on_value_jsonb (if has_depends_on)
+                        #   insert_depends_on_binding (if has_depends_on)
+                        #   insert_end
+                        if has_depends_on:
+                            insert_query = (
+                                insert_start
+                                + insert_depends_on
+                                + insert_old_uuid
+                                + insert_code_jsonb  # 'sql_escaped'::jsonb
+                                + insert_code_id
+                                + insert_depends_on_value_jsonb  # 'sql_escaped'::jsonb
+                                + insert_depends_on_binding
+                                + insert_end
+                            )
+                            insert_issue_query = (
+                                insert_issue_start
+                                + insert_issue_depends_on
+                                + insert_issue_old_uuid
+                                + insert_code_jsonb   # 'sql_escaped'::jsonb
+                                + insert_issue_code_id
+                                + insert_depends_on_value_jsonb   # 'sql_escaped'::jsonb
+                                + insert_depends_on_binding
+                                + insert_issue_end
+                            )
+                        else:
+                            insert_query = (
+                                insert_start
+                                + insert_old_uuid
+                                + insert_code_jsonb  # 'sql_escaped'::jsonb
+                                + insert_code_id
+                                + insert_end
+                            )
+                            insert_issue_query = (
+                                insert_issue_start
+                                + insert_issue_old_uuid
+                                + insert_code_jsonb   # 'sql_escaped'::jsonb
+                                + insert_issue_code_id
+                                + insert_issue_end
+                            )
                         time_insert_formation = datetime.datetime.now()
                         stat_insert_formation = time_insert_formation - time_id_formation
 
-                        # insert values - jsonb columns get special handling
+                        # insert values
                         insert_values = {
                             "uuid": new_uuid,
                             "display": row.display,
@@ -653,17 +700,23 @@ def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None
                             "terminology_version_uuid": row.terminology_version_uuid,
                             "created_date": row.created_date,
                             "additional_data": info,
-                            "depends_on_value_schema": depends_on_value_schema,
-                            "depends_on_value_simple": depends_on_value_simple,
-                            "depends_on_property": row.depends_on_property,
-                            "depends_on_system": row.depends_on_system,
-                            "depends_on_display": row.depends_on_display,
                             "old_uuid": row.uuid,
                         }
+
+                        # jsonb
                         if code_jsonb is None:
                             insert_values.update({"code_jsonb": code_jsonb})
-                        if depends_on_value_jsonb is None:
+
+                        # depends_on
+                        if has_depends_on:
                             insert_values.update({"depends_on_value_jsonb": depends_on_value_jsonb})
+                            insert_values.update({"depends_on_value_schema": depends_on_value_schema})
+                            insert_values.update({"depends_on_value_simple": depends_on_value_simple})
+                            insert_values.update({"depends_on_property": depends_on_property})
+                            insert_values.update({"depends_on_system": depends_on_system})
+                            insert_values.update({"depends_on_display": depends_on_display})
+
+                        # issue_type
                         has_issue = False
                         code_issue = None
                         if code_schema is not None and (
