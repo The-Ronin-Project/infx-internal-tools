@@ -38,7 +38,7 @@ class MappingRequestServiceTests(unittest.TestCase):
         )
         resource_type = app.models.mapping_request_service.ResourceType.OBSERVATION
 
-        with open(resources_folder(__file__, "SmartData.json")) as raw_resource_file:
+        with open(resources_folder(__file__, "ObservationWithSmartData.json")) as raw_resource_file:
             raw_resource = json.load(raw_resource_file)
             location = "Observation.component[0].code"
             element = "Observation.component.code"
@@ -63,13 +63,11 @@ class MappingRequestServiceTests(unittest.TestCase):
                 depends_on.depends_on_value, json.dumps(raw_resource["code"])
             )
             self.assertEqual(depends_on.depends_on_property, "Observation.code")
+
+            self.assertIn("category", additional_data)
             self.assertEqual(
-                additional_data,
-                raw_resource["category"][0]["text"]
-                if "category" in raw_resource
-                and len(raw_resource["category"]) > 0
-                and "text" in raw_resource["category"][0]
-                else None,
+                additional_data.get("category"),
+                "SmartData",
             )
 
     def test_extract_coding_attributes_observation_empty_component(self):
