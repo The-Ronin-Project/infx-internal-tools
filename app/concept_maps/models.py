@@ -1641,8 +1641,8 @@ class ConceptMapVersion:
                 ),
                 {
                     "concept_map_version_uuid": concept_map_version_uuid,
-                    "loaded_count": loaded_count
-                }
+                    "loaded_count": loaded_count,
+                },
             )
             conn.commit()
         except Exception as e:
@@ -1715,6 +1715,13 @@ class MappingRelationship:
             ),
             {"uuid": uuid},
         ).first()
+
+        # When there is no data, do not create an object
+        if data is None:
+            raise NotFoundException(
+                f"No data found for mapping relationship UUID: {uuid}"
+            )
+
         return cls(uuid=data.uuid, code=data.code, display=data.display)
 
     @classmethod
