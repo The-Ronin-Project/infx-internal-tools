@@ -438,7 +438,7 @@ class ConceptMapVersionCreator:
             Callers must input the UUID of the most recent active source value set version.
             new_target_value_set_version_uuid (uuid.UUID): The UUID of the new target value set version.
             Callers must input the UUID of the most recent active target value set version.
-            require_review_for_non_equivalent_relationships (bool): Whether to require review for non-equivalent relationships,(doesn't apply to taget no map)
+            require_review_for_non_equivalent_relationships (bool): Whether to require review for non-equivalent relationships,(doesn't apply to target no map)
             require_review_no_maps_not_in_target (bool): Whether to require review for no-maps not in the target.
             require_review_all_other_no_map_reasons (bool): Whether to require review for all other no map reasons.
         """
