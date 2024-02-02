@@ -1013,9 +1013,8 @@ class MappingRequestService:
                 LOGGER.warning(
                     f"Unrecognized location for Observation error: {location}"
                 )
-            print(f"raw_resource: {raw_resource}")
-            print(f"depends_on: {depends_on}")
-            # Procedure
+
+        # Procedure
         elif resource_type == ResourceType.PROCEDURE:
             # Procedure.code is a CodeableConcept
             if element == "Procedure.code":
@@ -1851,7 +1850,7 @@ if __name__ == "__main__":
     #     requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
     #     requested_issue_type: must be a type load_concepts_from_errors() already supports (see IssueType enum)
     # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    # service.load_concepts_from_errors(commit_changes=True)
+    #service.load_concepts_from_errors(commit_changes=True)
 
     # UNCOMMENT the 2 lines below for GitHub merges and testing; comment them when running the temporary error load task
     service.load_concepts_from_errors(commit_changes=False)
