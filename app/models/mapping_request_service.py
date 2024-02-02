@@ -262,7 +262,7 @@ class DependsOnData:
     """ A simple data class to hold depends on data for an item which needs to be mapped. """
     depends_on_property: Optional[str] = None
     depends_on_system: Optional[str] = None
-    depends_on_value: Optional[str] = None
+    depends_on_value: Optional[str] = None  # This could be a string or stringified JSON
     depends_on_display: Optional[str] = None
 
 
