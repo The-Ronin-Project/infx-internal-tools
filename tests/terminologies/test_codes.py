@@ -14,8 +14,47 @@ from app.errors import BadRequestWithCode
 from app.terminologies.views import create_code_payload_to_code_list
 
 
-class CodeTests(unittest.TestCase):
+class CodeClassTests(unittest.TestCase):
     """
+    These tests instantiate the Code class directly, as opposed to using API calls as below.
+    """
+    def setUp(self) -> None:
+        self.conn = get_db()
+        self.app = create_app()
+        self.app.config.update({
+            "TESTING": True,
+        })
+        self.client = self.app.test_client()
+
+    def tearDown(self) -> None:
+        # this executes after each test function, but does not stop lower-level functions from committing db changes
+        self.conn.rollback()
+        self.conn.close()
+
+    def test_load_simple_code(self):
+        # From the "Test ONLY: fake/fhir_uri" terminology v3
+        simple_code = app.models.codes.Code.load_from_custom_terminology("4e6e97aa-dd29-4f19-add2-46a56224515d")
+
+        self.assertEqual("Target Concept 2", simple_code.code)
+        self.assertEqual("target concept 2", simple_code.display)
+        self.assertEqual("fake/fhir_uri", simple_code.system)
+        self.assertEqual("3", simple_code.version)
+
+    def test_load_codeable_concept(self):
+        # From the "Test ONLY: Codeable Concepts" terminology v1
+        codeable_concept = app.models.codes.Code.load_from_custom_terminology("15552373-c736-4b28-b284-6c0009225796")
+
+        self.assertEqual("""{ "coding": [ { "system": "http://hl7.org/fhir/sid/icd-10-cm", "code": "D59.9" }, { "system": "http://snomed.info/sct", "code": "4854004" } ], "text": "Anemia, hemolytic, acquired (CMS/HCC)" }""",
+                         codeable_concept.code)
+        self.assertEqual("Anemia, hemolytic, acquired (CMS/HCC)", codeable_concept.display)
+        self.assertEqual("http://projectronin.io/fhir/CodeSystem/mock/codeableConcepts", codeable_concept.system)
+        self.assertEqual("1", codeable_concept.version)
+
+
+class CodeAPITests(unittest.TestCase):
+    """
+    These tests test the Code class via mocked API calls.
+
     There are 5 public.terminology_versions rows safe to use in tests that also pass checks to allow codes to be created
     ```
     terminology                    version     uri                 is_standard is_fhir effective_start  _end
