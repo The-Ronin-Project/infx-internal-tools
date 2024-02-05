@@ -13,7 +13,7 @@ def test_concept_map_output_to_oci():
     already an output file for a version number present in the OCI folder, this function will not overwrite it. If it is
     imperative to overwrite the previously output file for a version number, you must remove that file from OCI first.
     """
-    test_concept_map_version_uuid =  # use this invalid value on purpose when merging
+    test_concept_map_version_uuid = "(insert the version uuid here)"  # use this invalid value on purpose when merging
     concept_map_output_to_oci(test_concept_map_version_uuid, ConceptMap.database_schema_version)
     if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
         concept_map_output_to_oci(test_concept_map_version_uuid, ConceptMap.next_schema_version)
