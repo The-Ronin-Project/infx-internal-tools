@@ -7,6 +7,7 @@ from typing import List, Dict, Tuple, Optional, Any
 import re
 import requests
 import concurrent.futures
+import logging
 
 from psycopg2 import DatabaseError
 from sqlalchemy import text, MetaData, Table, Column, String, Row
@@ -3242,6 +3243,7 @@ class ValueSetVersion:
         try:
             publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json)
         except Exception as e:  # Publishing to Simplifier will be treated as optional, not required
+            logging.warning(f"Unable to publish Value Set Version {self.uuid}, {self.value_set.title} version {self.version} to Simplifier")
             pass
 
     @classmethod
