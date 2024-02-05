@@ -6,14 +6,14 @@ import pytest
 from app.concept_maps.models import ConceptMap, ConceptMapVersion
 
 
-@skip("This is a utility, not a test. Use only for OCI repairs by Informatics Systems team members.")
+#  @skip("This is a utility, not a test. Use only for OCI repairs by Informatics Systems team members.")
 def test_concept_map_output_to_oci():
     """
     Not a test. Really a tool for developers to push content to OCI for urgent reasons. Be aware that if there is
     already an output file for a version number present in the OCI folder, this function will not overwrite it. If it is
     imperative to overwrite the previously output file for a version number, you must remove that file from OCI first.
     """
-    test_concept_map_version_uuid = "(insert the version uuid here)"  # use this invalid value on purpose when merging
+    test_concept_map_version_uuid = '955e518a-8030-4fe5-9e61-e0a6e6fda1b3'  # use this invalid value on purpose when merging
     concept_map_output_to_oci(test_concept_map_version_uuid, ConceptMap.database_schema_version)
     if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
         concept_map_output_to_oci(test_concept_map_version_uuid, ConceptMap.next_schema_version)

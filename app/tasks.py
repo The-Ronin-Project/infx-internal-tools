@@ -22,8 +22,7 @@ if BROKER_TLS_ENFORCED:
 
 
 celery_app = Celery("infx-tasks", broker=BROKER_URL)
-# celery_app.conf.task_always_eager = True
-# celery_app.conf.broker_url = config('CELERY_BROKER_URL')
+celery_app.conf.task_always_eager = config('CELERY_TASK_ALWAYS_EAGER', False)
 
 
 # Deprecated because error service / mapping request process is being ran from local dev
