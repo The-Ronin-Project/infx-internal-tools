@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from operator import itemgetter
 from typing import Optional, List
 from uuid import UUID
+import logging
 
 from cachetools.func import ttl_cache
 from opensearchpy.helpers import bulk
@@ -1495,6 +1496,7 @@ class ConceptMapVersion:
         try:
             self.to_simplifier()
         except:
+            logging.warning(f"Unable to publish Concept Map Version {self.uuid}, {self.concept_map.title} version {self.version} to Simplifier")
             pass  # Simplifier API not reliable, so we make that step optional
 
         # Publish new version of data normalization registry
