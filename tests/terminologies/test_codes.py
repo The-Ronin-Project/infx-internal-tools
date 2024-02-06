@@ -44,8 +44,19 @@ class CodeClassTests(unittest.TestCase):
         # From the "Test ONLY: Codeable Concepts" terminology v1
         codeable_concept = app.models.codes.Code.load_from_custom_terminology("15552373-c736-4b28-b284-6c0009225796")
 
-        self.assertEqual("""{ "coding": [ { "system": "http://hl7.org/fhir/sid/icd-10-cm", "code": "D59.9" }, { "system": "http://snomed.info/sct", "code": "4854004" } ], "text": "Anemia, hemolytic, acquired (CMS/HCC)" }""",
-                         codeable_concept.code)
+        self.assertEqual(app.models.codes.FHIRCodeableConcept, type(codeable_concept.code_object))
+        self.assertEqual("Anemia, hemolytic, acquired (CMS/HCC)", codeable_concept.code_object.text)
+
+        ordered_coding = sorted(codeable_concept.code_object.coding, key=lambda coding: coding.code)
+        first_item = ordered_coding[0]
+        second_item = ordered_coding[1]
+
+        self.assertEqual("4854004", first_item.code)
+        self.assertEqual("http://snomed.info/sct", first_item.system)
+
+        self.assertEqual("D59.9", second_item.code)
+        self.assertEqual("http://hl7.org/fhir/sid/icd-10-cm", second_item.system)
+
         self.assertEqual("Anemia, hemolytic, acquired (CMS/HCC)", codeable_concept.display)
         self.assertEqual("http://projectronin.io/fhir/CodeSystem/mock/codeableConcepts", codeable_concept.system)
         self.assertEqual("1", codeable_concept.version)

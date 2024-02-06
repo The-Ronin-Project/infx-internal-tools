@@ -2,19 +2,86 @@ import datetime
 import uuid
 import json
 import logging
-from app.database import get_db
+from dataclasses import dataclass
+from typing import List, Union, Optional
+from enum import Enum
+
 from sqlalchemy import text
+
 import app.terminologies.models
-from typing import List
-from uuid import UUID
+from app.database import get_db
 from app.errors import BadRequestWithCode
 
 
-# INTERNAL_TOOLS_BASE_URL = "https://infx-internal.prod.projectronin.io"
+class RoninCodeSchemas(Enum):
+    code = "code"
+    codeable_concept = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept"
+
+
+@dataclass
+class FHIRCoding:
+    """
+    This class represents a Coding in FHIR/RCDM.
+    This class should directly hold data; it should NOT access our database
+    or have to be aware of our database schema.
+    """
+    code: Optional[str]
+    display: Optional[str]
+    system: Optional[str]
+    version: Optional[str]
+
+    @classmethod
+    def deserialize(cls, json_input_raw) -> 'FHIRCoding':
+        if type(json_input_raw) == str:
+            json_input = json.loads(json_input_raw)
+        elif type(json_input_raw) == dict:
+            json_input = json_input_raw
+        else:
+            raise NotImplementedError(f"FHIRCoding.deserialize not implemented for input type: {type(json_input_raw)}")
+
+        return cls(
+            code=json_input.get('code'),
+            display=json_input.get('display'),
+            system=json_input.get('system'),
+            version=json_input.get('version')
+        )
+
+
+@dataclass
+class FHIRCodeableConcept:
+    """
+    This class represents a CodeableConcept in FHIR/RCDM.
+    This class should directly hold data; it should NOT access our database
+    or have to be aware of our database schema.
+    """
+    coding: List[FHIRCoding]
+    text: str
+
+    @classmethod
+    def deserialize(cls, json_input_raw) -> 'FHIRCodeableConcept':
+        if type(json_input_raw) == str:
+            json_input = json.loads(json_input_raw)
+        elif type(json_input_raw) == dict:
+            json_input = json_input_raw
+        else:
+            raise NotImplementedError(f"FHIRCodeableConcept.deserialize not implemented for input type: {type(json_input_raw)}")
+
+        fhir_text = json_input.get('text')
+        coding_array = json_input.get('coding')
+
+        return cls(
+            coding=[FHIRCoding.deserialize(coding) for coding in coding_array],
+            text=fhir_text
+        )
+
 
 class Code:
     """
-    This class represents a code object used for encoding and maintaining information about a specific concept or term within a coding system or terminology. It provides a way to manage various attributes related to the code and the coding system it belongs to.
+    This class represents a code object used for encoding and maintaining information about a specific
+    concept or term within a coding system or terminology. While previously, it was analagous to a FHIR Coding,
+    this class is now intended to support both Coding (code, display, system, version) and entire
+    CodeableConcepts (or RCDM SourceCodeableConcept). It provides a way to manage various
+    attributes related to the code and the coding system it belongs to.
 
     Attributes:
     system (str): The identifier of the coding system that the code is a part of.
@@ -41,20 +108,27 @@ class Code:
         uuid=None,
         system_name=None,
         terminology_version: 'app.terminologies.models.Terminology' = None,
-        terminology_version_uuid=None,
+        terminology_version_uuid=None,  # todo: eliminate and access from terminology_version.uuid instead
         depends_on_property: str = None,
         depends_on_system: str = None,
         depends_on_value: str = None,
         depends_on_display: str = None,
-        custom_terminology_code_uuid: uuid.UUID = None,
+        custom_terminology_code_uuid: uuid.UUID = None,  # todo: how is this distinct from self.uuid, can we deprecate?
+        code_object: Union[FHIRCoding, FHIRCodeableConcept] = None,
+        code_schema: RoninCodeSchemas = RoninCodeSchemas.code
     ):
         self.system = system
         self.version = version
-        self.code = code
-        self.display = display
+        self._code = code
+        self._display = display
+
+        self.code_object = code_object
+        self.code_schema = code_schema
+
         self.additional_data = additional_data
+
         self.uuid = uuid
-        self.system_name = system_name
+        self.system_name = system_name  # todo: what is this needed for?
         self.terminology_version: app.terminologies.models.Terminology = (
             terminology_version
         )
@@ -100,6 +174,18 @@ class Code:
         ):
             self.terminology_version_uuid = self.terminology_version.uuid
 
+    @property
+    def code(self):
+        if self.code_schema == RoninCodeSchemas.codeable_concept:
+            return self.code_object
+        return self._code
+
+    @property
+    def display(self):
+        if self.code_schema == RoninCodeSchemas.codeable_concept:
+            return self.code_object.text
+        return self._display
+
     def __repr__(self, include_additional_data=True):
         """
         This method returns a human-readable representation of the Code instance. It overrides the default representation method for the Code class.
@@ -131,7 +217,7 @@ class Code:
 
         return repr_string + ")"
 
-    def __hash__(self) -> int:
+    def __hash__(self) -> int:  # todo: make it very clear why this is different from code_id and if it should be
         """
         This method computes a hash value for the Code instance based on its string representation. It overrides the default hash method for the Code class.
 
@@ -190,34 +276,45 @@ class Code:
         code_data = conn.execute(
             text(
                 """
-                select code.uuid, code.code, code.depends_on_value, code.depends_on_display, 
-                code.depends_on_property, code.depends_on_system, display, tv.fhir_uri as system_url, 
-                tv.version, tv.terminology as system_name, tv.uuid as terminology_version_uuid
-                from custom_terminologies.code
+                select code.uuid, code.code_schema, code.code_simple, code.code_jsonb, 
+                code.depends_on_value_schema, code.depends_on_value_simple, code.depends_on_value_jsonb, 
+                code.depends_on_display, code.depends_on_property, code.depends_on_system, code.display, 
+                tv.fhir_uri as system_url, tv.version, tv.terminology as system_name, tv.uuid as terminology_version_uuid
+                from custom_terminologies.code_poc as code
                 join terminology_versions tv
                 on code.terminology_version_uuid = tv.uuid
-                where code.uuid=:code_uuid
-                """
+                where code.old_uuid=:code_uuid
+                """  # todo: switch from old_uuid to uuid when appropriate
             ),
             {"code_uuid": code_uuid},
         ).first()
 
+        code_schema_raw = code_data.code_schema
+        code_schema = RoninCodeSchemas(code_schema_raw)
+
+        if code_schema == RoninCodeSchemas.codeable_concept:
+            code_object = FHIRCodeableConcept.deserialize(code_data.code_jsonb)
+        else:
+            code_object = None
+
         return cls(
             system=code_data.system_url,
             version=code_data.version,
-            code=code_data.code,
+            code=code_data.code_simple,
             display=code_data.display,
             system_name=code_data.system_name,
             terminology_version_uuid=code_data.terminology_version_uuid,
             uuid=code_uuid,
-            depends_on_value=code_data.depends_on_value,
+            depends_on_value=code_data.depends_on_value_simple,
             depends_on_display=code_data.depends_on_display,
             depends_on_property=code_data.depends_on_property,
             depends_on_system=code_data.depends_on_system,
+            code_object=code_object,
+            code_schema=code_schema
         )
 
-
     def serialize(self, with_system_and_version=True, with_system_name=False):
+        # todo: this will need to support multiple types (string, code, CodeableConcept)
         """
         This method serializes the Code instance into a dictionary format, including the system, version, code, and display attributes. It provides options to include or exclude the system and version attributes and to include the system_name attribute.
 
@@ -290,7 +387,6 @@ class Code:
         self.add_example_to_additional_data("example_value_string", value_string)
         self.add_example_to_additional_data("example_value_date_time", value_date_time)
         self.add_example_to_additional_data("example_value_codeable_concept", value_codeable_concept)
-
 
     def add_example_to_additional_data(self, key: str, example):
         """
