@@ -24,6 +24,8 @@ class FHIRCoding:
     This class represents a Coding in FHIR/RCDM.
     This class should directly hold data; it should NOT access our database
     or have to be aware of our database schema.
+
+    This should only be used within FHIRCodeableConcept and NOT as a standalone.
     """
     code: Optional[str]
     display: Optional[str]
@@ -105,7 +107,6 @@ class Code:
         code,
         display,
         additional_data=None,
-        uuid=None,
         system_name=None,
         terminology_version: 'app.terminologies.models.Terminology' = None,
         terminology_version_uuid=None,  # todo: eliminate and access from terminology_version.uuid instead
@@ -114,8 +115,11 @@ class Code:
         depends_on_value: str = None,
         depends_on_display: str = None,
         custom_terminology_code_uuid: uuid.UUID = None,  # todo: how is this distinct from self.uuid, can we deprecate?
+        fhir_terminology_code_uuid: Optional[uuid.UUID] = None,
         code_object: Union[FHIRCoding, FHIRCodeableConcept] = None,
-        code_schema: RoninCodeSchemas = RoninCodeSchemas.code
+        code_schema: RoninCodeSchemas = RoninCodeSchemas.code,
+        from_custom_terminology: Optional[bool] = None,
+        from_fhir_terminology: Optional[bool] = None,
     ):
         self.system = system
         self.version = version
@@ -124,10 +128,11 @@ class Code:
 
         self.code_object = code_object
         self.code_schema = code_schema
+        self.from_custom_terminology = from_custom_terminology
+        self.from_fhir_terminology = from_fhir_terminology
 
         self.additional_data = additional_data
 
-        self.uuid = uuid
         self.system_name = system_name  # todo: what is this needed for?
         self.terminology_version: app.terminologies.models.Terminology = (
             terminology_version
@@ -136,6 +141,7 @@ class Code:
         # `custom_terminology_code_uuid` is a specifically assigned uuid for this code
         # it serves as the primary key in the custom_terminologies.code table
         self.custom_terminology_code_uuid = custom_terminology_code_uuid
+        self.fhir_terminology_code_uuid = fhir_terminology_code_uuid
 
         self.depends_on_property = depends_on_property
         self.depends_on_system = depends_on_system
@@ -173,6 +179,15 @@ class Code:
             and self.terminology_version is not None
         ):
             self.terminology_version_uuid = self.terminology_version.uuid
+
+    @property
+    def uuid(self):
+        if self.from_custom_terminology is True:
+            return self.custom_terminology_code_uuid
+        elif self.from_fhir_terminology is True:
+            return self.fhir_terminology_code_uuid
+        else:
+            raise NotImplementedError("No uuid for Code objects that are not declared as from a custom terminology or fhir terminology")
 
     @property
     def code(self):
