@@ -51,6 +51,7 @@ CLIENT_SECRET = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_SECRET", default
 AUTH_AUDIENCE = config("DATA_NORMALIZATION_ERROR_SERVICE_AUDIENCE", default="")
 AUTH_URL = config("DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default="")
 PAGE_SIZE = 300
+VERBOSE = False  # do not use LOGGER.debug which chokes the log with messages from httpx and other libraries
 
 LOGGER = logging.getLogger()
 
@@ -627,11 +628,13 @@ class MappingRequestService:
                                     loop_total += since_last_time
                                     all_loop_total += loop_total
                                     all_loop_count += 1
-                                    LOGGER.debug(
-                                        f"  {length_of_response} responses received and loaded in {step_1}\n"
-                                        + f"  {cls.total_count_loaded_codes} new codes found and deduplicated in {step_2}\n"
-                                        + f"  loop {all_loop_count} done at time {current_time.time()}, duration {loop_total}"
-                                    )
+                                    if VERBOSE is True:
+                                        # do not use LOGGER.debug which chokes the log with messages from httpx etc.
+                                        LOGGER.warning(
+                                            f"  {length_of_response} responses received and loaded in {step_1}\n"
+                                            + f"  {cls.total_count_loaded_codes} new codes found and deduplicated in {step_2}\n"
+                                            + f"  loop {all_loop_count} done at time {current_time.time()}, duration {loop_total}"
+                                        )
 
                         except Exception as e:
                             LOGGER.warning(
@@ -1379,18 +1382,22 @@ class MappingRequestService:
             terminology = cls.terminology_version[terminology_version_uuid]
 
             if len(code_list) > 0:
-                LOGGER.debug(
-                    f"Attempting to load {len(code_list)} new codes to terminology "
-                    + f"{terminology.terminology} version {terminology.version}"
-                )
+                if VERBOSE is True:
+                    # do not use LOGGER.debug which chokes the log with messages from httpx etc.
+                    LOGGER.warning(
+                        f"Attempting to load {len(code_list)} new codes to terminology "
+                        + f"{terminology.terminology} version {terminology.version}"
+                    )
                 inserted_count = terminology.load_new_codes_to_terminology(
                     code_list, on_conflict_do_nothing=True
                 )
-                LOGGER.debug(
-                    f"Actually inserted {inserted_count} codes to "
-                    + f"{terminology.terminology} version {terminology.version} "
-                    + "after deduplication"
-                )
+                if VERBOSE is True:
+                    # do not use LOGGER.debug which chokes the log with messages from httpx etc.
+                    LOGGER.warning(
+                        f"Actually inserted {inserted_count} codes to "
+                        + f"{terminology.terminology} version {terminology.version} "
+                        + "after deduplication"
+                    )
                 if inserted_count > 0:
                     LOGGER.warning(
                         f"Inserted {inserted_count} new codes to "
@@ -1405,53 +1412,55 @@ class MappingRequestService:
         Link codes back to the error resource IDs that originated them, so we can request Interops to reprocess them.
         The request to reprocess is automatically invoked when a new concept map is published that contains these codes.
         """
+        if not cls.error_code_link_data:
+            return
+
         conn = get_db()
         try:
-            if cls.error_code_link_data:
-                # Create a temporary table and insert the data to it
-                conn.execute(
-                    text(
-                        """
-                        CREATE TEMP TABLE temp_error_data (
-                            code text,
-                            display text,
-                            terminology_version_uuid UUID,
-                            depends_on_system text,
-                            depends_on_property text,
-                            depends_on_display text,
-                            depends_on_value text,
-                            issue_uuid UUID,
-                            resource_uuid UUID,
-                            environment text,
-                            status text
-                        )
-                        """
-                    )
-                )
-
-                # Optimized bulk insert
-                conn.execute(temp_error_data.insert(), cls.error_code_link_data)
-
-                # Insert from the temporary table, allowing the database to batch lookups
-                conn.execute(
-                    text(
-                        """
-                        INSERT INTO custom_terminologies.error_service_issue
-                            (custom_terminology_code_uuid, issue_uuid, environment, status, resource_uuid)
-                        SELECT c.uuid, t.issue_uuid, t.environment, t.status, t.resource_uuid
-                        FROM temp_error_data t
-                        JOIN custom_terminologies.code c 
-                        ON c.code = t.code 
-                            AND c.display = t.display 
-                            AND c.terminology_version_uuid = t.terminology_version_uuid
-                            AND c.depends_on_system = t.depends_on_system
-                            AND c.depends_on_property = t.depends_on_property
-                            AND c.depends_on_display = t.depends_on_display
-                            AND c.depends_on_value = t.depends_on_value
-                    ON CONFLICT do nothing
+            # Create a temporary table and insert the data to it
+            conn.execute(
+                text(
                     """
+                    CREATE TEMP TABLE temp_error_data (
+                        code text,
+                        display text,
+                        terminology_version_uuid UUID,
+                        depends_on_system text,
+                        depends_on_property text,
+                        depends_on_display text,
+                        depends_on_value text,
+                        issue_uuid UUID,
+                        resource_uuid UUID,
+                        environment text,
+                        status text
                     )
+                    """
                 )
+            )
+
+            # Optimized bulk insert
+            conn.execute(temp_error_data.insert(), cls.error_code_link_data)
+
+            # Insert from the temporary table, allowing the database to batch lookups
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO custom_terminologies.error_service_issue
+                        (custom_terminology_code_uuid, issue_uuid, environment, status, resource_uuid)
+                    SELECT c.uuid, t.issue_uuid, t.environment, t.status, t.resource_uuid
+                    FROM temp_error_data t
+                    JOIN custom_terminologies.code c 
+                    ON c.code = t.code 
+                        AND c.display = t.display 
+                        AND c.terminology_version_uuid = t.terminology_version_uuid
+                        AND c.depends_on_system = t.depends_on_system
+                        AND c.depends_on_property = t.depends_on_property
+                        AND c.depends_on_display = t.depends_on_display
+                        AND c.depends_on_value = t.depends_on_value
+                ON CONFLICT do nothing
+                """
+                )
+            )
 
             # Delete the temporary table
             conn.execute(
@@ -1461,16 +1470,13 @@ class MappingRequestService:
                     """
                 )
             )
-
-            if cls.commit_by_batch:
-                LOGGER.warning("    .")  #  simple heartbeat is useful to avoid mis-diagnosing a long run as a failure
-                conn.commit()
         except Exception as e:
-            LOGGER.warning(
-                f"{message_exception_summary(e)} adding data to custom_terminologies.error_service_issue"
-            )
             conn.rollback()
             raise e
+
+        LOGGER.warning("    .")  # simple heartbeat is useful to avoid mis-diagnosing a long run as a failure
+        if cls.commit_by_batch:
+            conn.commit()
 
 
 @ttl_cache()
