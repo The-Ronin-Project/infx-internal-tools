@@ -114,7 +114,7 @@ class Code:
         depends_on_system: str = None,
         depends_on_value: str = None,
         depends_on_display: str = None,
-        custom_terminology_code_uuid: uuid.UUID = None,  # todo: how is this distinct from self.uuid, can we deprecate?
+        custom_terminology_code_uuid: uuid.UUID = None,
         fhir_terminology_code_uuid: Optional[uuid.UUID] = None,
         code_object: Union[FHIRCoding, FHIRCodeableConcept] = None,
         code_schema: RoninCodeSchemas = RoninCodeSchemas.code,
