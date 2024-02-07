@@ -138,9 +138,13 @@ class Code:
             terminology_version
         )
         self.terminology_version_uuid: uuid.UUID = terminology_version_uuid
+
         # `custom_terminology_code_uuid` is a specifically assigned uuid for this code
         # it serves as the primary key in the custom_terminologies.code table
+        # Only applies if this Code represents something loaded from the custom_terminologies.code table
         self.custom_terminology_code_uuid = custom_terminology_code_uuid
+
+        # Only applies if loaded from the fhir terminologies system
         self.fhir_terminology_code_uuid = fhir_terminology_code_uuid
 
         self.depends_on_property = depends_on_property
