@@ -24,7 +24,7 @@ from app.helpers.message_helper import message_exception_summary, message_except
 LOGGER = logging.getLogger()
 TOTAL_LIMIT = 1300000   # overall limit on number of records processed
 QUERY_LIMIT = 500       # per-request limit on number of records to process - neither smaller nor larger values help
-REPORT_LIMIT = 500     # how often to log statistics while in progress
+REPORT_LIMIT = 1000     # how often to log statistics while in progress
 RETRY_LIMIT = 40        # number of times to retry database connection when it drops mid-loop on long runs, >30 helps
 RETRY_SLEEP = 120       # time between retries - the most successful interval has consistently been 120, not more/less
 FIRST_UUID = uuid.UUID("00000000-0000-0000-0000-000000000000")
@@ -69,16 +69,9 @@ UUID_END = [
     uuid.UUID("efffffff-ffff-ffff-ffff-ffffffffffff"),
     uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff"),
 ]
-
-# When testing, you can specify which UUID to start or end with, this time around
-#     the classics:
+# other convenient values
 START_UUID = UUID_START[0]
 END_UUID = UUID_END[-1]
-#     other examples:
-# START_UUID = uuid.UUID("03659ed9-c591-4bbc-9bcf-37260e0e402f")
-# END_UUID = uuid.UUID("6c4fc33-c94c-49bf-91e8-839c2f934e84")
-# START_UUID = UUID_START[8]
-# END_UUID = UUID_END[8]
 
 class ConceptMapsForContent(Enum):
     """
@@ -295,18 +288,17 @@ def query_code_uuid_test_only() -> str:
 
 def print_start(time_start, uuid_start, uuid_end):
     LOGGER.warning(
-        f"START:\n{time_start} - at old_uuid: {uuid_start} - with planned end: {uuid_end}"
-        f" - page size: {QUERY_LIMIT} - report every: {REPORT_LIMIT} rows processed\n")
+        f"\nSTART: {uuid_start} to {uuid_end} - page size: {QUERY_LIMIT} - report every: {REPORT_LIMIT} rows\n")
 
 
 def print_progress(time_start, total_processed, last_previous_uuid, statistics=None):
-    # Save a bit of time for big runs (maybe?) by un-commenting this line
+    # Save log bloat for big runs by providing this line: you can comment it out when you want the extra log messages
     statistics = None
 
     time_end = datetime.datetime.now()
     time_elapsed = time_end - time_start
-    if total_processed > 0:
-        row_average_time = time_elapsed / total_processed
+    if REPORT_LIMIT > 0:
+        row_average_time = time_elapsed / REPORT_LIMIT
     else:
         row_average_time = 0
     if statistics is None:
@@ -316,7 +308,7 @@ def print_progress(time_start, total_processed, last_previous_uuid, statistics=N
         for s in statistics:
             summary += s
         stat_report = (
-            f"     Execution time breakdown:\n"
+            f"\n     Execution time breakdown:\n"
             f"       stat_select_batch:          {statistics[0]}\n"
             f"       stat_migrate_code_value:    {statistics[1]}\n"
             f"       stat_migrate_depends_on:    {statistics[2]}\n"
@@ -331,11 +323,10 @@ def print_progress(time_start, total_processed, last_previous_uuid, statistics=N
             f"     Total:                        {summary}"
         )
     LOGGER.warning(
-        f"{time_end} - Accumulated rows of interest: {total_processed}"
+        f"Accumulated rows: {total_processed}"
         f" - Time/1K: ({1000 * row_average_time})"
         f" - /100K: ({100000 * row_average_time})"
-        f" - /1M: ({1000000 * row_average_time})"
-        f" - Last old_uuid processed: {last_previous_uuid}\n{stat_report}"
+        f" - Last old_uuid: {last_previous_uuid}{stat_report}"
     )
 
 
@@ -349,22 +340,49 @@ def convert_empty_to_null(input_string: str):
         return input_string
 
 
-def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None):
+def migrate_database_table(
+    table_name: str=None,
+    granularity: int=1,
+    segment_start: int=None,
+    segment_count: int=None
+):
     """
-    As an Informatics Systems developer, you can run this from the MacOS terminal just like the
-    mapping_request_service using commands like this:
-    ```
-    cd Documents/GitHub/infx-internal-tools                                   
-    pyenv activate infx-internal-tools                                        
-    python -m app.proofs_of_concept.data_migration 1> ../log/data_with_some_timestamp.log 2>&1
-    ```
-    @param uuid_segment - which segment of UUIDs to process; input 0-15 to indicate first character 1, 2, 3....d, e, f
-        If granularity is 1, only 1 segment is processed. If no uuid_segment is supplied, a random choice is made.
-        If granularity is 0, all segments are processed from the uuid_segment int up to 15. If no uuid_segment, uses 0.
+    The Postman API endpoint runs this function.
+    To enable parallel processing, this function operates on segments of rows, organized by hexadecimal UUID value.
+    For normal activities, provide all inputs explicitly. Trigger random segment choice only for temporary tests in dev.
+    @param table_name - full name of database table in clinical-content, for example "custom_terminologies.code".
     @param granularity - how much to break up segments internally, as shown.
-        granularity 0 = 0x16 = 0 levels = do not segment UUIDs at all = process ALL UUIDs from uuid_segment to 15 (last).
-        granularity 1 = 1 level per segment = 1x16 groups (16 segments) - process 1 segment, given by uuid_segment
+        granularity 0 = 0x16 = 0 levels = do not segment at all = process ALL UUIDs from segment_start to 15 (inclusive)
+        granularity 1 = 1 level per segment = 1x16 groups (16 segments) - process 1 segment, given by segment_start.
         for now, 1 is the only level of granularity greater than 0 that is supported; we can add more levels if needed
+    @param segment_start - which segment of UUIDs to process; input 0-15 to indicate first character 1, 2, 3....d, e, f
+        If granularity is 1, and segment_count is 1, and segment_start is None, process 1 segment chosen at random.
+        In all other cases, when segment_start is None or <=0, process with segment_start = 0.
+    @param segment_count - how many UUID segments to process; beginning at segment_start:
+        If granularity is 1, and segment_count is 1, and segment_start is None, process 1 segment chosen at random.
+        In all other cases, when segment_count is None or <=0, process ALL segments from segment_start to 15 (inclusive)
+    """
+    if table_name is None:
+        return
+    if table_name == "custom_terminologies.code":
+        migrate_custom_terminologies_code(granularity, segment_start, segment_count)
+    elif table_name == "concept_maps.source_concept":
+        migrate_concept_maps_source_concept(granularity, segment_start, segment_count)
+    elif table_name == "concept_maps.concept_relationship":
+        migrate_concept_maps_concept_relationship(granularity, segment_start, segment_count)
+    elif table_name == "value_sets.expansion_member":
+        migrate_value_sets_expansion_member(granularity, segment_start, segment_count)
+    else:
+        return
+
+
+def migrate_custom_terminologies_code(
+    granularity: int=1,
+    segment_start: int=None,
+    segment_count: int=None
+):
+    """
+    migrate_database_table() helper function for when the original table_name is "custom_terminologies.code"
     """
     from app.database import get_db
 
@@ -377,19 +395,19 @@ def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None
         ch = logging.StreamHandler()
         LOGGER.addHandler(ch)
 
-    # adjust UUID inputs if unsupported values - note - range is (>= start, < end) - randint is (>= start, <= end)
-    if uuid_segment is None or uuid_segment not in range(0, 16):
+    # adjust inputs if unsupported values - note - range is (>= start, < end) - randint is (>= start, <= end)
+    if segment_start is None or segment_start not in range(0, 16):
         if granularity > 0:
-            uuid_segment = random.randint(0, 15)
+            segment_start = random.randint(0, 15)
         else:
-            uuid_segment = 0
+            segment_start = 0
+    uuid_start = UUID_START[segment_start]
     if granularity <= 0:
-        uuid_start = UUID_START[uuid_segment]
         uuid_end = UUID_END[-1]
-    elif granularity >= 1:
-        uuid_start = UUID_START[uuid_segment]
-        uuid_end = UUID_END[uuid_segment]
+    else:
+        uuid_end = UUID_END[segment_start + segment_count - 1]
 
+    full_time_start = datetime.datetime.now()
     total_processed = 0
     last_previous_uuid = uuid_start
     total_limit = TOTAL_LIMIT
@@ -501,11 +519,11 @@ def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None
     """
 
     # main loop
-    time_start = datetime.datetime.now()
     try:
-        print_start(time_start, uuid_start, uuid_end)
+
+        print_start(full_time_start, uuid_start, uuid_end)
         while not done:
-            time_zero: datetime = None
+            time_start: datetime = None
             time_select_batch: datetime = None
             time_migrate_code_value: datetime = None
             time_migrate_depends_on: datetime = None
@@ -530,7 +548,7 @@ def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None
             stat_fail_cause_dup_case_1 = delta_zero
             stat_fail_cause_dup_case_2 = delta_zero
             try:
-                time_zero = datetime.datetime.now()
+                time_start = datetime.datetime.now()
                 conn = get_db()
 
                 # processing by sequential UUID is non-optimal as it could miss new codes;
@@ -560,7 +578,7 @@ def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None
                     },
                 ).fetchall()
                 time_select_batch = datetime.datetime.now()
-                stat_select_batch = time_select_batch - time_zero
+                stat_select_batch = time_select_batch - time_start
 
                 # process the results from this batch
                 count = len(result)
@@ -830,11 +848,109 @@ def migrate_custom_terminologies_code(granularity: int=1, uuid_segment: int=None
 
     finally:
         print_progress(time_start, total_processed, last_previous_uuid)
-        LOGGER.warning("DONE.\n")
+        full_time_end = datetime.datetime.now()
+        full_time_elapsed = full_time_end - full_time_start
+        LOGGER.warning(
+            f"Full processing time: {full_time_elapsed}"
+            f" for granularity: {granularity}, segment_start: {segment_start}, segment_count: {segment_count}\n"
+            f"DONE.\n"
+        )
+
+
+def migrate_concept_maps_source_concept(
+    granularity: int=1,
+    segment_start: int=None,
+    segment_count: int=None
+):
+    """
+    migrate_database_table() helper function for when the original table_name is "concept_maps.source_concept"
+    """
+    return  # stub
+
+
+def migrate_concept_maps_concept_relationship(
+    granularity: int=1,
+    segment_start: int=None,
+    segment_count: int=None
+):
+    """
+    migrate_database_table() helper function for when the original table_name is "concept_maps.concept_relationshi"
+    """
+    return  # stub
+
+
+def migrate_value_sets_expansion_member(
+    granularity: int=1,
+    segment_start: int=None,
+    segment_count: int=None
+):
+    """
+    migrate_database_table() helper function for when the original table_name is "value_sets.expansion_member"
+    """
+    return  # stub
 
 
 def perform_migration():
-    migrate_custom_terminologies_code(0, 0)
+    """
+    Command line endpoint for running migration locally. Does not support command line inputs at this time.
+    """
+    # todo: For this command line endpoint, add a line for each table to be migrated.
+    migrate_database_table("custom_terminologies.code", 1, 0, segment_count=1)
+
+
+def cleanup_database_table(
+    table_name: str=None,
+    granularity: int=1,
+    segment_start: int=None,
+    segment_count: int=None
+):
+    """
+    Post-migration cleanup:
+
+    Early versions of this function will populate "keep" or "discard" action values in _poc and _poc_issue without
+    triggering subsequent action. Later versions will rely on existing, populated action values and act on them.
+
+    Populating the action column:
+
+    Most population of the action column will use queries that analyze _poc and _poc_issue rows for known problems with
+    duplication. Of the 2x2x2 logic cases, 7 cases can be derived by query, and these will populate the action column.
+    For the human review case, the results of spreadsheets marking "keep" values for rows of _poc and _poc_issue will be
+    imported and read to populate the action column appropriately.
+
+    code table keep/discard - re-use to clean up source_concept:
+
+    custom_terminologies.code migration reduces volume by migrating (from code to code_poc and code_poc_issue)
+    only those rows that are in use in certain concept maps and in the most recent version of each terminology.
+
+    For concept_maps.source_concept we migrate and reduce volume by using its foreign keys to custom_terminologies.code
+    and concept_maps.concept_map_version to only process rows corresponding to the custom_terminologies.code rows that
+    we are migrating. The uuid from the custom_terminologies.code row matches only 1 old_uuid in either code_poc or
+    code_poc_issue. That row's code_id value matches at least 1, possibly 1+ code_id values across code_poc and
+    code_poc_issue. Only 1 of those rows has the value "keep" in the action column. concept_maps.source_concept rows
+    with custom_terminology_uuid values that match ANY of the old_uuid values for this same code_id are migrated. Then:
+    concept_maps.source_concept rows that match on "discard" rows are modified to point to the "keep" row instead.
+    Any concept_maps.source_concept row that does not match as above can be discarded; this is a large number.
+
+    Same as above for value_sets.expansion_member.
+
+    Catching up with new table rows in the v4 table:
+
+    Prior to final cut-over, any time we re-run migration to pick up recently-added values, we simply re-run our
+    analysis queries for duplicates, and re-run our cleanup function for the table (this function). This works because
+    re-running migration does not disrupt any existing _poc and _poc_issue rows or their action columns.
+    It simply adds more rows, if found and as found.
+
+    What the cleanup action does:
+
+    Applies the action indicated by the action column value in the _poc and _poc_issue tables, such as "keep" or
+    "discard". (There may be other values, hence the action column is not a boolean.) A common action is deduplication
+    of rows by code_id or mapping_id. The single survivor row in _data may come from  either _poc or _poc_issue,
+    according to the action column value in _poc or _poc_issue. For "keep", migrates the corresponding row into the
+    _data table. For "discard", ensures the row is not in _data and if it is, deletes it from _data.
+
+    _poc and _poc_issue rows are not modified, either by cleanup, or by migrating recent rows to _poc and _poc_issue.
+    """
+    return  # stub
 
 
 if __name__=="__main__":

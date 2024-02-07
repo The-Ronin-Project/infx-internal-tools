@@ -3,6 +3,7 @@ from io import StringIO
 from uuid import uuid4
 
 import structlog
+from decouple import config
 from deprecated.classic import deprecated
 from flask import Flask, jsonify, request, Response
 from werkzeug.exceptions import HTTPException
@@ -446,12 +447,31 @@ def create_app(script_info=None):
         result = tasks.hello_world.delay()
         return "Task Created"
 
-    @app.route("/data_migration_poc", methods=["POST"])
-    def perform_poc_data_migration_endpoint():
+    @app.route("/database_migration", methods=["POST"])
+    def perform_data_migration_endpoint():
+        table_name = request.json.get('table_name')
         granularity = request.json.get('granularity')
-        uuid_segment = request.json.get('uuid_segment')
-        tasks.perform_poc_database_migration.delay(granularity, uuid_segment)
-        return "Task Created"
+        segment_start = request.json.get('segment_start')
+        segment_count = request.json.get('segment_count')
+        tasks.perform_database_migration.delay(table_name, granularity, segment_start, segment_count)
+        return f"Task Created: table_name={table_name} granularity={granularity}, segment_start={segment_start}, segment_count={segment_count}"
+
+    @app.route("/database_cleanup", methods=["POST"])
+    def perform_database_cleanup_endpoint():
+        table_name = request.json.get('table_name')
+        granularity = request.json.get('granularity')
+        segment_start = request.json.get('segment_start')
+        segment_count = request.json.get('segment_count')
+        tasks.perform_database_cleanup.delay(table_name, granularity, segment_start, segment_count)
+        return f"Task Created: table_name={table_name} granularity={granularity}, segment_start={segment_start}, segment_count={segment_count}"
+
+    @app.route("/mapping_request_service", methods=["POST"])
+    def perform_mapping_request_service_endpoint():
+        page_size = request.json.get('page_size')
+        requested_organization_id = request.json.get('requested_organization_id')
+        requested_resource_type = request.json.get('requested_resource_type')
+        tasks.perform_mapping_request_check.delay(page_size, requested_organization_id, requested_resource_type)
+        return f"Task Created: page_size={page_size} requested_organization_id={requested_organization_id}, requested_resource_type={requested_resource_type}"
 
     return app
 

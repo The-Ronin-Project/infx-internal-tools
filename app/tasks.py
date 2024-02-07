@@ -167,10 +167,39 @@ def back_fill_concept_maps_to_simplifier():
 
 
 @celery_app.task
-def perform_poc_database_migration(granularity, uuid_segment):
-    app.proofs_of_concept.data_migration.migrate_custom_terminologies_code(
+def perform_database_migration(table_name, granularity, segment_start, segment_count):
+    app.proofs_of_concept.data_migration.migrate_database_table(
+        table_name=table_name,
         granularity=granularity,
-        uuid_segment=uuid_segment
+        segment_start=segment_start,
+        segment_count=segment_count
+    )
+
+
+@celery_app.task
+def perform_database_cleanup(table_name, granularity, segment_start, segment_count):
+    app.proofs_of_concept.data_migration.cleanup_database_table(
+        table_name=table_name,
+        granularity=granularity,
+        segment_start=segment_start,
+        segment_count=segment_count
+    )
+
+
+@celery_app.task
+def perform_mapping_request_check(page_size, requested_organization_id, requested_resource_type):
+    """
+    Last 2 inputs are strings: if omitted, all known possible values are used: all orgids or all resource types
+    @param page_size (int) number of records to get from the Data Validation Error Service each time, default PAGE_SIZE
+    @param requested_organization_id: Confluence page called "Organization Ids" under "Living Architecture" lists them
+    @param requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
+    """
+    app.models.mapping_request_service.temporary_mapping_request_service(
+        commit_by_batch=True,
+        page_size=page_size,
+        requested_organization_id=requested_organization_id,
+        requested_resource_type=requested_resource_type,
+        requested_issue_type=None
     )
 
 

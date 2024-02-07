@@ -388,7 +388,7 @@ class MappingRequestService:
     @classmethod
     def load_concepts_from_errors(
         cls,
-        commit_changes=True,
+        commit_by_batch=True,
         page_size: int = None,
         requested_organization_id: str = None,
         requested_resource_type: str = None,
@@ -430,7 +430,7 @@ class MappingRequestService:
                     6a3. link_codes_back_to_reprocessing
         ```
         Parameters:
-            commit_changes (bool, optional): Whether to commit after each batch
+            commit_by_batch (bool, optional): Whether to commit after each batch
             page_size (int, optional): HTTP GET page size, if empty, use the default PAGE_SIZE
             requested_organization_id (str): If non-empty, get errors only for the organization_id listed; if empty, get all
             requested_resource_type (str): Get errors only for the ResourceType enum string listed; if empty, get all
@@ -450,7 +450,7 @@ class MappingRequestService:
         cls.page_size = page_size
 
         # database
-        cls.commit_changes = commit_changes
+        cls.commit_changes = commit_by_batch
 
         # resource type
         unsupported_resource_types = []
@@ -517,7 +517,7 @@ class MappingRequestService:
             + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
             + f"  Load to:   {DATABASE_HOST}\n\n"
             + f"  Settings: \n"
-            + f"    commit_changes={commit_changes}\n"
+            + f"    commit_changes={commit_by_batch}\n"
             + f"    page_size={page_size}\n"
             + f"    requested_organization_id={requested_organization_id}\n"
             + f"    requested_resource_type={requested_resource_type}\n"
@@ -627,7 +627,7 @@ class MappingRequestService:
                                     loop_total += since_last_time
                                     all_loop_total += loop_total
                                     all_loop_count += 1
-                                    LOGGER.warning(
+                                    LOGGER.debug(
                                         f"  {length_of_response} responses received and loaded in {step_1}\n"
                                         + f"  {cls.total_count_loaded_codes} new codes found and deduplicated in {step_2}\n"
                                         + f"  loop {all_loop_count} done at time {current_time.time()}, duration {loop_total}"
@@ -1366,18 +1366,23 @@ class MappingRequestService:
             terminology = cls.terminology_version[terminology_version_uuid]
 
             if len(code_list) > 0:
-                LOGGER.warning(
+                LOGGER.debug(
                     f"Attempting to load {len(code_list)} new codes to terminology "
                     + f"{terminology.terminology} version {terminology.version}"
                 )
                 inserted_count = terminology.load_new_codes_to_terminology(
                     code_list, on_conflict_do_nothing=True
                 )
-                LOGGER.warning(
+                LOGGER.debug(
                     f"Actually inserted {inserted_count} codes to "
                     + f"{terminology.terminology} version {terminology.version} "
                     + "after deduplication"
                 )
+                if inserted_count > 0:
+                    LOGGER.warning(
+                        f"Inserted {inserted_count} new codes to "
+                        + f"{terminology.terminology} version {terminology.version} "
+                    )
                 return inserted_count
         return 0
 
@@ -1445,6 +1450,7 @@ class MappingRequestService:
             )
 
             if cls.commit_changes:
+                LOGGER.warning(f"Adding data to custom_terminologies.error_service_issue")
                 conn.commit()
         except Exception as e:
             LOGGER.warning(
@@ -1825,12 +1831,25 @@ async def reprocess_resource(resource_uuid, token, client):
         return None
 
 
-if __name__ == "__main__":
+def temporary_mapping_request_service(
+        commit_by_batch: bool=True,
+        page_size: int=PAGE_SIZE,
+        requested_organization_id: str=None,
+        requested_resource_type: str=None,
+        requested_issue_type: str=None
+):
     # todo: clean out this method altogether, when a temporary, manual error load task is not needed.
-    from app.database import get_db
-
-    # Moved logging setup to here so it does not run in main program and cause duplicate logs
-
+    """
+    With no inputs, this function processes all organization ids, all resource types, all issue types, and waits to
+    commit changes until ALL pages finish, which means if there is an error or exception, no results are committed.
+    @param commit_by_batch (bool) - True to commit each batch as processed - False to commit only after ALL succeed.
+        Developers: for local tests of updates to this function, you may set to False
+    @param page_size (int) number of records to get from the Data Validation Error Service each time, default PAGE_SIZE
+    @param requested_organization_id: Confluence page called "Organization Ids" under "Living Architecture" lists them
+    @param requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
+    @param requested_issue_type: must be a type load_concepts_from_errors() already supports (see IssueType enum)
+    """
+    # Moved logging setup to here, so it does not run in main program and cause duplicate logs
     # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
     # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded
     LOGGER.setLevel("WARNING")
@@ -1840,21 +1859,31 @@ if __name__ == "__main__":
         ch = logging.StreamHandler()
         LOGGER.addHandler(ch)
 
-    # Per our usual practice, open a DatabaseHandler, that database calls within load_concepts_from_errors will re-use
+    # Developers: while locally testing updates to this function, you may temporarily force commit_by_batch to False
+    # commit_by_batch = False
+
+    # Do the work
     conn = get_db()
-    service = MappingRequestService()
+    try:
+        service = MappingRequestService()
+        service.load_concepts_from_errors(
+            commit_by_batch=commit_by_batch,
+            page_size=page_size,
+            requested_organization_id=requested_organization_id,
+            requested_resource_type=requested_resource_type,
+            requested_issue_type=requested_issue_type
+        )
+        if commit_by_batch is False:
+            LOGGER.warning(f"Committing all data now...")
+            conn.commit()
+    except Exception as e:
+        info = "".join(traceback.format_exception(*sys.exc_info()))
+        LOGGER.warning(f"ERROR: {info}")
+        conn.rollback()
+    finally:
+        LOGGER.warning(f"DONE.")
+        conn.close()
 
-    # Instructions for use:
-    # INPUT page_size and/or requested_organization_id and/or requested_resource_type and/or requested_issue_type.
-    #     requested_organization_id: Confluence page called "Organization Ids" under "Living Architecture" lists them
-    #     requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
-    #     requested_issue_type: must be a type load_concepts_from_errors() already supports (see IssueType enum)
-    # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    #service.load_concepts_from_errors(commit_changes=True)
 
-    # UNCOMMENT the 2 lines below for GitHub merges and testing; comment them when running the temporary error load task
-    service.load_concepts_from_errors(commit_changes=False)
-    conn.rollback()
-
-    # We have run rollback() and commit() where and as needed; now ask the DatabaseHandler to close() the connection
-    conn.close()
+if __name__ == "__main__":
+    temporary_mapping_request_service()
