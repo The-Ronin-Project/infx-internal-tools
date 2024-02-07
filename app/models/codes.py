@@ -132,9 +132,16 @@ class Code:
 
         self.additional_data = additional_data
 
-        self.terminology_version: app.terminologies.models.Terminology = (
-            terminology_version
-        )
+        if terminology_version is not None:
+            if type(terminology_version) != app.terminologies.models.Terminology:
+                raise BadRequestWithCode(
+                    code='app.models.codes.Code.terminology_version_type',
+                    description="terminology_version parameter must be instance of app.terminologies.models.Terminology or None"
+                )
+            self.terminology_version: app.terminologies.models.Terminology = terminology_version
+        else:
+            self.terminology_version = None
+
         self.terminology_version_uuid: uuid.UUID = terminology_version_uuid
 
         # `custom_terminology_code_uuid` is a specifically assigned uuid for this code
