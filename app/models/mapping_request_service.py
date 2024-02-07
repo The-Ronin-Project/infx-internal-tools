@@ -929,6 +929,8 @@ class MappingRequestService:
         # Condition
         if resource_type == ResourceType.CONDITION:
             # Condition.code is a CodeableConcept
+            if "code" not in raw_resource:
+                return false_result
             raw_code = raw_resource["code"]
             processed_code = raw_code
             processed_display = raw_code.get("text")
@@ -936,6 +938,8 @@ class MappingRequestService:
         # Medication
         elif resource_type == ResourceType.MEDICATION:
             # Medication.code is a CodeableConcept
+            if "code" not in raw_resource:
+                return false_result
             raw_code = raw_resource["code"]
             processed_code = raw_code
             processed_display = raw_code.get("text")
@@ -968,9 +972,12 @@ class MappingRequestService:
 
             # Observation.interpretation is a CodeableConcept
             elif element == "Observation.interpretation":
-                if "interpretation" not in raw_resource:
+                if (
+                    "interpretation" not in raw_resource
+                    or len(raw_resource["interpretation"]) < (index + 1)
+                ):
                     return false_result
-                raw_code = raw_resource["code"]
+                raw_code = raw_resource["interpretation"][index]
                 processed_code = raw_code
                 processed_display = raw_code.get("text")
 
@@ -991,6 +998,8 @@ class MappingRequestService:
                 # Only SmartData category gets depends on
                 if category_for_additional_data == "SmartData":
                     # Set depends_on data
+                    if "code" not in raw_resource:
+                        return false_result
                     depends_on = DependsOnData(
                         depends_on_value=json.dumps(raw_resource["code"]),
                         depends_on_property="Observation.code"
@@ -1028,6 +1037,8 @@ class MappingRequestService:
         elif resource_type == ResourceType.DOCUMENT_REFERENCE:
             # DocumentReference.type is a CodeableConcept
             if element == "DocumentReference.type":
+                if "type" not in raw_resource:
+                    return false_result
                 raw_code = raw_resource["type"]
                 processed_code = raw_code
                 processed_display = raw_code.get("text")
@@ -1036,6 +1047,8 @@ class MappingRequestService:
         elif resource_type == ResourceType.APPOINTMENT:
             # Appointment.status is a raw code - used for code and display
             if element == "Appointment.status":
+                if "status" not in raw_resource:
+                    return false_result
                 raw_code = raw_resource["status"]
                 processed_code = raw_code
                 processed_display = raw_code
