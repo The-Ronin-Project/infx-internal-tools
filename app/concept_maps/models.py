@@ -1759,7 +1759,7 @@ class SourceConcept:
 
     def __post_init__(self):
         self.code_object = Code(
-            uuid=self.uuid,
+            custom_terminology_code_uuid=self.uuid,
             code=self.code,
             display=self.display,
             system=self.system.fhir_uri,
