@@ -189,7 +189,9 @@ class Code:
         elif self.from_fhir_terminology is True:
             return self.fhir_terminology_code_uuid
         else:
-            raise NotImplementedError("No uuid for Code objects that are not declared as from a custom terminology or fhir terminology")
+            raise NotImplementedError(
+                "No uuid for Code objects that are not declared as from a custom terminology or fhir terminology"
+            )
 
     @property
     def code(self):
