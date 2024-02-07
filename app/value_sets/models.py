@@ -3587,7 +3587,7 @@ class ExplicitlyIncludedCode:
             "uuid": self.uuid,
             "review_status": self.review_status,
             "value_set_version_uuid": self.value_set_version.uuid,
-            "code": self.code.serialize(with_system_name=True),
+            "code": self.code.serialize(),
         }
 
     @classmethod
@@ -3613,7 +3613,6 @@ class ExplicitlyIncludedCode:
         for x in code_data:
             code = Code(
                 system=x.system_uri,
-                system_name=x.system_name,
                 version=x.version,
                 code=x.code,
                 display=x.display,

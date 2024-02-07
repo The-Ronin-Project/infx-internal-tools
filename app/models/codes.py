@@ -107,7 +107,6 @@ class Code:
         code,
         display,
         additional_data=None,
-        system_name=None,
         terminology_version: 'app.terminologies.models.Terminology' = None,
         terminology_version_uuid=None,  # todo: eliminate and access from terminology_version.uuid instead
         depends_on_property: str = None,
@@ -133,7 +132,6 @@ class Code:
 
         self.additional_data = additional_data
 
-        self.system_name = system_name  # todo: what is this needed for?
         self.terminology_version: app.terminologies.models.Terminology = (
             terminology_version
         )
@@ -321,9 +319,9 @@ class Code:
             version=code_data.version,
             code=code_data.code_simple,
             display=code_data.display,
-            system_name=code_data.system_name,
             terminology_version_uuid=code_data.terminology_version_uuid,
-            uuid=code_uuid,
+            custom_terminology_code_uuid=code_uuid,
+            from_custom_terminology=True,
             depends_on_value=code_data.depends_on_value_simple,
             depends_on_display=code_data.depends_on_display,
             depends_on_property=code_data.depends_on_property,
@@ -332,14 +330,13 @@ class Code:
             code_schema=code_schema
         )
 
-    def serialize(self, with_system_and_version=True, with_system_name=False):
+    def serialize(self, with_system_and_version=True):
         # todo: this will need to support multiple types (string, code, CodeableConcept)
         """
         This method serializes the Code instance into a dictionary format, including the system, version, code, and display attributes. It provides options to include or exclude the system and version attributes and to include the system_name attribute.
 
         Args:
         with_system_and_version (bool, optional): Whether to include the system and version attributes in the serialized output. Defaults to True.
-        with_system_name (bool, optional): Whether to include the system_name attribute in the serialized output. Defaults to False.
 
         Returns:
         dict: A dictionary containing the serialized attributes of the Code instance.
@@ -359,9 +356,6 @@ class Code:
         if with_system_and_version is False:
             serialized.pop("system")
             serialized.pop("version")
-
-        if self.system_name is not None and with_system_name is True:
-            serialized["system_name"] = self.system_name
 
         return serialized
 
