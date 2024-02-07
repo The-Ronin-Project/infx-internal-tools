@@ -3574,7 +3574,7 @@ class ExplicitlyIncludedCode:
                 {
                     "uuid": self.uuid,
                     "vs_version_uuid": self.value_set_version.uuid,
-                    "code_uuid": self.code.uuid,
+                    "code_uuid": self.code.custom_terminology_code_uuid,
                     "review_status": self.review_status,
                 },
             )
@@ -3617,7 +3617,7 @@ class ExplicitlyIncludedCode:
                 version=x.version,
                 code=x.code,
                 display=x.display,
-                uuid=x.code_uuid,
+                custom_terminology_code_uuid=x.code_uuid,
             )
 
             explicity_code_inclusion = cls(
