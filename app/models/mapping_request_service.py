@@ -337,8 +337,8 @@ class MappingRequestService:
     rest_api_params: dict  # input parameters based on current control values from the main loop
 
     # Control values
-    commit_changes: bool = (
-        False  # true/false to commit to database: control value from the main loop
+    commit_by_batch: bool = (
+        False  # true/false to commit upon completing each page of results: control value from the main loop
     )
     page_size: int  # set in the hundreds to throttle the service based on network factors
     organization_id: str  # tenant organization: control value from the main loop
@@ -450,7 +450,7 @@ class MappingRequestService:
         cls.page_size = page_size
 
         # database
-        cls.commit_changes = commit_by_batch
+        cls.commit_by_batch = commit_by_batch
 
         # resource type
         unsupported_resource_types = []
@@ -517,7 +517,7 @@ class MappingRequestService:
             + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
             + f"  Load to:   {DATABASE_HOST}\n\n"
             + f"  Settings: \n"
-            + f"    commit_changes={commit_by_batch}\n"
+            + f"    commit_by_batch={commit_by_batch}\n"
             + f"    page_size={page_size}\n"
             + f"    requested_organization_id={requested_organization_id}\n"
             + f"    requested_resource_type={requested_resource_type}\n"
@@ -1449,8 +1449,8 @@ class MappingRequestService:
                 )
             )
 
-            if cls.commit_changes:
-                LOGGER.warning(f"Adding data to custom_terminologies.error_service_issue")
+            if cls.commit_by_batch:
+                LOGGER.warning("    .")  #  simple heartbeat is useful to avoid mis-diagnosing a long run as a failure
                 conn.commit()
         except Exception as e:
             LOGGER.warning(
