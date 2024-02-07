@@ -1764,6 +1764,7 @@ class SourceConcept:
             display=self.display,
             system=self.system.fhir_uri,
             version=self.system.version,
+            from_custom_terminology=True
         )
 
     def __hash__(self):
