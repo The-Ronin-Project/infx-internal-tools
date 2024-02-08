@@ -171,8 +171,7 @@ class Code:
         - from_fhir_terminology (bool, optional): Indicates if this code originates from a FHIR terminology.
 
         Raises:
-        - BadRequestWithCode: If neither terminology_version, terminology_version_uuid nor system and version are provided, or if the terminology_version parameter is not of the expected type.
-        - Raises ValueError if the conditions based on code_schema are not met, ensuring proper usage of the constructor.
+        - Raises ValueError if the conditions for usage (see above) are not met, ensuring proper usage of the constructor.
         """
         # Validate code_schema against provided parameters
         if code_schema == RoninCodeSchemas.codeable_concept:
@@ -223,9 +222,8 @@ class Code:
 
         if terminology_version is not None:
             if type(terminology_version) != app.terminologies.models.Terminology:
-                raise BadRequestWithCode(
-                    code='app.models.codes.Code.terminology_version_type',
-                    description="terminology_version parameter must be instance of app.terminologies.models.Terminology or None"
+                raise ValueError(
+                    "terminology_version parameter must be instance of app.terminologies.models.Terminology or None"
                 )
             self.terminology_version: app.terminologies.models.Terminology = terminology_version
         else:
