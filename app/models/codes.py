@@ -120,8 +120,8 @@ class Code:
         from_custom_terminology: Optional[bool] = None,
         from_fhir_terminology: Optional[bool] = None,
     ):
-        self.system = system
-        self.version = version
+        # self.system = system
+        # self.version = version
         self._code = code
         self._display = display
 
@@ -133,10 +133,16 @@ class Code:
         self.additional_data = additional_data
 
         if terminology_version is None and terminology_version_uuid is None:
-            raise BadRequestWithCode(
-                code="app.models.codes.Code.terminology_version_required",
-                description="Either terminology_version or terminology_version_uuid must be provided to instantiate Code"
-            )
+            if system is None or version is None:
+                raise BadRequestWithCode(
+                    code="app.models.codes.Code.terminology_version_required",
+                    description="Either terminology_version, terminology_version_uuid, or system AND version must be provided to instantiate Code"
+                )
+            else:
+                self.terminology_version = app.terminologies.models.Terminology.load_by_fhir_uri_and_version_from_cache(
+                    fhir_uri=system,
+                    version=version
+                )
 
         if terminology_version is not None:
             if type(terminology_version) != app.terminologies.models.Terminology:
@@ -164,38 +170,6 @@ class Code:
         self.depends_on_value = depends_on_value
         self.depends_on_display = depends_on_display
 
-        if (
-            self.terminology_version is not None
-            and self.system is None
-            and self.version is None
-        ):
-            self.system = self.terminology_version.fhir_uri
-            self.version = self.terminology_version.version
-            self.terminology_version_uuid = self.terminology_version.uuid
-
-        if (
-            self.terminology_version_uuid is None
-            and self.system is not None
-            and self.version is not None
-        ):
-            self.terminology_version_uuid = (
-                app.terminologies.models.terminology_version_uuid_lookup(
-                    system, version
-                )
-            )
-            if self.terminology_version_uuid is not None:
-                self.terminology_version = (
-                    app.terminologies.models.load_terminology_version_with_cache(
-                        self.terminology_version_uuid
-                    )
-                )
-
-        if (
-            self.terminology_version_uuid is None
-            and self.terminology_version is not None
-        ):
-            self.terminology_version_uuid = self.terminology_version.uuid
-
     @property
     def uuid(self):
         if self.from_custom_terminology is True:
@@ -218,6 +192,16 @@ class Code:
         if self.code_schema == RoninCodeSchemas.codeable_concept:
             return self.code_object.text
         return self._display
+
+    @property
+    def system(self):
+        # For legacy compatibility
+        return self.terminology_version.fhir_uri
+
+    @property
+    def version(self):
+        # For legacy compatibility
+        return self.terminology_version.version
 
     @property
     def terminology_version_uuid(self):
