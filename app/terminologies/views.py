@@ -133,10 +133,32 @@ def create_code_payload_to_code_list(payload) -> list:
     """
     codes = []
     for code_data in payload:
+        code = code_data.get("code")
+        display = code_data.get("display")
+        terminology_version_uuid = code_data.get("terminology_version_uuid")
+
+        if code is None:
+            raise BadRequestWithCode(
+                code="Terminology.create_code.code_required",
+                description="A code must be provided for each code to create"
+            )
+
+        if display is None:
+            raise BadRequestWithCode(
+                code="Terminology.create_code.display_required",
+                description="A display must be provided for each code to create"
+            )
+
+        if terminology_version_uuid is None:
+            raise BadRequestWithCode(
+                code="Terminology.create_code.terminology_version_uuid_required",
+                description="A terminology_version_uuid must be provided for each code to create"
+            )
+
         code = Code(
-            code=code_data.get("code"),
-            display=code_data.get("display"),
-            terminology_version_uuid=code_data.get("terminology_version_uuid"),
+            code=code,
+            display=display,
+            terminology_version_uuid=terminology_version_uuid,
             additional_data=code_data.get("additional_data"),
             system=None,
             version=None,

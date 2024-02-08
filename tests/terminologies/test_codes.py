@@ -528,9 +528,7 @@ class CodeAPITests(unittest.TestCase):
         )
         result = response.json
         assert response.status == "400 BAD REQUEST"
-        assert result.get("code") == "Terminology.create_code.database_error"
-        error_text = """(psycopg2.errors.NotNullViolation) null value in column "code" of relation "code" violates not-null constraint"""
-        assert error_text in result.get("message")
+        assert result.get("code") == "Terminology.create_code.code_required"
 
     def test_create_code_no_code_display(self):
         """
@@ -557,9 +555,7 @@ class CodeAPITests(unittest.TestCase):
         )
         result = response.json
         assert response.status == "400 BAD REQUEST"
-        assert result.get("code") == "Terminology.create_code.database_error"
-        error_text = """(psycopg2.errors.NotNullViolation) null value in column "display" of relation "code" violates not-null constraint"""
-        assert error_text in result.get("message")
+        assert result.get("code") == "Terminology.create_code.display_required"
 
     def test_load_codes_multiple_terminologies(self):
         """
@@ -617,12 +613,14 @@ class CodeAPITests(unittest.TestCase):
                 }
             }
         ]
-        codes = create_code_payload_to_code_list(payload)
+
         with raises(BadRequestWithCode) as e:
+            codes = create_code_payload_to_code_list(payload)
             terminology.load_new_codes_to_terminology(codes)
+
         result = e.value
-        assert result.code == "Terminology.load_new_codes.no_terminology"
-        assert result.description == "Cannot load codes when no terminology is input"
+        assert result.code == "Terminology.create_code.terminology_version_uuid_required"
+        assert result.description == "A terminology_version_uuid must be provided for each code to create"
 
     def test_load_codes_class_conflict(self):
         """
