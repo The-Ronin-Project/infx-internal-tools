@@ -1,5 +1,4 @@
 from celery import Celery
-from celery.schedules import crontab
 from uuid import UUID
 from decouple import config
 
@@ -8,7 +7,7 @@ import app.value_sets.models
 import app.concept_maps.models
 import app.concept_maps.versioning_models
 import app.models.mapping_request_service
-import app.proofs_of_concept.data_migration
+import app.util.data_migration
 import app.util.concept_map_duplicate_codes
 from app.database import get_db
 
@@ -169,7 +168,7 @@ def back_fill_concept_maps_to_simplifier():
 
 @celery_app.task
 def perform_database_migration(table_name, granularity, segment_start, segment_count):
-    app.proofs_of_concept.data_migration.migrate_database_table(
+    app.util.data_migration.migrate_database_table(
         table_name=table_name,
         granularity=granularity,
         segment_start=segment_start,
@@ -179,7 +178,7 @@ def perform_database_migration(table_name, granularity, segment_start, segment_c
 
 @celery_app.task
 def perform_database_cleanup(table_name, granularity, segment_start, segment_count):
-    app.proofs_of_concept.data_migration.cleanup_database_table(
+    app.util.data_migration.cleanup_database_table(
         table_name=table_name,
         granularity=granularity,
         segment_start=segment_start,
@@ -205,8 +204,17 @@ def perform_mapping_request_check(page_size, requested_organization_id, requeste
 
 
 @celery_app.task
-def perform_load_condition_duplicates():
-    app.util.concept_map_duplicate_codes.load_condition_duplicates()
+def perform_load_condition_duplicates(
+        concept_map_uuid,
+        concept_map_version_uuid,
+        output_table_name,
+        output_pkey_distinct_constraint_name):
+    app.util.concept_map_duplicate_codes.load_duplicate_for_v4_concept_map(
+        concept_map_uuid,
+        concept_map_version_uuid,
+        output_table_name,
+        output_pkey_distinct_constraint_name,
+    )
 
 
 @celery_app.task
