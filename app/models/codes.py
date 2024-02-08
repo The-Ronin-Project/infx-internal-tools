@@ -108,7 +108,7 @@ class Code:
         display,
         additional_data=None,
         terminology_version: 'app.terminologies.models.Terminology' = None,
-        terminology_version_uuid=None,  # todo: eliminate and access from terminology_version.uuid instead
+        terminology_version_uuid=None,
         depends_on_property: str = None,
         depends_on_system: str = None,
         depends_on_value: str = None,
