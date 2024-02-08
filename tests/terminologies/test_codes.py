@@ -1,6 +1,7 @@
 import datetime
 import json
 import unittest
+import uuid
 
 from pytest import raises
 from sqlalchemy import text
@@ -25,6 +26,34 @@ class CodeClassTests(unittest.TestCase):
             "TESTING": True,
         })
         self.client = self.app.test_client()
+
+        example_codeable_concept_json = """
+                                    {
+                                      "coding": [
+                                        {
+                                          "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                                          "code": "D59.9"
+                                        },
+                                        {
+                                          "system": "http://snomed.info/sct",
+                                          "code": "4854004"
+                                        }
+                                      ],
+                                      "text": "Anemia, hemolytic, acquired (CMS/HCC)"
+                                    }
+                                    """
+        self.example_codeable_concept = app.models.codes.FHIRCodeableConcept.deserialize(example_codeable_concept_json)
+
+        self.example_terminology = app.terminologies.models.Terminology(
+            uuid=uuid.uuid4(),
+            terminology="sample_terminology",
+            version="1",
+            effective_start="2024-01-01",
+            effective_end="2024-01-10",
+            fhir_uri="http://fake_url",
+            fhir_terminology=False,
+            is_standard=False,
+        )
 
     def tearDown(self) -> None:
         # this executes after each test function, but does not stop lower-level functions from committing db changes
@@ -60,6 +89,101 @@ class CodeClassTests(unittest.TestCase):
         self.assertEqual("Anemia, hemolytic, acquired (CMS/HCC)", codeable_concept.display)
         self.assertEqual("http://projectronin.io/fhir/CodeSystem/mock/codeableConcepts", codeable_concept.system)
         self.assertEqual("1", codeable_concept.version)
+
+    def test_valid_initialization_with_simple_code(self):
+        code = "Test Code"
+        display = "Test Display"
+        simple_code = app.models.codes.Code(
+            code_schema=app.models.codes.RoninCodeSchemas.code,
+            code=code,
+            display=display,
+            system=None,
+            version=None,
+            terminology_version=self.example_terminology
+        )
+        self.assertEqual(code, simple_code.code)
+        self.assertEqual(display, simple_code.display)
+
+    def test_valid_initialization_with_codeable_concept(self):
+        codeable_concept = app.models.codes.Code(
+            code_schema=app.models.codes.RoninCodeSchemas.codeable_concept,
+            system=None,
+            version=None,
+            code=None,
+            display=None,
+            code_object=self.example_codeable_concept,
+            terminology_version=self.example_terminology,
+            from_custom_terminology=True,
+            custom_terminology_code_uuid=uuid.uuid4()
+        )
+
+        self.assertEqual("Anemia, hemolytic, acquired (CMS/HCC)", codeable_concept.display)
+        self.assertEqual(2, len(codeable_concept.code_object.coding))
+
+    def test_invalid_initialization_terminology_version_wrong_type(self):
+        with self.assertRaises(ValueError):
+            app.models.codes.Code(
+                code_schema=app.models.codes.RoninCodeSchemas.codeable_concept,
+                system=None,
+                version=None,
+                code=None,
+                display=None,
+                code_object=self.example_codeable_concept,
+                terminology_version=uuid.uuid4(),
+                from_custom_terminology=True,
+                custom_terminology_code_uuid=uuid.uuid4()
+            )
+
+    def test_invalid_initialization_without_code_and_display_for_simple_code_schema(self):
+        with self.assertRaises(TypeError):
+            # TypeError raised when required positional params not included
+            app.models.codes.Code(
+                code_schema=app.models.codes.RoninCodeSchemas.code, code_object=None)
+
+        with self.assertRaises(ValueError):
+            app.models.codes.Code(
+                code=None,
+                display=None,
+                system=None,
+                version=None,
+                code_schema=app.models.codes.RoninCodeSchemas.code,
+                code_object=None)
+
+    def test_invalid_initialization_with_code_and_display_for_codeable_concept_schema(self):
+        with self.assertRaises(ValueError):
+            app.models.codes.Code(
+                code_schema=app.models.codes.RoninCodeSchemas.codeable_concept,
+                code="123",
+                display="Test Display",
+                system=None,
+                version=None,
+                code_object=self.example_codeable_concept
+            )
+
+    def test_invalid_initialization_missing_code_object_for_codeable_concept_schema(self):
+        with self.assertRaises(ValueError):
+            app.models.codes.Code(
+                code_schema=app.models.codes.RoninCodeSchemas.codeable_concept,
+                system=None,
+                version=None,
+                code=None,
+                display=None,
+                code_object=None
+            )
+
+    def test_invalid_initialization_from_custom_terminology_without_uuid(self):
+        with self.assertRaises(ValueError):
+
+            codeable_concept = app.models.codes.Code(
+                code_schema=app.models.codes.RoninCodeSchemas.codeable_concept,
+                system=None,
+                version=None,
+                code=None,
+                display=None,
+                code_object=self.example_codeable_concept,
+                terminology_version=self.example_terminology,
+                from_custom_terminology=True
+            )
 
 
 class CodeAPITests(unittest.TestCase):

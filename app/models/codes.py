@@ -382,17 +382,21 @@ class Code:
 
         code_schema_raw = code_data.code_schema
         code_schema = RoninCodeSchemas(code_schema_raw)
+        code = None
+        display = None
 
         if code_schema == RoninCodeSchemas.codeable_concept:
             code_object = FHIRCodeableConcept.deserialize(code_data.code_jsonb)
-        else:
+        elif code_schema == RoninCodeSchemas.code:
             code_object = None
+            code = code_data.code_simple
+            display = code_data.display
 
         return cls(
             system=code_data.system_url,
             version=code_data.version,
-            code=code_data.code_simple,
-            display=code_data.display,
+            code=code,
+            display=display,
             terminology_version_uuid=code_data.terminology_version_uuid,
             custom_terminology_code_uuid=code_uuid,
             from_custom_terminology=True,
