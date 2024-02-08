@@ -136,18 +136,8 @@ def create_code_payload_to_code_list(payload) -> list:
         code = code_data.get("code")
         display = code_data.get("display")
         terminology_version_uuid = code_data.get("terminology_version_uuid")
-
-        if code is None:
-            raise BadRequestWithCode(
-                code="Terminology.create_code.code_required",
-                description="A code must be provided for each code to create"
-            )
-
-        if display is None:
-            raise BadRequestWithCode(
-                code="Terminology.create_code.display_required",
-                description="A display must be provided for each code to create"
-            )
+        raw_code_schema = code_data.get("code_schema")
+        raw_code_object = code_data.get("code_object")
 
         if terminology_version_uuid is None:
             raise BadRequestWithCode(
@@ -155,15 +145,80 @@ def create_code_payload_to_code_list(payload) -> list:
                 description="A terminology_version_uuid must be provided for each code to create"
             )
 
-        code = Code(
-            code=code,
-            display=display,
-            terminology_version_uuid=terminology_version_uuid,
-            additional_data=code_data.get("additional_data"),
-            system=None,
-            version=None,
-        )
-        codes.append(code)
+        code_schema = None
+        if raw_code_schema is None:
+            code_schema = RoninCodeSchemas.code
+        else:
+            code_schema = RoninCodeSchemas(raw_code_schema)
+
+        if code_schema == RoninCodeSchemas.code:
+
+            if code is None:
+                raise BadRequestWithCode(
+                    code="Terminology.create_code.code_required",
+                    description="A code must be provided for each code to create"
+                )
+
+            if display is None:
+                raise BadRequestWithCode(
+                    code="Terminology.create_code.display_required",
+                    description="A display must be provided for each code to create"
+                )
+
+            if raw_code_object is not None:
+                raise BadRequestWithCode(
+                    code="Terminology.create_code.code_object_provided_for_raw_code",
+                    description="When the code_schema is 'code' (which is default), code_object must not be provided"
+                )
+
+            code = Code(
+                code=code,
+                display=display,
+                terminology_version_uuid=terminology_version_uuid,
+                additional_data=code_data.get("additional_data"),
+                system=None,
+                version=None,
+            )
+            codes.append(code)
+
+        elif code_schema == RoninCodeSchemas.codeable_concept:
+            if code or display:
+                raise BadRequestWithCode(
+                    code="Terminology.create_code.codeable_concept_code_and_display_not_allowed",
+                    description="For a codeable concept, code and display must not be provided"
+                )
+
+            if raw_code_object is None:
+                raise BadRequestWithCode(
+                    code="Terminology.create_code.code_object_provided_for_raw_code",
+                    description="For a codeable concept, a code object must be provided"
+                )
+
+            try:
+                code_object = FHIRCodeableConcept.deserialize(raw_code_object)
+            except:  # todo: fix this
+                raise BadRequestWithCode(
+                    code="Terminology.create_code.codeable_concept.deserialize_failure",
+                    description="Unable to deserialize provided code_object"
+                )
+            code = Code(
+                code_schema=code_schema,
+                code_object=code_object,
+                terminology_version_uuid=terminology_version_uuid,
+                additional_data=code_data.get('additional_data'),
+                system=None,
+                version=None,
+                code=None,
+                display=None
+            )
+            codes.append(code)
+
+        else:
+            if raw_code_object is not None:
+                raise BadRequestWithCode(
+                    code="Terminology.create_code.invalid_code_schema",
+                    description="Only 'code' (which is default) and 'http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept' are supported for code_schema on this endpoint"
+                )
     return codes
 
 
