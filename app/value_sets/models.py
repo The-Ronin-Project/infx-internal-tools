@@ -3574,7 +3574,7 @@ class ExplicitlyIncludedCode:
                 {
                     "uuid": self.uuid,
                     "vs_version_uuid": self.value_set_version.uuid,
-                    "code_uuid": self.code.uuid,
+                    "code_uuid": self.code.custom_terminology_code_uuid,
                     "review_status": self.review_status,
                 },
             )
@@ -3587,7 +3587,7 @@ class ExplicitlyIncludedCode:
             "uuid": self.uuid,
             "review_status": self.review_status,
             "value_set_version_uuid": self.value_set_version.uuid,
-            "code": self.code.serialize(with_system_name=True),
+            "code": self.code.serialize(),
         }
 
     @classmethod
@@ -3613,11 +3613,10 @@ class ExplicitlyIncludedCode:
         for x in code_data:
             code = Code(
                 system=x.system_uri,
-                system_name=x.system_name,
                 version=x.version,
                 code=x.code,
                 display=x.display,
-                uuid=x.code_uuid,
+                custom_terminology_code_uuid=x.code_uuid,
             )
 
             explicity_code_inclusion = cls(

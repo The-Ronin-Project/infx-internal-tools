@@ -175,7 +175,8 @@ class Terminology:
                     version=self.version,
                     code=item.code,
                     display=item.display,
-                    uuid=item.uuid,
+                    fhir_terminology_code_uuid=item.uuid,
+                    from_fhir_terminology=True,
                     system_name=self.terminology,
                     terminology_version=self,
                 )
