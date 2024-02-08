@@ -1212,7 +1212,7 @@ class MappingRequestService:
             display=processed_display,
             system=None,
             version=None,
-            terminology_version_uuid=terminology_to_load_to.uuid,
+            terminology_version=terminology_to_load_to,
             custom_terminology_code_uuid=new_code_uuid,
         )
 

@@ -132,6 +132,12 @@ class Code:
 
         self.additional_data = additional_data
 
+        if terminology_version is None and terminology_version_uuid is None:
+            raise BadRequestWithCode(
+                code="app.models.codes.Code.terminology_version_required",
+                description="Either terminology_version or terminology_version_uuid must be provided to instantiate Code"
+            )
+
         if terminology_version is not None:
             if type(terminology_version) != app.terminologies.models.Terminology:
                 raise BadRequestWithCode(
@@ -142,7 +148,8 @@ class Code:
         else:
             self.terminology_version = None
 
-        self.terminology_version_uuid: uuid.UUID = terminology_version_uuid
+        if terminology_version_uuid is not None:
+            self.terminology_version = app.terminologies.models.Terminology.load_from_cache(terminology_version_uuid)
 
         # `custom_terminology_code_uuid` is a specifically assigned uuid for this code
         # it serves as the primary key in the custom_terminologies.code table
@@ -211,6 +218,10 @@ class Code:
         if self.code_schema == RoninCodeSchemas.codeable_concept:
             return self.code_object.text
         return self._display
+
+    @property
+    def terminology_version_uuid(self):
+        return self.terminology_version.uuid
 
     def __repr__(self, include_additional_data=True):
         """

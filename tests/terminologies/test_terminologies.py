@@ -77,7 +77,7 @@ class TerminologyTests(unittest.TestCase):
             display="Test 1",
             system=None,
             version=None,
-            terminology_version_uuid=duplicate_insert_test_terminology.uuid,
+            terminology_version=duplicate_insert_test_terminology,
             custom_terminology_code_uuid=uuid.uuid4(),
         )  # This code is known to already exist in this terminology
 
@@ -87,7 +87,7 @@ class TerminologyTests(unittest.TestCase):
             display=f"Test {current_unix_timestamp}",
             system=None,
             version=None,
-            terminology_version_uuid=duplicate_insert_test_terminology.uuid,
+            terminology_version=duplicate_insert_test_terminology,
             custom_terminology_code_uuid=uuid.uuid4(),
         )  # Use a unit timestamp to form a new code
 
