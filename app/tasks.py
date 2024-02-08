@@ -9,6 +9,7 @@ import app.concept_maps.models
 import app.concept_maps.versioning_models
 import app.models.mapping_request_service
 import app.proofs_of_concept.data_migration
+import app.util.concept_map_duplicate_codes
 from app.database import get_db
 
 
@@ -201,6 +202,7 @@ def perform_mapping_request_check(page_size, requested_organization_id, requeste
         requested_resource_type=requested_resource_type,
         requested_issue_type=None
     )
+
 
 @celery_app.task
 def perform_load_condition_duplicates():
