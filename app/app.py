@@ -475,8 +475,17 @@ def create_app(script_info=None):
 
     @app.route("/concept_map_v4_duplicate_check", methods=["POST"])
     def perform_concept_map_v4_duplicate_check():
-        tasks.perform_load_condition_duplicates.delay()
-        return f"Task Created"
+        concept_map_uuid = request.json.get('concept_map_uuid')
+        concept_map_version_uuid = request.json.get('concept_map_version_uuid')
+        output_table_name = request.json.get('output_table_name')
+        output_pkey_distinct_constraint_name = request.json.get('output_pkey_distinct_constraint_name')
+        tasks.perform_load_condition_duplicates.delay(
+            concept_map_uuid,
+            concept_map_version_uuid,
+            output_table_name,
+            output_pkey_distinct_constraint_name
+        )
+        return f"Task Created: concept_map_uuid={concept_map_uuid} concept_map_version_uuid={concept_map_version_uuid}, output_table_name={output_table_name}, output_pkey_distinct_constraint_name={output_pkey_distinct_constraint_name}"
 
     return app
 

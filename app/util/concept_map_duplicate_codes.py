@@ -9,7 +9,6 @@ import pytest
 import uuid
 from sqlalchemy import text
 
-from app.concept_maps.models import ConceptMap, ConceptMapVersion
 from app.database import get_db
 from app.helpers.format_helper import prepare_dynamic_value_for_sql_issue
 from app.helpers.message_helper import message_exception_summary
@@ -17,11 +16,22 @@ from app.helpers.message_helper import message_exception_summary
 LOGGER = logging.getLogger()
 
 
-def load_condition_duplicates():
+def load_duplicate_for_v4_concept_map(
+        concept_map_uuid: str = None,
+        concept_map_version_uuid: str = None,
+        output_table_name: str = None,
+        output_pkey_distinct_constraint_name: str = None,
+):
     """
-    It's not clear we will need variants of this function in future. Recommend keeping it in the repo while we have v4.
-    Creates an output table custom_terminologies.test_code_condition_duplicates with values you can use to
-    de-duplicate entries in the concept_map.concept_relationship table by uuid, as follows:
+    Recommend keeping it in the repo as long as there are consuming teams using v4.
+    For a list of UUIDs for v4 concept maps that Informatics is keeping, see 2 enum lists:
+    app.util.data_migration.ConceptMapsForContent and app.util.data_migration.ConceptMapsForSystems
+
+    You may run this from the Postman call named "Concept Map v4 Duplicate Check" - set the 4 inputs in the payload.
+    For examples of inputs see the command line function load_v4_concept_map_duplicates() or current Postman payload.
+
+    Creates an output table with a schema like custom_terminologies.test_code_condition_duplicates with values you can
+    use to de-duplicate entries in the concept_map.concept_relationship table by uuid, as follows:
 
     0. The goal count displays at top of this LOGGER output. After the output table has all those rows in it, you can
     1. do a select * on the output table in pgAdmin and be sure to sort by normalized_code_value (one of the columns)
@@ -34,11 +44,54 @@ def load_condition_duplicates():
              Interops cannot see Spark entries as duplicates so those should be ignored for this purpose.
     8. With items 6 and 7 both in mind, choose 1 uuid in concept_map.concept_relationship to keep. Discard the other.
 
-    Note: Before you can use this function, you need to edit it to
-    set the destination table name, concept map UUID and concept map version UUID in count_query and select_query.
-    It would improve the function if these were arguments, so that manual editing was not necessary.
-    However, it's not clear we will need variants of this function. Recommend keeping it in the repo while we have v4.
+    Note: An SQL expression for an example output table, custom_terminologies.test_code_condition_duplicates, is below:
+    ```
+    -- Table: custom_terminologies.test_code_condition_duplicates
+
+    -- DROP TABLE IF EXISTS custom_terminologies.test_code_condition_duplicates;
+
+    CREATE TABLE IF NOT EXISTS custom_terminologies.test_code_condition_duplicates
+    (
+        custom_terminologies_code_uuid uuid NOT NULL,
+        normalized_code_value character varying COLLATE pg_catalog."default",
+        display character varying COLLATE pg_catalog."default",
+        depends_on_property character varying COLLATE pg_catalog."default",
+        depends_on_value character varying COLLATE pg_catalog."default",
+        cm_title character varying COLLATE pg_catalog."default",
+        cm_uuid uuid,
+        cm_version character varying COLLATE pg_catalog."default",
+        code character varying COLLATE pg_catalog."default",
+        target_concept_code character varying COLLATE pg_catalog."default",
+        target_concept_display character varying COLLATE pg_catalog."default",
+        target_concept_system character varying COLLATE pg_catalog."default",
+        concept_map_concept_relationship_uuid uuid,
+        CONSTRAINT test_code_condition_duplicates_pkey PRIMARY KEY (custom_terminologies_code_uuid)
+    )
+
+    TABLESPACE pg_default;
+
+    ALTER TABLE IF EXISTS custom_terminologies.test_code_condition_duplicates
+        OWNER to roninadmin;
+    ```
     """
+    # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
+    # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded
+    LOGGER.setLevel("WARNING")
+
+    # Create a console handler and add it to the logger if it doesn't have any handlers
+    if not LOGGER.hasHandlers():
+        ch = logging.StreamHandler()
+        LOGGER.addHandler(ch)
+
+    if (
+        concept_map_uuid is None or
+        concept_map_version_uuid is None or
+        output_pkey_distinct_constraint_name is None or
+        output_table_name is None
+    ):
+        LOGGER.warning("NO INPUT.")
+        return
+
     # If DB loses connection mid-way, query the table for the highest UUID captured so far and set first_uuid to that.
     first_uuid = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
@@ -59,10 +112,10 @@ def load_condition_duplicates():
         join concept_maps.source_concept sc on sc.concept_map_version_uuid = cmv.uuid
         join concept_maps.concept_relationship cr on cr.source_concept_uuid = sc.uuid
         join custom_terminologies.code ctc on sc.custom_terminology_uuid = ctc.uuid
-        where cm.uuid = 'c504f599-6bf6-4865-8220-bb199e3d1809'
-        and cmv.uuid = '955e518a-8030-4fe5-9e61-e0a6e6fda1b3'
+        where cm.uuid = :concept_map_uuid
+        and cmv.uuid = :concept_map_version_uuid
         """
-    select_query = """
+    select_query = f"""
         select cm.title, cm.uuid as cm_uuid, cmv.version as cm_version, 
         ctc.code, ctc.display, ctc.uuid as custom_terminologies_code_uuid, 
         cr.uuid as concept_map_concept_relationship_uuid,
@@ -72,34 +125,28 @@ def load_condition_duplicates():
         join concept_maps.source_concept sc on sc.concept_map_version_uuid = cmv.uuid
         join concept_maps.concept_relationship cr on cr.source_concept_uuid = sc.uuid
         join custom_terminologies.code ctc on sc.custom_terminology_uuid = ctc.uuid
-        where cm.uuid = 'c504f599-6bf6-4865-8220-bb199e3d1809'
-        and cmv.uuid = '955e518a-8030-4fe5-9e61-e0a6e6fda1b3'
-        and ctc.uuid > :start_uuid
+        where cm.uuid = :concept_map_uuid
+        and cmv.uuid = :concept_map_version_uuid
+        and ctc.uuid >= :start_uuid
         and ctc.uuid not in (
-            select custom_terminologies_code_uuid from custom_terminologies.test_code_condition_duplicates
+            select custom_terminologies_code_uuid from {output_table_name}
         )
         order by ctc.uuid
         limit :page_size
         """
     from app.database import get_db
-
-    # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
-    # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded
-    LOGGER.setLevel("WARNING")
-
-    # Create a console handler and add it to the logger if it doesn't have any handlers
-    if not LOGGER.hasHandlers():
-        ch = logging.StreamHandler()
-        LOGGER.addHandler(ch)
-
     conn = get_db()
     try:
         count1 = conn.execute(
-            text(count_query)
+            text(count_query),
+            {
+                "concept_map_uuid": concept_map_uuid,
+                "concept_map_version_uuid": concept_map_version_uuid,
+            }
         ).first()
         LOGGER.warning(f"Rows in v4 table: {count1}")
         count2 = conn.execute(
-            text("select count(*) from custom_terminologies.test_code_condition_duplicates")
+            text(f"select count(*) from {output_table_name}")
         ).first()
         LOGGER.warning(f"Output rows completed before this run: {count2}")
     except Exception as e:
@@ -111,6 +158,8 @@ def load_condition_duplicates():
             result = conn.execute(
                 text(select_query),
                 {
+                    "concept_map_uuid": concept_map_uuid,
+                    "concept_map_version_uuid": concept_map_version_uuid,
                     "start_uuid": last_previous_uuid,
                     "page_size": page_size
                 }
@@ -136,8 +185,8 @@ def load_condition_duplicates():
                         rejected
                     ) = prepare_dynamic_value_for_sql_issue(row.code, row.display)
 
-                    insert_query = """
-                    insert into custom_terminologies.test_code_condition_duplicates
+                    insert_query = f"""
+                    insert into {output_table_name}
                     (
                         custom_terminologies_code_uuid,
                         code,
@@ -190,7 +239,7 @@ def load_condition_duplicates():
                         conn.rollback()
                         error_summary = message_exception_summary(e)
                         # already processed this row? if so, just skip it
-                        if "test_code_condition_duplicates_pkey" not in error_summary:
+                        if output_pkey_distinct_constraint_name not in error_summary:
                             raise e
 
                     # for row in result
@@ -207,6 +256,19 @@ def load_condition_duplicates():
     LOGGER.warning("DONE.")
 
 
+def load_v4_concept_map_duplicates():
+    """
+    Command line endpoint for running v4 duplicate check locally. Does not support command line inputs at this time.
+    """
+    # todo: For this command line endpoint, add a line for each table to be checked.
+    load_duplicate_for_v4_concept_map(
+        "c504f599-6bf6-4865-8220-bb199e3d1809",
+        "955e518a-8030-4fe5-9e61-e0a6e6fda1b3",
+        "custom_terminologies.test_code_condition_duplicates_task",
+        "test_code_condition_duplicates_task_pkey"
+    )
+
+
 if __name__=="__main__":
-    load_condition_duplicates()
+    load_v4_concept_map_duplicates()
 
