@@ -473,6 +473,11 @@ def create_app(script_info=None):
         tasks.perform_mapping_request_check.delay(page_size, requested_organization_id, requested_resource_type)
         return f"Task Created: page_size={page_size} requested_organization_id={requested_organization_id}, requested_resource_type={requested_resource_type}"
 
+    @app.route("/concept_map_v4_duplicate_check", methods=["POST"])
+    def perform_concept_map_v4_duplicate_check():
+        tasks.perform_load_condition_duplicates.delay()
+        return f"Task Created"
+
     return app
 
 

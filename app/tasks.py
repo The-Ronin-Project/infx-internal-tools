@@ -202,6 +202,10 @@ def perform_mapping_request_check(page_size, requested_organization_id, requeste
         requested_issue_type=None
     )
 
+@celery_app.task
+def perform_load_condition_duplicates():
+    app.util.concept_map_duplicate_codes.load_condition_duplicates()
+
 
 @celery_app.task
 def hello_world():
