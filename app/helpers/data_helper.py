@@ -6,6 +6,11 @@ from collections import OrderedDict
 
 from app.errors import BadDataError
 
+OID_URL_CONVERSIONS = {
+    "urn:oid:2.16.840.1.113883.6.3": "http://hl7.org/fhir/sid/icd-10",  # ICD-10
+    "urn:oid:2.16.840.1.113883.6.90": "http://hl7.org/fhir/sid/icd-10-cm",  # ICD-10 CM
+    "urn:oid:2.16.840.1.113883.6.96": "http://snomed.info/sct",  # SNOMED CT International Edition
+}
 
 def load_json_string(input_json_string: str):
     """
@@ -204,6 +209,10 @@ def normalize_source_codeable_concept(input_object):
                 del coding["id"]
             if coding.get("userSelected") is not None:
                 del coding["userSelected"]
+            system = coding.get("system")
+            if system is not None:
+                if system in OID_URL_CONVERSIONS:
+                    coding["system"] = OID_URL_CONVERSIONS[system]
         input_object["coding"] = order_object_list(coding_list)
     return input_object
 
