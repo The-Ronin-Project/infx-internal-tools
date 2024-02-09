@@ -1,3 +1,5 @@
+from typing import Optional
+
 from app.helpers.data_helper import hash_string, serialize_json_object, load_json_string, cleanup_json_string, \
     normalize_source_codeable_concept
 from app.helpers.message_helper import message_exception_classname
@@ -6,10 +8,10 @@ from app.helpers.message_helper import message_exception_classname
 def generate_code_id(
     code_string: str,
     display: str,
-    depends_on_value_string: str,
-    depends_on_property: str,
-    depends_on_system: str,
-    depends_on_display: str
+    depends_on_value_string: Optional[str] = None,
+    depends_on_property: Optional[str] = None,
+    depends_on_system: Optional[str] = None,
+    depends_on_display: Optional[str] = None
 ) -> str:
     # todo: move to the Mapping Service repo when it exists
     """

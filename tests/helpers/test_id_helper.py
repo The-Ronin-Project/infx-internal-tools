@@ -52,19 +52,11 @@ class IdHelperTests(unittest.TestCase):
         code_id_example_1 = generate_code_id(
             code_string=example_1,
             display=display_1,
-            depends_on_property="",
-            depends_on_display="",
-            depends_on_system="",
-            depends_on_value_string=""
         )
 
         code_id_example_2 = generate_code_id(
             code_string=example_2,
             display=display_2,
-            depends_on_property="",
-            depends_on_display="",
-            depends_on_system="",
-            depends_on_value_string=""
         )
 
         self.assertEqual(code_id_example_1, code_id_example_2)
@@ -81,19 +73,11 @@ class IdHelperTests(unittest.TestCase):
         code_id_example_1 = generate_code_id(
             code_string=example_1,
             display=display_1,
-            depends_on_property="",
-            depends_on_display="",
-            depends_on_system="",
-            depends_on_value_string=""
         )
 
         code_id_example_2 = generate_code_id(
             code_string=example_2,
             display=display_2,
-            depends_on_property="",
-            depends_on_display="",
-            depends_on_system="",
-            depends_on_value_string=""
         )
 
         self.assertEqual(code_id_example_1, code_id_example_2)

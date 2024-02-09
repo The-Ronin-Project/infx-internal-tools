@@ -189,10 +189,6 @@ def load_duplicate_for_v4_concept_map(
                     normalized_code_id = generate_code_id(  # Not supporting depends on data at the moment
                         code_string=code_string,
                         display=json.loads(code_string).get("text", ""),
-                        depends_on_property="",
-                        depends_on_display="",
-                        depends_on_system="",
-                        depends_on_value_string=""
                     )
 
                     insert_query = f"""
