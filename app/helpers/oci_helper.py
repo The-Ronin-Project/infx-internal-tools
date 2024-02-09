@@ -159,6 +159,9 @@ def save_to_object_store(
     @param content: content to publish, with metadata to support publication
     @return: completion message and concept map
     """
+    if is_oci_write_disabled():
+        LOGGER.info("OCI write operations are disabled.")
+        return False
     LOGGER.info(f"Attempting to save {path} to OCI bucket")
     put_object_response = object_storage_client.put_object(
         namespace,
@@ -241,6 +244,9 @@ def put_data_to_oci(
     @param content_type: for example "json" or "csv" - the content type and file name extension
     @return:
     """
+    if is_oci_write_disabled():
+        LOGGER.info("OCI write operations are disabled.")
+        return False
     object_storage_client = oci_authentication()
     bucket_name = config("OCI_CLI_BUCKET")
     namespace = object_storage_client.get_namespace().data
@@ -251,3 +257,10 @@ def put_data_to_oci(
         path,
         content
     )
+
+
+def is_oci_write_disabled():
+    """
+    For use while testing to disable writing to OCI
+    """
+    return config("DISABLE_OCI_WRITE", default="False", cast=bool)
