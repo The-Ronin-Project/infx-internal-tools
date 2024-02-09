@@ -25,6 +25,7 @@ from app.errors import (
 )
 from app.helpers.oci_helper import set_up_object_store
 from app.helpers.simplifier_helper import publish_to_simplifier
+from app.helpers.data_helper import OID_URL_CONVERSIONS
 from app.models.codes import Code
 import app.models.data_ingestion_registry
 from app.terminologies.models import (
@@ -34,11 +35,6 @@ from app.terminologies.models import (
 )
 import app.tasks
 
-OID_URL_CONVERSIONS = {
-    "urn:oid:2.16.840.1.113883.6.3": "http://hl7.org/fhir/sid/icd-10",  # ICD-10
-    "urn:oid:2.16.840.1.113883.6.90": "http://hl7.org/fhir/sid/icd-10-cm",  # ICD-10 CM
-    "urn:oid:2.16.840.1.113883.6.96": "http://snomed.info/sct",  # SNOMED CT International Edition
-}
 
 # Function for checking if we have a coding array string that used to be JSON
 def is_coding_array(source_code_string):

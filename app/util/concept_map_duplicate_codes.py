@@ -12,6 +12,7 @@ from sqlalchemy import text
 from app.database import get_db
 from app.helpers.format_helper import prepare_dynamic_value_for_sql_issue
 from app.helpers.message_helper import message_exception_summary
+from app.helpers.id_helper import generate_code_id
 
 LOGGER = logging.getLogger()
 
@@ -185,12 +186,18 @@ def load_duplicate_for_v4_concept_map(
                         rejected
                     ) = prepare_dynamic_value_for_sql_issue(row.code, row.display)
 
+                    normalized_code_id = generate_code_id(  # Not supporting depends on data at the moment
+                        code_string=code_string,
+                        display=json.loads(code_string).get("text", ""),
+                    )
+
                     insert_query = f"""
                     insert into {output_table_name}
                     (
                         custom_terminologies_code_uuid,
                         code,
                         normalized_code_value,
+                        normalized_code_id,
                         display,
                         cm_title,
                         cm_uuid,
@@ -205,6 +212,7 @@ def load_duplicate_for_v4_concept_map(
                         :custom_terminologies_code_uuid,
                         :code,
                         :normalized_code_value,
+                        :normalized_code_id,
                         :display,
                         :cm_title,
                         :cm_uuid,
@@ -222,6 +230,7 @@ def load_duplicate_for_v4_concept_map(
                             {
                                 "custom_terminologies_code_uuid": row.custom_terminologies_code_uuid,
                                 "normalized_code_value": code_string,
+                                "normalized_code_id": normalized_code_id,
                                 "code": row.code,
                                 "display": row.display,
                                 "cm_title": row.title,
@@ -264,8 +273,8 @@ def load_v4_concept_map_duplicates():
     load_duplicate_for_v4_concept_map(
         "c504f599-6bf6-4865-8220-bb199e3d1809",
         "955e518a-8030-4fe5-9e61-e0a6e6fda1b3",
-        "custom_terminologies.test_code_condition_duplicates_task",
-        "test_code_condition_duplicates_task_pkey"
+        "custom_terminologies.test_code_condition_duplicates_w_id",
+        "test_code_condition_duplicates_w_id_pkey"
     )
 
 
