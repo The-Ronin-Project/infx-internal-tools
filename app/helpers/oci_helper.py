@@ -79,7 +79,7 @@ def set_up_object_store(content, initial_path, folder, content_type):
     """
     if is_oci_write_disabled():
         LOGGER.info("OCI write operations are disabled.")
-        return False
+        return {"message": "Not pushed to bucket, OCI write operations are disabled"}
 
     object_storage_client = oci_authentication()
 
@@ -165,7 +165,7 @@ def save_to_object_store(
     """
     if is_oci_write_disabled():
         LOGGER.info("OCI write operations are disabled.")
-        return False
+        return {"message": "Not pushed to bucket, OCI write operations are disabled"}
     LOGGER.info(f"Attempting to save {path} to OCI bucket")
     put_object_response = object_storage_client.put_object(
         namespace,
@@ -250,7 +250,7 @@ def put_data_to_oci(
     """
     if is_oci_write_disabled():
         LOGGER.info("OCI write operations are disabled.")
-        return False
+        return {"message": "Not pushed to bucket, OCI write operations are disabled"}
     object_storage_client = oci_authentication()
     bucket_name = config("OCI_CLI_BUCKET")
     namespace = object_storage_client.get_namespace().data
