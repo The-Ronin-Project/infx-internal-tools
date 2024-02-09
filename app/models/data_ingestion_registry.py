@@ -14,6 +14,10 @@ import app.value_sets.models
 from app.database import get_db
 from app.errors import BadRequestWithCode
 from app.helpers.oci_helper import oci_authentication
+from app.helpers.oci_helper import is_oci_write_disabled
+
+import logging
+LOGGER = logging.getLogger()
 
 
 @dataclass
@@ -226,6 +230,9 @@ class DataNormalizationRegistry:
         @param registry: data to publish
         @param filepath: Caller sets the full path and filename in OCI.
         """
+        if is_oci_write_disabled():
+            LOGGER.info("OCI write operations are disabled.")
+            return False
         object_storage_client = oci_authentication()
         bucket_name = config("OCI_CLI_BUCKET")
         namespace = object_storage_client.get_namespace().data

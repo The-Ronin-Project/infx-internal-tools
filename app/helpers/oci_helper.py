@@ -77,6 +77,10 @@ def set_up_object_store(content, initial_path, folder, content_type):
     @param content_type: "csv" or "json" - filename extension
     @return: content if saved to oci, otherwise messages returned based on findings
     """
+    if is_oci_write_disabled():
+        LOGGER.info("OCI write operations are disabled.")
+        return False
+
     object_storage_client = oci_authentication()
 
     isValueSet: bool = (content.get("resourceType") == "ValueSet")
