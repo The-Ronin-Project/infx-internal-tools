@@ -58,7 +58,7 @@ def load_duplicate_for_v4_concept_map(
     and ctc.terminology_version_uuid='45022739-00fb-4fbc-a2f2-82614cde6f68');
     ```
 
-    Use after a Content review to select which duplicates in concept_map.concept_relationship table are "best" to keep:
+    Use with a Content review to select which duplicates in concept_map.concept_relationship table are "best" to keep:
 
     0. The goal count displays at top of this LOGGER output. After the output table has all those rows in it, you can
     1. do a select * on the output table in pgAdmin and be sure to sort by normalized_code_value (one of the columns)
