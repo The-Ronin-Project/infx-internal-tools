@@ -1,10 +1,7 @@
-import logging
 from io import StringIO
 from uuid import uuid4
 
 import structlog
-from decouple import config
-from deprecated.classic import deprecated
 from flask import Flask, jsonify, request, Response
 from werkzeug.exceptions import HTTPException
 
@@ -15,12 +12,12 @@ import app.tasks as tasks
 import app.terminologies.views as terminology_views
 import app.value_sets.views as value_set_views
 from app.database import close_db, rollback_and_close_connection_if_open
-from app.errors import BadRequestWithCode, NotFoundException, BadSourceCodeError, DuplicateTargetError, OCIException
+from app.errors import BadSourceCodeError, DuplicateTargetError, OCIException
 from app.helpers.structlog import config_structlog, common_handler
 from app.models.data_ingestion_registry import (
     DataNormalizationRegistry,
 )
-from app.models.mapping_request_service import get_outstanding_errors
+from app.util.mapping_request_service import get_outstanding_errors
 from app.models.patient_edu import *
 from app.models.surveys import *
 from app.models.teams import *

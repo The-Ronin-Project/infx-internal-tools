@@ -6,7 +6,7 @@ from app.errors import NotFoundException
 import app.value_sets.models
 import app.concept_maps.models
 import app.concept_maps.versioning_models
-import app.models.mapping_request_service
+import app.util.mapping_request_service
 import app.util.data_migration
 import app.util.concept_map_duplicate_codes
 from app.database import get_db
@@ -67,7 +67,7 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     conn = get_db()
 
     # Get the number of outstanding codes, this is stored and used after a new version has been created
-    outstanding_code_count = app.models.mapping_request_service.get_count_of_outstanding_codes(concept_map_uuid)
+    outstanding_code_count = app.util.mapping_request_service.get_count_of_outstanding_codes(concept_map_uuid)
 
     # Step 6: look up source and target value set
     
@@ -194,7 +194,7 @@ def perform_mapping_request_check(page_size, requested_organization_id, requeste
     @param requested_organization_id: Confluence page called "Organization Ids" under "Living Architecture" lists them
     @param requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
     """
-    app.models.mapping_request_service.temporary_mapping_request_service(
+    app.util.mapping_request_service.temporary_mapping_request_service(
         commit_by_batch=True,
         page_size=page_size,
         requested_organization_id=requested_organization_id,

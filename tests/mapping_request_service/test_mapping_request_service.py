@@ -3,16 +3,16 @@ import uuid
 import unittest
 import json
 from app.helpers.file_helper import resources_folder
-import app.models.mapping_request_service
+import app.util.mapping_request_service
 
 
 class MappingRequestServiceTests(unittest.TestCase):
     def test_extract_issue_location(self):
         mapping_request_service = (
-            app.models.mapping_request_service.MappingRequestService()
+            app.util.mapping_request_service.MappingRequestService()
         )
 
-        sample_issue_2 = app.models.mapping_request_service.ErrorServiceIssue(
+        sample_issue_2 = app.util.mapping_request_service.ErrorServiceIssue(
             create_dt_tm=datetime.datetime.now(),
             description="Tenant source value '260385009' has no target defined in any Observation.valueCodeableConcept concept map for tenant 'mdaoc'",
             id=uuid.UUID("ea088929-a8ba-472c-af6b-e6df5cd0c248"),
@@ -34,9 +34,9 @@ class MappingRequestServiceTests(unittest.TestCase):
 
     def test_extract_coding_attributes_observation_smart_data(self):
         mapping_request_service = (
-            app.models.mapping_request_service.MappingRequestService()
+            app.util.mapping_request_service.MappingRequestService()
         )
-        resource_type = app.models.mapping_request_service.ResourceType.OBSERVATION
+        resource_type = app.util.mapping_request_service.ResourceType.OBSERVATION
 
         with open(resources_folder(__file__, "ObservationWithSmartData.json")) as raw_resource_file:
             raw_resource = json.load(raw_resource_file)
@@ -72,9 +72,9 @@ class MappingRequestServiceTests(unittest.TestCase):
 
     def test_extract_coding_attributes_observation_empty_component(self):
         mapping_request_service = (
-            app.models.mapping_request_service.MappingRequestService()
+            app.util.mapping_request_service.MappingRequestService()
         )
-        resource_type = app.models.mapping_request_service.ResourceType.OBSERVATION
+        resource_type = app.util.mapping_request_service.ResourceType.OBSERVATION
 
         raw_resource = {
             "resourceType": "Observation",
@@ -100,9 +100,9 @@ class MappingRequestServiceTests(unittest.TestCase):
 
     def test_extract_coding_attributes_observation_missing_component(self):
         mapping_request_service = (
-            app.models.mapping_request_service.MappingRequestService()
+            app.util.mapping_request_service.MappingRequestService()
         )
-        resource_type = app.models.mapping_request_service.ResourceType.OBSERVATION
+        resource_type = app.util.mapping_request_service.ResourceType.OBSERVATION
 
         raw_resource = {
             "resourceType": "Observation",

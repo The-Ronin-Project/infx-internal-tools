@@ -1,11 +1,10 @@
 import datetime
-import pytest
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 import json
 
 from app.models.models import Organization
 import app.concept_maps.models
-import app.models.mapping_request_service
+import app.util.mapping_request_service
 import app.models.data_ingestion_registry
 import app.tasks
 from app.database import get_db
@@ -96,7 +95,7 @@ def test_incremental_load_condition_integration(mock_request):
 
     # Loop through both Condition and Observation resource types
     for resource_type in (
-        app.models.mapping_request_service.ResourceType.CONDITION,
+            app.util.mapping_request_service.ResourceType.CONDITION,
     ):
         #
         # PART 1: Loading from Errors to Custom Terminology
@@ -129,7 +128,7 @@ def test_incremental_load_condition_integration(mock_request):
         mock_lookup_concept_map.return_value = test_incremental_load_concept_map_version
 
         codes_by_org_and_resource_type = (
-            app.models.mapping_request_service.load_concepts_from_errors()
+            app.util.mapping_request_service.load_concepts_from_errors()
         )
         conn.commit()
 
@@ -141,7 +140,7 @@ def test_incremental_load_condition_integration(mock_request):
     )
 
     mock_registry_for_report = (
-        app.models.mapping_request_service.DataNormalizationRegistry()
+        app.util.mapping_request_service.DataNormalizationRegistry()
     )
     mock_registry_for_report.entries = [
         app.models.data_ingestion_registry.DNRegistryEntry(
@@ -155,7 +154,7 @@ def test_incremental_load_condition_integration(mock_request):
             concept_map=incremental_load_concept_map,
         )
     ]
-    outstanding_errors = app.models.mapping_request_service.get_outstanding_errors(
+    outstanding_errors = app.util.mapping_request_service.get_outstanding_errors(
         registry=mock_registry_for_report
     )
     number_of_outstanding_codes = outstanding_errors[0].get(
@@ -178,7 +177,7 @@ def test_incremental_load_observation_integration(mock_request):
     conn = get_db()
     organization = Organization(id="ronin")
 
-    resource_type = app.models.mapping_request_service.ResourceType.OBSERVATION
+    resource_type = app.util.mapping_request_service.ResourceType.OBSERVATION
 
     #
     # PART 1: Loading from Errors to Custom Terminology
@@ -211,7 +210,7 @@ def test_incremental_load_observation_integration(mock_request):
         mock_lookup_concept_map.return_value = test_incremental_load_concept_map_version
 
         codes_by_org_and_resource_type = (
-            app.models.mapping_request_service.load_concepts_from_errors()
+            app.util.mapping_request_service.load_concepts_from_errors()
         )
         conn.commit()
 
@@ -223,7 +222,7 @@ def test_incremental_load_observation_integration(mock_request):
     )
 
     mock_registry_for_report = (
-        app.models.mapping_request_service.DataNormalizationRegistry()
+        app.util.mapping_request_service.DataNormalizationRegistry()
     )
     mock_registry_for_report.entries = [
         app.models.data_ingestion_registry.DNRegistryEntry(
@@ -237,7 +236,7 @@ def test_incremental_load_observation_integration(mock_request):
             concept_map=incremental_load_concept_map,
         )
     ]
-    outstanding_errors = app.models.mapping_request_service.get_outstanding_errors(
+    outstanding_errors = app.util.mapping_request_service.get_outstanding_errors(
         registry=mock_registry_for_report
     )
     number_of_outstanding_codes = outstanding_errors[0].get(
@@ -275,7 +274,7 @@ def test_outstanding_condition_error_concepts_report():
         )
     ]
 
-    report = app.models.mapping_request_service.get_outstanding_errors(
+    report = app.util.mapping_request_service.get_outstanding_errors(
         registry=mock_registry
     )
     print(report)
@@ -299,7 +298,7 @@ def test_outstanding_observation_error_concepts_report():
         )
     ]
 
-    report = app.models.mapping_request_service.get_outstanding_errors(
+    report = app.util.mapping_request_service.get_outstanding_errors(
         registry=mock_registry
     )
     print(report)
