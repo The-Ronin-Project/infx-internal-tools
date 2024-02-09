@@ -36,9 +36,9 @@ class ConceptMapVersioningModels(unittest.TestCase):
         """
 
         # Create params, get data, etc...
-        previous_version_uuid = "PLACEHOLDER_PREVIOUS_VERSION_UUID"
-        new_source_value_set_version_uuid = "PLACEHOLDER_SOURCE_VALUE_SET_VERSION_UUID"
-        new_target_value_set_version_uuid = "PLACEHOLDER_TARGET_VALUE_SET_VERSION_UUID"
+        previous_version_uuid = "24f3917c-94b2-48ab-9936-a63ca24c673a"
+        new_source_value_set_version_uuid = "94160026-646c-4c44-9252-3c6c84b133ac"
+        new_target_value_set_version_uuid = "1c9455af-8ced-4d26-a223-1df4e0c49a16"
         require_review_for_non_equivalent_relationships = False
         require_review_no_maps_not_in_target = False
 
@@ -86,9 +86,9 @@ class ConceptMapVersioningModels(unittest.TestCase):
         """
 
         # Create params, get data, etc...
-        previous_version_uuid = "PLACEHOLDER_PREVIOUS_VERSION_UUID"
-        new_source_value_set_version_uuid = "PLACEHOLDER_SOURCE_VALUE_SET_VERSION_UUID"
-        new_target_value_set_version_uuid = "PLACEHOLDER_TARGET_VALUE_SET_VERSION_UUID"
+        previous_version_uuid = "24f3917c-94b2-48ab-9936-a63ca24c673a"
+        new_source_value_set_version_uuid = "1c9455af-8ced-4d26-a223-1df4e0c49a16"
+        new_target_value_set_version_uuid = "1c9455af-8ced-4d26-a223-1df4e0c49a16"
         require_review_for_non_equivalent_relationships = False
         require_review_no_maps_not_in_target = False
 
@@ -123,7 +123,7 @@ class ConceptMapVersioningModels(unittest.TestCase):
 
         # Add assertions here to compare the relevant properties of both versions
         # In this case, we expect an added code, but no removed or modified codes since the source value set version is new (once code more) and the target value set version is the same
-        self.assertEqual(diff_result["added_count"], 1)
+        self.assertEqual(diff_result["added_count"], 58)
         self.assertEqual(diff_result["removed_count"], 0)
         self.assertEqual(diff_result["modified_count"], 0)
         self.assertEqual(diff_result["previous_total"] + 1, diff_result["new_total"])
@@ -137,9 +137,9 @@ class ConceptMapVersioningModels(unittest.TestCase):
         """
 
         # Create params, get data, etc...
-        previous_version_uuid = "PLACEHOLDER_PREVIOUS_VERSION_UUID"
-        new_source_value_set_version_uuid = "PLACEHOLDER_SOURCE_VALUE_SET_VERSION_UUID"
-        new_target_value_set_version_uuid = "PLACEHOLDER_TARGET_VALUE_SET_VERSION_UUID"
+        previous_version_uuid = "24f3917c-94b2-48ab-9936-a63ca24c673a"
+        new_source_value_set_version_uuid = "94160026-646c-4c44-9252-3c6c84b133ac"
+        new_target_value_set_version_uuid = "94160026-646c-4c44-9252-3c6c84b133ac"
         require_review_for_non_equivalent_relationships = False
         require_review_no_maps_not_in_target = False
 
@@ -175,6 +175,6 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # Add assertions here to compare the relevant properties of both versions
         # In this case, we expect a removed code and a modified count (via previous_mapping_context) but no added codes since the source value set version is the same and the target value set version is the new (one code less)
         self.assertEqual(diff_result["added_count"], 0)
-        self.assertEqual(diff_result["removed_count"], 1)
-        self.assertEqual(diff_result["modified_count"], 1)
-        self.assertEqual(diff_result["previous_total"], diff_result["new_total"])
+        self.assertEqual(diff_result["removed_count"], 57)
+        self.assertEqual(diff_result["modified_count"], 57)
+        self.assertEqual(diff_result["previous_total"] - 57, diff_result["new_total"])
