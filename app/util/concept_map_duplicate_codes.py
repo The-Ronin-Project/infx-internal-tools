@@ -31,8 +31,34 @@ def load_duplicate_for_v4_concept_map(
     You may run this from the Postman call named "Concept Map v4 Duplicate Check" - set the 4 inputs in the payload.
     For examples of inputs see the command line function load_v4_concept_map_duplicates() or current Postman payload.
 
-    Creates an output table with a schema like custom_terminologies.test_code_condition_duplicates with values you can
-    use to de-duplicate entries in the concept_map.concept_relationship table by uuid, as follows:
+    Creates an output table with a schema like custom_terminologies.test_code_condition_duplicates with values you can:
+
+    Use (with management approval for urgency) to apply technical resolution to duplicates without reference to
+    mapping targets, which may be different and of different quality. The query for performing this looks like:
+    ```
+    delete from custom_terminologies.code
+    where uuid in
+    (WITH DuplicateValues AS (
+        SELECT
+            normalized_code_id,
+            custom_terminologies_code_uuid, -- Assuming this is a unique identifier
+            ROW_NUMBER() OVER (PARTITION BY normalized_code_id ORDER BY custom_terminologies_code_uuid) as rn
+        FROM custom_terminologies.test_code_condition_duplicates_w_id
+    ), DuplicatesToDelete AS (
+        SELECT t.*
+        FROM custom_terminologies.test_code_condition_duplicates_w_id t
+        INNER JOIN DuplicateValues d
+        ON t.normalized_code_id = d.normalized_code_id
+        AND t.custom_terminologies_code_uuid = d.custom_terminologies_code_uuid -- Joining on the unique identifier
+        WHERE d.rn > 1)
+    SELECT ctc.uuid from custom_terminologies.code ctc
+    join DuplicatesToDelete dtd
+    on ctc.code=dtd.code
+    and ctc.display=dtd.display
+    and ctc.terminology_version_uuid='45022739-00fb-4fbc-a2f2-82614cde6f68');
+    ```
+
+    Use with a Content review to select which duplicates in concept_map.concept_relationship table are "best" to keep:
 
     0. The goal count displays at top of this LOGGER output. After the output table has all those rows in it, you can
     1. do a select * on the output table in pgAdmin and be sure to sort by normalized_code_value (one of the columns)
