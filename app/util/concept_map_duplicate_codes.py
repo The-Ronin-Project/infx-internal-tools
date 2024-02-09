@@ -55,6 +55,7 @@ def load_duplicate_for_v4_concept_map(
     (
         custom_terminologies_code_uuid uuid NOT NULL,
         normalized_code_value character varying COLLATE pg_catalog."default",
+        normalized_code_id character varying COLLATE pg_catalog."default",
         display character varying COLLATE pg_catalog."default",
         depends_on_property character varying COLLATE pg_catalog."default",
         depends_on_value character varying COLLATE pg_catalog."default",
