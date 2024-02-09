@@ -232,7 +232,7 @@ class DataNormalizationRegistry:
         """
         if is_oci_write_disabled():
             LOGGER.info("OCI write operations are disabled.")
-            return False
+            return {"message": "Not pushed to bucket, OCI write operations are disabled"}
         object_storage_client = oci_authentication()
         bucket_name = config("OCI_CLI_BUCKET")
         namespace = object_storage_client.get_namespace().data
