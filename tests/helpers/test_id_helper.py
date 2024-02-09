@@ -38,7 +38,7 @@ class IdHelperTests(unittest.TestCase):
             depends_on_system="",
             depends_on_value_string=""
         )
-        print(code_id)
+        self.assertEqual(code_id, "7fea4ba7f959ee712cc4528ebd053a9c")
 
     def test_hash_method_order_independent_coding(self):
         example_1 = '{"coding": [{"code": "R31.9", "system": "urn:oid:2.16.840.1.113883.6.90"}, {"code": "95567008", "system": "urn:oid:2.16.840.1.113883.6.96"}], "text": "Traumatic hematuria"}'
