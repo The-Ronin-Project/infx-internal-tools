@@ -58,7 +58,7 @@ def identify_duplicate_code_values_in_v4(
     Use with Content review to select which duplicates in concept_map.concept_relationship table are best to keep:
     1. Systems: all rows where deduplication_hash is unique across the code table - these rows can be auto-marked KEEP
     2. Systems: where deduplication_hash has duplicates - those with IDENTICAL TARGETS ONLY - 1 can be auto-marked KEEP
-    3. Systems: use the concept_map_duplicate_codes.py function to use this deduplication_hash
+    3. Systems: run the concept_map_duplicate_codes.py function to make a table of duplicates info for Content
     4. select * ... order by deduplication_hash, download the output as a CSV file, open in Excel, save as XLSX format
     5. Content: in Excel,marks the 1 KEEP decision for each deduplication_hash group in that empty "fix_action" column
     6. Content: save Excel changes, return XLSX file to Systems, Systems will run the following script(s):
