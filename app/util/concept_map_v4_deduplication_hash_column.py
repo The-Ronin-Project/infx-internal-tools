@@ -46,7 +46,7 @@ def identify_duplicate_code_values_in_v4(
     3. A "to do" comment in mapping_request_service.py has been added, in the spot where this call must be made.
     4. Once the duplication from data ingestion is stopped by step 3, de-duplication of existing concept maps can occur.
        concept_map_duplicate_codes.py can output a review spreadsheet for Content (see another PR) to enable a review
-       of this spreadsheet and subsequent DATA CORRECTION by Systems as described below at "REVIEW".
+       of this spreadsheet and subsequent, automated data correction by Systems, as described below, starting at REVIEW.
     5. A "diff" for ConceptMap artifacts is possible when you order the rows in serialized JSON output artifacts by
        deduplication_hash values: a technique designed for v5 but easily used in v4 when we have the deduplication hash.
        The rationale for the order will not be human-visible, but "diffs" will be TRIVIAL TO SEE once rows are ordered
@@ -195,7 +195,7 @@ def identify_duplicate_code_values_in_v4(
                         code_string,
                         rejected
                     ) = prepare_dynamic_value_for_sql_issue(row.code, row.display)
-                    deduplication_hash = generate_code_id(  # Not supporting depends on data at the moment
+                    deduplication_hash = generate_code_id(
                         code_string=code_string,
                         display=json.loads(code_string).get("text", ""),
                     )
