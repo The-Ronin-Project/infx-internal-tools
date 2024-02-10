@@ -38,17 +38,19 @@ def identify_duplicate_code_values_in_v4(
     only after the new deduplication_hash column is populated in custom_terminologies.code, impossible without it
 
     APPROACH:
-    1. Add deduplication_hash column to code table. Populate the column using this function.
+    1. Add deduplication_hash column to the v4 custom_terminologies.code table. Populate the column using this function.
     2. The Mapping Request Service calculates the deduplication_hash on each incoming code/display pair and if that
       deduplication_hash is already present in custom_terminologies.code AND ALREADY MAPPED in the relevant concept map
       for that resource_type, element, tenant, value set, terminology, and code, no work request for Content is created.
-      (Only the deduplication_hash gives us the data to check this rapidly from within Mapping Request Service.
-    3. A "to do" comment in mapping_request_service.py has been added where this would need to be placed (see open PR)
-    4. Once the duplication from data ingestion is stopped, de-duplication of existing concept maps could occur.
-       concept_map_duplicate_codes.py can output a review spreadsheet for Content (see open PR) to enable these steps:
-    5. A "diff" for ConceptMap artifacts is possible when you order the serialization of rows by deduplication_hash.
-       The rationale for the order will not be human-visible but "diffs" will be TRIVIAL TO SEE once rows are ordered
-       in the before and after. We need not build a Retool page immediately: any text "diff" program can operate on JSON
+      (Only the deduplication_hash gives us the data to check this rapidly from within Mapping Request Service).
+    3. A "to do" comment in mapping_request_service.py has been added, in the spot where this call must be made.
+    4. Once the duplication from data ingestion is stopped by step 3, de-duplication of existing concept maps can occur.
+       concept_map_duplicate_codes.py can output a review spreadsheet for Content (see another PR) to enable a review
+       of this spreadsheet and subsequent DATA CORRECTION by Systems as described below at "REVIEW".
+    5. A "diff" for ConceptMap artifacts is possible when you order the rows in serialized JSON output artifacts by
+       deduplication_hash values: a technique designed for v5 but easily used in v4 when we have the deduplication hash.
+       The rationale for the order will not be human-visible, but "diffs" will be TRIVIAL TO SEE once rows are ordered
+       in the before-and-after. We need not build a Retool page immediately: any text "diff" program can operate on JSON
        files as text. Note: we would want to re-output ConceptMap artifacts once before de-dup, and once after, to show
        what is removed by de-dup of mappings. From there, we are only interested in changes from needed work by Content.
 
@@ -57,12 +59,12 @@ def identify_duplicate_code_values_in_v4(
     1. Systems: all rows where deduplication_hash is unique across the code table - these rows can be auto-marked KEEP
     2. Systems: where deduplication_hash has duplicates - those with IDENTICAL TARGETS ONLY - 1 can be auto-marked KEEP
     3. Systems: use the concept_map_duplicate_codes.py function to use this deduplication_hash
-    3. select * ... order by deduplication_hash, download the output as a CSV file, open in Excel, save as XLSX format
-    4. Content: in Excel,marks the 1 KEEP decision for each deduplication_hash group in that empty "fix_action" column
-    5. Content: save Excel changes, return XLSX file to Systems, Systems will run the following script(s):
-    6. Load Systems decisions in to the "fix_action" column appropriately. Anything not marked KEEP will be discarded.
-    7. Systems: where a deduplication_hash with duplicates has a row marked to KEEP - delete all other rows in group
-    8. Systems: where a deduplication_hash with duplicates has no row marked to KEEP - see Content, or keep 1 at random
+    4. select * ... order by deduplication_hash, download the output as a CSV file, open in Excel, save as XLSX format
+    5. Content: in Excel,marks the 1 KEEP decision for each deduplication_hash group in that empty "fix_action" column
+    6. Content: save Excel changes, return XLSX file to Systems, Systems will run the following script(s):
+    7. Load Systems decisions in to the "fix_action" column appropriately. Anything not marked KEEP will be discarded.
+    8. Systems: where a deduplication_hash with duplicates has a row marked to KEEP - delete all other rows in group
+    9. Systems: where a deduplication_hash with duplicates has no row marked to KEEP - see Content, or keep 1 at random
     """
     # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
     # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded
@@ -140,7 +142,7 @@ def identify_duplicate_code_values_in_v4(
         (
             :deduplication_hash
         )
-        where uuid = :code_uuid
+        where uuid = :custom_terminologies_code_uuid
         """
 
     from app.database import get_db
@@ -203,7 +205,7 @@ def identify_duplicate_code_values_in_v4(
                             text(insert_query),
                             {
                                 "deduplication_hash": deduplication_hash,
-                                "code_uuid": row.custom_terminologies_code_uuid
+                                "custom_terminologies_code_uuid": row.custom_terminologies_code_uuid
                             }
                         )
                         conn.commit()
