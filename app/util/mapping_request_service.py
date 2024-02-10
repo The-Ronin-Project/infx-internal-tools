@@ -1230,11 +1230,15 @@ class MappingRequestService:
             version=None,
             terminology_version_uuid=terminology_to_load_to.uuid,
             custom_terminology_code_uuid=new_code_uuid,
+            depends_on_system=depends_on.depends_on_system if depends_on else None,
+            depends_on_display=depends_on.depends_on_display if depends_on else None,
+            depends_on_property=depends_on.depends_on_property if depends_on else None,
+            depends_on_value=depends_on.depends_on_value if depends_on else None
         )
 
         # Save the data linking this code back to its original error
         # After deduplication, we will look them up and insert them to the table
-        for issue_id in error_service_resource.issue_ids:
+        for issue_id in error_service_resource.issue_ids:  # !!! todo: This should only iterate over filtered issue_ids
             cls.error_code_link_data.append(
                 {
                     "issue_uuid": issue_id,
@@ -1904,5 +1908,75 @@ def temporary_mapping_request_service(
         conn.close()
 
 
+def single_issue_process(resource_id: str):
+    service = MappingRequestService()
+    MappingRequestService.input_issue_type = IssueType.NOV_CONMAP_LOOKUP.value
+    MappingRequestService.environment = config("DATA_NORMALIZATION_ENVIRONMENT")
+
+    # Get the single resource
+    service.token = get_token(
+        AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE
+    )
+    headers: dict[str, str] = {
+        "Authorization": f"Bearer {service.token}",
+        "content-type": "application/json",
+    }
+    url = f"{DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}/resources/{resource_id}"
+    response = httpx.get(url, headers=headers)
+
+    if response.status_code != 200:
+        logging.error(f"Could not fetch resource with ID: {resource_id}")
+        logging.error(f"{response.status_code}, {response.content}")
+        return
+
+    resource_data = response.json()
+
+    organization = Organization(resource_data["organization_id"])
+    MappingRequestService.organization_id = organization.id
+
+    service.error_service_resource_id = resource_data.get("id")  # Why is there a class variable for this?
+
+    # Create an ErrorServiceResource object with the values we have received.
+    error_resource = ErrorServiceResource(
+        id=uuid.UUID(resource_id),
+        organization=organization,
+        resource_type=ResourceType(resource_data["resource_type"]),
+        resource=resource_data.get("resource"),
+        status=resource_data.get("status"),
+        severity=resource_data.get("severity"),
+        create_dt_tm=convert_string_to_datetime_or_none(
+            resource_data.get("create_dt_tm")
+        ),
+        update_dt_tm=convert_string_to_datetime_or_none(
+            resource_data.get("update_dt_tm")
+        ),
+        reprocess_dt_tm=convert_string_to_datetime_or_none(
+            resource_data.get("reprocess_dt_tm")
+        ),
+        reprocessed_by=resource_data.get("reprocessed_by"),
+        token=service.token,
+    )
+    error_resources = [error_resource]
+
+    # Run the error service for a single resource
+    #
+
+    # Load issues for all error service resources
+    service.load_issues_for_error_resources(error_resources)
+
+    # Walk through all the error service resources
+    for error_service_resource in error_resources:
+        service.process_error_resource(
+            error_service_resource
+        )
+
+    MappingRequestService.commit_by_batch = True
+    # Deduplicate and process all issues found
+    service.deduplicate_and_process_all_issues()
+
+
 if __name__ == "__main__":
-    temporary_mapping_request_service()
+    temporary_mapping_request_service(requested_organization_id="mdaoc", requested_resource_type="Observation")
+
+    # To run a single resource, uncomment below
+    # single_issue_process("cc82e5a7-4e8d-40aa-8047-28e84578425c")
