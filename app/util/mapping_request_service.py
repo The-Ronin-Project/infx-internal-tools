@@ -1230,6 +1230,10 @@ class MappingRequestService:
             version=None,
             terminology_version_uuid=terminology_to_load_to.uuid,
             custom_terminology_code_uuid=new_code_uuid,
+            depends_on_system=depends_on.depends_on_system if depends_on else None,
+            depends_on_display=depends_on.depends_on_display if depends_on else None,
+            depends_on_property=depends_on.depends_on_property if depends_on else None,
+            depends_on_value=depends_on.depends_on_value if depends_on else None
         )
 
         # Save the data linking this code back to its original error
