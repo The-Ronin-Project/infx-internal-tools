@@ -30,9 +30,9 @@ def identify_duplicate_code_values_in_v4(
     STOP THIS CYCLE:
     1. Mapping Request Service has no way to screen incoming codes for what will eventually turn out to be duplicates
     2. Mapping Request Service sends all mapping work requests to the Content team
-    3. Content works all requests, in good faith,
-    4. some (many over time) become duplicate mappings, possibly mapped to the same target, possibly not
-    5 there is no "diff" possible for v4 ConceptMaps (will be in v5) so no one sees this happened until ingestion fails
+    3. Content works all requests, in good faith
+    4. Some (many over time) become duplicate mappings, possibly mapped to the same target, possibly not
+    5. There is no "diff" possible for v4 ConceptMaps (will be in v5) so no one sees this happened until ingestion fails
 
     EASY TO FIX:
     only after the new deduplication_hash column is populated in custom_terminologies.code, impossible without it
