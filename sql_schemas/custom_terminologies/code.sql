@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS custom_terminologies.code
     depends_on_value character varying COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
     depends_on_display character varying COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
     created_date timestamp with time zone DEFAULT now(),
-    code_id character varying COLLATE pg_catalog."default" NOT NULL,
+    deduplication_hash character varying COLLATE pg_catalog."default" NOT NULL,
     CONSTRAINT code_pkey PRIMARY KEY (uuid),
     CONSTRAINT code_display_depends_version UNIQUE (code, display, terminology_version_uuid, depends_on_property, depends_on_system, depends_on_value, depends_on_display)
         INCLUDE(code, display, terminology_version_uuid, depends_on_property, depends_on_system, depends_on_value, depends_on_display),
@@ -41,9 +41,9 @@ CREATE INDEX IF NOT EXISTS ct_terminology_version_uuid
 
 -- DROP INDEX IF EXISTS custom_terminologies.ct_code_id;
 
-CREATE INDEX IF NOT EXISTS ct_code_id
+CREATE INDEX IF NOT EXISTS ct_deduplication_hash
     ON custom_terminologies.code USING btree
-    (code_id ASC NULLS LAST)
+    (deduplication_hash ASC NULLS LAST)
     TABLESPACE pg_default;
 
 -- Trigger: ct_log
