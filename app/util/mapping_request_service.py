@@ -1979,4 +1979,4 @@ if __name__ == "__main__":
     temporary_mapping_request_service(requested_organization_id="mdaoc", requested_resource_type="Observation")
 
     # To run a single resource, uncomment below
-    # single_issue_process("cc82e5a7-4e8d-40aa-8047-28e84578425c")
+    # single_issue_process(resource_id="cc82e5a7-4e8d-40aa-8047-28e84578425c")
