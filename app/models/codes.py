@@ -48,6 +48,22 @@ class FHIRCoding:
             version=json_input.get('version')
         )
 
+    def serialize(self):
+        """
+        Only return attributes which are not None so that whatever we de-serialized
+        gets serialized the same way without adding other attributes.
+        """
+        serialized = {}
+        if self.code:
+            serialized["code"] = self.code
+        if self.display:
+            serialized["display"] = self.display
+        if self.system:
+            serialized["system"] = self.system
+        if self.version:
+            serialized["version"] = self.version
+        return serialized
+
 
 @dataclass
 class FHIRCodeableConcept:
@@ -75,6 +91,14 @@ class FHIRCodeableConcept:
             coding=[FHIRCoding.deserialize(coding) for coding in coding_array],
             text=fhir_text
         )
+
+    def serialize(self):
+        serialized = {}
+        if self.text:
+            serialized["text"] = self.text
+        if self.coding:
+            serialized["coding"] = [coding.serialize() for coding in self.coding]
+        return serialized
 
 
 class Code:
@@ -119,6 +143,7 @@ class Code:
         code_schema: RoninCodeSchemas = RoninCodeSchemas.code,
         from_custom_terminology: Optional[bool] = None,
         from_fhir_terminology: Optional[bool] = None,
+        saved_to_db: bool = False,
     ):
         """
         Initializes a new instance of the Code class with specified attributes for managing codes
@@ -190,16 +215,6 @@ class Code:
         self.code_object = code_object
         self.code_schema = code_schema
 
-        # Validate inputs for custom terminology requirements
-        if (from_custom_terminology is None or from_custom_terminology is False) and code_schema == RoninCodeSchemas.codeable_concept:
-            raise ValueError("Codeable concepts are only supported in custom terminologies")
-        if from_custom_terminology and custom_terminology_code_uuid is None:
-            raise ValueError("If initializing from a custom terminology, the custom_terminology_uuid must be provided")
-
-        # Designate as custom terminology code or FHIR terminology code if applicable
-        self.from_custom_terminology = from_custom_terminology
-        self.from_fhir_terminology = from_fhir_terminology
-
         # `custom_terminology_code_uuid` is a specifically assigned uuid for this code
         # it serves as the primary key in the custom_terminologies.code table
         # Only applies if this Code represents something loaded from the custom_terminologies.code table
@@ -232,6 +247,23 @@ class Code:
         if terminology_version_uuid is not None:
             self.terminology_version = app.terminologies.models.Terminology.load_from_cache(terminology_version_uuid)
 
+        if from_custom_terminology is None and from_fhir_terminology is None:
+            # If these weren't explicitly provided, we can still look them up
+            from_custom_terminology = self.terminology_version.is_custom_terminology
+            from_fhir_terminology = self.terminology_version.fhir_terminology
+
+        # Designate as custom terminology code or FHIR terminology code if applicable
+        self.from_custom_terminology = from_custom_terminology
+        self.from_fhir_terminology = from_fhir_terminology
+
+        # Validate inputs for custom terminology requirements
+        if code_schema == RoninCodeSchemas.codeable_concept:
+            if self.from_custom_terminology is None or self.from_custom_terminology is False:
+                raise ValueError("Codeable concepts are only supported in custom terminologies")
+        if from_custom_terminology and custom_terminology_code_uuid is None:
+            raise ValueError(
+                "If initializing from a custom terminology, the custom_terminology_uuid must be provided")
+
         # Other set up
         self.additional_data = additional_data
 
@@ -239,6 +271,51 @@ class Code:
         self.depends_on_system = depends_on_system
         self.depends_on_value = depends_on_value
         self.depends_on_display = depends_on_display
+
+        self._saved_to_db = saved_to_db
+
+    @classmethod
+    def new_code(
+            cls,
+            code,
+            display,
+            system: Optional[str] = None,
+            version: Optional[str] = None,
+            additional_data=None,
+            terminology_version: 'app.terminologies.models.Terminology' = None,
+            terminology_version_uuid=None,
+            depends_on_property: str = None,
+            depends_on_system: str = None,
+            depends_on_value: str = None,
+            depends_on_display: str = None,
+        ):
+        """
+        Instantiates a new code (not loaded from database).
+        Be sure to call save() on it.
+        """
+        return cls(
+            system=system,
+            version=version,
+            code=code,
+            display=display,
+            additional_data=additional_data,
+            terminology_version=terminology_version,
+            terminology_version_uuid=terminology_version_uuid,
+            depends_on_property=depends_on_property,
+            depends_on_system=depends_on_system,
+            depends_on_value=depends_on_value,
+            depends_on_display=depends_on_display,
+            custom_terminology_code_uuid=uuid.uuid4(),
+            code_schema=RoninCodeSchemas.code,
+            from_custom_terminology=True,
+            from_fhir_terminology=False,
+            saved_to_db=False,
+        )
+
+    @classmethod
+    def new_codeable_concept(cls):
+        # todo: implement constructor
+        pass
 
     @property
     def uuid(self):
@@ -348,6 +425,108 @@ class Code:
             )
         return False
 
+    # @classmethod
+    # def save_many(
+    #         cls,
+    #         codes: List['app.models.codes.Code'],
+    #         on_conflict_do_nothing: bool = False
+    # ):
+    #     # todo: implement as future optimization
+    #     pass
+
+    def generate_deduplicate_hash(self):
+        return ""  # todo: obviously, change this for the hash
+
+    def save(self,
+             on_conflict_do_nothing: bool = False
+             ):
+        conn = get_db()
+        query_text = """
+                        INSERT INTO custom_terminologies.code_poc 
+                        (
+                            uuid, 
+                            old_uuid,
+                            display, 
+                            code_schema,
+                            code_simple,
+                            code_jsonb,
+                            code_id,
+                            terminology_version_uuid, 
+                            additional_data, 
+                            depends_on_display, 
+                            depends_on_property, 
+                            depends_on_system,
+                            depends_on_value_schema,
+                            depends_on_value_simple,
+                            depends_on_value_jsonb 
+                        )
+                        VALUES 
+                        (
+                            :uuid,
+                            :old_uuid, 
+                            :display, 
+                            :code_schema,
+                            :code_simple,
+                            :code_jsonb,
+                            :code_id,
+                            :terminology_version_uuid, 
+                            :additional_data, 
+                            :depends_on_display, 
+                            :depends_on_property, 
+                            :depends_on_system,
+                            :depends_on_value_schema,
+                            :depends_on_value_simple,
+                            :depends_on_value_jsonb 
+                        )
+                    """
+        if on_conflict_do_nothing:
+            query_text += """ on conflict do nothing
+                                """
+        query_text += """ returning uuid"""
+
+        code_schema_to_save = None
+        code_simple = None
+        code_jsonb = None
+
+        if self.code_schema == RoninCodeSchemas.code:
+            code_schema_to_save = RoninCodeSchemas.code.value
+            code_simple = self.code
+        elif self.code_schema == RoninCodeSchemas.codeable_concept:
+            code_schema_to_save = RoninCodeSchemas.codeable_concept.value
+            code_jsonb = json.dumps(self.code.serialize())
+        else:
+            raise NotImplementedError("Save only implemented for code and codeable concepts")
+
+        try:
+            custom_terminology_code_uuid = self.custom_terminology_code_uuid if self.custom_terminology_code_uuid is not None else uuid.uuid4()
+            result = conn.execute(
+                text(query_text),
+                {
+                    "uuid": custom_terminology_code_uuid,
+                    "old_uuid": custom_terminology_code_uuid,
+                    "display": self.display,
+                    "code_schema": code_schema_to_save,
+                    "code_simple": code_simple,
+                    "code_jsonb": code_jsonb,
+                    "code_id": self.generate_deduplicate_hash(),
+                    "terminology_version_uuid": self.terminology_version_uuid,
+                    "depends_on_display": self.depends_on_display if self.depends_on_display else "",
+                    "depends_on_property": self.depends_on_property if self.depends_on_property else "",
+                    "depends_on_system": self.depends_on_system if self.depends_on_system else "",
+                    "depends_on_value_schema": None,
+                    "depends_on_value_simple": None,
+                    "depends_on_value_jsonb": None,
+                    "additional_data": json.dumps(self.additional_data),
+                },
+            ).fetchall()
+        except Exception as e:
+            conn.rollback()
+            raise e
+
+        actually_inserted = True if len(result) > 0 else False
+
+        return actually_inserted
+
     @classmethod
     def load_from_custom_terminology(cls, code_uuid):
         """
@@ -385,10 +564,10 @@ class Code:
         code = None
         display = None
 
+        code_object = None
         if code_schema == RoninCodeSchemas.codeable_concept:
             code_object = FHIRCodeableConcept.deserialize(code_data.code_jsonb)
         elif code_schema == RoninCodeSchemas.code:
-            code_object = None
             code = code_data.code_simple
             display = code_data.display
 
@@ -405,7 +584,8 @@ class Code:
             depends_on_property=code_data.depends_on_property,
             depends_on_system=code_data.depends_on_system,
             code_object=code_object,
-            code_schema=code_schema
+            code_schema=code_schema,
+            saved_to_db=True
         )
 
     def serialize(self, with_system_and_version=True):

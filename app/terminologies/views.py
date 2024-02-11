@@ -171,7 +171,7 @@ def create_code_payload_to_code_list(payload) -> list:
                     description="When the code_schema is 'code' (which is default), code_object must not be provided"
                 )
 
-            code = Code(
+            code = Code.new_code(
                 code=code,
                 display=display,
                 terminology_version_uuid=terminology_version_uuid,
@@ -202,6 +202,7 @@ def create_code_payload_to_code_list(payload) -> list:
                     description="Unable to deserialize provided code_object"
                 )
             code = Code(
+                custom_terminology_code_uuid=uuid.uuid4(),  # assign UUID for new code
                 code_schema=code_schema,
                 code_object=code_object,
                 terminology_version_uuid=terminology_version_uuid,

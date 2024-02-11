@@ -93,8 +93,7 @@ class CodeClassTests(unittest.TestCase):
     def test_valid_initialization_with_simple_code(self):
         code = "Test Code"
         display = "Test Display"
-        simple_code = app.models.codes.Code(
-            code_schema=app.models.codes.RoninCodeSchemas.code,
+        simple_code = app.models.codes.Code.new_code(
             code=code,
             display=display,
             system=None,
@@ -236,6 +235,12 @@ class CodeAPITests(unittest.TestCase):
         self.client = self.app.test_client()
 
     def tearDown(self) -> None:
+        self.app.config.update({
+            "DISABLE_ROLLBACK_AFTER_REQUEST": False
+        })
+        self.app.config.update({
+            "DISABLE_CLOSE_AFTER_REQUEST": False
+        })
         # this executes after each test function, but does not stop lower-level functions from committing db changes
         self.conn.rollback()
         self.conn.close()
@@ -245,6 +250,57 @@ class CodeAPITests(unittest.TestCase):
     safe_term_uuid_dupl = "d14cbd3a-aabe-4b26-b754-5ae2fbd20949"
     safe_term_uuid_fhir = "34eb844c-ffff-4462-ad6d-48af68f1e8a1"
     safe_term_uuid_std = "c96200d7-9e30-4a0c-b98e-22d0ff146a99"
+
+    def test_create_codeable_concept_happy(self):
+        # Allow us to make multiple requests without database rolling back after each one
+        self.app.config.update({
+            "DISABLE_ROLLBACK_AFTER_REQUEST": True
+        })
+        self.app.config.update({
+            "DISABLE_CLOSE_AFTER_REQUEST": True
+        })
+
+        # First, add a code to a test terminology
+        response = self.client.post(
+            "/terminology/new_code",
+            data=json.dumps(
+                [
+                    {
+                        "code_schema": "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept",
+                        "code_object": {
+                            "text": "Automated Codeable Concept for Test",
+                            "coding": [
+                                {
+                                  "code": "D59.9",
+                                  "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                                },
+                                {
+                                  "code": "4854004",
+                                  "system": "http://snomed.info/sct"
+                                }
+                            ]
+                        },
+                        "terminology_version_uuid": self.safe_term_uuid_dupl,
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        assert response.text == "Complete"
+
+        self.assertEqual(self.conn.closed, False)
+
+        # Then, load that terminology and verify the code is there and correct
+        terminology = app.terminologies.models.Terminology.load(self.safe_term_uuid_dupl)
+        terminology.load_content()
+
+        display_to_code_object = {code.display: code for code in terminology.codes}
+        new_code = display_to_code_object.get("Automated Codeable Concept for Test")
+        self.assertIsNotNone(new_code)
+        if new_code is not None:
+            self.assertEqual(new_code.code_schema, app.models.codes.RoninCodeSchemas.codeable_concept)
+            self.assertEqual(type(new_code.code), app.models.codes.FHIRCodeableConcept)
+            self.assertEqual(new_code.display, "Automated Codeable Concept for Test")
 
     def test_create_code_happy_future(self):
         """
