@@ -440,6 +440,10 @@ class Code:
     def save(self,
              on_conflict_do_nothing: bool = False
              ):
+        if self._saved_to_db is True:
+            # todo: should this raise an exception or just return?
+            raise Exception("Code object is already saved; cannot save again")
+
         conn = get_db()
         query_text = """
                         INSERT INTO custom_terminologies.code_poc 
@@ -524,6 +528,8 @@ class Code:
             raise e
 
         actually_inserted = True if len(result) > 0 else False
+        if actually_inserted:
+            self._saved_to_db = True
 
         return actually_inserted
 
