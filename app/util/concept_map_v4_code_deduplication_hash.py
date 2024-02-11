@@ -76,6 +76,8 @@ def identify_duplicate_code_values_in_v4(
     7. Load Systems decisions in to the "fix_action" column appropriately. Anything not marked KEEP will be discarded.
     8. Systems: where a deduplication_hash with duplicates has a row marked to KEEP - delete all other rows in group
     9. Systems: where a deduplication_hash with duplicates has no row marked to KEEP - see Content, or keep 1 at random
+
+    todo: a "Step 3" to add a deduplication_hash column to the v4 concept_maps.concept_relationship table also.
     """
     # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
     # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded
@@ -198,7 +200,7 @@ def identify_duplicate_code_values_in_v4(
                     if total_processed % report_page_size == 0:
                         LOGGER.warning(f"Rows so far this run: {total_processed}")
 
-                    # leverage v5 migration functions to get a normalized code_string and code_id values
+                    # leverage v5 migration functions to get deduplication_hash values
                     (
                         code_schema,
                         code_simple,
