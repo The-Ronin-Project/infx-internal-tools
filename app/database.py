@@ -1,3 +1,4 @@
+import logging
 from flask import current_app, g, has_request_context
 from sqlalchemy import create_engine
 from elasticsearch import Elasticsearch
@@ -77,8 +78,8 @@ def get_db():
                     "attach database 'tests/dbs/organizations.db' as organizations"
                 )
             else:
-                g.db = SQL_ALCHEMY_ENGINE.connect()
-                g.db.begin()
+                db_manager = DatabaseManager()
+                g.db = db_manager.get_connection()
         return g.db
     else:
         db = DatabaseManager()
@@ -139,9 +140,15 @@ def close_db(e=None):
         if e is None:
             testing = current_app.config.get("TESTING")
             if testing:
-                db.rollback()
+                if not current_app.config.get("DISABLE_ROLLBACK_AFTER_REQUEST"):
+                    db.rollback()
+                else:
+                    logging.info("Not rolling back because DISABLE_ROLLBACK_AFTER_REQUEST=True")
             else:
                 db.commit()
         if e is not None:
             db.rollback()
-        db.close()
+        if not current_app.config.get("DISABLE_CLOSE_AFTER_REQUEST"):
+            db.close()
+        else:
+            logging.info("Not closing connection because DISABLE_CLOSE_AFTER_REQUEST=True")
