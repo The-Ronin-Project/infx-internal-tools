@@ -22,10 +22,21 @@ def identify_duplicate_code_values_in_v4(
         concept_map_version_uuid: str = None
 ):
     """
-    See app.util.data_migration.ConceptMapsForContent and app.util.data_migration.ConceptMapsForSystems for UUIDs
-    for concept maps. Query the current clinical-content database for "active" and "pending" versions of each.
+    The duplicates in v4 data are:
+    - code: the same code object in more than one row in the (only) code table: a "false difference" duplicate
+    - mapping: the same source code object appears in more than one row in the same concept map table; the source code
+               objects in these cases may be "false difference" duplicates or literally the same value. The variations:
+        - "simple duplicate": the same source code object mapped to the same target in the same concept map
+        - "Content should review": the same source code object mapped to different targets in the same concept map
+        - NOT an issue: the same source code object appears in more than one concept map in our data: expected
+    - NOT an issue: any of the above, in a concept map that Informatics has identified as NOT using. See next paragraph.
 
-    Populates a new deduplication_hash column in custom_terminologies.code with values that Systems can leverage to:
+    For a list of UUIDs for v4 concept maps that Informatics IS using, see 2 enum lists:
+    app.util.data_migration.ConceptMapsForContent and app.util.data_migration.ConceptMapsForSystems
+    Query the current clinical-content database for "active" and "pending" versions of each.
+
+    identify_duplicate_code_values_in_v4() accomplishes a first step ("Step 1") towards resolving the above issues. It
+    populates a new deduplication_hash column in custom_terminologies.code with values that Systems can leverage to:
 
     STOP THIS CYCLE:
     1. Mapping Request Service has no way to screen incoming codes for what will eventually turn out to be duplicates
@@ -45,7 +56,7 @@ def identify_duplicate_code_values_in_v4(
       (Only the deduplication_hash gives us the data to check this rapidly from within Mapping Request Service).
     3. A "to do" comment in mapping_request_service.py has been added, in the spot where this call must be made.
     4. Once the duplication from data ingestion is stopped by step 3, de-duplication of existing concept maps can occur.
-       concept_map_duplicate_codes.py can output a review spreadsheet for Content (see another PR) to enable a review
+       concept_map_duplicate_codes.py can output a review spreadsheet for Content ("Step 2") to enable a review
        of this spreadsheet and subsequent, automated data correction by Systems, as described below, starting at REVIEW.
     5. A "diff" for ConceptMap artifacts is possible when you order the rows in serialized JSON output artifacts by
        deduplication_hash values: a technique designed for v5 but easily used in v4 when we have the deduplication hash.
