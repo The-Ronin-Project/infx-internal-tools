@@ -5,13 +5,13 @@ from elasticsearch import Elasticsearch
 from opensearchpy import OpenSearch
 from decouple import config
 
-# Create an SQL Alchemy engine instance for connecting to the Postgres database.
-SQL_ALCHEMY_ENGINE = create_engine(
-    f"postgresql://{config('DATABASE_USER', default='')}:{config('DATABASE_PASSWORD', default='')}@{config('DATABASE_HOST', default='')}/{config('DATABASE_NAME', default='')}",
-    connect_args={"sslmode": "require"},
-    pool_size=5,
-    max_overflow=0,
-)
+# # Create an SQL Alchemy engine instance for connecting to the Postgres database.
+# SQL_ALCHEMY_ENGINE = create_engine(
+#     f"postgresql://{config('DATABASE_USER', default='')}:{config('DATABASE_PASSWORD', default='')}@{config('DATABASE_HOST', default='')}/{config('DATABASE_NAME', default='')}",
+#     connect_args={"sslmode": "require"},
+#     pool_size=5,
+#     max_overflow=0,
+# )
 
 
 class DatabaseManager:
