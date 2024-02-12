@@ -204,7 +204,7 @@ def perform_mapping_request_check(page_size, requested_organization_id, requeste
 
 
 @celery_app.task
-def perform_load_condition_duplicates(
+def perform_load_concept_map_duplicates(
         concept_map_uuid,
         concept_map_version_uuid,
         output_table_name,
@@ -214,6 +214,18 @@ def perform_load_condition_duplicates(
         concept_map_version_uuid,
         output_table_name,
         output_pkey_distinct_constraint_name,
+    )
+
+
+@celery_app.task
+def perform_mark_concept_map_duplicates(
+        concept_map_uuid,
+        concept_map_version_uuid,
+        output_table_name):
+    app.util.concept_map_duplicate_codes.mark_duplicate_for_v4_concept_map(
+        concept_map_uuid,
+        concept_map_version_uuid,
+        output_table_name,
     )
 
 

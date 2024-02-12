@@ -479,13 +479,82 @@ def create_app(script_info=None):
         concept_map_version_uuid = request.json.get('concept_map_version_uuid')
         output_table_name = request.json.get('output_table_name')
         output_pkey_distinct_constraint_name = request.json.get('output_pkey_distinct_constraint_name')
-        tasks.perform_load_condition_duplicates.delay(
+        if concept_map_uuid is None or output_table_name is None or output_pkey_distinct_constraint_name is None:
+            return "Bad Input"
+        # if version is omitted, process the most recent "pending" and/or "active" version (if any)
+        if concept_map_version_uuid is None:
+            concept_map = concept_map_models.ConceptMap(concept_map_uuid)
+            if concept_map is None:
+                return "Bad Input"
+            # pending
+            concept_map_version = concept_map.get_most_recent_version(
+                active_only=False,
+                load_mappings=False,
+                pending_only=True
+            )
+            if concept_map_version is not None:
+                concept_map_version_uuid = concept_map_version.uuid
+                tasks.perform_load_concept_map_duplicates.delay(
+                    concept_map_uuid,
+                    concept_map_version_uuid,
+                    output_table_name,
+                    output_pkey_distinct_constraint_name
+                )
+            # active
+            concept_map_version = concept_map.get_most_recent_version(
+                active_only=True,
+                load_mappings=False,
+                pending_only=False
+            )
+            if concept_map_version is not None:
+                concept_map_version_uuid = concept_map_version.uuid
+        tasks.perform_load_concept_map_duplicates.delay(
             concept_map_uuid,
             concept_map_version_uuid,
             output_table_name,
             output_pkey_distinct_constraint_name
         )
         return f"Task Created: concept_map_uuid={concept_map_uuid} concept_map_version_uuid={concept_map_version_uuid}, output_table_name={output_table_name}, output_pkey_distinct_constraint_name={output_pkey_distinct_constraint_name}"
+
+    @app.route("/concept_map_v4_duplicate_mark_for_action", methods=["POST"])
+    def perform_concept_map_v4_duplicate_mark_for_action():
+        concept_map_uuid = request.json.get('concept_map_uuid')
+        concept_map_version_uuid = request.json.get('concept_map_version_uuid')
+        output_table_name = request.json.get('output_table_name')
+        if concept_map_uuid is None or output_table_name is None:
+            return "Bad Input"
+        # if version is omitted, process the most recent "pending" and/or "active" version (if any)
+        if concept_map_version_uuid is None:
+            concept_map = concept_map_models.ConceptMap(concept_map_uuid)
+            if concept_map is None:
+                return "Bad Input"
+            # pending
+            concept_map_version = concept_map.get_most_recent_version(
+                active_only=False,
+                load_mappings=False,
+                pending_only=True
+            )
+            if concept_map_version is not None:
+                concept_map_version_uuid = concept_map_version.uuid
+                tasks.perform_mark_concept_map_duplicates.delay(
+                    concept_map_uuid,
+                    concept_map_version_uuid,
+                    output_table_name
+                )
+            # active
+            concept_map_version = concept_map.get_most_recent_version(
+                active_only=True,
+                load_mappings=False,
+                pending_only=False
+            )
+            if concept_map_version is not None:
+                concept_map_version_uuid = concept_map_version.uuid
+        tasks.perform_mark_concept_map_duplicates.delay(
+            concept_map_uuid,
+            concept_map_version_uuid,
+            output_table_name
+        )
+        return f"Task Created: concept_map_uuid={concept_map_uuid} concept_map_version_uuid={concept_map_version_uuid}, output_table_name={output_table_name}\nDid you check both active and pending versions?"
 
     return app
 

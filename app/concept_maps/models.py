@@ -298,13 +298,21 @@ class ConceptMap:
         else:
             self.most_recent_active_version = None
 
-    def get_most_recent_version(self, active_only=False, load_mappings=True):
+    def get_most_recent_version(self, active_only=False, load_mappings=True, pending_only=False):
         conn = get_db()
         if active_only:
             query = """
                 select * from concept_maps.concept_map_version
                 where concept_map_uuid=:concept_map_uuid
                 and status='active'
+                order by version desc
+                limit 1
+                """
+        elif pending_only:
+            query = """
+                select * from concept_maps.concept_map_version
+                where concept_map_uuid=:concept_map_uuid
+                and status='pending'
                 order by version desc
                 limit 1
                 """
