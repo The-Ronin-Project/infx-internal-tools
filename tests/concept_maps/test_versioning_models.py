@@ -9,10 +9,10 @@ from app.concept_maps.models import ConceptMapVersion, ConceptMap
 
 class ConceptMapVersioningModels(unittest.TestCase):
     """
+    happy_path_concept_map_version_uuid = 24f3917c-94b2-48ab-9936-a63ca24c673a
+    The above concept map version is version 1 of Test ONLY: new_version_from_previous happy path.
+    It has 35 equivalent mappings, 5 source is broader than mappings, 17 source is narrower than mappings (12 of those are mapped no maps)
 
-    ```
-    concept_map_uuid =
-    ```
     """
 
     def setUp(self) -> None:
@@ -40,8 +40,12 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # Create params, get data, etc...
         previous_version_uuid = uuid.UUID("24f3917c-94b2-48ab-9936-a63ca24c673a")
         new_version_description = "happy path test"
-        new_source_value_set_version_uuid = uuid.UUID("94160026-646c-4c44-9252-3c6c84b133ac")
-        new_target_value_set_version_uuid = uuid.UUID("1c9455af-8ced-4d26-a223-1df4e0c49a16")
+        new_source_value_set_version_uuid = uuid.UUID(
+            "94160026-646c-4c44-9252-3c6c84b133ac"
+        )
+        new_target_value_set_version_uuid = uuid.UUID(
+            "1c9455af-8ced-4d26-a223-1df4e0c49a16"
+        )
         require_review_for_non_equivalent_relationships = False
         require_review_no_maps_not_in_target = False
 
@@ -77,9 +81,11 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # Add assertions here to compare the relevant properties of both versions
         # In this case, we expect no added, removed or modified codes since the source and target value set versions are the same
         self.assertEqual(diff_result["added_count"], 0)
-        self.assertEqual(diff_result["removed_count"], 12)  # mapped no maps are counted as removed
+        self.assertEqual(
+            diff_result["removed_count"], 12
+        )  # mapped no maps are counted as removed
         self.assertEqual(diff_result["modified_count"], 0)
-        self.assertEqual(diff_result["previous_total"]-12, diff_result["new_total"])
+        self.assertEqual(diff_result["previous_total"] - 12, diff_result["new_total"])
 
     def test_new_version_from_previous_new_source_same_target(self):
         """
@@ -92,8 +98,12 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # Create params, get data, etc...
         previous_version_uuid = uuid.UUID("24f3917c-94b2-48ab-9936-a63ca24c673a")
         new_version_description = "happy path test"
-        new_source_value_set_version_uuid = uuid.UUID("1c9455af-8ced-4d26-a223-1df4e0c49a16")
-        new_target_value_set_version_uuid = uuid.UUID("1c9455af-8ced-4d26-a223-1df4e0c49a16")
+        new_source_value_set_version_uuid = uuid.UUID(
+            "1c9455af-8ced-4d26-a223-1df4e0c49a16"
+        )
+        new_target_value_set_version_uuid = uuid.UUID(
+            "1c9455af-8ced-4d26-a223-1df4e0c49a16"
+        )
         require_review_for_non_equivalent_relationships = False
         require_review_no_maps_not_in_target = False
 
@@ -130,7 +140,9 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # Add assertions here to compare the relevant properties of both versions
         # In this case, we expect an added code, but no removed or modified codes since the source value set version is new (once code more) and the target value set version is the same
         self.assertEqual(diff_result["added_count"], 0)
-        self.assertEqual(diff_result["removed_count"], 12)  # mapped no maps are counted as removed
+        self.assertEqual(
+            diff_result["removed_count"], 12
+        )  # mapped no maps are counted as removed
         self.assertEqual(diff_result["modified_count"], 45)
         self.assertEqual(diff_result["previous_total"] - 12, diff_result["new_total"])
 
@@ -145,8 +157,12 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # Create params, get data, etc...
         previous_version_uuid = uuid.UUID("24f3917c-94b2-48ab-9936-a63ca24c673a")
         new_version_description = "happy path test"
-        new_source_value_set_version_uuid = uuid.UUID("94160026-646c-4c44-9252-3c6c84b133ac")
-        new_target_value_set_version_uuid = uuid.UUID("94160026-646c-4c44-9252-3c6c84b133ac")
+        new_source_value_set_version_uuid = uuid.UUID(
+            "94160026-646c-4c44-9252-3c6c84b133ac"
+        )
+        new_target_value_set_version_uuid = uuid.UUID(
+            "94160026-646c-4c44-9252-3c6c84b133ac"
+        )
         require_review_for_non_equivalent_relationships = False
         require_review_no_maps_not_in_target = False
 
@@ -183,6 +199,8 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # Add assertions here to compare the relevant properties of both versions
         # In this case, we expect a removed code and a modified count (via previous_mapping_context) but no added codes since the source value set version is the same and the target value set version is the new (one code less)
         self.assertEqual(diff_result["added_count"], 0)
-        self.assertEqual(diff_result["removed_count"], 12)  # mapped no maps are counted as removed
+        self.assertEqual(
+            diff_result["removed_count"], 12
+        )  # mapped no maps are counted as removed
         self.assertEqual(diff_result["modified_count"], 45)
         self.assertEqual(diff_result["previous_total"] - 12, diff_result["new_total"])
