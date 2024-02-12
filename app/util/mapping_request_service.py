@@ -891,6 +891,11 @@ class MappingRequestService:
             if terminology_to_load_to is None:
                 return
 
+            # todo: prevent duplicate mapping requests for Content: normalize input to compare with existing codes in db
+            # In CMv5 this means calling a function to calculate code_id and comparing with existing code_id values -
+            # but to be relevant, we also need the resource_type and element values - so that we know which concept maps
+            # would be involved, which tells us the value set and terminology - only with that full context, can we know
+
             # Load the code and link it back to the original error
             cls.prepare_code_for_terminology(
                 raw_resource,
