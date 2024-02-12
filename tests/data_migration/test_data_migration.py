@@ -2,7 +2,8 @@ import unittest
 
 from app.database import get_db
 from app.app import create_app
-from app.util.data_migration import ConceptMapsForSystems, ConceptMapsForContent
+from app.enum.concept_maps_for_systems import ConceptMapsForSystems
+from app.enum.concept_maps_for_content import ConceptMapsForContent
 
 
 class DataMigrationTests(unittest.TestCase):
