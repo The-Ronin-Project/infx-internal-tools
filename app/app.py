@@ -355,8 +355,9 @@ def create_app(script_info=None):
         Publish the data normalization registry to an object store, allowing other services to access the registry information.
         """
         if request.method == "POST":
+            oci_overwrite_allowed = request.values.get("overwrite_allowed").lower() == "true"
             return jsonify(
-                DataNormalizationRegistry.publish_data_normalization_registry()
+                DataNormalizationRegistry.publish_data_normalization_registry(oci_overwrite_allowed)
             )
 
     @app.route("/data_normalization/registry/actions/get_time", methods=["GET"])

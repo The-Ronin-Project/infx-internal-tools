@@ -13,6 +13,7 @@ import app.concept_maps.models
 import app.value_sets.models
 from app.database import get_db
 from app.errors import BadRequestWithCode
+from app.helpers import oci_helper
 from app.helpers.oci_helper import oci_authentication
 
 
@@ -219,22 +220,15 @@ class DataNormalizationRegistry:
         ]
 
     @staticmethod
-    def publish_to_object_store(registry, filepath):
+    def publish_to_object_store(registry, filepath, overwrite_allowed=False):
         """
         Publish a Data Normalization Registry to the Object Storage.
         This function is passive. Details about schema version etc. are resolved by the caller and provided in inputs.
         @param registry: data to publish
-        @param filepath: Caller sets the full path and filename in OCI.
+        @param filepath: Caller sets the full/absolute path and filename in OCI.
+        @param overwrite_allowed: if true, write to oci even if the object exists. Default is False
         """
-        object_storage_client = oci_authentication()
-        bucket_name = config("OCI_CLI_BUCKET")
-        namespace = object_storage_client.get_namespace().data
-        object_storage_client.put_object(
-            namespace,
-            bucket_name,
-            filepath,
-            json.dumps(registry, indent=2).encode("utf-8"),
-        )
+        oci_helper.set_up_and_save_to_object_store(registry, filepath, overwrite_allowed)
         return registry
 
     @staticmethod
@@ -301,6 +295,7 @@ class DataNormalizationRegistry:
         norm_registry_schema_version: int,
         concept_map_schema_version: int,
         value_set_schema_version: int,
+        overwrite_enabled=False,
     ):
         """
         Helper method for calls to publish_data_normalization_registry using different combinations of schema version.
@@ -315,6 +310,7 @@ class DataNormalizationRegistry:
         newly_published_version = DataNormalizationRegistry.publish_to_object_store(
             registry_serialized,
             f"{filepath}/{DataNormalizationRegistry.object_storage_file_name}",
+            overwrite_enabled,
         )
         try:
             previous_version = DataNormalizationRegistry.get_last_published_registry(
@@ -326,6 +322,7 @@ class DataNormalizationRegistry:
             DataNormalizationRegistry.publish_to_object_store(
                 diff_version,
                 f"{filepath}/{DataNormalizationRegistry.object_storage_diff_name}",
+                overwrite_enabled,
             )
         except ServiceError:
             pass
@@ -333,7 +330,7 @@ class DataNormalizationRegistry:
         return newly_published_version
 
     @classmethod
-    def publish_data_normalization_registry(cls):
+    def publish_data_normalization_registry(cls, overwrite_allowed: bool = False):
         """
         Publish the data normalization registry and the diff from previous version.
         If DataNormalizationRegistry.database_schema_version and DataNormalizationRegistry.next_schema_version are
@@ -350,6 +347,7 @@ class DataNormalizationRegistry:
             DataNormalizationRegistry.database_schema_version,
             app.concept_maps.models.ConceptMap.database_schema_version,
             app.value_sets.models.ValueSet.database_schema_version,
+            overwrite_allowed,
         )
 
         # Step 3: Also output DataNormalizationRegistry.next_schema_version, if different from database_schema_version
@@ -362,6 +360,7 @@ class DataNormalizationRegistry:
                 DataNormalizationRegistry.next_schema_version,
                 app.concept_maps.models.ConceptMap.next_schema_version,
                 app.value_sets.models.ValueSet.next_schema_version,
+                overwrite_allowed,
             )
 
         # Step 4: Done

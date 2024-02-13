@@ -23,7 +23,7 @@ from app.errors import (
     BadSourceCodeError,
     DuplicateTargetError,
 )
-from app.helpers.oci_helper import set_up_object_store
+from app.helpers.oci_helper import set_up_and_save_to_object_store, folder_path_for_oci
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.helpers.data_helper import OID_URL_CONVERSIONS
 from app.models.codes import Code
@@ -1469,7 +1469,7 @@ class ConceptMapVersion:
 
         return serialized, initial_path
 
-    def publish(self, resolve_errors: bool = False):
+    def publish(self, resolve_errors: bool = False, overwrite_allowed: bool = False):
         """
         A method to complete the full publication process including pushing to OCI, Simplifier,
         Normalization Registry and setting status active. If the current ConceptMap.database_schema_version (such as 3)
@@ -1477,20 +1477,21 @@ class ConceptMapVersion:
         @param resolve_errors After publish, reach out to the Error Service to determine whether any of the new concepts
                 in the map will resolve any errors previously reported. To support tests and repairs without exposing
                 OCI to unauthorized changes, default is False. The only caller who sets it to True is the API endpoint.
+        @param overwrite_allowed: if true, allow overwriting of files in the bucket
         @raise BadRequestWithCode if the schema_version is v4 or later and there are no mappings in the concept map.
         @return: n/a
         """
 
         # OCI: output as ConceptMap.database_schema_version, which may be the same as ConceptMap.next_schema_version
-        self.send_to_oci(ConceptMap.database_schema_version)
+        self.send_to_oci(ConceptMap.database_schema_version, overwrite_allowed)
         # write diff to OCI - comment out until we consider storage implications
-        # self.diff_versions_and_store_diff(concept_map_to_json, initial_path, schema_version)
+        # self.diff_versions_and_store_diff(concept_map_to_json, initial_path, schema_version, overwrite_allowed)
 
         # OCI: also output as ConceptMap.next_schema_version, if different from ConceptMap.database_schema_version
         if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
-            self.send_to_oci(ConceptMap.next_schema_version)
+            self.send_to_oci(ConceptMap.next_schema_version, overwrite_allowed)
             # write diff to OCI - comment out until we consider storage implication
-            # self.diff_versions_and_store_diff(concept_map_to_json, initial_path, schema_version)
+            # self.diff_versions_and_store_diff(concept_map_to_json, initial_path, schema_version, overwrite_allowed)
 
         # Follow-up publishing activities
         self.version_set_status_active()
@@ -1503,7 +1504,9 @@ class ConceptMapVersion:
             pass  # Simplifier API not reliable, so we make that step optional
 
         # Publish new version of data normalization registry
-        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
+        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry(
+            overwrite_allowed
+        )
 
         # Contact the Error Validation Service to resolve any errors fixed by the new concept map
         if resolve_errors:
@@ -1511,17 +1514,19 @@ class ConceptMapVersion:
                 concept_map_version_uuid=self.uuid
             )
 
-    def send_to_oci(self, schema_version):
+    def send_to_oci(self, schema_version, overwrite_allowed: bool = False):
         concept_map_to_json, initial_path = self.prepare_for_oci(schema_version)
-        set_up_object_store(
+        oci_path = folder_path_for_oci(
+            concept_map_to_json, initial_path + f"/published/{self.concept_map.uuid}", content_type="json"
+        )
+        set_up_and_save_to_object_store(
             concept_map_to_json,
-            initial_path + f"/published/{self.concept_map.uuid}",
-            folder="published",
-            content_type="json",
+            oci_path,
+            overwrite_allowed,
         )
 
     def diff_versions_and_store_diff(
-        self, concept_map_to_json, initial_path: str, schema_version: int
+        self, concept_map_to_json, initial_path: str, schema_version: int, overwrite_allowed=False
     ):
         """
         Supports publish() by publishing the diff from the previous version in a sub-folder named /diff
@@ -1531,13 +1536,15 @@ class ConceptMapVersion:
         previous_version = new_version - 1
         concept_map_diff = self.concept_map.diff_mappings_and_metadata(
             self.concept_map.uuid, previous_version, new_version, schema_version
-        )  # sends to OCI
+        )
         # diff to OCI
-        set_up_object_store(
+        oci_path = folder_path_for_oci(
+            concept_map_diff, initial_path + f"/published/{self.concept_map.uuid}/diff", content_type="json"
+        )
+        set_up_and_save_to_object_store(
             concept_map_diff,
-            initial_path + f"/published/{self.concept_map.uuid}/diff",
-            folder="published",
-            content_type="json",
+            oci_path,
+            overwrite_allowed
         )  # sends to OCI
 
     def to_simplifier(self):
