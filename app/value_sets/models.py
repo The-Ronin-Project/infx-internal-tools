@@ -54,7 +54,7 @@ MAX_ES_SIZE = 1000
 
 metadata = MetaData()
 expansion_member_data = Table(
-    "expansion_member",
+    "expansion_member_data",
     metadata,
     Column("expansion_uuid", UUID, nullable=False),
     Column("code_schema", String, nullable=False),
