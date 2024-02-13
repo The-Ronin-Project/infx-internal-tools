@@ -34,6 +34,7 @@ from app.models.codes import Code
 
 import app.concept_maps.models
 import app.models.data_ingestion_registry
+import app.models.codes
 
 from app.terminologies.models import Terminology
 
@@ -2707,7 +2708,7 @@ class ValueSetVersion:
         if isinstance(self.expansion_timestamp, str):
             self.expansion_timestamp = parser.parse(self.expansion_timestamp)
 
-        query = conn.execute(
+        query_result = conn.execute(
             text(
                 """
             select * from value_sets.expansion_member_data
@@ -2717,11 +2718,43 @@ class ValueSetVersion:
             {"expansion_uuid": self.expansion_uuid},
         )
 
-        for x in query:
-            code_or_codeable_concept_object = Code.create_code_or_codeable_concept(
-                query
-            )
-            self.expansion.add(code_or_codeable_concept_object)
+        for row in query_result:
+            # TODO: come back and add depends on support
+            code_schema = app.models.codes.RoninCodeSchemas(row.code_schema)
+            from_custom_terminology = True if row.custom_terminology_uuid is not None else False
+
+            if code_schema == app.models.codes.RoninCodeSchemas.code:
+                new_code = app.models.codes.Code(
+                    code_schema=code_schema,
+                    system=row.system,
+                    version=row.version,
+                    code=row.code_simple,
+                    display=row.display,
+                    from_custom_terminology=from_custom_terminology,
+                    custom_terminology_code_uuid=row.custom_terminology_uuid,
+                    from_fhir_terminology=None,  # todo: get a way to check this
+                    fhir_terminology_code_uuid=None,  # todo: get a way to load this
+                    saved_to_db=True
+                )
+            elif code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
+                code_object = app.models.codes.FHIRCodeableConcept.deserialize(row.code_jsonb)
+                new_code = app.models.codes.Code(
+                    code_schema=code_schema,
+                    system=row.system,
+                    version=row.version,
+                    code=None,
+                    display=None,
+                    code_object=code_object,
+                    from_custom_terminology=from_custom_terminology,
+                    custom_terminology_code_uuid=row.custom_terminology_uuid,
+                    from_fhir_terminology=None,  # todo: get a way to check this
+                    fhir_terminology_code_uuid=None,  # todo: get a way to load this
+                    saved_to_db=True
+                )
+            else:
+                raise NotImplementedError(f"ValueSetVersion.load_current_expansion cannot load code with schema {code_schema}")
+
+            self.expansion.add(new_code)
 
     def save_expansion(self, report=None):
         """

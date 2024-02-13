@@ -477,32 +477,6 @@ class Code:
             )
         return False
 
-    @staticmethod
-    def create_code_or_codeable_concept(data: dict):
-        """
-        Helper method to instantiate a Code or FHIRCodeableConcept object based on the code schema.
-        """
-
-        if data.code_schema == RoninCodeSchemas.code:
-            # Create a Code object
-            return Code(
-                system=data.get("system"),
-                version=data.get("version"),
-                code=data.get("code"),
-                display=data.get("display"),
-                additional_data=data.get("additional_data"),
-                terminology_version=data.get("terminology_version"),
-                depends_on_property=data.get("depends_on_property"),
-                depends_on_system=data.get("depends_on_system"),
-                depends_on_value=data.get("depends_on_value"),
-                depends_on_display=data.get("depends_on_display"),
-            )
-        elif data.code_schema == RoninCodeSchemas.codeable_concept:
-            # Create a FHIRCodeableConcept object
-            codings = [
-                FHIRCoding.deserialize(coding) for coding in data.get("coding", [])
-            ]
-            return FHIRCodeableConcept(coding=codings, text=data.get("text"))
     # @classmethod
     # def save_many(
     #         cls,
