@@ -2722,6 +2722,7 @@ class ValueSetVersion:
             # TODO: come back and add depends on support
             code_schema = app.models.codes.RoninCodeSchemas(row.code_schema)
             from_custom_terminology = True if row.custom_terminology_uuid is not None else False
+            from_fhir_terminology = True if row.fhir_terminology_uuid is not None else False
 
             if code_schema == app.models.codes.RoninCodeSchemas.code:
                 new_code = app.models.codes.Code(
@@ -2732,8 +2733,8 @@ class ValueSetVersion:
                     display=row.display,
                     from_custom_terminology=from_custom_terminology,
                     custom_terminology_code_uuid=row.custom_terminology_uuid,
-                    from_fhir_terminology=None,  # todo: get a way to check this
-                    fhir_terminology_code_uuid=None,  # todo: get a way to load this
+                    from_fhir_terminology=from_fhir_terminology,
+                    fhir_terminology_code_uuid=row.fhir_terminology_uuid,
                     saved_to_db=True
                 )
             elif code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
@@ -2747,8 +2748,8 @@ class ValueSetVersion:
                     code_object=code_object,
                     from_custom_terminology=from_custom_terminology,
                     custom_terminology_code_uuid=row.custom_terminology_uuid,
-                    from_fhir_terminology=None,  # todo: get a way to check this
-                    fhir_terminology_code_uuid=None,  # todo: get a way to load this
+                    from_fhir_terminology=from_fhir_terminology,
+                    fhir_terminology_code_uuid=row.fhir_terminology_uuid,
                     saved_to_db=True
                 )
             else:
