@@ -2,7 +2,6 @@ import unittest
 
 import pytest
 from decouple import config
-from werkzeug.exceptions import Conflict
 
 from app.helpers import oci_helper
 
@@ -93,7 +92,7 @@ class OciHelperTests(unittest.TestCase):
         When: oci_helper.set_up_and_save_to_object_store is called with overwrite_enabled = false (default)
         Then: The method raises an exception
         """
-        with pytest.raises(Conflict):
+        with pytest.raises(ValueError):
             oci_helper.set_up_and_save_to_object_store(
                 self.oci_test_file_content,
                 self.oci_test_file_path,
