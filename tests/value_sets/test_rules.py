@@ -15,9 +15,11 @@ class RuleTests(unittest.TestCase):
     def setUp(self) -> None:
         self.conn = get_db()
         self.app = create_app()
-        self.app.config.update({
-            "TESTING": True,
-        })
+        self.app.config.update(
+            {
+                "TESTING": True,
+            }
+        )
         self.client = self.app.test_client()
 
     def tearDown(self) -> None:
@@ -25,17 +27,19 @@ class RuleTests(unittest.TestCase):
         self.conn.close()
 
     def test_loinc_rule(self):
-        terminology_version = app.terminologies.models.Terminology.load('554805c6-4ad1-4504-b8c7-3bab4e5196fd')  # LOINC 2.74
+        terminology_version = app.terminologies.models.Terminology.load(
+            "554805c6-4ad1-4504-b8c7-3bab4e5196fd"
+        )  # LOINC 2.74
         rule = app.value_sets.models.LOINCRule(
             uuid=None,
             position=None,
             description=None,
-            prop='component',
-            operator='=',
+            prop="component",
+            operator="=",
             value='{"Complete blood count W Auto Differential panel"}',
             include=True,
             value_set_version=None,
-            fhir_system='http://loinc.org',
+            fhir_system="http://loinc.org",
             terminology_version=terminology_version,
         )
         rule.execute()
@@ -44,23 +48,31 @@ class RuleTests(unittest.TestCase):
 
         first_item = list(rule.results)[0]
 
-        self.assertEqual(first_item.code, '57021-8', 'The wrong LOINC code was provided')
-        self.assertEqual(first_item.display, 'CBC W Auto Differential panel - Blood', 'The wrong display was provided')
-        assert first_item.system == 'http://loinc.org'
-        assert first_item.version == '2.74'
+        self.assertEqual(
+            first_item.code, "57021-8", "The wrong LOINC code was provided"
+        )
+        self.assertEqual(
+            first_item.display,
+            "CBC W Auto Differential panel - Blood",
+            "The wrong display was provided",
+        )
+        assert first_item.system == "http://loinc.org"
+        assert first_item.version == "2.74"
 
     def test_snomed_rule(self):
-        terminology_version = app.terminologies.models.Terminology.load('306ae926-50aa-41d1-8ec8-1df123b0cd77')
+        terminology_version = app.terminologies.models.Terminology.load(
+            "306ae926-50aa-41d1-8ec8-1df123b0cd77"
+        )
         rule = app.value_sets.models.SNOMEDRule(
             uuid=None,
             position=None,
             description=None,
-            prop='ecl',
-            operator='=',
-            value='<<  73211009 |Diabetes mellitus|',
+            prop="ecl",
+            operator="=",
+            value="<<  73211009 |Diabetes mellitus|",
             include=True,
             value_set_version=None,
-            fhir_system='http://snomed.info/sct',
+            fhir_system="http://snomed.info/sct",
             terminology_version=terminology_version,
         )
         rule.execute()
@@ -69,8 +81,8 @@ class RuleTests(unittest.TestCase):
 
         first_item = list(rule.results)[0]
 
-        self.assertEqual(first_item.system, 'http://snomed.info/sct')
-        self.assertEqual(first_item.version, '2023-03-01')
+        self.assertEqual(first_item.system, "http://snomed.info/sct")
+        self.assertEqual(first_item.version, "2023-03-01")
 
     def test_custom_terminology_rule(self):
         """
@@ -78,18 +90,20 @@ class RuleTests(unittest.TestCase):
         """
 
         # Test Concept Map Versioning Source Terminology
-        terminology_version = app.terminologies.models.Terminology.load('d2b9133e-1566-4e06-a75e-e6b5c25aef85')
+        terminology_version = app.terminologies.models.Terminology.load(
+            "d2b9133e-1566-4e06-a75e-e6b5c25aef85"
+        )
 
         rule = app.value_sets.models.CustomTerminologyRule(
             uuid=None,
             position=None,
             description=None,
-            prop='include_entire_code_system',
-            operator='=',
-            value='true',
+            prop="include_entire_code_system",
+            operator="=",
+            value="true",
             include=True,
             value_set_version=None,
-            fhir_system='http://projectronin.io/fhir/CodeSystem/ronin/TestConceptMapVersioningSourceTerminology',
+            fhir_system="http://projectronin.io/fhir/CodeSystem/ronin/TestConceptMapVersioningSourceTerminology",
             terminology_version=terminology_version,
         )
         rule.execute()
@@ -97,44 +111,81 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(len(rule.results), 11)
 
         first_code = list(rule.results)[0]
-        self.assertEqual(first_code.system, 'http://projectronin.io/fhir/CodeSystem/ronin/TestConceptMapVersioningSourceTerminology')
-        self.assertEqual(first_code.version, '1')
+        self.assertEqual(
+            first_code.system,
+            "http://projectronin.io/fhir/CodeSystem/ronin/TestConceptMapVersioningSourceTerminology",
+        )
+        self.assertEqual(first_code.version, "1")
 
     def test_rxnorm_rule(self):
-        terminology_version = app.terminologies.models.Terminology.load('4e78774b-059d-4c98-ae13-6a669c5ec783')
+        terminology_version = app.terminologies.models.Terminology.load(
+            "4e78774b-059d-4c98-ae13-6a669c5ec783"
+        )
         rule = app.value_sets.models.RxNormRule(
             uuid=terminology_version,  # Most recent version of RxNorm
             position=None,
             description=None,
-            prop='term_type',
-            operator='=',
-            value='BPCK',  # The first value from the rule
+            prop="term_type",
+            operator="=",
+            value="BPCK",  # The first value from the rule
             include=True,
             value_set_version=None,
-            fhir_system='http://www.nlm.nih.gov/research/umls/rxnorm',
+            fhir_system="http://www.nlm.nih.gov/research/umls/rxnorm",
             terminology_version=terminology_version,
         )
         rule.execute()
 
-        self.assertLessEqual(684, len(rule.results))  # expect RxNorm size to grow over time: 684 was July 2023
+        self.assertLessEqual(
+            684, len(rule.results)
+        )  # expect RxNorm size to grow over time: 684 was July 2023
 
         first_code = list(rule.results)[0]
-        self.assertEqual(first_code.system,
-                         'http://www.nlm.nih.gov/research/umls/rxnorm')
-        self.assertEqual(first_code.version, '2023-07-03')
+        self.assertEqual(
+            first_code.system, "http://www.nlm.nih.gov/research/umls/rxnorm"
+        )
+        self.assertEqual(first_code.version, "2023-07-03")
+
+    def test_rxnorm_expansion(self):
+        terminology_version = app.terminologies.models.Terminology.load(
+            "37ec7673-357a-4749-ac11-805dff145842"
+        )  # Jan 2024 RxNorm version
+        rule = app.value_sets.models.RxNormRule(
+            uuid=terminology_version,  # Most recent version of RxNorm
+            position=None,
+            description=None,
+            prop="term_type",
+            operator="=",
+            value="BPCK",  # The first value from the rule
+            include=True,
+            value_set_version=None,
+            fhir_system="http://www.nlm.nih.gov/research/umls/rxnorm",
+            terminology_version=terminology_version,
+        )
+        rule.execute()
+
+        first_code = list(rule.results)[0]
+        self.assertEqual(
+            first_code.system, "http://www.nlm.nih.gov/research/umls/rxnorm"
+        )
+        self.assertEqual(first_code.version, "2024-01-02")
+        self.assertlessEqual(
+            4388, len(rule.results)
+        )  # 4388 is the correct count for 691 RxNorm codes with BPCK as the term type and 3697 codes with status of quantified in January 2024; we expect this count to increase over time
 
     def test_icd10_cm_rule(self):
-        terminology_version = app.terminologies.models.Terminology.load('1808dad4-1cbe-4ff1-aa0c-8a7bdc104ad5')
+        terminology_version = app.terminologies.models.Terminology.load(
+            "1808dad4-1cbe-4ff1-aa0c-8a7bdc104ad5"
+        )
         rule = app.value_sets.models.ICD10CMRule(
             uuid=terminology_version,
             position=None,
             description=None,
-            prop='code',
-            operator='self-and-descendents',
-            value='F10',
+            prop="code",
+            operator="self-and-descendents",
+            value="F10",
             include=True,
-            value_set_version='',
-            fhir_system='http://hl7.org/fhir/sid/icd-10-cm',
+            value_set_version="",
+            fhir_system="http://hl7.org/fhir/sid/icd-10-cm",
             terminology_version=terminology_version,
         )
         rule.execute()
@@ -142,9 +193,8 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(74, len(rule.results))
 
         first_code = list(rule.results)[0]
-        self.assertEqual(first_code.system,
-                         'http://hl7.org/fhir/sid/icd-10-cm')
-        self.assertEqual(first_code.version, '2023')
+        self.assertEqual(first_code.system, "http://hl7.org/fhir/sid/icd-10-cm")
+        self.assertEqual(first_code.version, "2023")
 
     def test_execute_rules_directly(self):
         response = self.client.post(
@@ -371,17 +421,15 @@ class RuleTests(unittest.TestCase):
 
     def test_update_single_rule(self):
         """
-            rule 731913f0-32ca-11ee-90ef-5386acde3123 has
-                value set version c316bbc8-1489-4320-9268-9edf9bedf7f1 and
-                terminology 554805c6-4ad1-4504-b8c7-3bab4e5196fd
+        rule 731913f0-32ca-11ee-90ef-5386acde3123 has
+            value set version c316bbc8-1489-4320-9268-9edf9bedf7f1 and
+            terminology 554805c6-4ad1-4504-b8c7-3bab4e5196fd
         """
         # happy path: valid rule UUID and value terminology version UUID
         response = self.client.patch(
             "/ValueSetRules/731913f0-32ca-11ee-90ef-5386acde3123",
             data=json.dumps(
-                {
-                    "new_terminology_version_uuid": "554805c6-4ad1-4504-b8c7-3bab4e5196fd"
-                }
+                {"new_terminology_version_uuid": "554805c6-4ad1-4504-b8c7-3bab4e5196fd"}
             ),
             content_type="application/json",
         )
@@ -391,27 +439,29 @@ class RuleTests(unittest.TestCase):
         response = self.client.patch(
             "/ValueSetRules/11111111-1111-1111-1111-111111111111",
             data=json.dumps(
-                {
-                    "new_terminology_version_uuid": "554805c6-4ad1-4504-b8c7-3bab4e5196fd"
-                }
+                {"new_terminology_version_uuid": "554805c6-4ad1-4504-b8c7-3bab4e5196fd"}
             ),
             content_type="application/json",
         )
         result = response.json
-        assert result.get("message") == "No Value Set Rule found with UUID: 11111111-1111-1111-1111-111111111111"
+        assert (
+            result.get("message")
+            == "No Value Set Rule found with UUID: 11111111-1111-1111-1111-111111111111"
+        )
 
         # No rule UUID provided in URL: gives app.views.update_single_rule() API URL endpoint failure
         response = self.client.patch(
             "/ValueSetRules/",
             data=json.dumps(
-                {
-                    "new_terminology_version_uuid": "554805c6-4ad1-4504-b8c7-3bab4e5196fd"
-                }
+                {"new_terminology_version_uuid": "554805c6-4ad1-4504-b8c7-3bab4e5196fd"}
             ),
             content_type="application/json",
         )
         result = response.json
-        assert result.get("message") == "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again."
+        assert (
+            result.get("message")
+            == "The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again."
+        )
 
         # None input to VSRule.load(): BadRequestWithCode for empty ID
         with raises(BadRequestWithCode):
@@ -425,8 +475,11 @@ class RuleTests(unittest.TestCase):
         )
         result = response.json
         assert result.get("code") == "ValueSetRule.update.empty"
-        assert result.get("message") == "Cannot update Value Set Rule: empty Terminology Version ID"
+        assert (
+            result.get("message")
+            == "Cannot update Value Set Rule: empty Terminology Version ID"
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

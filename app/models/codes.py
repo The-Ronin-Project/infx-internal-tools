@@ -117,6 +117,7 @@ class FHIRCodeableConcept:
         return serialized
 
 
+
 class Code:
     """
     This class represents a code object used for encoding and maintaining information about a specific
