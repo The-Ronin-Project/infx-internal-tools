@@ -173,7 +173,7 @@ class Code:
         return False
 
     @staticmethod
-    def create_code_object(data: dict):
+    def create_code_or_codeable_concept(data: dict):
         """
         Helper method to instantiate a Code or FHIRCodeableConcept object based on the code schema.
         """

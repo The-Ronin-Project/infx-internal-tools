@@ -1166,7 +1166,7 @@ class CustomTerminologyRule(VSRule):
             }
 
             # Use the create_code_object method to instantiate the correct object
-            code_object = Code.create_code_object(code_data)
+            code_object = Code.create_code_or_codeable_concept(code_data)
 
             # Add the instantiated object to the results set
             results.add(code_object)
@@ -2717,7 +2717,9 @@ class ValueSetVersion:
         )
 
         for x in query:
-            code_or_codeable_concept_object = Code.create_code_object(query)
+            code_or_codeable_concept_object = Code.create_code_or_codeable_concept(
+                query
+            )
             self.expansion.add(code_or_codeable_concept_object)
 
     def save_expansion(self, report=None):
