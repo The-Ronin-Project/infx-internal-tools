@@ -41,12 +41,20 @@ class FHIRCoding:
         else:
             raise NotImplementedError(f"FHIRCoding.deserialize not implemented for input type: {type(json_input_raw)}")
 
-        return cls(
+        instance = cls(
             code=json_input.get('code'),
             display=json_input.get('display'),
             system=json_input.get('system'),
             version=json_input.get('version')
         )
+
+        # See if any unrecognized keys were present in the initial JSON
+        expected_keys = {"code", "display", "system", "version", "userSelected"}
+        unrecognized_keys = set(json_input.keys()) - expected_keys
+        if unrecognized_keys:
+            raise ValueError(f"Unrecognized keys in JSON input for FHIRCoding.deserialize: {unrecognized_keys}")
+
+        return instance
 
     def serialize(self):
         """
@@ -87,10 +95,18 @@ class FHIRCodeableConcept:
         fhir_text = json_input.get('text')
         coding_array = json_input.get('coding')
 
-        return cls(
+        instance = cls(
             coding=[FHIRCoding.deserialize(coding) for coding in coding_array],
             text=fhir_text
         )
+
+        # See if any unrecognized keys were present in the initial JSON
+        expected_keys = {"coding", "text"}
+        unrecognized_keys = set(json_input.keys()) - expected_keys
+        if unrecognized_keys:
+            raise ValueError(f"Unrecognized keys in JSON input for FHIRCoding.deserialize: {unrecognized_keys}")
+
+        return instance
 
     def serialize(self):
         serialized = {}
