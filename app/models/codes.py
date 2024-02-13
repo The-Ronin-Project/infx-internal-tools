@@ -173,10 +173,9 @@ class Code:
         return False
 
     @staticmethod
-    def create_code_object(data: dict) -> Union["Code", FHIRCodeableConcept]:
+    def create_code_object(data: dict):
         """
-        Factory method to instantiate the appropriate object based on the data provided.
-        The method infers whether to create a Code or FHIRCodeableConcept based on the keys present in the data.
+        Helper method to instantiate a Code or FHIRCodeableConcept object based on the code schema.
         """
 
         if data.code_schema == RoninCodeSchemas.code:
