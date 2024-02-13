@@ -10,7 +10,7 @@ import concurrent.futures
 import logging
 
 from psycopg2 import DatabaseError
-from sqlalchemy import text, MetaData, Table, Column, String, Row
+from sqlalchemy import text, MetaData, Table, Column, String, Row, JSON
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import datetime
@@ -53,15 +53,18 @@ RXNORM_BASE_URL = "https://rxnav.prod.projectronin.io/REST/"
 MAX_ES_SIZE = 1000
 
 metadata = MetaData()
-expansion_member = Table(
+expansion_member_data = Table(
     "expansion_member",
     metadata,
     Column("expansion_uuid", UUID, nullable=False),
-    Column("code", String, nullable=False),
+    Column("code_schema", String, nullable=False),
+    Column("code_simple", String, nullable=False),
+    Column("code_jsonb", JSON, nullable=False),
     Column("display", String, nullable=False),
     Column("system", String, nullable=False),
     Column("version", String, nullable=False),
     Column("custom_terminology_uuid", UUID, nullable=True),
+    Column("fhir_terminology_uuid", UUID, nullable=True),
     schema="value_sets",
 )
 
