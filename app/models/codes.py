@@ -143,7 +143,7 @@ class Code:
         code_schema: RoninCodeSchemas = RoninCodeSchemas.code,
         from_custom_terminology: Optional[bool] = None,
         from_fhir_terminology: Optional[bool] = None,
-        saved_to_db: bool = False,
+        saved_to_db: bool = True,
     ):
         """
         Initializes a new instance of the Code class with specified attributes for managing codes
@@ -313,9 +313,44 @@ class Code:
         )
 
     @classmethod
-    def new_codeable_concept(cls):
-        # todo: implement constructor
-        pass
+    def new_codeable_concept(
+            cls,
+            code_object: FHIRCodeableConcept,
+            custom_terminology_code_uuid: Optional[uuid.UUID] = None,
+            additional_data=None,
+            terminology_version: 'app.terminologies.models.Terminology' = None,
+            terminology_version_uuid=None,
+            system: Optional[str] = None,
+            version: Optional[str] = None,
+            depends_on_property: str = None,
+            depends_on_system: str = None,
+            depends_on_value: str = None,
+            depends_on_display: str = None,
+    ):
+        custom_terminology_code_uuid = custom_terminology_code_uuid
+        if custom_terminology_code_uuid is None:
+            custom_terminology_code_uuid = uuid.uuid4()
+
+        return cls(
+                system=system,
+                version=version,
+                code=None,
+                display=None,
+                additional_data=additional_data,
+                terminology_version=terminology_version,
+                terminology_version_uuid=terminology_version_uuid,
+                depends_on_property=depends_on_property,
+                depends_on_system=depends_on_system,
+                depends_on_value=depends_on_value,
+                depends_on_display=depends_on_display,
+                custom_terminology_code_uuid=custom_terminology_code_uuid,
+                fhir_terminology_code_uuid=None,
+                code_object=code_object,
+                code_schema=RoninCodeSchemas.codeable_concept,
+                from_custom_terminology=True,
+                from_fhir_terminology=False,
+                saved_to_db=False,
+        )
 
     @property
     def uuid(self):

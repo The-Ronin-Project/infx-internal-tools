@@ -196,21 +196,15 @@ def create_code_payload_to_code_list(payload) -> list:
 
             try:
                 code_object = FHIRCodeableConcept.deserialize(raw_code_object)
-            except:  # todo: fix this
+            except (ValueError, json.decoder.JSONDecodeError):
                 raise BadRequestWithCode(
                     code="Terminology.create_code.codeable_concept.deserialize_failure",
                     description="Unable to deserialize provided code_object"
                 )
-            code = Code(
-                custom_terminology_code_uuid=uuid.uuid4(),  # assign UUID for new code
-                code_schema=code_schema,
+            code = Code.new_codeable_concept(
                 code_object=code_object,
                 terminology_version_uuid=terminology_version_uuid,
                 additional_data=code_data.get('additional_data'),
-                system=None,
-                version=None,
-                code=None,
-                display=None
             )
             codes.append(code)
 
