@@ -30,11 +30,10 @@ from app.helpers.message_helper import message_exception_classname
 
 from app.helpers.oci_helper import set_up_object_store
 
-from app.models.codes import Code
+import app.models.codes
 
 import app.concept_maps.models
 import app.models.data_ingestion_registry
-import app.models.codes
 
 from app.terminologies.models import Terminology
 
@@ -284,7 +283,14 @@ class UcumRule(VSRule):
 
         results_data = conn.execute(converted_query, {"codes": codes})
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.code)
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.code,
+                from_custom_terminology=False,
+                from_fhir_terminology=False,
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -301,7 +307,14 @@ class UcumRule(VSRule):
             text(query), {"terminology_version_uuid": self.terminology_version.uuid}
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.code)
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.code,
+                from_fhir_terminology=False,
+                from_custom_terminology=False,
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -345,7 +358,14 @@ class ICD10CMRule(VSRule):
             {"codes": codes, "version_uuid": self.terminology_version.uuid},
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.display,
+                from_custom_terminology=False,
+                from_fhir_terminology=False
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -395,7 +415,14 @@ class ICD10CMRule(VSRule):
             {"codes": codes, "version_uuid": self.terminology_version.uuid},
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.display,
+                from_fhir_terminology=False,
+                from_custom_terminology=False
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -440,7 +467,14 @@ class ICD10CMRule(VSRule):
             {"codes": codes, "version_uuid": self.terminology_version.uuid},
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.display,
+                from_custom_terminology=False,
+                from_fhir_terminology=False
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -459,7 +493,14 @@ class ICD10CMRule(VSRule):
             {"section_uuid": self.value, "version_uuid": self.terminology_version.uuid},
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.display,
+                from_fhir_terminology=False,
+                from_custom_terminology=False
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -480,7 +521,14 @@ class ICD10CMRule(VSRule):
             {"chapter_uuid": self.value, "version_uuid": self.terminology_version.uuid},
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.display,
+                from_custom_terminology=False,
+                from_fhir_terminology=False
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -499,7 +547,14 @@ class ICD10CMRule(VSRule):
             text(query), {"terminology_version_uuid": self.terminology_version.uuid}
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.display,
+                from_fhir_terminology=False,
+                from_custom_terminology=False
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -517,8 +572,13 @@ class SNOMEDRule(VSRule):
 
         results_data = conn.execute(text(query), {"value": self.value})
         results = [
-            Code(
-                self.fhir_system, self.terminology_version.version, x.conceptid, x.term
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.conceptid,
+                display=x.term,
+                from_custom_terminology=False,
+                from_fhir_terminology=False
             )
             for x in results_data
         ]
@@ -557,11 +617,13 @@ class SNOMEDRule(VSRule):
             # Add data to results
             data = r.json().get("items")
             results = [
-                Code(
-                    self.fhir_system,
-                    self.terminology_version.version,
-                    x.get("conceptId"),
-                    x.get("fsn").get("term"),
+                app.models.codes.Code(
+                    system=self.fhir_system,
+                    version=self.terminology_version.version,
+                    code=x.get("conceptId"),
+                    display=x.get("fsn").get("term"),
+                    from_fhir_terminology=False,
+                    from_custom_terminology=False
                 )
                 for x in data
             ]
@@ -646,11 +708,13 @@ class RxNormRule(VSRule):
             code = properties.get("rxcui")
             if result_term_type in term_type:
                 final_rxnorm_codes.append(
-                    Code(
-                        self.fhir_system,
-                        self.terminology_version.version,
-                        code,
-                        display,
+                    app.models.codes.Code(
+                        system=self.fhir_system,
+                        version=self.terminology_version.version,
+                        code=code,
+                        display=display,
+                        from_custom_terminology=False,
+                        from_fhir_terminology=False,
                     )
                 )
 
@@ -682,11 +746,13 @@ class RxNormRule(VSRule):
             # Combine the data from both responses
             combined_data = concepts_data + status_data
             results = [
-                Code(
-                    self.fhir_system,
-                    self.terminology_version.version,
-                    x.get("rxcui"),
-                    x.get("name"),
+                app.models.codes.Code(
+                    system=self.fhir_system,
+                    version=self.terminology_version.version,
+                    code=x.get("rxcui"),
+                    display=x.get("name"),
+                    from_fhir_terminology=False,
+                    from_custom_terminology=False
                 )
                 for x in combined_data
             ]
@@ -705,11 +771,13 @@ class RxNormRule(VSRule):
         # Add data to results
         data = r.json().get("minConceptGroup").get("minConcept")
         results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.get("rxcui"),
-                x.get("name"),
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.get("rxcui"),
+                display=x.get("name"),
+                from_custom_terminology=False,
+                from_fhir_terminology=False
             )
             for x in data
         ]
@@ -723,11 +791,13 @@ class LOINCRule(VSRule):
 
     def codes_from_results(self, db_result):
         results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.loinc_num,
-                x.long_common_name,
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.loinc_num,
+                display=x.long_common_name,
+                from_fhir_terminology=False,
+                from_custom_terminology=False
             )
             for x in db_result
         ]
@@ -893,7 +963,14 @@ class ICD10PCSRule(VSRule):
             {"value": value_param, "version_uuid": self.terminology_version.uuid},
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.display,
+                from_custom_terminology=False,
+                from_fhir_terminology=False
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -1037,11 +1114,13 @@ class CPTRule(VSRule):
         conn = get_db()
         results_data = conn.execute(text(query))
         results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.code,
-                x.long_description,
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.long_description,
+                from_fhir_terminology=False,
+                from_custom_terminology=False
             )
             for x in results_data
         ]
@@ -1088,11 +1167,13 @@ class CPTRule(VSRule):
             text(query), {"terminology_version_uuid": self.terminology_version.uuid}
         )
         results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.code,
-                x.long_description,
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.long_description,
+                from_custom_terminology=False,
+                from_fhir_terminology=False
             )
             for x in results_data
         ]
@@ -1114,7 +1195,14 @@ class FHIRRule(VSRule):
             text(query), {"terminology_version_uuid": self.terminology_version.uuid}
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.display,
+                from_fhir_terminology=True,
+                from_custom_terminology=False
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -1145,7 +1233,14 @@ class FHIRRule(VSRule):
             {"codes": codes, "terminology_version_uuid": self.terminology_version.uuid},
         )
         results = [
-            Code(self.fhir_system, self.terminology_version.version, x.code, x.display)
+            app.models.codes.Code(
+                system=self.fhir_system,
+                version=self.terminology_version.version,
+                code=x.code,
+                display=x.display,
+                from_custom_terminology=False,
+                from_fhir_terminology=True
+            )
             for x in results_data
         ]
         self.results = set(results)
@@ -2636,7 +2731,12 @@ class ValueSetVersion:
             extensional_data = [x for x in extensional_members_data]
 
             for item in extensional_data:
-                code = Code(item.fhir_uri, item.version, item.code, item.display)
+                code = app.models.codes.Code(
+                    system=item.fhir_uri,
+                    version=item.version,
+                    code=item.code,
+                    display=item.display
+                )
                 if (
                     item.fhir_uri,
                     item.version,
@@ -3616,7 +3716,7 @@ class ExplicitlyIncludedCode:
     These are codes that are explicitly added to an intensional value set.
     """
 
-    code: Code
+    code: app.models.codes.Code
     value_set_version: ValueSetVersion
     review_status: str
     uuid: uuid = field(default=uuid.uuid4())
@@ -3678,7 +3778,7 @@ class ExplicitlyIncludedCode:
 
         results = []
         for x in code_data:
-            code = Code(
+            code = app.models.codes.Code(
                 system=x.system_uri,
                 version=x.version,
                 code=x.code,
