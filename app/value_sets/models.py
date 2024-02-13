@@ -1150,30 +1150,49 @@ class FHIRRule(VSRule):
 
 class CustomTerminologyRule(VSRule):
     def codes_from_results(self, db_result):
-        results = set()
-        for x in db_result:
-            # Prepare the data for each code in db_result
-            code_data = {
-                "system": self.fhir_system,
-                "version": self.terminology_version.version,
-                "code_schema": x.code_schema,
-                "code_simple": x.code_simple,
-                "code_jsonb": x.jsonb,
-                "display": x.display,
-                "depends_on_property": x.depends_on_property,
-                "depends_on_system": x.depends_on_system,
-                "depends_on_value": x.depends_on_value,
-                "depends_on_display": x.depends_on_display,
-                "custom_terminology_code_uuid": x.uuid,
-            }
+        codes = []
+        for row in db_result:
+            # TODO: come back and add depends on support
+            code_schema = app.models.codes.RoninCodeSchemas(row.code_schema)
+            from_custom_terminology = True
+            from_fhir_terminology = False
 
-            # Use the create_code_object method to instantiate the correct object
-            code_object = Code.create_code_or_codeable_concept(code_data)
-
-            # Add the instantiated object to the results set
-            results.add(code_object)
-
-        return results
+            if code_schema == app.models.codes.RoninCodeSchemas.code:
+                new_code = app.models.codes.Code(
+                    code_schema=code_schema,
+                    system=row.system,
+                    version=row.version,
+                    code=row.code_simple,
+                    display=row.display,
+                    from_custom_terminology=from_custom_terminology,
+                    custom_terminology_code_uuid=row.custom_terminology_uuid,
+                    from_fhir_terminology=from_fhir_terminology,
+                    fhir_terminology_code_uuid=row.fhir_terminology_uuid,
+                    saved_to_db=True,
+                )
+            elif code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
+                code_object = app.models.codes.FHIRCodeableConcept.deserialize(
+                    row.code_jsonb
+                )
+                new_code = app.models.codes.Code(
+                    code_schema=code_schema,
+                    system=row.system,
+                    version=row.version,
+                    code=None,
+                    display=None,
+                    code_object=code_object,
+                    from_custom_terminology=from_custom_terminology,
+                    custom_terminology_code_uuid=row.custom_terminology_uuid,
+                    from_fhir_terminology=from_fhir_terminology,
+                    fhir_terminology_code_uuid=row.fhir_terminology_uuid,
+                    saved_to_db=True,
+                )
+            else:
+                raise NotImplementedError(
+                    f"ValueSetVersion.load_current_expansion cannot load code with schema {code_schema}"
+                )
+            codes.append(new_code)
+        return codes
 
     def include_entire_code_system(self):
         self.terminology_version.load_content()
@@ -2721,8 +2740,12 @@ class ValueSetVersion:
         for row in query_result:
             # TODO: come back and add depends on support
             code_schema = app.models.codes.RoninCodeSchemas(row.code_schema)
-            from_custom_terminology = True if row.custom_terminology_uuid is not None else False
-            from_fhir_terminology = True if row.fhir_terminology_uuid is not None else False
+            from_custom_terminology = (
+                True if row.custom_terminology_uuid is not None else False
+            )
+            from_fhir_terminology = (
+                True if row.fhir_terminology_uuid is not None else False
+            )
 
             if code_schema == app.models.codes.RoninCodeSchemas.code:
                 new_code = app.models.codes.Code(
@@ -2735,10 +2758,12 @@ class ValueSetVersion:
                     custom_terminology_code_uuid=row.custom_terminology_uuid,
                     from_fhir_terminology=from_fhir_terminology,
                     fhir_terminology_code_uuid=row.fhir_terminology_uuid,
-                    saved_to_db=True
+                    saved_to_db=True,
                 )
             elif code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
-                code_object = app.models.codes.FHIRCodeableConcept.deserialize(row.code_jsonb)
+                code_object = app.models.codes.FHIRCodeableConcept.deserialize(
+                    row.code_jsonb
+                )
                 new_code = app.models.codes.Code(
                     code_schema=code_schema,
                     system=row.system,
@@ -2750,10 +2775,12 @@ class ValueSetVersion:
                     custom_terminology_code_uuid=row.custom_terminology_uuid,
                     from_fhir_terminology=from_fhir_terminology,
                     fhir_terminology_code_uuid=row.fhir_terminology_uuid,
-                    saved_to_db=True
+                    saved_to_db=True,
                 )
             else:
-                raise NotImplementedError(f"ValueSetVersion.load_current_expansion cannot load code with schema {code_schema}")
+                raise NotImplementedError(
+                    f"ValueSetVersion.load_current_expansion cannot load code with schema {code_schema}"
+                )
 
             self.expansion.add(new_code)
 
@@ -3274,7 +3301,9 @@ class ValueSetVersion:
         try:
             publish_to_simplifier(resource_type, value_set_uuid, value_set_to_json)
         except Exception as e:  # Publishing to Simplifier will be treated as optional, not required
-            logging.warning(f"Unable to publish Value Set Version {self.uuid}, {self.value_set.title} version {self.version} to Simplifier")
+            logging.warning(
+                f"Unable to publish Value Set Version {self.uuid}, {self.value_set.title} version {self.version} to Simplifier"
+            )
             pass
 
     @classmethod
