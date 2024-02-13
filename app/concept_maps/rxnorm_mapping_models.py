@@ -4,6 +4,7 @@ import requests
 
 import app.helpers.data_helper
 import app.helpers.format_helper
+import app.errors
 
 
 def parse_rxnorm_codes_from_source_code(source_code):
@@ -11,8 +12,9 @@ def parse_rxnorm_codes_from_source_code(source_code):
     is_spark_format = app.helpers.data_helper.is_spark_format(source_code)
 
     if not is_spark_format:
-        raise NotImplementedError(
-            "Only spark formatted inputs are supported for parsing out RxNorm codes"
+        raise app.errors.BadRequestWithCode(
+            code="RxNormMappingHelper.format",
+            description="Only spark formatted inputs are supported for parsing out RxNorm codes"
         )
 
     if is_spark_format:
