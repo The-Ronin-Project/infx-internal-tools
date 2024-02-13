@@ -12,6 +12,7 @@ from app.errors import BadRequestWithCode
 
 # INTERNAL_TOOLS_BASE_URL = "https://infx-internal.prod.projectronin.io"
 
+
 class Code:
     """
     This class represents a code object used for encoding and maintaining information about a specific concept or term within a coding system or terminology. It provides a way to manage various attributes related to the code and the coding system it belongs to.
@@ -40,7 +41,7 @@ class Code:
         additional_data=None,
         uuid=None,
         system_name=None,
-        terminology_version: 'app.terminologies.models.Terminology' = None,
+        terminology_version: "app.terminologies.models.Terminology" = None,
         terminology_version_uuid=None,
         depends_on_property: str = None,
         depends_on_system: str = None,
@@ -171,6 +172,34 @@ class Code:
             )
         return False
 
+    @staticmethod
+    def create_code_object(data: dict) -> Union["Code", FHIRCodeableConcept]:
+        """
+        Factory method to instantiate the appropriate object based on the data provided.
+        The method infers whether to create a Code or FHIRCodeableConcept based on the keys present in the data.
+        """
+
+        if data.code_schema == RoninCodeSchemas.code:
+            # Create a Code object
+            return Code(
+                system=data.get("system"),
+                version=data.get("version"),
+                code=data.get("code"),
+                display=data.get("display"),
+                additional_data=data.get("additional_data"),
+                terminology_version=data.get("terminology_version"),
+                depends_on_property=data.get("depends_on_property"),
+                depends_on_system=data.get("depends_on_system"),
+                depends_on_value=data.get("depends_on_value"),
+                depends_on_display=data.get("depends_on_display"),
+            )
+        elif data.code_schema == RoninCodeSchemas.codeable_concept:
+            # Create a FHIRCodeableConcept object
+            codings = [
+                FHIRCoding.deserialize(coding) for coding in data.get("coding", [])
+            ]
+            return FHIRCodeableConcept(coding=codings, text=data.get("text"))
+
     @classmethod
     def load_from_custom_terminology(cls, code_uuid):
         """
@@ -215,7 +244,6 @@ class Code:
             depends_on_property=code_data.depends_on_property,
             depends_on_system=code_data.depends_on_system,
         )
-
 
     def serialize(self, with_system_and_version=True, with_system_name=False):
         """
@@ -289,8 +317,9 @@ class Code:
         self.add_example_to_additional_data("example_value_boolean", value_boolean)
         self.add_example_to_additional_data("example_value_string", value_string)
         self.add_example_to_additional_data("example_value_date_time", value_date_time)
-        self.add_example_to_additional_data("example_value_codeable_concept", value_codeable_concept)
-
+        self.add_example_to_additional_data(
+            "example_value_codeable_concept", value_codeable_concept
+        )
 
     def add_example_to_additional_data(self, key: str, example):
         """

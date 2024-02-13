@@ -1148,38 +1148,40 @@ class FHIRRule(VSRule):
 
 class CustomTerminologyRule(VSRule):
     def codes_from_results(self, db_result):
-        results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.code,
-                x.display,
-                depends_on_property=x.depends_on_property,
-                depends_on_system=x.depends_on_system,
-                depends_on_value=x.depends_on_value,
-                depends_on_display=x.depends_on_display,
-                custom_terminology_code_uuid=x.uuid,
-            )
-            for x in db_result
-        ]
-        return set(results)
+        results = set()
+        for x in db_result:
+            # Prepare the data for each code in db_result
+            code_data = {
+                "system": self.fhir_system,
+                "version": self.terminology_version.version,
+                "code_schema": x.code_schema,
+                "code_simple": x.code_simple,
+                "code_jsonb": x.jsonb,
+                "display": x.display,
+                "depends_on_property": x.depends_on_property,
+                "depends_on_system": x.depends_on_system,
+                "depends_on_value": x.depends_on_value,
+                "depends_on_display": x.depends_on_display,
+                "custom_terminology_code_uuid": x.uuid,
+            }
+
+            # Use the create_code_object method to instantiate the correct object
+            code_object = Code.create_code_object(code_data)
+
+            # Add the instantiated object to the results set
+            results.add(code_object)
+
+        return results
 
     def include_entire_code_system(self):
-        conn = get_db()
-        query = """
-        select * from custom_terminologies.code 
-        where terminology_version_uuid=:terminology_version_uuid
-        """
-        results_data = conn.execute(
-            text(query), {"terminology_version_uuid": self.terminology_version.uuid}
-        )
-
-        self.results = self.codes_from_results(results_data)
+        self.terminology_version.load_content()
+        codes = self.terminology_version.codes
+        return set(codes)
 
     def display_regex(self):
         conn = get_db()
         query = """
-        select * from custom_terminologies.code 
+        select * from custom_terminologies.code_poc 
         where terminology_version_uuid=:terminology_version_uuid
         and display like :value
         """
@@ -1196,7 +1198,7 @@ class CustomTerminologyRule(VSRule):
     def code_rule(self):
         conn = get_db()
         query = """
-        select * from custom_terminologies.code
+        select * from custom_terminologies.code_poc
         where code in :value
         and terminology_version_uuid=:terminology_version_uuid
         """
@@ -2707,7 +2709,7 @@ class ValueSetVersion:
         query = conn.execute(
             text(
                 """
-            select * from value_sets.expansion_member
+            select * from value_sets.expansion_member_data
             where expansion_uuid = :expansion_uuid
             """
             ),
@@ -2715,7 +2717,8 @@ class ValueSetVersion:
         )
 
         for x in query:
-            self.expansion.add(Code(x.system, x.version, x.code, x.display))
+            code_or_codeable_concept_object = Code.create_code_object(query)
+            self.expansion.add(code_or_codeable_concept_object)
 
     def save_expansion(self, report=None):
         """
@@ -2753,11 +2756,13 @@ class ValueSetVersion:
         if self.expansion:
             try:
                 conn.execute(
-                    expansion_member.insert(),
+                    expansion_member_data.insert(),
                     [
                         {
                             "expansion_uuid": str(self.expansion_uuid),
-                            "code": code.code,
+                            "code_schema": code.code_schema,
+                            "code_simple": code.code_simple,
+                            "code_jsonb": code.code_jsonb,
                             "display": code.display,
                             "system": code.system,
                             "version": code.version,
@@ -3274,10 +3279,10 @@ class ValueSetVersion:
         removed_codes_query = conn.execute(
             text(
                 """
-                select distinct code, display, system from value_sets.expansion_member
+                select distinct code_schema, code_simple, code_jsonb, display, system from value_sets.expansion_member_data
                 where expansion_uuid = :previous_expansion
                 EXCEPT
-                select distinct code, display, system from value_sets.expansion_member
+                select distinct code_schema, code_simple, code_jsonb, display, system from value_sets.expansion_member_data
                 where expansion_uuid = :new_expansion
                 order by display asc
                 """
@@ -3289,7 +3294,9 @@ class ValueSetVersion:
         )
         removed_codes = [
             {
-                "code": x.code,
+                "code_schema": x.code_schema,
+                "code_simple": x.code_simple,
+                "code_jsonb": x.code_jsonb,
                 "display": x.display,
                 "system": x.system,
             }
@@ -3299,10 +3306,10 @@ class ValueSetVersion:
         added_codes_query = conn.execute(
             text(
                 """
-                select distinct code, display, system from value_sets.expansion_member
+                select distinct code_schema, code_simple, code_jsonb, display, system from value_sets.expansion_member_data
                 where expansion_uuid = :new_expansion
                 EXCEPT
-                select distinct code, display, system from value_sets.expansion_member
+                select distinct code_schema, code_simple, code_jsonb, display, system from value_sets.expansion_member_data
                 where expansion_uuid = :previous_expansion
                 order by display asc
                 """
@@ -3314,7 +3321,9 @@ class ValueSetVersion:
         )
         added_codes = [
             {
-                "code": x.code,
+                "code_schema": x.code_schema,
+                "code_simple": x.code_simple,
+                "code_jsonb": x.code_jsonb,
                 "display": x.display,
                 "system": x.system,
             }
