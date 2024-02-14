@@ -1,3 +1,5 @@
+import logging
+
 from celery import Celery
 from uuid import UUID
 from decouple import config
@@ -171,6 +173,7 @@ def back_fill_concept_maps_to_simplifier():
 
 @celery_app.task
 def perform_database_migration(table_name, granularity, segment_start, segment_count):
+    logging.info(f"Running perform_database_migration table_name={table_name} granularity={granularity}, segment_start={segment_start}, segment_count={segment_count}")
     app.util.data_migration.migrate_database_table(
         table_name=table_name,
         granularity=granularity,
