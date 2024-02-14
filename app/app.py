@@ -457,6 +457,15 @@ def create_app(script_info=None):
         tasks.perform_database_migration.delay(table_name, granularity, segment_start, segment_count)
         return f"Task Created: table_name={table_name} granularity={granularity}, segment_start={segment_start}, segment_count={segment_count}"
 
+
+    @app.route("/populate_v4_deduplication_hash", methods=["POST"])
+    def populate_v4_deduplication_hash_endpoint():
+        segment_count = request.json.get('how_many_blocks_will_we_run_in_parallel_as_a_set')
+        segment_start = request.json.get('starting_from_zero_which_block_in_the_set_to_run_now')
+        tasks.identify_v4_concept_map_duplicates.delay(segment_start, segment_count)
+        return f"Task Created: segment_start={segment_start}, segment_count={segment_count}"
+
+
     @app.route("/database_cleanup", methods=["POST"])
     def perform_database_cleanup_endpoint():
         table_name = request.json.get('table_name')

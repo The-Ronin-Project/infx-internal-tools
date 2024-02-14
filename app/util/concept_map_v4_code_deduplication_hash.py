@@ -9,10 +9,15 @@ import pytest
 import uuid
 from sqlalchemy import text
 
+from app.concept_maps.models import ConceptMap
 from app.database import get_db
-from app.helpers.format_helper import prepare_dynamic_value_for_sql_issue
+from app.enum.concept_maps_for_content import ConceptMapsForContent
+from app.enum.concept_maps_for_systems import ConceptMapsForSystems
+from app.helpers.format_helper import prepare_code_and_display_for_storage, filter_unsafe_depends_on_value, \
+    prepare_depends_on_value_for_storage
 from app.helpers.message_helper import message_exception_summary
 from app.helpers.id_helper import generate_code_id
+from app.util.data_migration import convert_empty_to_null, get_v5_concept_map_uuids_in_n_blocks_for_parallel_process
 
 LOGGER = logging.getLogger()
 
@@ -22,6 +27,10 @@ def identify_duplicate_code_values_in_v4(
         concept_map_version_uuid: str = None
 ):
     """
+    Currently this function limits the work to code values used in a specific concept map and version.
+    See identify_v4_concept_map_duplicates() which calls identify_v4_concept_map_duplicates_ctive_and_pending().
+    todo: If both inputs are None, walk through the entire custom_terminologies.code table.
+
     The duplicates in v4 data are:
     - code: the same code object in more than one row in the (only) code table: a "false difference" duplicate
     - mapping: the same source code object appears in more than one row in the same concept map table; the source code
@@ -94,33 +103,12 @@ def identify_duplicate_code_values_in_v4(
     last_previous_uuid = start_uuid
     done = False
     total_processed = 0
-    LOGGER.warning(f"START: {datetime.datetime.now()} ")
 
     # Set the concept map UUID and concept map version UUID in query text.
-    count_goal_query = """
-        select count(ctc.code) as goal from
-        concept_maps.concept_map cm
-        join concept_maps.concept_map_version cmv on cmv.concept_map_uuid = cm.uuid
-        join concept_maps.source_concept sc on sc.concept_map_version_uuid = cmv.uuid
-        join concept_maps.concept_relationship cr on cr.source_concept_uuid = sc.uuid
-        join custom_terminologies.code ctc on sc.custom_terminology_uuid = ctc.uuid
-        where cm.uuid = :concept_map_uuid
-        and cmv.uuid = :concept_map_version_uuid
-        """
-    count_completed_query = """
-        select count(ctc.code) as completed from
-        concept_maps.concept_map cm
-        join concept_maps.concept_map_version cmv on cmv.concept_map_uuid = cm.uuid
-        join concept_maps.source_concept sc on sc.concept_map_version_uuid = cmv.uuid
-        join concept_maps.concept_relationship cr on cr.source_concept_uuid = sc.uuid
-        join custom_terminologies.code ctc on sc.custom_terminology_uuid = ctc.uuid
-        where cm.uuid = :concept_map_uuid
-        and cmv.uuid = :concept_map_version_uuid
-        and ctc.deduplication_hash is not null
-        """
     select_query = f"""
         select cm.title, cm.uuid as cm_uuid, cmv.version as cm_version, 
         ctc.code, ctc.display, ctc.uuid as custom_terminologies_code_uuid, 
+        ctc.depends_on_value, ctc.depends_on_property, ctc.depends_on_system, ctc.depends_on_display,
         cr.uuid as concept_map_concept_relationship_uuid,
         cr.target_concept_code, cr.target_concept_display, cr.target_concept_system
         from concept_maps.concept_map cm
@@ -130,42 +118,19 @@ def identify_duplicate_code_values_in_v4(
         join custom_terminologies.code ctc on sc.custom_terminology_uuid = ctc.uuid
         where cm.uuid = :concept_map_uuid
         and cmv.uuid = :concept_map_version_uuid
-        and ctc.uuid >= :start_uuid
-        and ctc.code_id is not null
+        and ctc.uuid > :start_uuid
+        and ctc.deduplication_hash is null
         order by ctc.uuid
         limit :page_size
         """
-    insert_query = f"""
-        insert into custom_terminologies.code
-        (
-            deduplication_hash
-        )
-        values 
-        (
-            :deduplication_hash
-        )
+    update_query = f"""
+        update custom_terminologies.code
+        set deduplication_hash = :deduplication_hash
         where uuid = :custom_terminologies_code_uuid
         """
 
     from app.database import get_db
     conn = get_db()
-    try:
-        count_goal = conn.execute(
-            text(count_goal_query),
-            {
-                "concept_map_uuid": concept_map_uuid,
-                "concept_map_version_uuid": concept_map_version_uuid,
-            }
-        ).first()
-        LOGGER.warning(f"Rows in v4 table: {count_goal.goal}")
-        count_completed = conn.execute(
-            text(count_completed_query)
-        ).first()
-        LOGGER.warning(f"Output rows completed before this run: {count_completed.completed}")
-    except Exception as e:
-        conn.rollback()
-        raise e
-
     while not done:
         try:
             result = conn.execute(
@@ -185,9 +150,9 @@ def identify_duplicate_code_values_in_v4(
             else:
                 for row in result:
                     last_previous_uuid = row.custom_terminologies_code_uuid
-                    total_processed += 1
                     if total_processed % report_page_size == 0:
                         LOGGER.warning(f"Rows so far this run: {total_processed}")
+                    total_processed += 1
 
                     # leverage v5 migration functions to get deduplication_hash values
                     (
@@ -195,16 +160,37 @@ def identify_duplicate_code_values_in_v4(
                         code_simple,
                         code_jsonb,
                         code_string,
-                        rejected
-                    ) = prepare_dynamic_value_for_sql_issue(row.code, row.display)
+                        display_string
+                    ) = prepare_code_and_display_for_storage(row.code, row.display)
+                    (
+                        depends_on_value,
+                        rejected_depends_on_value
+                    ) = filter_unsafe_depends_on_value(row.depends_on_value)
+                    has_depends_on = (rejected_depends_on_value is None and depends_on_value is not None)
+                    (
+                        depends_on_value_schema,
+                        depends_on_value_simple,
+                        depends_on_value_jsonb,
+                        depends_on_value_string
+                    ) = prepare_depends_on_value_for_storage(depends_on_value)
+                    depends_on_value_for_code_id = ""
+                    if has_depends_on:
+                        depends_on_value_for_code_id += (
+                            depends_on_value_string +
+                            row.depends_on_property +
+                            row.depends_on_system +
+                            row.depends_on_display
+                        )
+                    # todo: for today, the v5 generate_code_id() pretends it does not know depends_on is a list
                     deduplication_hash = generate_code_id(
                         code_string=code_string,
-                        display=json.loads(code_string).get("text", ""),
+                        display=display_string,
+                        depends_on_value_string=depends_on_value_for_code_id,
                     )
 
                     try:
                         conn.execute(
-                            text(insert_query),
+                            text(update_query),
                             {
                                 "deduplication_hash": deduplication_hash,
                                 "custom_terminologies_code_uuid": row.custom_terminologies_code_uuid
@@ -223,20 +209,95 @@ def identify_duplicate_code_values_in_v4(
             LOGGER.warning("HALTED due to ERROR.")
             done = True
 
-    LOGGER.warning("DONE.")
+    # while not done
+    LOGGER.warning(f"Rows so far this run: {total_processed}")
 
 
-def identify_v4_concept_map_duplicates():
+def identify_v4_concept_map_duplicates(
+    number_of_blocks_requested: int=4,
+    block_to_process_in_this_run: int=0,
+):
     """
-    Command line endpoint for identifying v4 duplicate check locally. Does not support command line inputs at this time.
+    @param number_of_blocks_requested - how to split for parallel processing, for example request 4 blocks, 8, etc.
+    @param block_to_process_in_this_run - a 0-based index - which block - must be < number_of_blocks_requested
     """
-    # todo: For this command line endpoint, call for each table to be checked. data_migration.py lists UUID
-    identify_duplicate_code_values_in_v4(
-        "c504f599-6bf6-4865-8220-bb199e3d1809",
-        "955e518a-8030-4fe5-9e61-e0a6e6fda1b3"
+    # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
+    # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded
+    LOGGER.setLevel("WARNING")
+
+    # Create a console handler and add it to the logger if it doesn't have any handlers
+    if not LOGGER.hasHandlers():
+        ch = logging.StreamHandler()
+        LOGGER.addHandler(ch)
+
+    # process all the items of interest
+    message = (
+        f"START: {datetime.datetime.now()}\n"
+        f"Concept map UUIDs in group '{block_to_process_in_this_run}' "
+        f"which is 1 of {number_of_blocks_requested} groups to process:\n"
     )
+    try:
+        uuid_lists = get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks_requested)
+        list_to_process = uuid_lists[block_to_process_in_this_run]
+        for concept_map_uuid in list_to_process:
+            message += f"  {concept_map_uuid}\n"
+        LOGGER.warning(message + f"\nProcessing the {len(list_to_process)} UUIDs now.")
+        for concept_map_uuid in list_to_process:
+            message = identify_v4_concept_map_duplicates_active_and_pending(concept_map_uuid)
+            LOGGER.warning(message)
+        LOGGER.warning("DONE.")
+    except Exception as e:
+        info = "".join(traceback.format_exception(*sys.exc_info()))
+        LOGGER.warning(f"""\nERROR: {message_exception_summary(e)}\n\n{info}""")
+        LOGGER.warning("HALTED due to ERROR.")
+
+
+def identify_v4_concept_map_duplicates_active_and_pending(concept_map_uuid) -> str:
+    """
+    Process the most recent "pending" and/or "active" version (if any)
+    @return message - information to use in logging
+    """
+    message = f"Processing concept map UUID: {concept_map_uuid}"
+
+    concept_map = ConceptMap(concept_map_uuid)
+    if concept_map is None:
+        return message + "\nConcept map not found."
+    else:
+        message += f"\nTitle: {concept_map.title}"
+
+    # pending
+    concept_map_version = concept_map.get_most_recent_version(
+        active_only=False,
+        load_mappings=False,
+        pending_only=True
+    )
+    if concept_map_version is None:
+        message += "\nConcept map 'pending' version not found."
+    else:
+        message += f"\nConcept map 'pending' version {concept_map_version.version} UUID: {concept_map_version.uuid}"
+        identify_duplicate_code_values_in_v4(concept_map_uuid, concept_map_version.uuid)
+
+    # active
+    concept_map_version = concept_map.get_most_recent_version(
+        active_only=True,
+        load_mappings=False,
+        pending_only=False
+    )
+    if concept_map_version is None:
+        message += "\nConcept map 'active' version not found."
+    else:
+        message += f"\nConcept map 'active' version {concept_map_version.version} UUID: {concept_map_version.uuid}"
+        identify_duplicate_code_values_in_v4(concept_map_uuid, concept_map_version.uuid)
+
+    # done
+    return message
 
 
 if __name__=="__main__":
-    identify_v4_concept_map_duplicates()
+    # Template to do parallel runs on a laptop with 16 processors (15 blocks leaves 1 to do other stuff).
+    # Edit the first number based on the number of CPUs on your laptop ; second number is 0-based relative to that.
+    identify_v4_concept_map_duplicates(
+        number_of_blocks_requested=15,
+        block_to_process_in_this_run=12,
+    )
 

@@ -10,9 +10,11 @@ import uuid
 from sqlalchemy import text
 
 from app.database import get_db
-from app.helpers.format_helper import prepare_dynamic_value_for_sql_issue
+from app.helpers.format_helper import prepare_code_and_display_for_storage, filter_unsafe_depends_on_value, \
+    prepare_depends_on_value_for_storage
 from app.helpers.message_helper import message_exception_summary
 from app.helpers.id_helper import generate_code_id, generate_mapping_id_with_source_code_id
+from app.util.data_migration import convert_empty_to_null
 
 LOGGER = logging.getLogger()
 
@@ -250,18 +252,38 @@ def load_duplicate_for_v4_concept_map(
                         if total_processed % report_page_size == 0:
                             LOGGER.warning(f"Rows so far this run: {total_processed}")
 
-                        # leverage v5 migration functions to get normalized code_string and deduplication_hash values
+                        # leverage v5 migration functions to get code, display, depends_on, and deduplication values
                         (
                             code_schema,
                             code_simple,
                             code_jsonb,
                             code_string,
-                            rejected
-                        ) = prepare_dynamic_value_for_sql_issue(row.code, row.display)
-                        display_string = json.loads(code_string).get("text", "")
+                            display_string
+                        ) = prepare_code_and_display_for_storage(row.code, row.display)
+                        (
+                            depends_on_value,
+                            rejected_depends_on_value
+                        ) = filter_unsafe_depends_on_value(row.depends_on_value)
+                        has_depends_on = (rejected_depends_on_value is None and depends_on_value is not None)
+                        (
+                            depends_on_value_schema,
+                            depends_on_value_simple,
+                            depends_on_value_jsonb,
+                            depends_on_value_string
+                        ) = prepare_depends_on_value_for_storage(depends_on_value)
+                        depends_on_value_for_code_id = ""
+                        if has_depends_on:
+                            depends_on_value_for_code_id += (
+                                    depends_on_value_string +
+                                    row.depends_on_property +
+                                    row.depends_on_system +
+                                    row.depends_on_display
+                            )
+                        # todo: for today, the v5 generate_code_id() pretends it does not know depends_on is a list
                         code_deduplication_hash = generate_code_id(
                             code_string=code_string,
                             display=display_string,
+                            depends_on_value_string=depends_on_value_for_code_id,
                         )
                         mapping_deduplication_hash = generate_mapping_id_with_source_code_id(
                             source_code_id=code_deduplication_hash,

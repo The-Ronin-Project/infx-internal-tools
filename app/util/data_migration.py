@@ -5,13 +5,17 @@ import time
 import uuid
 import traceback
 import sys
+from math import floor
 
 # from decouple import config
 from sqlalchemy import text
 
-from app.helpers.format_helper import prepare_dynamic_value_for_sql_issue, IssuePrefix, \
-    prepare_additional_data_for_sql
-from app.helpers.id_helper import hash_for_code_id
+from app.enum.concept_maps_for_content import ConceptMapsForContent
+from app.enum.concept_maps_for_systems import ConceptMapsForSystems
+from app.helpers.format_helper import IssuePrefix, \
+    prepare_additional_data_for_storage, filter_unsafe_depends_on_value, prepare_code_and_display_for_storage, \
+    prepare_depends_on_value_for_storage
+from app.helpers.id_helper import generate_code_id
 from app.helpers.message_helper import message_exception_summary
 
 # from sqlalchemy.dialects.postgresql import UUID as UUID_column_type
@@ -69,6 +73,44 @@ UUID_END = [
 START_UUID = UUID_START[0]
 END_UUID = UUID_END[-1]
 
+
+def get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks_needed: int = 1) -> list:
+    """
+    Returns list of lists of UUIDs, split evenly into blocks according to requested number_of_blocks_needed.
+    Included are app.enum.concept_maps_for_content.ConceptMapsForContent and ConceptMapsForSystems. Also see:
+
+    Example of calling get_v5_concept_map_uuids_in_n_blocks_for_parallel_process() to control parallel processing:
+    Main caller: if __name__=="__main__": in app.util.concept_map_v4_code_deduplication_hash.py
+    Called function (calls this): app.util.concept_map_v4_code_deduplication_hash.identify_v4_concept_map_duplicates()
+
+    Example of a function that accepts a concept map UUID and grabs just the "pending" and "active" versions to process:
+    app.util.concept_map_v4_code_deduplication_hash.identify_v4_concept_map_duplicates_active_and_pending()
+
+    For ConceptMapsForSystems we might need to migrate more versions in more statuses, to support existing unit tests.
+    """
+    if number_of_blocks_needed < 1 or number_of_blocks_needed > 32:
+        return []
+    full_list = []
+    for concept_map_uuid in ConceptMapsForContent:
+        full_list.append(concept_map_uuid.value)
+    for concept_map_uuid in ConceptMapsForSystems:
+        full_list.append(concept_map_uuid.value)
+    sorted_list = sorted(full_list)
+    list_length = len(sorted_list)
+    block_length: int = floor(list_length / number_of_blocks_needed)
+
+    # collect result_list
+    result_list = []
+    for n in range(0, number_of_blocks_needed):   # range is (>= start, < end)
+        start = n * block_length
+        if n == number_of_blocks_needed - 1:
+            entry = sorted_list[start:]
+            result_list.append(entry)
+        else:
+            end = ((n + 1) * block_length)
+            entry = sorted_list[start:end]   # slice is (>= start, < end)
+            result_list.append(entry)
+    return result_list
 
 def query_code_uuid_latest_versions() -> str:
     """
@@ -157,12 +199,10 @@ def query_code_uuid_test_only() -> str:
 
 def print_start(time_start, uuid_start, uuid_end):
     LOGGER.warning(
-        f"\nSTART: {uuid_start} to {uuid_end} - page size: {QUERY_LIMIT} - report every: {REPORT_LIMIT} rows\n")
+        f"\nSTART: {time_start} - {uuid_start} to {uuid_end} - page size: {QUERY_LIMIT} - report every: {REPORT_LIMIT} rows\n")
 
 
-def print_progress(time_start, total_processed, last_previous_uuid, statistics=None):
-    # Save log bloat for big runs by providing this line: you can comment it out when you want the extra log messages
-    statistics = None
+def print_progress(time_start, total_processed, last_previous_uuid):
 
     time_end = datetime.datetime.now()
     time_elapsed = time_end - time_start
@@ -170,32 +210,11 @@ def print_progress(time_start, total_processed, last_previous_uuid, statistics=N
         row_average_time = time_elapsed / REPORT_LIMIT
     else:
         row_average_time = 0
-    if statistics is None:
-        stat_report = ""
-    else:
-        summary = datetime.timedelta(0)
-        for s in statistics:
-            summary += s
-        stat_report = (
-            f"\n     Execution time breakdown:\n"
-            f"       stat_select_batch:          {statistics[0]}\n"
-            f"       stat_migrate_code_value:    {statistics[1]}\n"
-            f"       stat_migrate_depends_on:    {statistics[2]}\n"
-            f"       stat_migrate_advisory_data: {statistics[3]}\n"
-            f"       stat_id_formation:          {statistics[4]}\n"
-            f"       stat_insert_formation:      {statistics[5]}\n"
-            f"       stat_values_formation:      {statistics[6]}\n"
-            f"       stat_insert_success:        {statistics[7]}\n"
-            f"       stat_insert_fail:           {statistics[8]}\n"
-            f"       stat_fail_cause_dup_case_1: {statistics[9]}\n"
-            f"       stat_fail_cause_dup_case_2: {statistics[10]}\n"
-            f"     Total:                        {summary}"
-        )
     LOGGER.warning(
         f"Accumulated rows: {total_processed}"
         f" - Time/1K: ({1000 * row_average_time})"
         f" - /100K: ({100000 * row_average_time})"
-        f" - Last old_uuid: {last_previous_uuid}{stat_report}"
+        f" - Last old_uuid: {last_previous_uuid}"
     )
 
 
@@ -205,6 +224,16 @@ def convert_empty_to_null(input_string: str):
     """
     if input_string == "" or input_string == "null":
         return None
+    else:
+        return input_string
+
+
+def convert_null_to_empty(input_string: str):
+    """
+    conversion helper for data migration: when a null column needs to be represented as "" (empty string) return ""
+    """
+    if input_string == None or input_string == "null":
+        return ""
     else:
         return input_string
 
@@ -292,17 +321,29 @@ def migrate_custom_terminologies_code(
             code_simple,
             code_jsonb,
             code_id,
+            deduplication_hash,
             terminology_version_uuid,
             created_date,
             additional_data, 
     """
-    insert_depends_on = f"""
+    insert_depends_on_start = f"""
+        INSERT INTO custom_terminologies.code_poc_depends_on
+    """
+    insert_depends_on_columns = f"""
+        (
             depends_on_value_jsonb,
             depends_on_value_schema,  
             depends_on_value_simple, 
             depends_on_property, 
             depends_on_system, 
             depends_on_display,
+            uuid,
+            sequence,
+            code_uuid,
+            old_uuid
+        )
+        VALUES
+        (
     """
     insert_old_uuid = f"""
             old_uuid
@@ -317,6 +358,7 @@ def migrate_custom_terminologies_code(
     # :code_jsonb is added here at runtime
     insert_code_id = f"""
             :code_id,
+            :deduplication_hash,
             :terminology_version_uuid,
             :created_date,
             :additional_data,
@@ -328,6 +370,10 @@ def migrate_custom_terminologies_code(
             :depends_on_property, 
             :depends_on_system, 
             :depends_on_display,
+            :uuid,
+            :sequence,
+            :code_uuid,
+            :old_uuid
     """
     insert_end = f"""
             :old_uuid
@@ -343,17 +389,13 @@ def migrate_custom_terminologies_code(
             code_simple,
             code_jsonb,
             code_id,
+            deduplication_hash,
             terminology_version_uuid,
             created_date,
             additional_data, 
     """
-    insert_issue_depends_on = f"""
-            depends_on_value_jsonb,
-            depends_on_value_schema,  
-            depends_on_value_simple, 
-            depends_on_property, 
-            depends_on_system, 
-            depends_on_display,
+    insert_issue_depends_on_start = f"""
+        INSERT INTO custom_terminologies.code_poc_issue_depends_on
     """
     insert_issue_old_uuid = f"""
             old_uuid,
@@ -369,6 +411,7 @@ def migrate_custom_terminologies_code(
     # :code_jsonb is added here at runtime
     insert_issue_code_id = f"""
             :code_id,
+            :deduplication_hash,
             :terminology_version_uuid,
             :created_date,
             :additional_data,
@@ -380,6 +423,11 @@ def migrate_custom_terminologies_code(
             :depends_on_property, 
             :depends_on_system, 
             :depends_on_display,
+            :uuid,
+            :sequence,
+            :code_uuid,
+            :old_uuid
+        )
     """
     insert_issue_end = f"""
             :old_uuid,
@@ -392,37 +440,12 @@ def migrate_custom_terminologies_code(
 
         print_start(full_time_start, uuid_start, uuid_end)
         while not done:
-            time_start: datetime = None
-            time_select_batch: datetime = None
-            time_migrate_code_value: datetime = None
-            time_migrate_depends_on: datetime = None
-            time_migrate_advisory_data: datetime = None
-            time_id_formation: datetime = None
-            time_insert_formation: datetime = None
-            time_values_formation: datetime = None
-            time_insert_success: datetime = None
-            time_insert_fail: datetime = None
-            time_fail_cause_dup_case_1: datetime = None
-            time_fail_cause_dup_case_2: datetime = None
-            delta_zero = datetime.timedelta(0)
-            stat_select_batch = delta_zero
-            stat_migrate_code_value = delta_zero
-            stat_migrate_depends_on = delta_zero
-            stat_migrate_advisory_data = delta_zero
-            stat_id_formation = delta_zero
-            stat_insert_formation = delta_zero
-            stat_values_formation = delta_zero
-            stat_insert_success = delta_zero
-            stat_insert_fail = delta_zero
-            stat_fail_cause_dup_case_1 = delta_zero
-            stat_fail_cause_dup_case_2 = delta_zero
             try:
                 time_start = datetime.datetime.now()
                 conn = get_db()
 
-                # processing by sequential UUID is non-optimal as it could miss new codes;
-                # the right way is by created_date, and also to make users stop using the database during migration;
-                # however, processing by sequential UUIDs rapidly discovers a rich gumbo of formatting cases
+                # Processing by sequential UUID could miss new codes added by user work. Therefore to complete migration
+                # users must stop using the database and we can run a final pass to get data for the late-arriving UUIDs
                 query = f"""
                         select uuid, display, code, terminology_version_uuid,
                         created_date, additional_data, 
@@ -446,8 +469,6 @@ def migrate_custom_terminologies_code(
                         "query_limit": query_limit,
                     },
                 ).fetchall()
-                time_select_batch = datetime.datetime.now()
-                stat_select_batch = time_select_batch - time_start
 
                 # process the results from this batch
                 count = len(result)
@@ -471,122 +492,88 @@ def migrate_custom_terminologies_code(
                         issue_type = "unknown"
                         total_processed += 1
 
-                        # code - migrate 1 old code column to 4 new columns
+                        # prepare_code_and_display_for_storage
                         (
                             code_schema,
                             code_simple,
                             code_jsonb,
-                            code_string,
-                            rejected
-                        ) = prepare_dynamic_value_for_sql_issue(row.code, row.display)
-                        time_migrate_code_value = datetime.datetime.now()
-                        stat_migrate_code_value = time_migrate_code_value - time_select_batch
+                            code_string_for_code_id,
+                            display_string_for_code_id
+                        ) = prepare_code_and_display_for_storage(row.code, row.display)
 
-                        # depends_on_value - migrate 1 old depends_on_value column to 3 new columns
-                        # also copy the other depends_on columns - convert all invalid "" values to None
+                        # filter_unsafe_depends_on_value
+                        (
+                            depends_on_value,
+                            rejected_depends_on_value
+                        ) = filter_unsafe_depends_on_value(row.depends_on_value)
+
+                        # has_depends_on
+                        # todo: for today, pretend we do not know depends_on is a list
+                        has_depends_on = (rejected_depends_on_value is None and depends_on_value is not None)
                         (
                             depends_on_value_schema,
                             depends_on_value_simple,
                             depends_on_value_jsonb,
-                            depends_on_value_string,
-                            rejected_depends_on_value
-                        ) = prepare_dynamic_value_for_sql_issue(row.depends_on_value)
-                        has_depends_on = (rejected_depends_on_value is None and (depends_on_value_string is not None))
-                        depends_on_property = convert_empty_to_null(row.depends_on_property)
-                        depends_on_system = convert_empty_to_null(row.depends_on_system)
-                        depends_on_display = convert_empty_to_null(row.depends_on_display)
-                        time_migrate_depends_on = datetime.datetime.now()
-                        stat_migrate_depends_on = time_migrate_depends_on - time_migrate_code_value
-
-                        # additional data
-                        info = prepare_additional_data_for_sql(row.additional_data, rejected_depends_on_value)
-                        time_migrate_advisory_data = datetime.datetime.now()
-                        stat_migrate_advisory_data = time_migrate_advisory_data - time_migrate_depends_on
-
-                        # code_id
-                        code_id = hash_for_code_id(
-                            code_string,
-                            row.display,
-                            depends_on_value_string,
-                            depends_on_property,
-                            depends_on_system,
-                            depends_on_display
+                            depends_on_value_string
+                        ) = prepare_depends_on_value_for_storage(depends_on_value)
+                        depends_on_value_for_code_id = ""
+                        depends_on_value_for_code_id += (
+                                convert_null_to_empty(depends_on_value_string) +
+                                convert_null_to_empty(row.depends_on_property) +
+                                convert_null_to_empty(row.depends_on_system) +
+                                convert_null_to_empty(row.depends_on_display)
                         )
-                        time_id_formation = datetime.datetime.now()
-                        stat_id_formation = time_id_formation - time_migrate_advisory_data
+
+                        # prepare_additional_data_for_storage
+                        additional_data = prepare_additional_data_for_storage(
+                            row.additional_data,
+                            rejected_depends_on_value
+                        )
+
+                        # code_id (and deduplication_hash)
+                        code_id = generate_code_id(
+                            code_string=code_string_for_code_id,
+                            display=display_string_for_code_id,
+                            depends_on_value_string=depends_on_value_for_code_id,
+                        )
+                        deduplication_hash = code_id
 
                         # uuid
-                        new_uuid = uuid.uuid4()
+                        code_uuid = uuid.uuid4()
 
                         # jsonb columns get special handling
                         if code_jsonb is None:
                             insert_code_jsonb = " :code_jsonb, "
                         else:
                             insert_code_jsonb = f" '{code_jsonb}'::jsonb, "
-                        if has_depends_on:
-                            if depends_on_value_jsonb is None:
-                                insert_depends_on_value_jsonb = " :depends_on_value_jsonb, "
-                            else:
-                                insert_depends_on_value_jsonb = f" '{depends_on_value_jsonb}'::jsonb, "
 
-                        # insert_query vs. insert_issue_query - send issue rows to the issue table - segment order:
-                        #   insert_start
-                        #   insert_depends_on (if has_depends_on)
-                        #   insert_old_uuid
-                        #   insert_code_jsonb
-                        #   insert_code_id
-                        #   insert_depends_on_value_jsonb (if has_depends_on)
-                        #   insert_depends_on_binding (if has_depends_on)
-                        #   insert_end
-                        if has_depends_on:
-                            insert_query = (
-                                insert_start
-                                + insert_depends_on
-                                + insert_old_uuid
-                                + insert_code_jsonb  # 'sql_escaped'::jsonb
-                                + insert_code_id
-                                + insert_depends_on_value_jsonb  # 'sql_escaped'::jsonb
-                                + insert_depends_on_binding
-                                + insert_end
-                            )
-                            insert_issue_query = (
-                                insert_issue_start
-                                + insert_issue_depends_on
-                                + insert_issue_old_uuid
-                                + insert_code_jsonb   # 'sql_escaped'::jsonb
-                                + insert_issue_code_id
-                                + insert_depends_on_value_jsonb   # 'sql_escaped'::jsonb
-                                + insert_depends_on_binding
-                                + insert_issue_end
-                            )
-                        else:
-                            insert_query = (
-                                insert_start
-                                + insert_old_uuid
-                                + insert_code_jsonb  # 'sql_escaped'::jsonb
-                                + insert_code_id
-                                + insert_end
-                            )
-                            insert_issue_query = (
-                                insert_issue_start
-                                + insert_issue_old_uuid
-                                + insert_code_jsonb   # 'sql_escaped'::jsonb
-                                + insert_issue_code_id
-                                + insert_issue_end
-                            )
-                        time_insert_formation = datetime.datetime.now()
-                        stat_insert_formation = time_insert_formation - time_id_formation
+                        # code_insert_query vs. code_insert_issue_query - send issues to the issue table
+                        code_insert_query = (
+                            insert_start
+                            + insert_old_uuid
+                            + insert_code_jsonb  # 'sql_escaped'::jsonb
+                            + insert_code_id
+                            + insert_end
+                        )
+                        code_insert_issue_query = (
+                            insert_issue_start
+                            + insert_issue_old_uuid
+                            + insert_code_jsonb   # 'sql_escaped'::jsonb
+                            + insert_issue_code_id
+                            + insert_issue_end
+                        )
 
                         # insert values
                         insert_values = {
-                            "uuid": new_uuid,
+                            "uuid": code_uuid,
                             "display": row.display,
                             "code_schema": code_schema,
                             "code_simple": code_simple,
                             "code_id": code_id,
+                            "deduplication_hash": deduplication_hash,
                             "terminology_version_uuid": row.terminology_version_uuid,
                             "created_date": row.created_date,
-                            "additional_data": info,
+                            "additional_data": additional_data,
                             "old_uuid": row.uuid,
                         }
 
@@ -594,55 +581,47 @@ def migrate_custom_terminologies_code(
                         if code_jsonb is None:
                             insert_values.update({"code_jsonb": code_jsonb})
 
-                        # depends_on
-                        if has_depends_on:
-                            insert_values.update({"depends_on_value_jsonb": depends_on_value_jsonb})
-                            insert_values.update({"depends_on_value_schema": depends_on_value_schema})
-                            insert_values.update({"depends_on_value_simple": depends_on_value_simple})
-                            insert_values.update({"depends_on_property": depends_on_property})
-                            insert_values.update({"depends_on_system": depends_on_system})
-                            insert_values.update({"depends_on_display": depends_on_display})
-
                         # issue_type
-                        has_issue = False
-                        code_issue = None
+                        has_code_issue = False
                         if code_schema is not None and (
                             IssuePrefix.COLUMN_VALUE_FORMAT.value in code_schema
                         ):
-                            has_issue = True
+                            has_code_issue = True
                             insert_values["code_schema"] = None
-                            code_issue = code_schema + " (code)"
-                            issue_type = code_issue
-                        if has_issue is True:
-                            query = insert_issue_query
+                            issue_type = code_schema + " (code)"
+                        has_depends_on_issue = False
+                        if depends_on_value_schema is not None and (
+                            IssuePrefix.COLUMN_VALUE_FORMAT.value in depends_on_value_schema
+                        ):
+                            has_depends_on_issue = True
+                            if has_code_issue:
+                                issue_type += f", {depends_on_value_schema} (depends_on)"
+                            else:
+                                insert_values["code_schema"] = None
+                                issue_type = depends_on_value_schema + " (depends_on)"
+                        if has_code_issue is True or has_depends_on_issue is True:
+                            query = code_insert_issue_query
                             insert_values.update({
                                 "issue_type": issue_type
                             })
                         else:
-                            query = insert_query
-                        time_values_formation = datetime.datetime.now()
-                        stat_values_formation = time_values_formation - time_insert_formation
+                            query = code_insert_query
 
-                        # query
+                        # run the query: either code_insert_query or code_insert_issue_query
                         try:
                             result = conn.execute(
                                 text(query),
                                 insert_values
                             )
                             conn.commit()
-                            time_insert_success = datetime.datetime.now()
-                            stat_insert_success = time_insert_success - time_values_formation
-
                         except Exception as e:
                             conn.rollback()
                             error_summary = message_exception_summary(e)
-                            time_insert_fail = datetime.datetime.now()
-                            stat_insert_fail = time_insert_fail - time_values_formation
-
                             if old_uuid_duplicate in error_summary or issue_old_uuid_duplicate in error_summary:
                                 skip = True
                             elif code_duplicate in error_summary:
                                 duplicate_code = True
+                                has_code_issue = True
                                 try:
                                     issue_type = insert_values.get("issue_type")
                                     if issue_type is not None:
@@ -652,26 +631,86 @@ def migrate_custom_terminologies_code(
                                             "issue_type": f"{DUPLICATE_CODE_PREFIX}{code_id}",
                                         })
                                     result = conn.execute(
-                                        text(insert_issue_query),
+                                        text(code_insert_issue_query),
                                         insert_values
                                     )
                                     conn.commit()
-                                    time_fail_cause_dup_case_1 = datetime.datetime.now()
-                                    stat_fail_cause_dup_case_1 = time_fail_cause_dup_case_1 - time_insert_fail
-
                                 except Exception as ex:
                                     conn.rollback()
                                     error_summary = message_exception_summary(e)
-                                    time_fail_cause_dup_case_2 = datetime.datetime.now()
-                                    stat_fail_cause_dup_case_2 = time_fail_cause_dup_case_2 - time_insert_fail
-
                                     if issue_old_uuid_duplicate in error_summary or code_duplicate in error_summary:
                                         skip = True
                                     else:
                                         raise ex
                             else:
                                 raise e
-                    # end: for r in result
+
+                        # In real data, the only lists were unsafe: ALL migrated depends_on lists have exactly 1 member
+                        # created by converting the single value to a 1-member list. That's why this block need not loop
+                        # todo: for today, pretend we do not know depends_on is a list
+                        if has_depends_on:
+
+                            # uuid
+                            depends_on_uuid = uuid.uuid4()
+
+                            # jsonb
+                            if depends_on_value_jsonb is None:
+                                insert_depends_on_value_jsonb = " :depends_on_value_jsonb, "
+                            else:
+                                insert_depends_on_value_jsonb = f" '{depends_on_value_jsonb}'::jsonb, "
+
+                            # depends_on_insert_query vs. depends_on_insert_issue_query - FK to normal vs. issues table
+                            depends_on_insert_query = (
+                                insert_depends_on_start
+                                + insert_depends_on_columns
+                                + insert_depends_on_value_jsonb  # 'sql_escaped'::jsonb
+                                + insert_depends_on_binding
+                            )
+                            depends_on_insert_issue_query = (
+                                insert_issue_depends_on_start
+                                + insert_depends_on_columns
+                                + insert_depends_on_value_jsonb  # 'sql_escaped'::jsonb
+                                + insert_depends_on_binding
+                            )
+
+                            # insert values
+                            insert_values = {
+                                "depends_on_value_jsonb": depends_on_value_jsonb,
+                                "depends_on_value_schema": depends_on_value_schema,
+                                "depends_on_value_simple": depends_on_value_simple,
+                                "depends_on_property": convert_empty_to_null(row.depends_on_property),
+                                "depends_on_system": convert_empty_to_null(row.depends_on_system),
+                                "depends_on_display": convert_empty_to_null(row.depends_on_display),
+                                "uuid": depends_on_uuid,
+                                "sequence": 1,
+                                "code_uuid": code_uuid,
+                                "old_uuid": row.uuid,
+                            }
+
+                            # jsonb
+                            if depends_on_value_jsonb is None:
+                                insert_values.update({"depends_on_value_jsonb": depends_on_value_jsonb})
+
+                            # issue_type
+                            if has_code_issue is True or has_depends_on_issue is True:
+                                query = depends_on_insert_issue_query
+                            else:
+                                query = depends_on_insert_query
+
+                            # run the query: either depends_on_insert_query or depends_on_insert_issue_query
+                            try:
+                                result = conn.execute(
+                                    text(query),
+                                    insert_values
+                                )
+                                conn.commit()
+                            except Exception as e:
+                                conn.rollback()
+                                # no need to check for already inserted because the code_id assured that earlier
+                                raise e
+
+                        # end: if has_depends_on
+                    # end: for row in result
 
             except Exception as e:
                 error_summary = message_exception_summary(e)
@@ -688,24 +727,10 @@ def migrate_custom_terminologies_code(
                     raise e
             finally:
                 if done or total_processed > 0 and (total_processed % REPORT_LIMIT == 0):
-                    statistics = [
-                        stat_select_batch,
-                        stat_migrate_code_value,
-                        stat_migrate_depends_on,
-                        stat_migrate_advisory_data,
-                        stat_id_formation,
-                        stat_insert_formation,
-                        stat_values_formation,
-                        stat_insert_success,
-                        stat_insert_fail,
-                        stat_fail_cause_dup_case_1,
-                        stat_fail_cause_dup_case_2,
-                    ]
                     print_progress(
                         time_start,
                         total_processed,
-                        last_previous_uuid,
-                        statistics
+                        last_previous_uuid
                     )
                 if not done:
                     done = total_processed >= total_limit

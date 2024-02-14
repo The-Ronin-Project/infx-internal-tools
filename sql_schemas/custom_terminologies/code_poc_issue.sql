@@ -1,28 +1,58 @@
--- Table: custom_terminologies.code_poc_depends_on
+-- Table: custom_terminologies.code_poc_issue
 
--- DROP TABLE IF EXISTS custom_terminologies.code_poc_depends_on;
+-- DROP TABLE IF EXISTS custom_terminologies.code_poc_issue;
 
-CREATE TABLE IF NOT EXISTS custom_terminologies.code_poc_depends_on
+CREATE TABLE IF NOT EXISTS custom_terminologies.code_poc_issue
 (
     uuid uuid NOT NULL,
-    sequence integer NOT NULL,
-    depends_on_property character varying COLLATE pg_catalog."default",
-    depends_on_system character varying COLLATE pg_catalog."default",
-    depends_on_value_schema character varying COLLATE pg_catalog."default" NOT NULL,
-    depends_on_value_simple character varying COLLATE pg_catalog."default",
-    depends_on_value_jsonb jsonb,
-    terminology_code_uuid uuid NOT NULL,
-    CONSTRAINT code_poc_depends_on_pkey PRIMARY KEY (uuid),
-    CONSTRAINT code_poc_depends_on_terminology_code_uuid FOREIGN KEY (terminology_code_uuid)
-        REFERENCES custom_terminologies.code_poc (uuid) MATCH SIMPLE
+    display character varying COLLATE pg_catalog."default" NOT NULL,
+    code_schema character varying COLLATE pg_catalog."default",
+    code_simple character varying COLLATE pg_catalog."default",
+    code_jsonb jsonb,
+    code_id character varying COLLATE pg_catalog."default" NOT NULL,
+    terminology_version_uuid uuid NOT NULL,
+    additional_data character varying COLLATE pg_catalog."default",
+    created_date timestamp with time zone DEFAULT now(),
+    old_uuid uuid,
+    issue_type character varying COLLATE pg_catalog."default",
+    action character varying COLLATE pg_catalog."default",
+    deduplication_hash character varying COLLATE pg_catalog."default",
+    CONSTRAINT issue_code_poc_pkey PRIMARY KEY (uuid),
+    CONSTRAINT issue_old_uuid UNIQUE (old_uuid),
+    CONSTRAINT issue_terminology_version FOREIGN KEY (terminology_version_uuid)
+        REFERENCES public.terminology_versions (uuid) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE NO ACTION
 )
 
 TABLESPACE pg_default;
 
-ALTER TABLE IF EXISTS custom_terminologies.code_poc_depends_on
+ALTER TABLE IF EXISTS custom_terminologies.code_poc_issue
     OWNER to roninadmin;
+-- Index: ct_poc_issue_deduplication_hash
 
-COMMENT ON TABLE custom_terminologies.code_poc_depends_on
-    IS 'depends_on list members for a row in the code_poc table';
+-- DROP INDEX IF EXISTS custom_terminologies.ct_poc_issue_deduplication_hash;
+
+CREATE INDEX IF NOT EXISTS ct_poc_issue_deduplication_hash
+    ON custom_terminologies.code_poc_issue USING btree
+    (deduplication_hash COLLATE pg_catalog."default" ASC NULLS LAST)
+    WITH (deduplicate_items=True)
+    TABLESPACE pg_default;
+-- Index: ct_poc_issue_old_uuid
+
+-- DROP INDEX IF EXISTS custom_terminologies.ct_poc_issue_old_uuid;
+
+CREATE INDEX IF NOT EXISTS ct_poc_issue_old_uuid
+    ON custom_terminologies.code_poc_issue USING btree
+    (old_uuid ASC NULLS LAST)
+    WITH (deduplicate_items=True)
+    TABLESPACE pg_default;
+-- Index: ct_poc_issue_terminology_version_uuid
+
+-- DROP INDEX IF EXISTS custom_terminologies.ct_poc_issue_terminology_version_uuid;
+
+CREATE INDEX IF NOT EXISTS ct_poc_issue_terminology_version_uuid
+    ON custom_terminologies.code_poc_issue USING btree
+    (terminology_version_uuid ASC NULLS LAST)
+    WITH (deduplicate_items=True)
+    TABLESPACE pg_default;

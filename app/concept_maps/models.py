@@ -299,6 +299,12 @@ class ConceptMap:
             self.most_recent_active_version = None
 
     def get_most_recent_version(self, active_only=False, load_mappings=True, pending_only=False):
+        """
+        @param active_only True to get the most recent with 'active' status (prioritized above pending_only)
+        @param load_mappings True to load all the mapping data, in full; use False when only the metadata is needed
+        @param pending_only True to get the most recent with 'pending' status (prioritized below active_only)
+        @return - most recent ConceptMapVersion of the status requested, or None if there is none of that status
+        """
         conn = get_db()
         if active_only:
             query = """
@@ -328,7 +334,10 @@ class ConceptMap:
             text(query),
             {"concept_map_uuid": self.uuid},
         ).first()
-        return ConceptMapVersion(version_data.uuid, load_mappings=load_mappings)
+        if version_data is None:
+            return None
+        else:
+            return ConceptMapVersion(version_data.uuid, load_mappings=load_mappings)
 
     @classmethod
     def concept_map_metadata(cls, cm_uuid):

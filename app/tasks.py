@@ -9,6 +9,7 @@ import app.concept_maps.versioning_models
 import app.util.mapping_request_service
 import app.util.data_migration
 import app.util.concept_map_duplicate_codes
+import app.util.concept_map_v4_code_deduplication_hash
 from app.database import get_db
 
 
@@ -78,6 +79,8 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     concept_map_most_recent_version = concept_map.get_most_recent_version(
         active_only=False
     )
+    if concept_map_most_recent_version is None:
+        raise NotFoundException(f"Could not find any version of the concept map with UUID {concept_map_uuid}")
 
     # Get the source_value_set_version_uuid from the concept map object.
     # This source_value_set_version_uuid MAY OR MAY NOT be the most recent version, and MAY OR MAY NOT be active.
@@ -173,6 +176,14 @@ def perform_database_migration(table_name, granularity, segment_start, segment_c
         granularity=granularity,
         segment_start=segment_start,
         segment_count=segment_count
+    )
+
+
+@celery_app.task
+def identify_v4_concept_map_duplicates(segment_start, segment_count):
+    app.util.concept_map_v4_code_deduplication_hash.identify_v4_concept_map_duplicates(
+        number_of_blocks_requested=segment_count,
+        block_to_process_in_this_run=segment_start,
     )
 
 

@@ -4,6 +4,7 @@ from app.database import get_db
 from app.app import create_app
 from app.enum.concept_maps_for_systems import ConceptMapsForSystems
 from app.enum.concept_maps_for_content import ConceptMapsForContent
+from app.util.data_migration import get_v5_concept_map_uuids_in_n_blocks_for_parallel_process
 
 
 class DataMigrationTests(unittest.TestCase):
@@ -153,6 +154,46 @@ class DataMigrationTests(unittest.TestCase):
 'f38902e7-bc7e-4890-a506-81f5b75c4cd7',
 'f469524c-83fa-461c-976d-4e4a818713f8'
 )"""
+
+    def test_get_concept_map_uuids_in_4_blocks_for_parallel_process_happy(self):
+        original_count = len(ConceptMapsForContent) + len(ConceptMapsForSystems)
+        number_of_blocks = 4
+        test_list = get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks)
+        assert len(test_list) == number_of_blocks
+        test_count = 0
+        for x in test_list:
+            test_count += len(x)
+        assert test_count == original_count
+
+    def test_get_concept_map_uuids_in_8_blocks_for_parallel_process_happy(self):
+        original_count = len(ConceptMapsForContent) + len(ConceptMapsForSystems)
+        number_of_blocks = 8
+        test_list = get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks)
+        assert len(test_list) == number_of_blocks
+        test_count = 0
+        for x in test_list:
+            test_count += len(x)
+        assert test_count == original_count
+
+    def test_get_concept_map_uuids_in_15_blocks_for_parallel_process_happy(self):
+        original_count = len(ConceptMapsForContent) + len(ConceptMapsForSystems)
+        number_of_blocks = 15
+        test_list = get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks)
+        assert len(test_list) == number_of_blocks
+        test_count = 0
+        for x in test_list:
+            test_count += len(x)
+        assert test_count == original_count
+
+    def test_get_concept_map_uuids_in_0_blocks_for_parallel_process_fail(self):
+        number_of_blocks = 0
+        test_list = get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks)
+        assert len(test_list) == 0
+
+    def test_get_concept_map_uuids_in_64_blocks_for_parallel_process_fail(self):
+        number_of_blocks = 64
+        test_list = get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks)
+        assert len(test_list) == 0
 
 
 if __name__ == '__main__':

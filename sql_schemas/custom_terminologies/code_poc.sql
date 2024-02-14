@@ -12,15 +12,10 @@ CREATE TABLE IF NOT EXISTS custom_terminologies.code_poc
     code_id character varying COLLATE pg_catalog."default" NOT NULL,
     terminology_version_uuid uuid NOT NULL,
     additional_data character varying COLLATE pg_catalog."default",
-    depends_on_property character varying COLLATE pg_catalog."default",
-    depends_on_system character varying COLLATE pg_catalog."default",
-    depends_on_display character varying COLLATE pg_catalog."default",
-    depends_on_value_schema character varying COLLATE pg_catalog."default",
-    depends_on_value_simple character varying COLLATE pg_catalog."default",
-    depends_on_value_jsonb jsonb,
     created_date timestamp with time zone DEFAULT now(),
     old_uuid uuid,
     action character varying COLLATE pg_catalog."default",
+    deduplication_hash character varying COLLATE pg_catalog."default",
     CONSTRAINT code_poc_pkey PRIMARY KEY (uuid),
     CONSTRAINT code_id UNIQUE (code_id),
     CONSTRAINT old_uuid UNIQUE (old_uuid),
@@ -38,6 +33,15 @@ ALTER TABLE IF EXISTS custom_terminologies.code_poc
 
 COMMENT ON TABLE custom_terminologies.code_poc
     IS 'proof of concept for migrating data from RCDM ConceptMap schema v4 to v5: issue table';
+-- Index: ct_poc_deduplication_hash
+
+-- DROP INDEX IF EXISTS custom_terminologies.ct_poc_deduplication_hash;
+
+CREATE INDEX IF NOT EXISTS ct_poc_deduplication_hash
+    ON custom_terminologies.code_poc USING btree
+    (deduplication_hash COLLATE pg_catalog."default" ASC NULLS LAST)
+    WITH (deduplicate_items=True)
+    TABLESPACE pg_default;
 -- Index: ct_poc_old_uuid
 
 -- DROP INDEX IF EXISTS custom_terminologies.ct_poc_old_uuid;

@@ -32,11 +32,7 @@ class IdHelperTests(unittest.TestCase):
 
         code_id = generate_code_id(
             code_string=example_codeable_concept_json,
-            display=display,
-            depends_on_property="",
-            depends_on_display="",
-            depends_on_system="",
-            depends_on_value_string=""
+            display=display
         )
         self.assertEqual(code_id, "7fea4ba7f959ee712cc4528ebd053a9c")
 
