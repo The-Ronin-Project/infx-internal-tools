@@ -9,7 +9,7 @@ import pytest
 import uuid
 from sqlalchemy import text
 
-from app.concept_maps.models import ConceptMap
+import app.concept_maps.models
 from app.database import get_db
 from app.enum.concept_maps_for_content import ConceptMapsForContent
 from app.enum.concept_maps_for_systems import ConceptMapsForSystems
@@ -259,7 +259,7 @@ def identify_v4_concept_map_duplicates_active_and_pending(concept_map_uuid) -> s
     """
     message = f"Processing concept map UUID: {concept_map_uuid}"
 
-    concept_map = ConceptMap(concept_map_uuid)
+    concept_map = app.concept_maps.models.ConceptMap(concept_map_uuid)
     if concept_map is None:
         return message + "\nConcept map not found."
     else:
