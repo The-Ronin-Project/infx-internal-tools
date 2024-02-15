@@ -451,12 +451,7 @@ def migrate_custom_terminologies_code(
                         created_date, additional_data, 
                         depends_on_property, depends_on_system, depends_on_value, depends_on_display
                         from custom_terminologies.code 
-                        where uuid >= :last_previous_uuid 
-                        and (
-                        uuid in ({query_code_uuid_latest_versions()}) or
-                        uuid in ({query_code_uuid_string_versions()}) or
-                        uuid in ({query_code_uuid_test_only()})
-                        )
+                        where uuid >= :last_previous_uuid and migrate = true
                         and uuid not in (select old_uuid from custom_terminologies.code_poc) 
                         and uuid not in (select old_uuid from custom_terminologies.code_poc_issue)
                         order by uuid asc
