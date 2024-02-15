@@ -15,6 +15,24 @@ class ConceptMapVersioningModels(unittest.TestCase):
 
     """
 
+    #  class wide variables
+    happy_path_previous_version_uuid = uuid.UUID("24f3917c-94b2-48ab-9936-a63ca24c673a")
+    happy_path_new_version_description = "happy path test"
+    value_set_version_uuid_fifty_seven_concepts = uuid.UUID(
+        "94160026-646c-4c44-9252-3c6c84b133ac"
+    )
+    value_set_version_uuid_fifty_eight_concepts = uuid.UUID(
+        "1c9455af-8ced-4d26-a223-1df4e0c49a16"
+    )
+    happy_path_require_review_for_non_equivalent_relationships = False
+    happy_path_require_review_no_maps_not_in_target = False
+
+    # Create class
+    concept_map_version_creator = ConceptMapVersionCreator()
+
+    #  mapped no map count for previous_version concept map
+    happy_path_papped_no_map_count = 12
+
     def setUp(self) -> None:
         self.conn = get_db()
         self.app = create_app()
@@ -37,31 +55,19 @@ class ConceptMapVersioningModels(unittest.TestCase):
 
         """
 
-        # Create params, get data, etc...
-        previous_version_uuid = uuid.UUID("24f3917c-94b2-48ab-9936-a63ca24c673a")
-        new_version_description = "happy path test"
-        new_source_value_set_version_uuid = uuid.UUID(
-            "94160026-646c-4c44-9252-3c6c84b133ac"
-        )
-        new_target_value_set_version_uuid = uuid.UUID(
-            "1c9455af-8ced-4d26-a223-1df4e0c49a16"
-        )
-        require_review_for_non_equivalent_relationships = False
-        require_review_no_maps_not_in_target = False
-
-        # Create class
-        concept_map_version_creator = ConceptMapVersionCreator()
         # Call method and store the new_version_uuid
-        new_version_uuid = concept_map_version_creator.new_version_from_previous(
-            previous_version_uuid,
-            new_version_description,
-            new_source_value_set_version_uuid,
-            new_target_value_set_version_uuid,
-            require_review_for_non_equivalent_relationships,
-            require_review_no_maps_not_in_target,
+        new_version_uuid = self.concept_map_version_creator.new_version_from_previous(
+            self.happy_path_previous_version_uuid,
+            self.happy_path_new_version_description,
+            self.value_set_version_uuid_fifty_seven_concepts,
+            self.value_set_version_uuid_fifty_eight_concepts,
+            self.happy_path_require_review_for_non_equivalent_relationships,
+            self.happy_path_require_review_no_maps_not_in_target,
         )
         # Load the previous ConceptMapVersion and new ConceptMapVersion
-        previous_concept_map_version = ConceptMapVersion(previous_version_uuid)
+        previous_concept_map_version = ConceptMapVersion(
+            self.happy_path_previous_version_uuid
+        )
         previous_concept_map_version.load_data()
         new_concept_map_version = ConceptMapVersion(new_version_uuid)
         new_concept_map_version.load_data()
@@ -82,10 +88,13 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # In this case, we expect no added, removed or modified codes since the source and target value set versions are the same
         self.assertEqual(diff_result["added_count"], 0)
         self.assertEqual(
-            diff_result["removed_count"], 12
+            diff_result["removed_count"], self.happy_path_papped_no_map_count
         )  # mapped no maps are counted as removed
         self.assertEqual(diff_result["modified_count"], 0)
-        self.assertEqual(diff_result["previous_total"] - 12, diff_result["new_total"])
+        self.assertEqual(
+            diff_result["previous_total"] - self.happy_path_papped_no_map_count,
+            diff_result["new_total"],
+        )
 
     def test_new_version_from_previous_new_source_same_target(self):
         """
@@ -95,32 +104,20 @@ class ConceptMapVersioningModels(unittest.TestCase):
 
         """
 
-        # Create params, get data, etc...
-        previous_version_uuid = uuid.UUID("24f3917c-94b2-48ab-9936-a63ca24c673a")
-        new_version_description = "happy path test"
-        new_source_value_set_version_uuid = uuid.UUID(
-            "1c9455af-8ced-4d26-a223-1df4e0c49a16"
-        )
-        new_target_value_set_version_uuid = uuid.UUID(
-            "1c9455af-8ced-4d26-a223-1df4e0c49a16"
-        )
-        require_review_for_non_equivalent_relationships = False
-        require_review_no_maps_not_in_target = False
-
-        # Create class
-        concept_map_version_creator = ConceptMapVersionCreator()
         # Call method and store the new_version_uuid
-        new_version_uuid = concept_map_version_creator.new_version_from_previous(
-            previous_version_uuid,
-            new_version_description,
-            new_source_value_set_version_uuid,
-            new_target_value_set_version_uuid,
-            require_review_for_non_equivalent_relationships,
-            require_review_no_maps_not_in_target,
+        new_version_uuid = self.concept_map_version_creator.new_version_from_previous(
+            self.happy_path_previous_version_uuid,
+            self.happy_path_new_version_description,
+            self.value_set_version_uuid_fifty_eight_concepts,
+            self.value_set_version_uuid_fifty_eight_concepts,
+            self.happy_path_require_review_for_non_equivalent_relationships,
+            self.happy_path_require_review_no_maps_not_in_target,
         )
 
         # Load the previous ConceptMapVersion and new ConceptMapVersion
-        previous_concept_map_version = ConceptMapVersion(previous_version_uuid)
+        previous_concept_map_version = ConceptMapVersion(
+            self.happy_path_previous_version_uuid
+        )
         previous_concept_map_version.load_data()
         new_concept_map_version = ConceptMapVersion(new_version_uuid)
         new_concept_map_version.load_data()
@@ -141,10 +138,13 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # In this case, we expect an added code, but no removed or modified codes since the source value set version is new (once code more) and the target value set version is the same
         self.assertEqual(diff_result["added_count"], 0)
         self.assertEqual(
-            diff_result["removed_count"], 12
+            diff_result["removed_count"], self.happy_path_papped_no_map_count
         )  # mapped no maps are counted as removed
         self.assertEqual(diff_result["modified_count"], 45)
-        self.assertEqual(diff_result["previous_total"] - 12, diff_result["new_total"])
+        self.assertEqual(
+            diff_result["previous_total"] - self.happy_path_papped_no_map_count,
+            diff_result["new_total"],
+        )
 
     def test_new_version_from_previous_same_source_new_target(self):
         """
@@ -154,32 +154,20 @@ class ConceptMapVersioningModels(unittest.TestCase):
 
         """
 
-        # Create params, get data, etc...
-        previous_version_uuid = uuid.UUID("24f3917c-94b2-48ab-9936-a63ca24c673a")
-        new_version_description = "happy path test"
-        new_source_value_set_version_uuid = uuid.UUID(
-            "94160026-646c-4c44-9252-3c6c84b133ac"
-        )
-        new_target_value_set_version_uuid = uuid.UUID(
-            "94160026-646c-4c44-9252-3c6c84b133ac"
-        )
-        require_review_for_non_equivalent_relationships = False
-        require_review_no_maps_not_in_target = False
-
-        # Create class
-        concept_map_version_creator = ConceptMapVersionCreator()
         # Call method and store the new_version_uuid
-        new_version_uuid = concept_map_version_creator.new_version_from_previous(
-            previous_version_uuid,
-            new_version_description,
-            new_source_value_set_version_uuid,
-            new_target_value_set_version_uuid,
-            require_review_for_non_equivalent_relationships,
-            require_review_no_maps_not_in_target,
+        new_version_uuid = self.concept_map_version_creator.new_version_from_previous(
+            self.happy_path_previous_version_uuid,
+            self.happy_path_new_version_description,
+            self.value_set_version_uuid_fifty_seven_concepts,
+            self.value_set_version_uuid_fifty_seven_concepts,
+            self.happy_path_require_review_for_non_equivalent_relationships,
+            self.happy_path_require_review_no_maps_not_in_target,
         )
 
         # Load the previous ConceptMapVersion and new ConceptMapVersion
-        previous_concept_map_version = ConceptMapVersion(previous_version_uuid)
+        previous_concept_map_version = ConceptMapVersion(
+            self.happy_path_previous_version_uuid
+        )
         previous_concept_map_version.load_data()
         new_concept_map_version = ConceptMapVersion(new_version_uuid)
         new_concept_map_version.load_data()
@@ -200,7 +188,10 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # In this case, we expect a removed code and a modified count (via previous_mapping_context) but no added codes since the source value set version is the same and the target value set version is the new (one code less)
         self.assertEqual(diff_result["added_count"], 0)
         self.assertEqual(
-            diff_result["removed_count"], 12
+            diff_result["removed_count"], self.happy_path_papped_no_map_count
         )  # mapped no maps are counted as removed
         self.assertEqual(diff_result["modified_count"], 45)
-        self.assertEqual(diff_result["previous_total"] - 12, diff_result["new_total"])
+        self.assertEqual(
+            diff_result["previous_total"] - self.happy_path_papped_no_map_count,
+            diff_result["new_total"],
+        )
