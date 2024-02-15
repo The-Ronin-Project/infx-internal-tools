@@ -776,8 +776,6 @@ class ConceptMapVersionCreator:
             )
 
             mapping.save()
-        # Commit the changes to the database
-        self.conn.commit()
 
     def process_no_map(
         self,
