@@ -31,7 +31,7 @@ class ConceptMapVersioningModels(unittest.TestCase):
     concept_map_version_creator = ConceptMapVersionCreator()
 
     #  mapped no map count for previous_version concept map
-    happy_path_papped_no_map_count = 12
+    happy_path_mapped_no_map_count = 12
 
     def setUp(self) -> None:
         self.conn = get_db()
@@ -88,11 +88,11 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # In this case, we expect no added, removed or modified codes since the source and target value set versions are the same
         self.assertEqual(diff_result["added_count"], 0)
         self.assertEqual(
-            diff_result["removed_count"], self.happy_path_papped_no_map_count
+            diff_result["removed_count"], self.happy_path_mapped_no_map_count
         )  # mapped no maps are counted as removed
         self.assertEqual(diff_result["modified_count"], 0)
         self.assertEqual(
-            diff_result["previous_total"] - self.happy_path_papped_no_map_count,
+            diff_result["previous_total"] - self.happy_path_mapped_no_map_count,
             diff_result["new_total"],
         )
 
@@ -138,11 +138,11 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # In this case, we expect an added code, but no removed or modified codes since the source value set version is new (once code more) and the target value set version is the same
         self.assertEqual(diff_result["added_count"], 0)
         self.assertEqual(
-            diff_result["removed_count"], self.happy_path_papped_no_map_count
+            diff_result["removed_count"], self.happy_path_mapped_no_map_count
         )  # mapped no maps are counted as removed
         self.assertEqual(diff_result["modified_count"], 45)
         self.assertEqual(
-            diff_result["previous_total"] - self.happy_path_papped_no_map_count,
+            diff_result["previous_total"] - self.happy_path_mapped_no_map_count,
             diff_result["new_total"],
         )
 
@@ -188,10 +188,10 @@ class ConceptMapVersioningModels(unittest.TestCase):
         # In this case, we expect a removed code and a modified count (via previous_mapping_context) but no added codes since the source value set version is the same and the target value set version is the new (one code less)
         self.assertEqual(diff_result["added_count"], 0)
         self.assertEqual(
-            diff_result["removed_count"], self.happy_path_papped_no_map_count
+            diff_result["removed_count"], self.happy_path_mapped_no_map_count
         )  # mapped no maps are counted as removed
         self.assertEqual(diff_result["modified_count"], 45)
         self.assertEqual(
-            diff_result["previous_total"] - self.happy_path_papped_no_map_count,
+            diff_result["previous_total"] - self.happy_path_mapped_no_map_count,
             diff_result["new_total"],
         )
