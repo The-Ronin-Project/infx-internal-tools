@@ -120,7 +120,7 @@ class OciHelperTests(unittest.TestCase):
 
         assert self.oci_test_file_content == returned_content
 
-    def test_is_oci_write_disabled():
+    def test_is_oci_write_disabled(self):
         """
         Test to verify if the OCI writing capability is disabled via an environment variable.
 
@@ -133,10 +133,10 @@ class OciHelperTests(unittest.TestCase):
         - For example: DISABLE_OCI_WRITE=True
         """
         os.environ["DISABLE_OCI_WRITE"] = "True"
-        assert is_oci_write_disabled()
+        self.assertTrue(oci_helper.is_oci_write_disabled())
 
 
-    def test_not_is_oci_write_disabled():
+    def test_not_is_oci_write_disabled(self):
         """
         Test to verify that OCI writing capability is enabled when the corresponding environment variable is set to 'False'.
 
@@ -148,4 +148,4 @@ class OciHelperTests(unittest.TestCase):
         - 'False' is the default state.
         """
         os.environ["DISABLE_OCI_WRITE"] = "False"
-        assert not is_oci_write_disabled()
+        self.assertFalse(oci_helper.is_oci_write_disabled())
