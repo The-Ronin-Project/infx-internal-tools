@@ -53,6 +53,10 @@ def set_up_and_save_to_object_store(content: dict, oci_file_path: str, overwrite
     @param overwrite_allowed: if true, write to oci even if the object exists. Default is False
     @return: content, if saved to oci. Otherwise, raises an exception
     """
+    if is_oci_write_disabled():
+        LOGGER.info("OCI write operations are disabled.")
+        return {"message": "Not pushed to bucket, OCI write operations are disabled"}
+
     object_storage_client = oci_authentication()
 
     is_value_set: bool = (content.get("resourceType") == "ValueSet")
@@ -149,7 +153,12 @@ def save_to_object_store(
     @param content: content to publish, with metadata to support publication
     @return: completion message and content
     """
+
+    if is_oci_write_disabled():
+        LOGGER.info("OCI write operations are disabled.")
+        return {"message": "Not pushed to bucket, OCI write operations are disabled"}
     LOGGER.info(f"Attempting to save {object_path} to OCI bucket")
+
     put_object_response = object_storage_client.put_object(
         namespace,
         bucket_name,
@@ -209,3 +218,11 @@ def get_data_from_oci(
             )
         else:
             raise e
+
+
+def is_oci_write_disabled():
+    """
+    For use while testing to disable writing to OCI
+    """
+    return config("DISABLE_OCI_WRITE", default="False", cast=bool)
+  
