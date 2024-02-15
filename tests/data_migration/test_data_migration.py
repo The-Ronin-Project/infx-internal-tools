@@ -299,7 +299,7 @@ class DataMigrationTests(unittest.TestCase):
         code = "016eba87-a1cc-4e10-b0d5-fa7665f6714b"
         display = "overwrite upon success"
         result = prepare_code_and_display_for_storage(code, display)
-        assert result[0] == "format issue: uuid"
+        assert result[0] == "code"
         assert result[1] == code
         assert result[2] is None
         assert result[3] == "016eba87-a1cc-4e10-b0d5-fa7665f6714b"

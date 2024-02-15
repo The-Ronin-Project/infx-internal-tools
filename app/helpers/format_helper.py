@@ -183,15 +183,6 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
             code_string=old_value
         )
 
-    # handle uuid case (bad)
-    # todo: delete this legacy check after v5 migration is complete
-    elif old_display is not None and is_uuid4_format(old_value):
-        # code: report format issue
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_storage(
-            issue="uuid",
-            code_string=old_value
-        )
-
     # handle Ronin cancer staging pattern as spark (good)
     # todo: delete this legacy check after v5 migration is complete
     elif old_display is not None and re.search(r"\{Line \d}", old_value):
