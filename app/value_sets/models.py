@@ -10,7 +10,8 @@ import concurrent.futures
 import logging
 
 from psycopg2 import DatabaseError
-from sqlalchemy import text, MetaData, Table, Column, String, Row, JSON
+from sqlalchemy import text, MetaData, Table, Column, String, Row
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import datetime
@@ -58,7 +59,11 @@ expansion_member_data = Table(
     Column("expansion_uuid", UUID, nullable=False),
     Column("code_schema", String, nullable=False),
     Column("code_simple", String, nullable=False),
-    Column("code_jsonb", JSON, nullable=False),
+    Column(
+        "code_jsonb",
+        JSONB(none_as_null=True),
+        nullable=True,
+    ),
     Column("display", String, nullable=False),
     Column("system", String, nullable=False),
     Column("version", String, nullable=False),
@@ -364,7 +369,7 @@ class ICD10CMRule(VSRule):
                 code=x.code,
                 display=x.display,
                 from_custom_terminology=False,
-                from_fhir_terminology=False
+                from_fhir_terminology=False,
             )
             for x in results_data
         ]
@@ -421,7 +426,7 @@ class ICD10CMRule(VSRule):
                 code=x.code,
                 display=x.display,
                 from_fhir_terminology=False,
-                from_custom_terminology=False
+                from_custom_terminology=False,
             )
             for x in results_data
         ]
@@ -473,7 +478,7 @@ class ICD10CMRule(VSRule):
                 code=x.code,
                 display=x.display,
                 from_custom_terminology=False,
-                from_fhir_terminology=False
+                from_fhir_terminology=False,
             )
             for x in results_data
         ]
@@ -499,7 +504,7 @@ class ICD10CMRule(VSRule):
                 code=x.code,
                 display=x.display,
                 from_fhir_terminology=False,
-                from_custom_terminology=False
+                from_custom_terminology=False,
             )
             for x in results_data
         ]
@@ -527,7 +532,7 @@ class ICD10CMRule(VSRule):
                 code=x.code,
                 display=x.display,
                 from_custom_terminology=False,
-                from_fhir_terminology=False
+                from_fhir_terminology=False,
             )
             for x in results_data
         ]
@@ -553,7 +558,7 @@ class ICD10CMRule(VSRule):
                 code=x.code,
                 display=x.display,
                 from_fhir_terminology=False,
-                from_custom_terminology=False
+                from_custom_terminology=False,
             )
             for x in results_data
         ]
@@ -578,7 +583,7 @@ class SNOMEDRule(VSRule):
                 code=x.conceptid,
                 display=x.term,
                 from_custom_terminology=False,
-                from_fhir_terminology=False
+                from_fhir_terminology=False,
             )
             for x in results_data
         ]
@@ -623,7 +628,7 @@ class SNOMEDRule(VSRule):
                     code=x.get("conceptId"),
                     display=x.get("fsn").get("term"),
                     from_fhir_terminology=False,
-                    from_custom_terminology=False
+                    from_custom_terminology=False,
                 )
                 for x in data
             ]
@@ -752,7 +757,7 @@ class RxNormRule(VSRule):
                     code=x.get("rxcui"),
                     display=x.get("name"),
                     from_fhir_terminology=False,
-                    from_custom_terminology=False
+                    from_custom_terminology=False,
                 )
                 for x in combined_data
             ]
@@ -777,7 +782,7 @@ class RxNormRule(VSRule):
                 code=x.get("rxcui"),
                 display=x.get("name"),
                 from_custom_terminology=False,
-                from_fhir_terminology=False
+                from_fhir_terminology=False,
             )
             for x in data
         ]
@@ -797,7 +802,7 @@ class LOINCRule(VSRule):
                 code=x.loinc_num,
                 display=x.long_common_name,
                 from_fhir_terminology=False,
-                from_custom_terminology=False
+                from_custom_terminology=False,
             )
             for x in db_result
         ]
@@ -969,7 +974,7 @@ class ICD10PCSRule(VSRule):
                 code=x.code,
                 display=x.display,
                 from_custom_terminology=False,
-                from_fhir_terminology=False
+                from_fhir_terminology=False,
             )
             for x in results_data
         ]
@@ -1120,7 +1125,7 @@ class CPTRule(VSRule):
                 code=x.code,
                 display=x.long_description,
                 from_fhir_terminology=False,
-                from_custom_terminology=False
+                from_custom_terminology=False,
             )
             for x in results_data
         ]
@@ -1173,7 +1178,7 @@ class CPTRule(VSRule):
                 code=x.code,
                 display=x.long_description,
                 from_custom_terminology=False,
-                from_fhir_terminology=False
+                from_fhir_terminology=False,
             )
             for x in results_data
         ]
@@ -1201,7 +1206,7 @@ class FHIRRule(VSRule):
                 code=x.code,
                 display=x.display,
                 from_fhir_terminology=True,
-                from_custom_terminology=False
+                from_custom_terminology=False,
             )
             for x in results_data
         ]
@@ -1239,7 +1244,7 @@ class FHIRRule(VSRule):
                 code=x.code,
                 display=x.display,
                 from_custom_terminology=False,
-                from_fhir_terminology=True
+                from_fhir_terminology=True,
             )
             for x in results_data
         ]
@@ -1252,20 +1257,18 @@ class CustomTerminologyRule(VSRule):
         for row in db_result:
             # TODO: come back and add depends on support
             code_schema = app.models.codes.RoninCodeSchemas(row.code_schema)
-            from_custom_terminology = True
-            from_fhir_terminology = False
 
             if code_schema == app.models.codes.RoninCodeSchemas.code:
                 new_code = app.models.codes.Code(
                     code_schema=code_schema,
-                    system=row.system,
-                    version=row.version,
                     code=row.code_simple,
+                    system=None,
+                    version=None,
                     display=row.display,
-                    from_custom_terminology=from_custom_terminology,
-                    custom_terminology_code_uuid=row.custom_terminology_uuid,
-                    from_fhir_terminology=from_fhir_terminology,
-                    fhir_terminology_code_uuid=row.fhir_terminology_uuid,
+                    terminology_version=self.terminology_version,
+                    from_custom_terminology=True,
+                    custom_terminology_code_uuid=row.old_uuid,  # this is the uuid of the code itself todo: update for new table
+                    from_fhir_terminology=False,
                     saved_to_db=True,
                 )
             elif code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
@@ -1274,15 +1277,15 @@ class CustomTerminologyRule(VSRule):
                 )
                 new_code = app.models.codes.Code(
                     code_schema=code_schema,
-                    system=row.system,
-                    version=row.version,
                     code=None,
                     display=None,
+                    system=None,
+                    version=None,
+                    terminology_version=self.terminology_version,
                     code_object=code_object,
-                    from_custom_terminology=from_custom_terminology,
-                    custom_terminology_code_uuid=row.custom_terminology_uuid,
-                    from_fhir_terminology=from_fhir_terminology,
-                    fhir_terminology_code_uuid=row.fhir_terminology_uuid,
+                    from_custom_terminology=True,
+                    custom_terminology_code_uuid=row.old_uuid,  # this is the uuid of the code itself todo: update for new table
+                    from_fhir_terminology=False,
                     saved_to_db=True,
                 )
             else:
@@ -1315,10 +1318,13 @@ class CustomTerminologyRule(VSRule):
         self.results = self.codes_from_results(results_data)
 
     def code_rule(self):
+        """
+        This rule is only intended for simple code use, never for codeable concepts.
+        """
         conn = get_db()
         query = """
         select * from custom_terminologies.code_poc
-        where code in :value
+        where code_simple in :value
         and terminology_version_uuid=:terminology_version_uuid
         """
         converted_query = text(query).bindparams(bindparam("value", expanding=True))
@@ -2735,7 +2741,7 @@ class ValueSetVersion:
                     system=item.fhir_uri,
                     version=item.version,
                     code=item.code,
-                    display=item.display
+                    display=item.display,
                 )
                 if (
                     item.fhir_uri,
@@ -2927,9 +2933,15 @@ class ValueSetVersion:
                     [
                         {
                             "expansion_uuid": str(self.expansion_uuid),
-                            "code_schema": code.code_schema,
-                            "code_simple": code.code_simple,
-                            "code_jsonb": code.code_jsonb,
+                            "code_schema": code.code_schema.value,
+                            "code_simple": code.code
+                            if code.code_schema
+                            == app.models.codes.RoninCodeSchemas.code
+                            else None,
+                            "code_jsonb": json.dumps(code.code)
+                            if code.code_schema
+                            == app.models.codes.RoninCodeSchemas.codeable_concept
+                            else None,
                             "display": code.display,
                             "system": code.system,
                             "version": code.version,

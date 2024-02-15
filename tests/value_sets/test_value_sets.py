@@ -65,12 +65,15 @@ class ValueSetTests(unittest.TestCase):
 
     ```
     """
+
     def setUp(self) -> None:
         self.conn = get_db()
         self.app = create_app()
-        self.app.config.update({
-            "TESTING": True,
-        })
+        self.app.config.update(
+            {
+                "TESTING": True,
+            }
+        )
         self.client = self.app.test_client()
 
     def tearDown(self) -> None:
@@ -102,6 +105,9 @@ class ValueSetTests(unittest.TestCase):
     safe_term_uuid_old = "3c9ed300-0cb8-47af-8c04-a06352a14b8d"
     safe_term_uuid_dupl = "d14cbd3a-aabe-4b26-b754-5ae2fbd20949"
 
+    # UUID value of Test ONLY: Custom Terminology Value Set version
+    custom_terminology_value_set_version = "b8de6b05-5f0e-4a9d-a872-7cb265a52311"
+
     def test_value_set_expand(self):
         """
         Expand the 'Automated Testing Value Set' value set and verify the outputs,
@@ -114,24 +120,53 @@ class ValueSetTests(unittest.TestCase):
 
         self.assertEqual(11509, len(value_set_version.expansion))
 
+    def test_custom_terminology_value_set(self):
+        """
+        Tests making a new expanison and loading the expansion for custom terminology value set.
+        """
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.custom_terminology_value_set_version
+        )
+        value_set_version.expand(force_new=True)
+
+        self.assertEqual(28, len(value_set_version.expansion))
+
+        expected_subset_codes = ["N2", "N3b", "N1 FIGO IIIC"]
+        actual_codes = [code.code for code in value_set_version.expansion]
+        # Check that each expected code in the subset is present in the actual codes
+        for expected_code in expected_subset_codes:
+            self.assertIn(expected_code, actual_codes)
+
+        self.assertTrue(value_set_version.expansion_already_exists)
+        current_expansion = value_set_version.load_current_expansion()
+        self.assertEqual(len(current_expansion), 28)
+
     def test_value_set_not_found(self):
         with raises(NotFoundException) as e:
             app.value_sets.models.ValueSet.load(self.safe_term_uuid_dupl)
         result = e.value
-        assert result.message == f"No Value Set found with UUID: {self.safe_term_uuid_dupl}"
+        assert (
+            result.message
+            == f"No Value Set found with UUID: {self.safe_term_uuid_dupl}"
+        )
 
     def test_value_set_version_not_found(self):
         with raises(NotFoundException) as e:
             app.value_sets.models.ValueSetVersion.load(self.safe_term_uuid_dupl)
         result = e.value
-        assert result.message == f"No Value Set Version found with UUID: {self.safe_term_uuid_dupl}"
+        assert (
+            result.message
+            == f"No Value Set Version found with UUID: {self.safe_term_uuid_dupl}"
+        )
 
     def test_expansion_report(self):
         response = self.client.get(
             f"/ValueSets/expansions/{self.safe_value_set_uuid_auto_tool_expansion}/report"
         )
-        assert hashlib.md5(response.data).hexdigest() == "8cb508cafbae9fba542270698aa9db9e"
+        assert (
+            hashlib.md5(response.data).hexdigest() == "8cb508cafbae9fba542270698aa9db9e"
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -188,7 +188,7 @@ class Terminology:
                     where terminology_version_uuid=:terminology_version_uuid
                     """
                 ),
-                {"terminology_version_uuid": self.uuid}
+                {"terminology_version_uuid": self.uuid},
             )
             for code_data in content_data:
                 code_schema_raw = code_data.code_schema
@@ -198,7 +198,9 @@ class Terminology:
 
                 code_object = None
                 if code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
-                    code_object = app.models.codes.FHIRCodeableConcept.deserialize(code_data.code_jsonb)
+                    code_object = app.models.codes.FHIRCodeableConcept.deserialize(
+                        code_data.code_jsonb
+                    )
                 elif code_schema == app.models.codes.RoninCodeSchemas.code:
                     code = code_data.code_simple
                     display = code_data.display
@@ -216,14 +218,13 @@ class Terminology:
                     depends_on_property=code_data.depends_on_property,
                     depends_on_system=code_data.depends_on_system,
                     code_object=code_object,
-                    code_schema=code_schema
+                    code_schema=code_schema,
                 )
                 self.codes.append(new_code)
         else:
             raise NotImplementedError(
                 "Loading content only supported for FHIR Terminologies and Custom Terminologies"
             )
-
 
     @classmethod
     def load_terminologies_for_value_set_version(cls, vs_version_uuid):
@@ -259,7 +260,7 @@ class Terminology:
                 x.effective_end,
                 x.fhir_uri,
                 x.fhir_terminology,
-                x.is_standard
+                x.is_standard,
             )
             for x in term_data
         }
