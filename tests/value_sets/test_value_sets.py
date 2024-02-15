@@ -124,22 +124,36 @@ class ValueSetTests(unittest.TestCase):
         """
         Tests making a new expanison and loading the expansion for custom terminology value set.
         """
+        #
+        # Step 1: Expand the value set and verify the expansion
+        #
         value_set_version = app.value_sets.models.ValueSetVersion.load(
             self.custom_terminology_value_set_version
         )
         value_set_version.expand(force_new=True)
 
-        self.assertEqual(28, len(value_set_version.expansion))
+        self.assertEqual(12, len(value_set_version.expansion))
 
-        expected_subset_codes = ["N2", "N3b", "N1 FIGO IIIC"]
+        expected_subset_codes = ["N2", "N0b", "N3"]
         actual_codes = [code.code for code in value_set_version.expansion]
         # Check that each expected code in the subset is present in the actual codes
         for expected_code in expected_subset_codes:
             self.assertIn(expected_code, actual_codes)
 
-        self.assertTrue(value_set_version.expansion_already_exists)
-        current_expansion = value_set_version.load_current_expansion()
-        self.assertEqual(len(current_expansion), 28)
+        #
+        # Step 2: Test loading the expansion from the database
+        #
+
+        del value_set_version
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.custom_terminology_value_set_version
+        )
+        self.assertTrue(value_set_version.expansion_already_exists())
+        # value_set_version.expand()
+        value_set_version.load_current_expansion()
+        current_expansion = value_set_version.expansion
+
+        self.assertEqual(len(current_expansion), 12)
 
     def test_value_set_not_found(self):
         with raises(NotFoundException) as e:
