@@ -142,7 +142,6 @@ class DataMigrationTests(unittest.TestCase):
 '49a9d481-c4f8-464e-82de-21f43027b0e4',
 '503e4d7f-f6b9-4923-9a53-7353f5e1193b',
 '52d8c0f9-c9e7-4345-a31f-e9a6ae9f3913',
-'684fe9e6-72b4-43db-b2f6-e66b81a997f7',
 '71cf28b4-b998-45bf-aba6-772be10e8c11',
 '7a6e1a03-a36f-47d9-badd-645516b4c9fc',
 '89a6b716-38e7-422f-8c92-c7a7243c6fbf',

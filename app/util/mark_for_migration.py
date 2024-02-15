@@ -5,6 +5,7 @@ import app.enum.concept_maps_for_content
 import app.enum.concept_maps_for_systems
 import app.enum.terminologies_for_systems
 import app.enum.value_sets_for_systems
+import app.enum.value_sets_for_content
 
 import app.models.data_ingestion_registry
 import app.value_sets.models
@@ -55,10 +56,24 @@ def mark_concept_maps_for_migration(data_normalization_registry: app.models.data
 
     systems_uuids = [x.value for x in concept_maps_for_systems]
     content_uuids = [x.value for x in concept_maps_for_content]
-    all_cm_uuids = systems_uuids + content_uuids
-    all_cm_uuids = list(set(all_cm_uuids))
+    content_uuids = list(set(content_uuids))
+    systems_uuids = list(set(systems_uuids))
 
-    for concept_map_uuid in all_cm_uuids:
+    # For systems UUIDs, mark all versions to migrate
+    for concept_map_uuid in systems_uuids:
+        conn.execute(
+            text(
+                """
+                update concept_maps.concept_map_version
+                set migrate=true
+                where concept_map_uuid=:concept_map_uuid
+                """
+            ),
+            {"concept_map_uuid": concept_map_uuid},
+        )
+
+    # For Content UUIDs, mark active and pending versions; Also, perform some data integrity checks
+    for concept_map_uuid in content_uuids:
         # Verify there is only one active version (if any)
         all_versions = conn.execute(
             text(
@@ -237,7 +252,25 @@ def mark_value_sets_for_migration(data_normalization_registry: app.models.data_i
     )
 
     # Mark everything specifically added to the enum
-    # todo: implement if necessary
+    value_sets_for_content = app.enum.value_sets_for_content.ValueSetsForContent
+    content_uuids = [x.value for x in value_sets_for_content]
+    content_uuids = list(set(content_uuids))
+
+    for value_set_uuid in content_uuids:
+        conn.execute(
+            text(
+                """
+                update value_sets.value_set_version
+                set migrate=true
+                where value_set_uuid=:value_set_uuid
+                and status in ('pending', 'active')
+                """
+            ), {
+                "value_set_uuid": value_set_uuid
+            }
+        )
+
+    # todo: implement specific selection for systems if necessary
 
 
 def mark_custom_terminology_codes_for_migration():
