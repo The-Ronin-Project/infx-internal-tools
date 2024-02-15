@@ -85,12 +85,16 @@ Contact a team member for:
 - details about creating your own .env file from our [.env.template](.env.template) and saving it in the same folder
 - ask your team to add you to the database access group `clinical-intelligence`
 - pgAdmin setup: ask the IT team for a username and password, then use the team Confluence instructions
-- get a PEM file that contains your key for OCI access, create a folder `.oci` at your top level folder, and put the PEM file there
 
 
 ### Setting up a dev environment
 
 First, follow these directions: https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account
+
+#### OCI Key
+Download the PEM file that contains the private key for OCI access from 1Password vault, `INFX Shared`, item
+`OCI_api_key.pem`. Create a folder `.oci` at the top level of your user folder (e.g. `~/.oci`) and put the PEM file
+there. This is configurable in the project .env file.
 
 #### Tool set
 - Docker Desktop

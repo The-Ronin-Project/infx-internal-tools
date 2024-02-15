@@ -28,7 +28,7 @@ from app.errors import (
 )
 from app.helpers.message_helper import message_exception_classname
 
-from app.helpers.oci_helper import set_up_object_store
+from app.helpers.oci_helper import set_up_and_save_to_object_store, folder_path_for_oci
 
 from app.models.codes import Code
 
@@ -653,7 +653,6 @@ class RxNormRule(VSRule):
         self.results = set(final_rxnorm_codes)
 
     def rxnorm_term_type(self):
-        # json_value = json.loads(self.value)
         term_type = self.value.replace(",", " ")
 
         # Calls the getAllConceptsByTTY API
@@ -662,41 +661,32 @@ class RxNormRule(VSRule):
             f"{RXNORM_BASE_URL}allconcepts.json", params=payload
         )
 
-        # Extracts a list of RxCUIs from the JSON response
-        # rxcuis = self.json_extract(tty_member_request.json(), "rxcui")
+        # New API call for RxNorm codes with a "quantified" status
+        quantified_rxnorm_codes = requests.get(
+            f"{RXNORM_BASE_URL}allstatus.json?status=quantified"
+        )
 
-        # Calls the concept property RxNorm API
-        # concept_properties = []
-        # with concurrent.futures.ThreadPoolExecutor(max_workers=25) as pool:
-        #     results = pool.map(self.load_rxnorm_properties, rxcuis)
-        #     for result in results:
-        #         concept_properties.append(result)
-        #
-        # # Making a final list of RxNorm codes
-        # final_rxnorm_codes = []
-        # for item in concept_properties:
-        #     properties = item.get("properties")
-        #     result_term_type = properties.get("tty")
-        #     display = properties.get("name")
-        #     code = properties.get("rxcui")
-        #     final_rxnorm_codes.append(
-        #         Code(
-        #             self.fhir_system,
-        #             self.terminology_version.version,
-        #             code,
-        #             display,
-        #         )
-        #     )
-        results = [
-            Code(
-                self.fhir_system,
-                self.terminology_version.version,
-                x.get("rxcui"),
-                x.get("name"),
+        # Combine the two API responses into one set
+        if tty_member_request.ok and quantified_rxnorm_codes.ok:
+            concepts_data = (
+                tty_member_request.json().get("minConceptGroup").get("minConcept")
             )
-            for x in tty_member_request.json().get("minConceptGroup").get("minConcept")
-        ]
-        self.results = set(results)
+            status_data = (
+                quantified_rxnorm_codes.json().get("minConceptGroup").get("minConcept")
+            )
+
+            # Combine the data from both responses
+            combined_data = concepts_data + status_data
+            results = [
+                Code(
+                    self.fhir_system,
+                    self.terminology_version.version,
+                    x.get("rxcui"),
+                    x.get("name"),
+                )
+                for x in combined_data
+            ]
+            self.results = set(results)
 
     def all_active_rxnorm(self):
         """
@@ -3181,7 +3171,7 @@ class ValueSetVersion:
 
         return serialized, initial_path
 
-    def publish(self, force_new):
+    def publish(self, force_new, overwrite_allowed=False):
         """
         Publish the ValueSet instance to OCI storage and Simplifier.
 
@@ -3196,11 +3186,11 @@ class ValueSetVersion:
         self.expand(force_new=force_new)
 
         # OCI: output as ValueSet.database_schema_version, which may be the same as ValueSet.next_schema_version
-        value_set_to_json = self.send_to_oci(ValueSet.database_schema_version)
+        value_set_to_json = self.send_to_oci(ValueSet.database_schema_version, overwrite_allowed)
 
         # OCI: also output as ValueSet.next_schema_version, if different from ValueSet.database_schema_version
         if ValueSet.database_schema_version != ValueSet.next_schema_version:
-            value_set_to_json = self.send_to_oci(ValueSet.next_schema_version)
+            value_set_to_json = self.send_to_oci(ValueSet.next_schema_version, overwrite_allowed)
 
         # Additional publishing activities
         self.version_set_status_active()
@@ -3208,15 +3198,21 @@ class ValueSetVersion:
         self.to_simplifier(value_set_to_json)
 
         # Publish new version of data normalization registry
-        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
+        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry(
+            overwrite_allowed
+        )
 
-    def send_to_oci(self, schema_version):
+    def send_to_oci(self, schema_version, enable_overwrite=False):
         value_set_to_json, initial_path = self.prepare_for_oci(schema_version)
-        set_up_object_store(
+        oci_path = folder_path_for_oci(
             value_set_to_json,
             initial_path + f"/published/{self.value_set.uuid}",
-            folder="published",
-            content_type="json",
+            content_type="json"
+        )
+        set_up_and_save_to_object_store(
+            value_set_to_json,
+            oci_path,
+            enable_overwrite,
         )
         return value_set_to_json
 

@@ -6,6 +6,40 @@ from collections import OrderedDict
 
 from app.errors import BadDataError
 
+OID_URL_CONVERSIONS = {
+    "urn:oid:2.16.840.1.113883.6.96": "http://snomed.info/sct",
+    "urn:oid:2.16.840.1.113883.6.88": "http://www.nlm.nih.gov/research/umls/rxnorm",
+    "urn:oid:2.16.840.1.113883.6.1": "http://loinc.org",
+    "urn:oid:2.16.840.1.113883.6.8": "http://unitsofmeasure.org",
+    "urn:oid:2.16.840.1.113883.3.26.1.2": "http://ncimeta.nci.nih.gov",
+    "urn:oid:2.16.840.1.113883.6.12": "http://www.ama-assn.org/go/cpt",
+    "urn:oid:2.16.840.1.113883.6.209": "http://hl7.org/fhir/ndfrt",
+    "urn:oid:2.16.840.1.113883.4.9": "http://fdasis.nlm.nih.gov",
+    "urn:oid:2.16.840.1.113883.6.69": "http://hl7.org/fhir/sid/ndc",
+    "urn:oid:2.16.840.1.113883.12.292": "http://hl7.org/fhir/sid/cvx",
+    "urn:oid:1.0.3166.1.2.2": "urn:iso:std:iso:3166",
+    "urn:oid:2.16.840.1.113883.6.344": "http://hl7.org/fhir/sid/dsm5",
+    "urn:oid:2.16.840.1.113883.6.301.5": "http://www.nubc.org/patient-discharge",
+    "urn:oid:2.16.840.1.113883.6.256": "http://www.radlex.org",
+    "urn:oid:2.16.840.1.113883.6.3": "http://hl7.org/fhir/sid/icd-10",
+    "urn:oid:2.16.840.1.113883.6.42": "http://hl7.org/fhir/sid/icd-9-cm",
+    "urn:oid:2.16.840.1.113883.6.90": "http://hl7.org/fhir/sid/icd-10-cm",
+    "urn:oid:2.16.840.1.113883.2.4.4.31.1": "http://hl7.org/fhir/sid/icpc-1",
+    "urn:oid:2.16.840.1.113883.6.139": "http://hl7.org/fhir/sid/icpc-2",
+    "urn:oid:2.16.840.1.113883.6.254": "http://hl7.org/fhir/sid/icf-nl",
+    "urn:oid:1.3.160": "https://www.gs1.org/gtin",
+    "urn:oid:2.16.840.1.113883.6.73": "http://www.whocc.no/atc",
+    "urn:oid:2.16.840.1.113883.6.24": "urn:iso:std:iso:11073:10101",
+    "urn:oid:1.2.840.10008.2.16.4": "http://dicom.nema.org/resources/ontology/DCM",
+    "urn:oid:2.16.840.1.113883.5.1105": "http://hl7.org/fhir/NamingSystem/ca-hc-din",
+    "urn:oid:2.16.840.1.113883.6.101": "http://nucc.org/provider-taxonomy",
+    "urn:oid:2.16.840.1.113883.6.14": "https://www.cms.gov/Medicare/Coding/HCPCSReleaseCodeSets",
+    "urn:oid:2.16.840.1.113883.6.43.1": "http://terminology.hl7.org/CodeSystem/icd-o-3",
+    "urn:oid:2.16.840.1.113883.4.1": "http://hl7.org/fhir/sid/us-ssn",
+    "urn:oid:2.16.840.1.113883.4.6": "http://hl7.org/fhir/sid/us-npi",
+    "urn:oid:2.16.840.1.113883.4.7": "http://hl7.org/fhir",
+}
+
 
 def load_json_string(input_json_string: str):
     """
@@ -204,6 +238,10 @@ def normalize_source_codeable_concept(input_object):
                 del coding["id"]
             if coding.get("userSelected") is not None:
                 del coding["userSelected"]
+            system = coding.get("system")
+            if system is not None:
+                if system in OID_URL_CONVERSIONS:
+                    coding["system"] = OID_URL_CONVERSIONS[system]
         input_object["coding"] = order_object_list(coding_list)
     return input_object
 

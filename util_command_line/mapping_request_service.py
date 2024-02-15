@@ -1,33 +1,12 @@
-import asyncio
-import datetime
-import json
-import logging
-import re
-import uuid
-from dataclasses import dataclass
-from enum import Enum
 from json import JSONDecodeError
-from typing import Dict, List, Optional
-import traceback
-import sys
 from unittest import skip
 
 import httpx
-from cachetools.func import ttl_cache
-from decouple import config
-from deprecated.classic import deprecated
-from httpx import ReadTimeout
-from httpcore import PoolTimeout as HttpcorePoolTimeout
-from httpx import PoolTimeout as HttpxPoolTimeout
-from sqlalchemy import text, Table, Column, MetaData, Text, bindparam
-from sqlalchemy.dialects.postgresql import UUID as UUID_column_type
-from werkzeug.exceptions import BadRequest
+from sqlalchemy import text
 
-from app.models.mapping_request_service import get_environment_from_service_url, \
+from app.util.mapping_request_service import get_environment_from_service_url, \
     DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL, get_token, AUTH_URL, CLIENT_ID, CLIENT_SECRET, AUTH_AUDIENCE, \
     make_get_request
-from app.terminologies.models import Terminology
-from app.database import get_db
 
 
 @skip("This is a utility, not a test. This one-time repair function has been used already. Retaining as an example.")

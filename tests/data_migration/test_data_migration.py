@@ -1,15 +1,10 @@
-import json
 import unittest
-from json import JSONDecodeError
-
-from _pytest.python_api import raises
 
 from app.database import get_db
 from app.app import create_app
-from app.helpers.format_helper import prepare_dynamic_value_for_sql_issue, DataExtensionUrl, \
-    convert_source_concept_spark_export_string_to_json_string_unordered, \
-    convert_source_concept_text_only_spark_export_string_to_json_string
-from app.proofs_of_concept.data_migration import ConceptMapsForSystems, ConceptMapsForContent
+from app.enum.concept_maps_for_systems import ConceptMapsForSystems
+from app.enum.concept_maps_for_content import ConceptMapsForContent
+from app.util.data_migration import get_v5_concept_map_uuids_in_n_blocks_for_parallel_process
 
 
 class DataMigrationTests(unittest.TestCase):
@@ -147,7 +142,6 @@ class DataMigrationTests(unittest.TestCase):
 '49a9d481-c4f8-464e-82de-21f43027b0e4',
 '503e4d7f-f6b9-4923-9a53-7353f5e1193b',
 '52d8c0f9-c9e7-4345-a31f-e9a6ae9f3913',
-'684fe9e6-72b4-43db-b2f6-e66b81a997f7',
 '71cf28b4-b998-45bf-aba6-772be10e8c11',
 '7a6e1a03-a36f-47d9-badd-645516b4c9fc',
 '89a6b716-38e7-422f-8c92-c7a7243c6fbf',
@@ -159,6 +153,46 @@ class DataMigrationTests(unittest.TestCase):
 'f38902e7-bc7e-4890-a506-81f5b75c4cd7',
 'f469524c-83fa-461c-976d-4e4a818713f8'
 )"""
+
+    def test_get_concept_map_uuids_in_4_blocks_for_parallel_process_happy(self):
+        original_count = len(ConceptMapsForContent) + len(ConceptMapsForSystems)
+        number_of_blocks = 4
+        test_list = get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks)
+        assert len(test_list) == number_of_blocks
+        test_count = 0
+        for x in test_list:
+            test_count += len(x)
+        assert test_count == original_count
+
+    def test_get_concept_map_uuids_in_8_blocks_for_parallel_process_happy(self):
+        original_count = len(ConceptMapsForContent) + len(ConceptMapsForSystems)
+        number_of_blocks = 8
+        test_list = get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks)
+        assert len(test_list) == number_of_blocks
+        test_count = 0
+        for x in test_list:
+            test_count += len(x)
+        assert test_count == original_count
+
+    def test_get_concept_map_uuids_in_15_blocks_for_parallel_process_happy(self):
+        original_count = len(ConceptMapsForContent) + len(ConceptMapsForSystems)
+        number_of_blocks = 15
+        test_list = get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks)
+        assert len(test_list) == number_of_blocks
+        test_count = 0
+        for x in test_list:
+            test_count += len(x)
+        assert test_count == original_count
+
+    def test_get_concept_map_uuids_in_0_blocks_for_parallel_process_fail(self):
+        number_of_blocks = 0
+        test_list = get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks)
+        assert len(test_list) == 0
+
+    def test_get_concept_map_uuids_in_64_blocks_for_parallel_process_fail(self):
+        number_of_blocks = 64
+        test_list = get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks)
+        assert len(test_list) == 0
 
 
 if __name__ == '__main__':

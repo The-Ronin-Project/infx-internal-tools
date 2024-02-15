@@ -891,6 +891,17 @@ class MappingRequestService:
             if terminology_to_load_to is None:
                 return
 
+            # todo: prevent duplicate mapping requests for Content: normalize input to compare with existing codes in db
+            # In CMv5 this means calling a function to calculate code_id and comparing with existing code_id values -
+            # while we are still using v4, search for the comment
+            # "leverage v5 migration functions to get deduplication_hash values"
+            # to find 2 examples of util functions that use v5 functions to calculate a deduplication_hash value.
+            # Here, in Mapping Request Service, use these v5 functions the same way, to calculate a deduplication_hash.
+            # Then compare it with deduplication_hash values in the custom_terminologies.code table that are in the
+            # same concept map for the current tenant, resource_type, and data element - use JOIN to see which concept
+            # maps, value sets, and terminology are involved. This tells whether the code is already mapped.
+            # If it is now mapped, do not create a Mapping Request for it!
+
             # Load the code and link it back to the original error
             cls.prepare_code_for_terminology(
                 raw_resource,
@@ -1230,6 +1241,10 @@ class MappingRequestService:
             version=None,
             terminology_version_uuid=terminology_to_load_to.uuid,
             custom_terminology_code_uuid=new_code_uuid,
+            depends_on_system=depends_on.depends_on_system if depends_on else None,
+            depends_on_display=depends_on.depends_on_display if depends_on else None,
+            depends_on_property=depends_on.depends_on_property if depends_on else None,
+            depends_on_value=depends_on.depends_on_value if depends_on else None
         )
 
         # Save the data linking this code back to its original error

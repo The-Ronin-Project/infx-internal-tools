@@ -397,41 +397,6 @@ def diff_new_version_against_previous():
     return jsonify(diff)
 
 
-@deprecated("Has not been used to date. Deprecated but retained for debugging or any internal use within Systems.")
-@value_sets_blueprint.route(
-    "/ValueSets/<string:version_uuid>/prerelease", methods=["GET", "POST"]
-)
-def get_value_set_version_prerelease(version_uuid):
-    """
-    Retrieve or create a prerelease version of a ValueSet identified by the version_uuid.
-    Handles both GET and POST requests.
-    Returns JSON data for the prerelease ValueSet version.
-    """
-    vs_version = ValueSetVersion.load(version_uuid)
-    if request.method == "POST":
-        force_new = request.values.get("force_new") == "true"
-        vs_version.expand(force_new=force_new)
-        value_set_to_json, initial_path = vs_version.prepare_for_oci()
-        value_set_to_datastore = set_up_object_store(
-            value_set_to_json,
-            initial_path + f"/prerelease/{vs_version.value_set.uuid}",
-            folder="prerelease",
-            content_type="json",
-        )  # sends to OCI
-        return jsonify(value_set_to_datastore)
-    if request.method == "GET":
-        value_set_from_object_store = get_data_from_oci(
-            ValueSet.object_storage_folder_name,
-            ValueSet.database_schema_version,
-            release_status="prerelease",
-            resource_id=vs_version.value_set.uuid,
-            resource_version=vs_version.version,
-            content_type="json",
-            return_content=True,
-        )
-        return jsonify(value_set_from_object_store)
-
-
 @value_sets_blueprint.route(
     "/ValueSets/<string:version_uuid>/published", methods=["GET", "POST"]
 )
@@ -455,8 +420,13 @@ def get_value_set_version_published(version_uuid):
     """
     value_set_version = ValueSetVersion.load(version_uuid)
     if request.method == "POST":
+        oci_overwrite_allowed = request.values.get("overwrite_allowed").lower() == "true"
         force_new = request.values.get("force_new")
-        value_set_version.publish(force_new)
+        try:
+            value_set_version.publish(force_new, oci_overwrite_allowed)
+        except ValueError as value_error:
+            return BadRequest(value_error.args[0])
+
         return "Published"
 
     if request.method == "GET":
