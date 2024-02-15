@@ -55,18 +55,20 @@ class MappingRequestServiceTests(unittest.TestCase):
             )
 
             self.assertTrue(found)
-            self.assertEqual(processed_code, raw_resource["component"][index]["code"])
+            self.assertEqual(processed_code, '{"text":"Line 1"}', )
             self.assertEqual(
-                processed_display, raw_resource["component"][index]["code"]["text"]
+                processed_display, "Line 1"
             )
             self.assertEqual(
-                depends_on.depends_on_value, json.dumps(raw_resource["code"])
+                depends_on.depends_on_value, '{"coding":[{"code":"SNOMED#260767000","system":"http://snomed.info/sct"},{"code":"EPIC#42384","display":"regional lymph nodes (N)","system":"urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"}],"text":"FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - TNM CLASSIFICATION - AJCC N - REGIONAL LYMPH NODES (N)"}'
             )
+            self.assertEqual({"text": "Line 1"}, raw_resource["component"][index]["code"])
+            self.assertEqual("Line 1", raw_resource["component"][index]["code"]["text"])
             self.assertEqual(depends_on.depends_on_property, "Observation.code")
 
             self.assertIn("category", additional_data)
             self.assertEqual(
-                additional_data.get("category"),
+                json.loads(additional_data).get("category"),
                 "SmartData",
             )
 

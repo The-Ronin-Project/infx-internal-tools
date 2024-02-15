@@ -212,18 +212,26 @@ def normalize_source_ratio(input_object):
     shape the Ratio attributes as needed to conform to the RCDM profile - remove the unsupported attributes -
     require required attributes
     """
-    # todo: implement
-    return input_object
+    numerator = input_object.get("numerator")
+    denominator = input_object.get("denominator")
+    if numerator is None or denominator is None:
+        raise BadDataError(
+            code="Ratio.schema",
+            description="Ratio was expected, but one or more attributes is missing",
+            errors="Invalid Ratio"
+        )
+    output_object = {
+        "numerator": numerator,
+        "denominator": denominator
+    }
+    return output_object
 
 
 def normalize_source_codeable_concept(input_object):
     """
     shape the CodeableConcept attributes as needed to conform to the RCDM profile - remove the unsupported attributes -
     require required attributes - calls order_object_list() on "coding" list to ensure members are in consistent order
-    - ≈
     """
-    if input_object.get("id") is not None:
-        del input_object["id"]
     coding_list = input_object.get("coding")
     text_value = input_object.get("text")
     if coding_list is None and text_value is None:
@@ -242,8 +250,12 @@ def normalize_source_codeable_concept(input_object):
             if system is not None:
                 if system in OID_URL_CONVERSIONS:
                     coding["system"] = OID_URL_CONVERSIONS[system]
-        input_object["coding"] = order_object_list(coding_list)
-    return input_object
+    output_object = {}
+    if coding_list is not None:
+        output_object["coding"] = order_object_list(coding_list)
+    if text_value is not None:
+        output_object["text"] = text_value
+    return output_object
 
 
 def contains_double_quoted_strings(input_string: str) -> bool:
@@ -283,11 +295,3 @@ def contains_brackets(input_string: str) -> bool:
 
 def contains_alphanumeric(input_string: str):
     return any(char.isalnum() for char in input_string)
-
-
-def get_next_hex_char(hex_char):
-    hex_int = int(hex_char, 16)
-    hex_int = (hex_int + 1) % 16
-    next_hex_char = hex(hex_int)[2:]
-    return next_hex_char
-

@@ -169,8 +169,8 @@ class RuleTests(unittest.TestCase):
         )
         self.assertEqual(first_code.version, "2024-01-02")
         self.assertEqual(
-            len(rule.results), 4388
-        )  # 4388 is the correct count for 691 RxNorm codes with BPCK as the term type and 3697 codes with status of quantified
+            4397, len(rule.results)
+        )  # This requires maintenance: 4397 is the correct count for February 2024; in January 2024 it was 4388, etc.
 
     def test_icd10_cm_rule(self):
         terminology_version = app.terminologies.models.Terminology.load(

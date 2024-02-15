@@ -14,7 +14,7 @@ import sys
 import httpx
 from cachetools.func import ttl_cache
 from decouple import config
-from httpx import ReadTimeout, Response
+from httpx import ReadTimeout
 from httpcore import PoolTimeout as HttpcorePoolTimeout
 from httpx import PoolTimeout as HttpxPoolTimeout
 from sqlalchemy import text, Table, Column, MetaData, Text, bindparam
@@ -25,19 +25,20 @@ import app
 import app.concept_maps.models
 import app.models.data_ingestion_registry
 import app.value_sets.models
-from app.errors import BadDataError, NotFoundException
+from app.errors import BadDataError
 from app.helpers.api_helper import (
     get_token,
     make_get_request_async,
     make_get_request,
     make_post_request_async,
 )
-from app.helpers.format_helper import convert_string_to_datetime_or_none
+from app.helpers.format_helper import convert_string_to_datetime_or_none, normalized_codeable_concept_string, \
+    normalized_data_dictionary_string
 from app.helpers.message_helper import (
     message_exception_summary,
     message_exception_classname,
 )
-from app.models.codes import Code
+from app.models.codes import Code, DependsOnData
 from app.models.models import Organization
 from app.terminologies.models import Terminology
 from app.database import get_db
@@ -256,21 +257,6 @@ class ErrorServiceIssue:
             ),
             metadata=issue_data.get("metadata"),
         )
-
-
-@dataclass
-class DependsOnData:
-    """ A simple data class to hold depends on data for an item which needs to be mapped. """
-    depends_on_property: Optional[str] = None
-    depends_on_system: Optional[str] = None
-    depends_on_value: Optional[str] = None  # This could be a string or stringified JSON
-    depends_on_display: Optional[str] = None
-
-
-@dataclass
-class AdditionalData:
-    """ A simple data class to additional on data for an item which needs to be mapped. """
-    additional_data: Optional[str] = None
 
 
 metadata = MetaData()
@@ -877,7 +863,7 @@ class MappingRequestService:
         """
 
         if issue.type == IssueType.NOV_CONMAP_LOOKUP.value:
-            # Based on resource_type, identify coding that needs to get into the concept map
+            # Based on resource_type, identify the Code that needs to get into the concept map; get the str values ready
             (found, processed_code, processed_display, depends_on, additional_data) = cls.extract_coding_attributes(
                 resource_type, raw_resource, location, element, index
             )
@@ -890,17 +876,6 @@ class MappingRequestService:
             )
             if terminology_to_load_to is None:
                 return
-
-            # todo: prevent duplicate mapping requests for Content: normalize input to compare with existing codes in db
-            # In CMv5 this means calling a function to calculate code_id and comparing with existing code_id values -
-            # while we are still using v4, search for the comment
-            # "leverage v5 migration functions to get deduplication_hash values"
-            # to find 2 examples of util functions that use v5 functions to calculate a deduplication_hash value.
-            # Here, in Mapping Request Service, use these v5 functions the same way, to calculate a deduplication_hash.
-            # Then compare it with deduplication_hash values in the custom_terminologies.code table that are in the
-            # same concept map for the current tenant, resource_type, and data element - use JOIN to see which concept
-            # maps, value sets, and terminology are involved. This tells whether the code is already mapped.
-            # If it is now mapped, do not create a Mapping Request for it!
 
             # Load the code and link it back to the original error
             cls.prepare_code_for_terminology(
@@ -924,20 +899,32 @@ class MappingRequestService:
     ) -> (bool, str, str, Optional[DependsOnData], Optional[str]):
         """
         There's something unique about the handling for every resource_type we support
+
+        This function is responsible for serializing any object data using Informatics Systems standard functions
+        that provide consistent JSON format, consistent order for attribute keys and consistent order for list entries.
+        This is to ensure that when a Code or Error is created, it can be accurately deduplicated against existing
+        data to prevent real and false duplicates in our data and to prevent creating needless mapping work for Content.
+
         @param resource_type: a FHIR resource canonical name from the ResourceType enum
         @param raw_resource: the ingested data from the tenant, from the error service resource object
         @param location: the site of the validation issue in the FHIR resource: format defined by the Error Service
         @param element: the site of the validation issue in the FHIR resource: format defined by Informatics tooling
         @param index: for lists of values such as contact telephone numbers, 0-based array position in raw_resource
         @return: (found, processed_code, processed_display)
-            found is True if extracting the data was successful; otherwise False
-            processed_code, processed_display are 2 critically important str attributes of a Coding data type
-            When found is False, processed_code and processed_display are empty strings
+            found is True if extracting the data was successful; otherwise False.
+            processed_code, processed_display are 2 critically important str attributes for input to create a Code()
+                Before being returned by this function, the processed_code (if an object) is normalized to a JSON string
+                that provides consistent format, consistent order for attributes, and consistent order for list entries.
+                When found is False, processed_code and processed_display are empty strings.
+            depends_on, additional_data are optional str inputs for input to create a Code()
+                Before being returned, depends_on (if an object) and additional_data are each normalized to JSON string
+                with consistent format, attribute order, and list entry order as described above.
         """
         processed_code = ""
         processed_display = ""
         depends_on = None
-        additional_data = {}
+        additional_data = None
+        additional_data_dict = {}
         false_result = False, processed_code, processed_display, depends_on, additional_data
 
         # Condition
@@ -946,7 +933,7 @@ class MappingRequestService:
             if "code" not in raw_resource:
                 return false_result
             raw_code = raw_resource["code"]
-            processed_code = raw_code
+            processed_code = normalized_codeable_concept_string(raw_code)
             processed_display = raw_code.get("text")
 
         # Medication
@@ -955,7 +942,7 @@ class MappingRequestService:
             if "code" not in raw_resource:
                 return false_result
             raw_code = raw_resource["code"]
-            processed_code = raw_code
+            processed_code = normalized_codeable_concept_string(raw_code)
             processed_display = raw_code.get("text")
 
         # Observation
@@ -966,14 +953,14 @@ class MappingRequestService:
             if "category" in raw_resource:
                 if raw_resource["category"] and "text" in raw_resource["category"][0]:
                     category_for_additional_data = raw_resource["category"][0]["text"]
-                    additional_data['category'] = category_for_additional_data
+                    additional_data_dict["category"] = category_for_additional_data
 
             # Observation.value is a CodeableConcept
             if element == "Observation.value" or element == "Observation.valueCodeableConcept":
                 if "valueCodeableConcept" not in raw_resource:
                     return false_result
                 raw_code = raw_resource["valueCodeableConcept"]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
 
             # Observation.code is a CodeableConcept
@@ -981,7 +968,7 @@ class MappingRequestService:
                 if "code" not in raw_resource:
                     return false_result
                 raw_code = raw_resource["code"]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
 
             # Observation.interpretation is a CodeableConcept
@@ -992,7 +979,7 @@ class MappingRequestService:
                 ):
                     return false_result
                 raw_code = raw_resource["interpretation"][index]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
 
             # Observation.component.code is a CodeableConcept - location has an index
@@ -1006,7 +993,7 @@ class MappingRequestService:
                 ):
                     return false_result
                 raw_code = raw_resource["component"][index]["code"]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
 
                 # Only SmartData category gets depends on
@@ -1015,7 +1002,7 @@ class MappingRequestService:
                     if "code" not in raw_resource:
                         return false_result
                     depends_on = DependsOnData(
-                        depends_on_value=json.dumps(raw_resource["code"]),
+                        depends_on_value=normalized_codeable_concept_string(raw_resource["code"]),
                         depends_on_property="Observation.code"
                     )
 
@@ -1030,7 +1017,7 @@ class MappingRequestService:
                 ):
                     return false_result
                 raw_code = raw_resource["component"][index]["valueCodeableConcept"]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
             else:
                 LOGGER.warning(
@@ -1044,7 +1031,7 @@ class MappingRequestService:
                 if "code" not in raw_resource:
                     return false_result
                 raw_code = raw_resource["code"]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
 
         # DocumentReference
@@ -1054,7 +1041,7 @@ class MappingRequestService:
                 if "type" not in raw_resource:
                     return false_result
                 raw_code = raw_resource["type"]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
 
         # Appointment
@@ -1101,6 +1088,9 @@ class MappingRequestService:
             )
             cls.all_skip_count += 1
             return false_result
+
+        # Collect the additional data
+        additional_data = normalized_data_dictionary_string(additional_data_dict)
 
         return True, processed_code, processed_display, depends_on, additional_data
 
@@ -1256,13 +1246,9 @@ class MappingRequestService:
                     "resource_uuid": error_service_resource.id,
                     "environment": cls.environment,
                     "status": "pending",
-                    "code": json.dumps(processed_code)
-                    if type(processed_code) == dict
-                    else processed_code,
+                    "code": processed_code,
                     "display": processed_display,
                     "terminology_version_uuid": terminology_to_load_to.uuid,
-                    # todo: no currently supported resource requires the dependsOn data
-                    # but it is part of the unique constraint to look up a row, so use it
                     "depends_on_property": depends_on.depends_on_property if depends_on else None,
                     "depends_on_system": depends_on.depends_on_system if depends_on else None,
                     "depends_on_value": depends_on.depends_on_value if depends_on else None,

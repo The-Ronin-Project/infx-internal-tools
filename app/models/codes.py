@@ -2,10 +2,12 @@ import datetime
 import uuid
 import json
 import logging
+from dataclasses import dataclass
+
 from app.database import get_db
 from sqlalchemy import text
 import app.terminologies.models
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from app.errors import BadRequestWithCode
 
@@ -311,3 +313,24 @@ class Code:
             deduplicated_list = list(set(json_list))
             unjsoned_list = [json.loads(x) for x in deduplicated_list]
             self.additional_data[key] = unjsoned_list[:5]
+
+
+@dataclass
+class DependsOnData:
+    """
+    A simple data class to hold depends on data for a code or concept which needs to be mapped.
+    Values contribute to the dependsOn property of a sourceConcept in a mapping in a FHIR ConceptMap resource.
+    """
+    depends_on_property: Optional[str] = None
+    depends_on_system: Optional[str] = None
+    depends_on_value: Optional[str] = None  # This could be a string or serialized JSON of a FHIR element or resource
+    depends_on_display: Optional[str] = None
+
+
+@dataclass
+class AdditionalData:
+    """
+    A simple data class to hold additional data for a code or concept which needs to be mapped.
+    Internal use only, not part of FHIR or Ronin Common Data Model.
+    """
+    additional_data: dict = None

@@ -844,3 +844,10 @@ def cleanup_database_table(
 
 if __name__=="__main__":
     perform_migration()
+
+
+def get_next_hex_char(hex_char):
+    hex_int = int(hex_char, 16)
+    hex_int = (hex_int + 1) % 16
+    next_hex_char = hex(hex_int)[2:]
+    return next_hex_char

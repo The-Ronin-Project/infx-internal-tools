@@ -36,10 +36,29 @@ def convert_string_to_datetime_or_none(input_string):
 
 
 def prepare_code_and_display_for_storage(raw_code: str = None, raw_display: str = None) -> (str, str, str, str, str):
-    return prepare_dynamic_value_for_storage(raw_code, raw_display)
+    """
+    This is the function to call to store an RCDM FHIR sourceConcept element value in the clinical-content database.
+    Documentation is provided at the prepare_dynamic_value_for_storage() function. Provides all 5 return values.
+    """
+    (
+        value_schema,
+        value_simple,
+        value_jsonb,
+        value_string,
+        display_string
+    ) = prepare_dynamic_value_for_storage(raw_code, raw_display)
+    if value_schema == "string":
+        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_source_code_for_storage(
+            code_string=raw_code
+        )
+    return value_schema, value_simple, value_jsonb, value_string, display_string
 
 
 def prepare_depends_on_value_for_storage(raw_depends_on_value: str = None) -> (str, str, str, str):
+    """
+    This is the function to call to store a RCDM FHIR DependsOn element value in the clinical-content database.
+    Documentation is provided at the prepare_dynamic_value_for_storage() function. Returns 4 values, no display_string.
+    """
     (
         value_schema,
         value_simple,
@@ -47,22 +66,28 @@ def prepare_depends_on_value_for_storage(raw_depends_on_value: str = None) -> (s
         value_string,
         display_string
     ) = prepare_dynamic_value_for_storage(raw_depends_on_value, None)
+    if value_schema == "string":
+        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_depends_on_for_storage(
+            code_string=raw_depends_on_value
+        )
     return value_schema, value_simple, value_jsonb, value_string
 
     
 def prepare_dynamic_value_for_storage(old_value: str = None, old_display: str = None) -> (str, str, str, str, str):
     """
-    To ensure clarity for callers, wrapper functions prepare_code_and_display_for_storage() and
-    prepare_depends_on_value_for_storage() are provided and should be used instead of this function.
+    Helper function. DO NOT call this function directly.
 
-    For inserting code or dependsOn columns into a table that has already been migrated to the ConceptMap v5 schema.
+    For each FHIR element type we need, we write a wrapper function, which must be called instead of this function.
+    For current examples, see prepare_code_and_display_for_storage() and prepare_depends_on_value_for_storage()
+
+    For inserting dynamic value columns into a table that has already been migrated to the ConceptMap v5 schema.
     the input string in old_value may be a string or a serialized object. The end result is to prepare and return
     4 values the caller needs: 3 column values for storage, and 1 string to contribute to later hash calculations.
 
     Calls the helper function prepare_dynamic_value_for_storage_report_issue() to process the inputs.
 
     @param old_value - may be a string, or may be a FHIR code which as data is a string value
-    @param old_display - IMPORTANT - caller must supply this value if the old_value is a FHIR code - used for some tests
+    @param old_display - this value is optional and might be present when the dynamic value is for a source code
 
     @return
         value_schema (string) - FHIR primitive name, DataExtensionUrls value, or message prefixed with "format issue:"
@@ -94,19 +119,15 @@ def prepare_dynamic_value_for_storage(old_value: str = None, old_display: str = 
 
 def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_display: str = None) -> (str, str, str, str, str):
     """
-    Helper function does the work for prepare_dynamic_value_for_storage().
-    To ensure clarity for callers, wrapper functions prepare_code_and_display_for_storage() and
-    prepare_depends_on_value_for_storage() are provided and should be used.
-
-    If old_display is supplied by the caller, the old_value is treated as a code value; otherwise as a depends_on value.
-
-    The input string in old_value may be a string or a serialized object. The result is to prepare and return
-    4 values the caller needs: 3 column values for storage, and 1 string to contribute to later hash calculations.
-    This function is intended to support multiple data types for FHIR dynamic values: code, CodeableConcept, Ratio, etc.
-    For CodeableConcept a 5th value is returned giving a display value, normalized to be equal to CodeableConcept.text
+    Helper function does the work for prepare_dynamic_value_for_storage(). DO NOT call this function directly.
 
     @param old_value - may be a string, or may be a FHIR code or serialized FHIR object.
     @param old_display - (Optional) the old_display value that came with the old_code value, if available.
+
+    Returns 5 values the caller needs for storage:
+    - 3 column values for storing the value,
+    - 1 string to contribute to calculating an identity hash, and
+    - (if old_display is input) 1 display value, normalized to CodeableConcept.text if the old_value was CodeableConcept
 
     @return
         value_schema (string) - FHIR primitive name, DataExtensionUrls value, or message prefixed with "format issue:"
@@ -118,6 +139,7 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
             - this returned value_string value is ready for the caller to input to hash_string to create the code_id
         display_string (string) - in the case of code being CodeableConcept, normalize display to the "text" value
     """
+
     # null depends_on
     if old_display is None and (old_value is None or old_value == ""):
         return None, None, None, None, None
@@ -132,16 +154,19 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
     display_string = old_display
 
     # an all-digits simple value may be read as an int
-    if old_value.isnumeric():
+    if old_value is not None and old_value.isnumeric():
         old_value = f"{old_value}"
 
     # unwrap any wrappers in the JSON
+    # todo: delete this legacy check after v5 migration is complete
     if old_value is not None and '"valueCodeableConcept"' in old_value:
         # code
         old_value = remove_deprecated_wrapper(old_value)
 
-    # begin: detect code and depends_on issue cases
+    # detect issue cases:
+    # todo: after v5 migration is complete, this if/elif/else begins at is_json_format, others to be discarded as shown
     # handle None (bad)
+    # todo: delete this legacy check after v5 migration is complete
     if old_value is None and old_display is not None:
         # code: report format issue
         (value_schema, value_simple, value_jsonb, value_string) = prepare_code_none_issue_for_storage(
@@ -150,6 +175,7 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
         )
 
     # handle '' (bad)
+    # todo: delete this legacy check after v5 migration is complete
     elif old_value == "" and old_display is not None:
         # code: report format issue
         (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_storage(
@@ -158,6 +184,7 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
         )
 
     # handle uuid case (bad)
+    # todo: delete this legacy check after v5 migration is complete
     elif old_display is not None and is_uuid4_format(old_value):
         # code: report format issue
         (value_schema, value_simple, value_jsonb, value_string) = prepare_string_format_issue_for_storage(
@@ -166,6 +193,7 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
         )
 
     # handle Ronin cancer staging pattern as spark (good)
+    # todo: delete this legacy check after v5 migration is complete
     elif old_display is not None and re.search(r"\{Line \d}", old_value):
         # code: convert to json
         json_string = convert_source_concept_text_only_spark_export_string_to_json_string(old_value)
@@ -178,6 +206,7 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
         ) = prepare_json_format_for_storage(json_string, old_display)
 
     # handle '[null]' variants (bad)
+    # todo: delete this legacy check after v5 migration is complete
     elif old_value == "[null]" or re.search(r"\[null, ", old_value):
         # depends_on: correct to null
         if old_display is None:
@@ -190,6 +219,7 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
             )
 
     # handle spark case (bad)
+    # todo: delete this legacy check after v5 migration is complete
     elif is_spark_format(old_value):
         # 2 steps to final: convert spark to JSON, then process as in the JSON case
         # try to convert to json
@@ -214,7 +244,8 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
                 display_string
             ) = prepare_json_format_for_storage(json_string, old_display)
 
-    # handle json case (good or bad)
+    # json
+    # todo: after v5 migration is complete, the if/elif/else should begin here; cases above here should be discarded
     elif is_json_format(old_value):
         (
             value_schema,
@@ -224,22 +255,10 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
             display_string
         ) = prepare_json_format_for_storage(old_value, old_display)
 
-    # (removed) an issue with code and display columns reversed as a result of an old ETL script is no longer present
-
-    # depends on: string (good)
-    elif old_display is None:
-        # depends_on
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_depends_on_for_storage(
-            code_string=old_value
-        )
-
-    # code: string (good)
+    # string
     else:
-        # code
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_source_code_for_storage(
-            code_string=old_value
-        )
-    # end: detect code and depends_on issue cases
+        value_schema = "string"
+        value_simple = old_value
 
     return value_schema, value_simple, value_jsonb, value_string, display_string
 
@@ -326,6 +345,16 @@ def prepare_object_source_ratio_for_storage(code_object) -> (str, str, str, str)
     )
 
 
+def normalized_ratio_string(code_object) -> str:
+    """
+    @raise BadDataError if the value is not a Ratio
+    @return (str) serialized RCDM Ratio normalized for: JSON format, JSON key order, coding list member order
+    """
+    rcdm_object = normalize_source_ratio(code_object)
+    rcdm_string = serialize_json_object(rcdm_object)
+    return rcdm_string
+
+
 def prepare_object_source_code_for_storage(code_object) -> (str, str, str, str):
     """
     @raise BadDataError if the value does not match the sourceCodeableConcept schema
@@ -338,6 +367,16 @@ def prepare_object_source_code_for_storage(code_object) -> (str, str, str, str):
         escape_sql_input_value(rcdm_string),
         rcdm_string
     )
+
+
+def normalized_codeable_concept_string(code_object) -> str:
+    """
+    @raise BadDataError if the value is not a CodeableConcept
+    @return (str) serialized RCDM CodeableConcept normalized for: JSON format, JSON key order, coding list member order
+    """
+    rcdm_object = normalize_source_codeable_concept(code_object)
+    rcdm_string = serialize_json_object(rcdm_object)
+    return rcdm_string
 
 
 def prepare_additional_data_for_storage(additional_data, rejected_depends_on_value: str = None):
@@ -376,6 +415,18 @@ def prepare_data_dictionary_for_storage(info_dict):
     if len(sql_escaped) == 0:
         return None
     return sql_escaped
+
+
+def normalized_data_dictionary_string(info_dict):
+    """
+    Serialize a python data dictionary for a string valued column - like additional_data for INFX internal use only
+    @return the string, or None if the dictionary was empty
+    """
+    if info_dict is None or len(info_dict) == 0:
+        return None
+    info_string = json.dumps(info_dict)
+    clean_info = cleanup_json_string(info_string)
+    return clean_info
 
 
 def prepare_string_depends_on_for_storage(code_string: str) -> (str, str, str, str):
