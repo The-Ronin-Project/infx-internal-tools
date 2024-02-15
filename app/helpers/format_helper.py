@@ -379,27 +379,35 @@ def normalized_codeable_concept_string(code_object) -> str:
     return rcdm_string
 
 
-def prepare_additional_data_for_storage(additional_data, rejected_depends_on_value: str = None):
+def prepare_additional_data_for_storage(additional_data: str, rejected_depends_on_value: str = None):
+    """
+    @param additional_data (str) - serialized data dictionary for internal INFX Systems and Content use
+    @param rejected_depends_on_value (str) - for legacy issues this may contain a string value that is unsafe to keep
+    """
 
     # todo: This block is intended for use only during database migration to v5. After migration it should be deleted.
-    if additional_data is None or len(additional_data) == 0 or additional_data == "{}" or additional_data == "null":
-        return None
     if rejected_depends_on_value is not None:
+        if additional_data is None or additional_data == "" or additional_data == "null":
+            additional_data_dict = {}
+        else:
+            try:
+                additional_data_dict = load_json_string(additional_data)
+            except Exception as e:
+                # for bad old data, simply discard what was there and add the necessary info
+                additional_data_dict = {}
         warning = [
             "The depends_on data format provided with this code is NOT SAFE for clinical use",
             "Do not attempt to interpret or use these values",
             "Each may have ANY ORDER and ANY MEANING"
         ]
-        additional_data.update(
+        additional_data_dict.update(
             {
                 "warning_unsafe_rejected_data": " - ".join(warning),
                 "rejected_data_do_not_use": rejected_depends_on_value
             }
         )
 
-    # The line below is the only line needed in prepare_additional_data_for_storage() after migration to v5 is complete.
-    # todo: After migration, keep the line below, and REMOVE the rejected_depends_on_value argument from this function.
-    return prepare_data_dictionary_for_storage(additional_data)
+    # todo: After migration, remove all of the above, rewrite this function, & REMOVE the rejected_depends_on_value arg
 
 
 def prepare_data_dictionary_for_storage(info_dict):

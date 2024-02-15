@@ -452,5 +452,6 @@ class DataMigrationTests(unittest.TestCase):
         assert result[2] == sql_escaped
         assert result[3] == normalized_value
 
+
 if __name__ == '__main__':
     unittest.main()

@@ -45,6 +45,24 @@ class FormatHelperTests(unittest.TestCase):
 
     def test_prepare_depends_on_value_for_storage_null_display_means_string(self):
         code = "Potassium Level"
+        result = prepare_depends_on_value_for_storage(code)
+        assert result[0] == "string"
+        assert result[1] == code
+        assert result[2] is None
+        assert result[3] == code
+
+    def test_prepare_code_and_display_for_storage_all_digits(self):
+        code = "12345678"
+        display = "Potassium Level"
+        result = prepare_code_and_display_for_storage(code, display)
+        assert result[0] == "code"
+        assert result[1] == code
+        assert result[2] is None
+        assert result[3] == code
+        assert result[4] == display
+
+    def test_prepare_depends_on_value_for_storage_null_display_means_string(self):
+        code = "Potassium Level"
         display = None
         result = prepare_depends_on_value_for_storage(code)
         assert result[0] == "string"

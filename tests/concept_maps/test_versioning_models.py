@@ -1,5 +1,6 @@
 import unittest
 import uuid
+from unittest import skip
 
 from app.app import create_app
 from app.database import get_db
@@ -47,6 +48,7 @@ class ConceptMapVersioningModels(unittest.TestCase):
         self.conn.rollback()
         self.conn.close()
 
+    @skip("We decided not to migrate this test concept map because it used an outdated terminology version")
     def test_new_version_from_previous_same_source_same_target(self):
         """
         Given: The source and target value set versions are the same for both previous version and new version
@@ -96,6 +98,7 @@ class ConceptMapVersioningModels(unittest.TestCase):
             diff_result["new_total"],
         )
 
+    @skip("We decided not to migrate this test concept map because it used an outdated terminology version")
     def test_new_version_from_previous_new_source_same_target(self):
         """
         Given: The source value set for the new concept map version is new and the target value set version is the same.
@@ -146,6 +149,7 @@ class ConceptMapVersioningModels(unittest.TestCase):
             diff_result["new_total"],
         )
 
+    @skip("We decided not to migrate this test concept map because it used an outdated terminology version")
     def test_new_version_from_previous_same_source_new_target(self):
         """
         Given: The source value set version is the same and the target value set version is the new.

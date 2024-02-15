@@ -74,6 +74,14 @@ START_UUID = UUID_START[0]
 END_UUID = UUID_END[-1]
 
 
+
+def get_next_hex_char(hex_char):
+    hex_int = int(hex_char, 16)
+    hex_int = (hex_int + 1) % 16
+    next_hex_char = hex(hex_int)[2:]
+    return next_hex_char
+
+
 def get_v5_concept_map_uuids_in_n_blocks_for_parallel_process(number_of_blocks_needed: int = 1) -> list:
     """
     Returns list of lists of UUIDs, split evenly into blocks according to requested number_of_blocks_needed.
@@ -784,7 +792,7 @@ def perform_migration():
     Command line endpoint for running migration locally. Does not support command line inputs at this time.
     """
     # todo: For this command line endpoint, add a line for each table to be migrated.
-    migrate_database_table("custom_terminologies.code", 1, 0, segment_count=1)
+    migrate_database_table("custom_terminologies.code", 1, 4, segment_count=1)
 
 
 def cleanup_database_table(
@@ -844,10 +852,3 @@ def cleanup_database_table(
 
 if __name__=="__main__":
     perform_migration()
-
-
-def get_next_hex_char(hex_char):
-    hex_int = int(hex_char, 16)
-    hex_int = (hex_int + 1) % 16
-    next_hex_char = hex(hex_int)[2:]
-    return next_hex_char
