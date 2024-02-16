@@ -229,8 +229,8 @@ def hash_for_mapping_id(
         source_code_id
         + relationship_code
         + target_concept_code
-        + target_concept_display if target_concept_display is not None else ""
-        + target_concept_system if target_concept_system is not None else ""
+        + (target_concept_display if target_concept_display is not None else "")
+        + (target_concept_system if target_concept_system is not None else "")
     )
 
     hashed = hash_string(concatenated)
