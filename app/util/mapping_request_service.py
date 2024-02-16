@@ -947,6 +947,8 @@ class MappingRequestService:
 
             # todo: add a depends_on_list for Medication.ingredient.strength using ingredient, a list object
             # if "ingredient" in raw_resource:
+            #   raw_ingredient = raw_resource["ingredient"]
+            #   if len(raw_ingredient) > 0:
             #    depends_on_list = normalized_medication_ingredient_strength_depends_on_list(raw_resource["ingredient"])
 
         # Observation
