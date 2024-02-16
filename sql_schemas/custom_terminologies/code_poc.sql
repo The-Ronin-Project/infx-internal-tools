@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS custom_terminologies.code_poc
     action character varying COLLATE pg_catalog."default",
     deduplication_hash character varying COLLATE pg_catalog."default",
     CONSTRAINT code_poc_pkey PRIMARY KEY (uuid),
-    CONSTRAINT code_id UNIQUE (code_id),
+    CONSTRAINT code_id UNIQUE (code_id, terminology_version_uuid)
+        INCLUDE(terminology_version_uuid, code_id),
     CONSTRAINT old_uuid UNIQUE (old_uuid),
     CONSTRAINT terminology_version FOREIGN KEY (terminology_version_uuid)
         REFERENCES public.terminology_versions (uuid) MATCH SIMPLE
