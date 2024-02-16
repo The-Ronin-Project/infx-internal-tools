@@ -15,9 +15,8 @@ CREATE TABLE IF NOT EXISTS custom_terminologies.code_data
     created_date timestamp with time zone DEFAULT now(),
     deduplication_hash character varying COLLATE pg_catalog."default",
     CONSTRAINT code_data_pkey PRIMARY KEY (uuid),
-    CONSTRAINT code_id UNIQUE (code_id, terminology_version_uuid)
+    CONSTRAINT code_data_code_id UNIQUE (code_id, terminology_version_uuid)
         INCLUDE(terminology_version_uuid, code_id),
-    CONSTRAINT old_uuid UNIQUE (old_uuid),
     CONSTRAINT terminology_version FOREIGN KEY (terminology_version_uuid)
         REFERENCES public.terminology_versions (uuid) MATCH SIMPLE
         ON UPDATE NO ACTION
