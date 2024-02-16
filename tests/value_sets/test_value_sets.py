@@ -108,6 +108,8 @@ class ValueSetTests(unittest.TestCase):
 
     # UUID value of Test ONLY: Custom Terminology Value Set version
     custom_terminology_value_set_version = "b8de6b05-5f0e-4a9d-a872-7cb265a52311"
+    icd_10_cm_value_set_version = "f50ab829-110a-493a-be22-a49ec18c2161"
+    fhir_terminology_value_set_version = "770f63eb-793f-4be5-9870-510c05f5801c"
 
     def test_value_set_expand(self):
         """
@@ -123,7 +125,7 @@ class ValueSetTests(unittest.TestCase):
 
     def test_custom_terminology_value_set(self):
         """
-        Tests making a new expanison and loading the expansion for custom terminology value set.
+        Tests making a new expansion and loading the expansion for custom terminology value set.
         """
         #
         # Step 1: Expand the value set and verify the expansion
@@ -181,6 +183,128 @@ class ValueSetTests(unittest.TestCase):
         self.assertIsNone(result.code_jsonb)
         self.assertEqual("http://projectronin.io/fhir/CodeSystem/agnostic/AJCCStagingNomenclatures", result.system)
         self.assertEqual("3", result.version)
+
+    def test_icd_10_cm_value_set(self):
+        """
+        Tests making a new expansion and loading the expansion for ICD-10 CM value set.
+        """
+        #
+        # Step 1: Expand the value set and verify the expansion
+        #
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.icd_10_cm_value_set_version
+        )
+        value_set_version.expand(force_new=True)
+
+        self.assertEqual(8, len(value_set_version.expansion))
+
+        expected_subset_codes = ["R05", "R04.2"]
+        actual_codes = [code.code for code in value_set_version.expansion]
+        # Check that each expected code in the subset is present in the actual codes
+        for expected_code in expected_subset_codes:
+            self.assertIn(expected_code, actual_codes)
+
+        #
+        # Step 2: Test loading the expansion from the database
+        #
+
+        del value_set_version
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.icd_10_cm_value_set_version
+        )
+        self.assertTrue(value_set_version.expansion_already_exists())
+        # value_set_version.expand()
+        value_set_version.load_current_expansion()
+        current_expansion = value_set_version.expansion
+
+        self.assertEqual(len(current_expansion), 8)
+
+        #
+        # Step 3: Directly query the database and verify a complete row
+        #
+        expansion_uuid = value_set_version.expansion_uuid
+        code_to_check = "R05"
+
+        result = self.conn.execute(
+            text(
+                """
+                select * from value_sets.expansion_member_data
+                where expansion_uuid=:expansion_uuid
+                and code_simple=:code_to_check
+                """
+            ), {
+                "expansion_uuid": expansion_uuid,
+                "code_to_check": code_to_check
+            }
+        ).one_or_none()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(app.models.codes.RoninCodeSchemas.code.value, result.code_schema)
+        self.assertEqual(code_to_check, result.code_simple)
+        self.assertIsNone(result.code_jsonb)
+        self.assertEqual("http://hl7.org/fhir/sid/icd-10-cm", result.system)
+        self.assertEqual("2024", result.version)
+
+    def test_fhir_terminology_value_set(self):
+        """
+        Tests making a new expansion and loading the expansion for FHIR Terminology value set.
+        """
+        #
+        # Step 1: Expand the value set and verify the expansion
+        #
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.fhir_terminology_value_set_version
+        )
+        value_set_version.expand(force_new=True)
+
+        self.assertEqual(7, len(value_set_version.expansion))
+
+        expected_subset_codes = ['sms', 'email', 'phone']
+        actual_codes = [code.code for code in value_set_version.expansion]
+        # Check that each expected code in the subset is present in the actual codes
+        for expected_code in expected_subset_codes:
+            self.assertIn(expected_code, actual_codes)
+
+        #
+        # Step 2: Test loading the expansion from the database
+        #
+
+        del value_set_version
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.fhir_terminology_value_set_version
+        )
+        self.assertTrue(value_set_version.expansion_already_exists())
+        # value_set_version.expand()
+        value_set_version.load_current_expansion()
+        current_expansion = value_set_version.expansion
+
+        self.assertEqual(len(current_expansion), 7)
+
+        #
+        # Step 3: Directly query the database and verify a complete row
+        #
+        expansion_uuid = value_set_version.expansion_uuid
+        code_to_check = "sms"
+
+        result = self.conn.execute(
+            text(
+                """
+                select * from value_sets.expansion_member_data
+                where expansion_uuid=:expansion_uuid
+                and code_simple=:code_to_check
+                """
+            ), {
+                "expansion_uuid": expansion_uuid,
+                "code_to_check": code_to_check
+            }
+        ).one_or_none()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(app.models.codes.RoninCodeSchemas.code.value, result.code_schema)
+        self.assertEqual(code_to_check, result.code_simple)
+        self.assertIsNone(result.code_jsonb)
+        self.assertEqual("http://hl7.org/fhir/contact-point-system", result.system)
+        self.assertEqual("4.0.1", result.version)
 
     def test_value_set_not_found(self):
         with raises(NotFoundException) as e:
