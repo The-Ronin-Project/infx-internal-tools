@@ -132,7 +132,7 @@ class ValueSetTests(unittest.TestCase):
         )
         value_set_version.expand(force_new=True)
 
-        self.assertEqual(12, len(value_set_version.expansion))
+        self.assertEqual(28, len(value_set_version.expansion))
 
         expected_subset_codes = ["N2", "N0b", "N3"]
         actual_codes = [code.code for code in value_set_version.expansion]
@@ -153,7 +153,7 @@ class ValueSetTests(unittest.TestCase):
         value_set_version.load_current_expansion()
         current_expansion = value_set_version.expansion
 
-        self.assertEqual(len(current_expansion), 12)
+        self.assertEqual(len(current_expansion), 28)
 
     def test_value_set_not_found(self):
         with raises(NotFoundException) as e:
