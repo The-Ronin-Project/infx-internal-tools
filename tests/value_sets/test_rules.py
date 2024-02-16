@@ -233,7 +233,7 @@ class RuleTests(unittest.TestCase):
             first_code.system, "http://www.nlm.nih.gov/research/umls/rxnorm"
         )
         self.assertEqual(first_code.version, "2024-01-02")
-        self.assertlessEqual(
+        self.assertLessEqual(
             4388, len(rule.results)
         )  # 4388 is the correct count for 691 RxNorm codes with BPCK as the term type and 3697 codes with status of quantified in January 2024; we expect this count to increase over time
 
