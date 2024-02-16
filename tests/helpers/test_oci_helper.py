@@ -99,7 +99,7 @@ class OciHelperTests(unittest.TestCase):
             oci_helper.set_up_and_save_to_object_store(
                 self.oci_test_file_content,
                 self.oci_test_file_path,
-                overwrite_allowed=False
+                is_overwrite_allowed=False
             )
 
 
@@ -115,7 +115,7 @@ class OciHelperTests(unittest.TestCase):
         returned_content = oci_helper.set_up_and_save_to_object_store(
             self.oci_test_file_content,
             self.oci_test_file_path,
-            overwrite_allowed=True
+            is_overwrite_allowed=True
         )
 
         assert self.oci_test_file_content == returned_content

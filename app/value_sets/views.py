@@ -4,7 +4,7 @@ from deprecated.classic import deprecated
 from flask import Blueprint, request, jsonify, Response
 
 from app.errors import BadRequestWithCode
-from app.helpers.oci_helper import get_data_from_oci
+from app.helpers.oci_helper import get_data_from_oci, OCI_OVERWRITE_PARAM_CONST
 from app.value_sets.models import *
 from app.models.use_case import (
     load_use_case_by_value_set_uuid,
@@ -420,10 +420,10 @@ def get_value_set_version_published(version_uuid):
     """
     value_set_version = ValueSetVersion.load(version_uuid)
     if request.method == "POST":
-        oci_overwrite_allowed = request.values.get("overwrite_allowed").lower() == "true"
+        is_oci_overwrite_allowed = request.values.get(OCI_OVERWRITE_PARAM_CONST, "false").lower() == "true"
         force_new = request.values.get("force_new")
         try:
-            value_set_version.publish(force_new, oci_overwrite_allowed)
+            value_set_version.publish(force_new, is_oci_overwrite_allowed)
         except ValueError as value_error:
             return BadRequest(value_error.args[0])
 

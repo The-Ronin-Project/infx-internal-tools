@@ -26,6 +26,7 @@ from app.models.surveys import *
 from app.models.teams import *
 from app.value_sets.models import *
 import app.concept_maps.models as concept_map_models
+from app.helpers.oci_helper import OCI_OVERWRITE_PARAM_CONST
 
 # Configure the logger when the application is imported. This ensures that
 # everything below uses the same configured logger.
@@ -355,9 +356,8 @@ def create_app(script_info=None):
         Publish the data normalization registry to an object store, allowing other services to access the registry information.
         """
         if request.method == "POST":
-            oci_overwrite_allowed = request.values.get("overwrite_allowed").lower() == "true"
             return jsonify(
-                DataNormalizationRegistry.publish_data_normalization_registry(oci_overwrite_allowed)
+                DataNormalizationRegistry.publish_data_normalization_registry()
             )
 
     @app.route("/data_normalization/registry/actions/get_time", methods=["GET"])
@@ -389,17 +389,15 @@ def create_app(script_info=None):
         methods=["POST"],
     )
     def load_outstanding_codes_to_new_concept_map_version():
-        message = "Concept Map was not found during a request to load outstanding codes"
         concept_map_uuid = request.json.get("concept_map_uuid")
         if concept_map_uuid is None:
-            message = "No Concept Map UUID was supplied during a request to load outstanding codes"
-        else:
-            try:
-                tasks.load_outstanding_codes_to_new_concept_map_version(concept_map_uuid)
-                message = "OK"
-            except NotFoundException as e:
-                message = e.message
-        return message
+            raise BadRequestWithCode(
+                code="load_outstanding_codes_to_concept_map.concept_map_uuid",
+                description="No Concept Map UUID was supplied during a request to load outstanding codes"
+            )
+
+        # This isn't actually executing as a delayed task; this is still realtime todo: consider changing that
+        tasks.load_outstanding_codes_to_new_concept_map_version(concept_map_uuid)
 
     @app.route(
         "/data_normalization/actions/resolve_issues_for_concept_map_version",

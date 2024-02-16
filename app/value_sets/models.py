@@ -3171,26 +3171,26 @@ class ValueSetVersion:
 
         return serialized, initial_path
 
-    def publish(self, force_new, overwrite_allowed=False):
+    def publish(self, force_new_expansion, is_overwrite_allowed=False):
         """
         Publish the ValueSet instance to OCI storage and Simplifier.
 
         This method first expands the ValueSet instance and then prepares it for OCI publishing using the `prepare_for_oci` method.
-        It sends the serialized value set to OCI storage using the `set_up_object_store` method for both the database_schema_version
+        It sends the serialized value set to OCI storage using the `set_up_and_save_to_object_store` method for both the database_schema_version
         and next_schema_version, if they are different.
 
         The method then creates a copy of the serialized value set for Simplifier and sets the status to active.
 
         """
 
-        self.expand(force_new=force_new)
+        self.expand(force_new=force_new_expansion)
 
         # OCI: output as ValueSet.database_schema_version, which may be the same as ValueSet.next_schema_version
-        value_set_to_json = self.send_to_oci(ValueSet.database_schema_version, overwrite_allowed)
+        value_set_to_json = self.send_to_oci(ValueSet.database_schema_version, is_overwrite_allowed)
 
         # OCI: also output as ValueSet.next_schema_version, if different from ValueSet.database_schema_version
         if ValueSet.database_schema_version != ValueSet.next_schema_version:
-            value_set_to_json = self.send_to_oci(ValueSet.next_schema_version, overwrite_allowed)
+            value_set_to_json = self.send_to_oci(ValueSet.next_schema_version, is_overwrite_allowed)
 
         # Additional publishing activities
         self.version_set_status_active()
@@ -3198,11 +3198,9 @@ class ValueSetVersion:
         self.to_simplifier(value_set_to_json)
 
         # Publish new version of data normalization registry
-        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry(
-            overwrite_allowed
-        )
+        app.models.data_ingestion_registry.DataNormalizationRegistry.publish_data_normalization_registry()
 
-    def send_to_oci(self, schema_version, enable_overwrite=False):
+    def send_to_oci(self, schema_version, is_overwrite_enabled=False):
         value_set_to_json, initial_path = self.prepare_for_oci(schema_version)
         oci_path = folder_path_for_oci(
             value_set_to_json,
@@ -3212,7 +3210,7 @@ class ValueSetVersion:
         set_up_and_save_to_object_store(
             value_set_to_json,
             oci_path,
-            enable_overwrite,
+            is_overwrite_enabled,
         )
         return value_set_to_json
 

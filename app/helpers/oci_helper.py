@@ -12,6 +12,7 @@ from app.errors import NotFoundException, OCIException
 
 LOGGER = logging.getLogger()
 
+OCI_OVERWRITE_PARAM_CONST = "overwrite_allowed"
 
 def oci_authentication():
     """
@@ -43,14 +44,14 @@ def folder_path_for_oci(content: dict, path: str, content_type: str):
     return path
 
 
-def set_up_and_save_to_object_store(content: dict, oci_file_path: str, overwrite_allowed: bool = False) -> dict:
+def set_up_and_save_to_object_store(content: dict, oci_file_path: str, is_overwrite_allowed: bool = False) -> dict:
     """
     This function is the conditional matrix for saving a resource to oci.  The function LOOKS
     to see if the resource already exists and LOOKS to see where it should be saved.
     @param content: content to publish, with metadata to support publication
     @param oci_file_path: path location for this resource - includes the filename and extension. folder_path_for_oci()
         can be used to help format this correctly.
-    @param overwrite_allowed: if true, write to oci even if the object exists. Default is False
+    @param is_overwrite_allowed: if true, write to oci even if the object exists. Default is False
     @return: content, if saved to oci. Otherwise, raises an exception
     """
     if is_oci_write_disabled():
@@ -59,7 +60,12 @@ def set_up_and_save_to_object_store(content: dict, oci_file_path: str, overwrite
 
     object_storage_client = oci_authentication()
 
-    is_value_set: bool = (content.get("resourceType") == "ValueSet")
+    # todo: move this entire chunk of code out of here and into value set code
+    if type(content) == dict:
+        is_value_set: bool = (content.get("resourceType") == "ValueSet")
+    else:
+        # Data normalization registry is a list, so we need to account for that
+        is_value_set: bool = False
     if is_value_set and content["status"] not in (
         "active",
         "in progress",
@@ -73,21 +79,22 @@ def set_up_and_save_to_object_store(content: dict, oci_file_path: str, overwrite
     bucket_name = config("OCI_CLI_BUCKET")
     namespace = object_storage_client.get_namespace().data
 
-    status = content.get("status")
-    if status is not None:
-        del content["status"]
+    if type(content) == dict:  # Data normalization registry is a list, so we need to account for that
+        status = content.get("status")
+        if status is not None:
+            del content["status"]
 
     file_exists = file_in_bucket(
         oci_file_path, object_storage_client, bucket_name, namespace
     )
 
-    if not file_exists or overwrite_allowed:
+    if not file_exists or is_overwrite_allowed:
         save_to_object_store(
             oci_file_path, object_storage_client, bucket_name, namespace, content
         )
     else:
         raise ValueError(
-            "This object already exists in the object store and cannot be overwritten without an override."
+            f"This object already exists in the object store and cannot be overwritten without an override. OCI File Path: {oci_file_path}"
         )
 
     return content

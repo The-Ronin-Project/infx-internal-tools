@@ -224,15 +224,15 @@ class DataNormalizationRegistry:
         ]
 
     @staticmethod
-    def publish_to_object_store(registry, filepath, overwrite_allowed=False):
+    def publish_to_object_store(registry, filepath, is_overwrite_allowed=True):
         """
         Publish a Data Normalization Registry to the Object Storage.
         This function is passive. Details about schema version etc. are resolved by the caller and provided in inputs.
         @param registry: data to publish
         @param filepath: Caller sets the full/absolute path and filename in OCI.
-        @param overwrite_allowed: if true, write to oci even if the object exists. Default is False
+        @param is_overwrite_allowed: if true, write to oci even if the object exists. Default is True
         """
-        oci_helper.set_up_and_save_to_object_store(registry, filepath, overwrite_allowed)
+        oci_helper.set_up_and_save_to_object_store(registry, filepath, is_overwrite_allowed)
         return registry
 
     @staticmethod
@@ -299,7 +299,7 @@ class DataNormalizationRegistry:
         norm_registry_schema_version: int,
         concept_map_schema_version: int,
         value_set_schema_version: int,
-        overwrite_enabled=False,
+        is_overwrite_enabled=True,
     ):
         """
         Helper method for calls to publish_data_normalization_registry using different combinations of schema version.
@@ -314,7 +314,7 @@ class DataNormalizationRegistry:
         newly_published_version = DataNormalizationRegistry.publish_to_object_store(
             registry_serialized,
             f"{filepath}/{DataNormalizationRegistry.object_storage_file_name}",
-            overwrite_enabled,
+            is_overwrite_enabled,
         )
         try:
             previous_version = DataNormalizationRegistry.get_last_published_registry(
@@ -326,7 +326,7 @@ class DataNormalizationRegistry:
             DataNormalizationRegistry.publish_to_object_store(
                 diff_version,
                 f"{filepath}/{DataNormalizationRegistry.object_storage_diff_name}",
-                overwrite_enabled,
+                is_overwrite_enabled,
             )
         except ServiceError:
             pass
@@ -334,12 +334,15 @@ class DataNormalizationRegistry:
         return newly_published_version
 
     @classmethod
-    def publish_data_normalization_registry(cls, overwrite_allowed: bool = False):
+    def publish_data_normalization_registry(cls, is_overwrite_allowed: bool = True):
         """
         Publish the data normalization registry and the diff from previous version.
         If DataNormalizationRegistry.database_schema_version and DataNormalizationRegistry.next_schema_version are
         different (such as 3 and 4) publish registry and diff files to both output folders in OCI, in this case
         /DataNormalizationRegistry/v3 and /DataNormalizationRegistry/v4.
+
+        @param is_overwrite_allowed: Toggle for allowing to overwrite of existing artifacts in object storage. True by
+            default for the data normalization registry.
         """
         # Step 1: Get the data.
         current_registry = DataNormalizationRegistry()
@@ -351,7 +354,7 @@ class DataNormalizationRegistry:
             DataNormalizationRegistry.database_schema_version,
             app.concept_maps.models.ConceptMap.database_schema_version,
             app.value_sets.models.ValueSet.database_schema_version,
-            overwrite_allowed,
+            is_overwrite_allowed,
         )
 
         # Step 3: Also output DataNormalizationRegistry.next_schema_version, if different from database_schema_version
@@ -364,7 +367,7 @@ class DataNormalizationRegistry:
                 DataNormalizationRegistry.next_schema_version,
                 app.concept_maps.models.ConceptMap.next_schema_version,
                 app.value_sets.models.ValueSet.next_schema_version,
-                overwrite_allowed,
+                is_overwrite_allowed,
             )
 
         # Step 4: Done

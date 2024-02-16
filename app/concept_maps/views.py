@@ -12,7 +12,7 @@ from werkzeug.exceptions import BadRequest
 import app.tasks as tasks
 from app.concept_maps.models import *
 from app.concept_maps.versioning_models import *
-from app.helpers.oci_helper import get_data_from_oci
+from app.helpers.oci_helper import get_data_from_oci, OCI_OVERWRITE_PARAM_CONST
 import app.concept_maps.rxnorm_mapping_models
 
 from app.errors import NotFoundException
@@ -199,9 +199,9 @@ def get_concept_map_version_published(version_uuid):
     concept_map_version = ConceptMapVersion(version_uuid)
 
     if request.method == "POST":
-        oci_overwrite_allowed = request.values.get("overwrite_allowed").lower() == "true"
+        oci_overwrite_allowed = request.values.get(OCI_OVERWRITE_PARAM_CONST, "false").lower() == "true"
         try:
-            concept_map_version.publish(resolve_errors=True, overwrite_allowed=oci_overwrite_allowed)
+            concept_map_version.publish(resolve_errors=True, is_overwrite_allowed=oci_overwrite_allowed)
         except ValueError as value_error:
             return BadRequest(value_error.args[0])
 

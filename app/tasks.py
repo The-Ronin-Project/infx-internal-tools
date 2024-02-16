@@ -129,7 +129,7 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     )
 
     # Step 8: Publish the new value set version
-    new_source_value_set_version.publish(force_new=True)
+    new_source_value_set_version.publish(force_new_expansion=True)
 
     # Step 9: Create new concept map version
     version_creator = app.concept_maps.versioning_models.ConceptMapVersionCreator()
