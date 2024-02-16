@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS custom_terminologies.code
     depends_on_display character varying COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
     created_date timestamp with time zone DEFAULT now(),
     deduplication_hash character varying COLLATE pg_catalog."default",
+    migrate boolean NOT NULL DEFAULT false,
     CONSTRAINT code_pkey PRIMARY KEY (uuid),
     CONSTRAINT code_display_depends_version UNIQUE (code, display, terminology_version_uuid, depends_on_property, depends_on_system, depends_on_value, depends_on_display)
         INCLUDE(code, display, terminology_version_uuid, depends_on_property, depends_on_system, depends_on_value, depends_on_display),
