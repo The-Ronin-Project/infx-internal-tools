@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch, Mock
 
 from pytest import raises
+from sqlalchemy import text
 
 import app.value_sets.models
 import app.terminologies.models
@@ -154,6 +155,32 @@ class ValueSetTests(unittest.TestCase):
         current_expansion = value_set_version.expansion
 
         self.assertEqual(len(current_expansion), 28)
+
+        #
+        # Step 3: Directly query the database and verify a complete row
+        #
+        expansion_uuid = value_set_version.expansion_uuid
+        code_to_check = "N2"
+
+        result = self.conn.execute(
+            text(
+                """
+                select * from value_sets.expansion_member_data
+                where expansion_uuid=:expansion_uuid
+                and code_simple=:code_to_check
+                """
+            ), {
+                "expansion_uuid": expansion_uuid,
+                "code_to_check": code_to_check
+            }
+        ).one_or_none()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(app.models.codes.RoninCodeSchemas.code.value, result.code_schema)
+        self.assertEqual(code_to_check, result.code_simple)
+        self.assertIsNone(result.code_jsonb)
+        self.assertEqual("http://projectronin.io/fhir/CodeSystem/agnostic/AJCCStagingNomenclatures", result.system)
+        self.assertEqual("3", result.version)
 
     def test_value_set_not_found(self):
         with raises(NotFoundException) as e:
