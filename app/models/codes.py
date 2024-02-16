@@ -109,6 +109,7 @@ class FHIRCodeableConcept:
         return instance
 
     def serialize(self):
+        """ Serialize to a dict appropriate for json.dumps """
         serialized = {}
         if self.text:
             serialized["text"] = self.text
