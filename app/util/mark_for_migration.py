@@ -563,19 +563,124 @@ def generate_report_of_content_to_move():
         )
 
 
+def get_latest_code_uuid_for_code(input_code_uuid):
+    conn = get_db()
+
+    select_query = text(
+        """
+        WITH TerminologyInfo AS (
+            SELECT
+                cv.terminology,
+                cv.uuid AS terminology_version_uuid,
+                c.code,
+                c.display,
+                c.depends_on_property,
+                c.depends_on_system,
+                c.depends_on_value,
+                c.depends_on_display
+            FROM custom_terminologies.code c
+            JOIN public.terminology_versions cv ON c.terminology_version_uuid = cv.uuid
+            WHERE c.uuid = :input_code_uuid -- Replace 'input_code_uuid' with the actual uuid
+        ),
+        LatestVersion AS (
+            SELECT
+                tv.terminology,
+                MAX(tv.version::float) AS latest_version
+            FROM public.terminology_versions tv
+            JOIN TerminologyInfo ti ON tv.terminology = ti.terminology
+        --     WHERE (tv.effective_start IS NULL OR tv.effective_start <= CURRENT_DATE)
+        --       AND (tv.effective_end IS NULL OR tv.effective_end >= CURRENT_DATE)
+            GROUP BY tv.terminology
+        ),
+        LatestTerminology AS (
+            SELECT
+                tv.uuid AS latest_terminology_version_uuid,
+                lv.terminology,
+                lv.latest_version
+            FROM LatestVersion lv
+            JOIN public.terminology_versions tv ON lv.terminology = tv.terminology
+                AND lv.latest_version = tv.version::float
+        )
+        SELECT
+            c.uuid AS new_code_uuid,
+            c.code,
+            c.display,
+            c.depends_on_property,
+            c.depends_on_system,
+            c.depends_on_value,
+            c.depends_on_display
+        FROM custom_terminologies.code c
+        JOIN LatestTerminology lt ON c.terminology_version_uuid = lt.latest_terminology_version_uuid
+        JOIN TerminologyInfo ti ON c.code = ti.code
+            AND c.display = ti.display
+            AND c.depends_on_property = ti.depends_on_property
+            AND c.depends_on_system = ti.depends_on_system
+            AND c.depends_on_value = ti.depends_on_value
+            AND c.depends_on_display = ti.depends_on_display
+    """)
+
+    result = conn.execute(
+        select_query,
+        {"input_code_uuid": input_code_uuid}
+    ).one()
+    return result.new_code_uuid
+
+
+def unmark_duplicates():
+    conn = get_db()
+
+    # Select from table
+    results = conn.execute(
+        text(
+            """
+            select * from custom_terminologies.code_duplicate_action
+            """
+        )
+    ).fetchall()
+
+    # Iterate through each row and ummark the duplicate row
+    for row in results:
+        uuid_to_unmark = None
+        if row.keep_orig:
+            uuid_to_unmark = row.dup_uuid
+        elif row.keep_dup:
+            uuid_to_unmark = row.orig_uuid
+        if not uuid_to_unmark:
+            raise Exception(f"No row to unmark identified for row: {row.orig_uuid}, {row.dup_uuid}, {row.keep_orig}, {row.keep_dup}")
+
+        latest_uuid = get_latest_code_uuid_for_code(uuid_to_unmark)
+        if not latest_uuid:
+            raise Exception(f"Translation failed for code uuid: {uuid_to_unmark}")
+
+        conn.execute(
+            text(
+                """
+                update custom_terminologies.code
+                set migrate=false
+                where uuid=:code_uuid
+                """
+            ), {
+                "code_uuid": latest_uuid
+            }
+        )
+
+
 def mark_content_for_migration():
     conn = get_db()
 
-    data_normalization_registry = app.models.data_ingestion_registry.DataNormalizationRegistry()
-    data_normalization_registry.load_entries()
+    # data_normalization_registry = app.models.data_ingestion_registry.DataNormalizationRegistry()
+    # data_normalization_registry.load_entries()
+    #
+    # reset_mark_to_move()
+    #
+    # mark_concept_maps_for_migration(data_normalization_registry)
+    # mark_value_sets_for_migration(data_normalization_registry)
+    # mark_custom_terminology_codes_for_migration()
+    #
+    # generate_report_of_content_to_move()
 
-    reset_mark_to_move()
-
-    mark_concept_maps_for_migration(data_normalization_registry)
-    mark_value_sets_for_migration(data_normalization_registry)
-    mark_custom_terminology_codes_for_migration()
-
-    generate_report_of_content_to_move()
+    # Finally, identify specific duplicates which should NOT be moved and unmark them for moving
+    unmark_duplicates()
 
     conn.commit()
     conn.close()
