@@ -945,6 +945,10 @@ class MappingRequestService:
             processed_code = normalized_codeable_concept_string(raw_code)
             processed_display = raw_code.get("text")
 
+            # todo: add a depends_on_list for Medication.ingredient.strength using ingredient, a list object
+            # if "ingredient" in raw_resource:
+            #    depends_on_list = normalized_medication_ingredient_strength_depends_on_list(raw_resource["ingredient"])
+
         # Observation
         elif resource_type == ResourceType.OBSERVATION:
             category_for_additional_data = None
@@ -1005,6 +1009,10 @@ class MappingRequestService:
                         depends_on_value=normalized_codeable_concept_string(raw_resource["code"]),
                         depends_on_property="Observation.code"
                     )
+                    # todo: replace the above depends_on call with a 1-member depends_on_list for Observation.code
+                    # if "code" not in raw_resource:
+                    #      return false_result
+                    # normalized_codeable_concept_string(raw_resource["code"])
 
             # Observation.component.value is a CodeableConcept - location will have an index
             elif element == "Observation.component.value" or element == "Observation.component.valueCodeableConcept":
