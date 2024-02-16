@@ -241,6 +241,14 @@ class Code:
         self.fhir_terminology_code_uuid = fhir_terminology_code_uuid
 
         # Set up self.terminology_version
+        self.terminology_version = None
+        if terminology_version is not None:
+            if type(terminology_version) != app.terminologies.models.Terminology:
+                raise ValueError(
+                    "terminology_version parameter must be instance of app.terminologies.models.Terminology or None"
+                )
+            self.terminology_version: app.terminologies.models.Terminology = terminology_version
+
         if terminology_version is None and terminology_version_uuid is None:
             if system is None or version is None:
                 raise ValueError(
@@ -251,15 +259,6 @@ class Code:
                     fhir_uri=system,
                     version=version
                 )
-
-        if terminology_version is not None:
-            if type(terminology_version) != app.terminologies.models.Terminology:
-                raise ValueError(
-                    "terminology_version parameter must be instance of app.terminologies.models.Terminology or None"
-                )
-            self.terminology_version: app.terminologies.models.Terminology = terminology_version
-        else:
-            self.terminology_version = None
 
         if terminology_version_uuid is not None:
             self.terminology_version = app.terminologies.models.Terminology.load_from_cache(terminology_version_uuid)
