@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 import app.terminologies.models
 from app.database import get_db
-from app.errors import BadRequestWithCode
+from app.errors import BadRequestWithCode, NotFoundException
 
 
 class RoninCodeSchemas(Enum):
@@ -241,6 +241,14 @@ class Code:
         self.fhir_terminology_code_uuid = fhir_terminology_code_uuid
 
         # Set up self.terminology_version
+        self.terminology_version = None
+        if terminology_version is not None:
+            if type(terminology_version) != app.terminologies.models.Terminology:
+                raise ValueError(
+                    "terminology_version parameter must be instance of app.terminologies.models.Terminology or None"
+                )
+            self.terminology_version: app.terminologies.models.Terminology = terminology_version
+
         if terminology_version is None and terminology_version_uuid is None:
             if system is None or version is None:
                 raise ValueError(
@@ -251,15 +259,6 @@ class Code:
                     fhir_uri=system,
                     version=version
                 )
-
-        if terminology_version is not None:
-            if type(terminology_version) != app.terminologies.models.Terminology:
-                raise ValueError(
-                    "terminology_version parameter must be instance of app.terminologies.models.Terminology or None"
-                )
-            self.terminology_version: app.terminologies.models.Terminology = terminology_version
-        else:
-            self.terminology_version = None
 
         if terminology_version_uuid is not None:
             self.terminology_version = app.terminologies.models.Terminology.load_from_cache(terminology_version_uuid)
@@ -508,13 +507,7 @@ class Code:
                             code_jsonb,
                             code_id,
                             terminology_version_uuid, 
-                            additional_data, 
-                            depends_on_display, 
-                            depends_on_property, 
-                            depends_on_system,
-                            depends_on_value_schema,
-                            depends_on_value_simple,
-                            depends_on_value_jsonb 
+                            additional_data
                         )
                         VALUES 
                         (
@@ -526,13 +519,7 @@ class Code:
                             :code_jsonb,
                             :code_id,
                             :terminology_version_uuid, 
-                            :additional_data, 
-                            :depends_on_display, 
-                            :depends_on_property, 
-                            :depends_on_system,
-                            :depends_on_value_schema,
-                            :depends_on_value_simple,
-                            :depends_on_value_jsonb 
+                            :additional_data
                         )
                     """
         if on_conflict_do_nothing:
@@ -566,12 +553,6 @@ class Code:
                     "code_jsonb": code_jsonb,
                     "code_id": self.generate_deduplicate_hash(),
                     "terminology_version_uuid": self.terminology_version_uuid,
-                    "depends_on_display": self.depends_on_display if self.depends_on_display else "",
-                    "depends_on_property": self.depends_on_property if self.depends_on_property else "",
-                    "depends_on_system": self.depends_on_system if self.depends_on_system else "",
-                    "depends_on_value_schema": None,
-                    "depends_on_value_simple": None,
-                    "depends_on_value_jsonb": None,
                     "additional_data": json.dumps(self.additional_data),
                 },
             ).fetchall()
@@ -605,8 +586,7 @@ class Code:
             text(
                 """
                 select code.uuid, code.code_schema, code.code_simple, code.code_jsonb, 
-                code.depends_on_value_schema, code.depends_on_value_simple, code.depends_on_value_jsonb, 
-                code.depends_on_display, code.depends_on_property, code.depends_on_system, code.display, 
+                code.display, 
                 tv.fhir_uri as system_url, tv.version, tv.terminology as system_name, tv.uuid as terminology_version_uuid
                 from custom_terminologies.code_poc as code
                 join terminology_versions tv
@@ -616,6 +596,9 @@ class Code:
             ),
             {"code_uuid": code_uuid},
         ).first()
+
+        if code_data is None:
+            raise NotFoundException(f"No custom terminology code found with UUID: {code_uuid}")
 
         code_schema_raw = code_data.code_schema
         code_schema = RoninCodeSchemas(code_schema_raw)
@@ -637,10 +620,6 @@ class Code:
             terminology_version_uuid=code_data.terminology_version_uuid,
             custom_terminology_code_uuid=code_uuid,
             from_custom_terminology=True,
-            depends_on_value=code_data.depends_on_value_simple,
-            depends_on_display=code_data.depends_on_display,
-            depends_on_property=code_data.depends_on_property,
-            depends_on_system=code_data.depends_on_system,
             code_object=code_object,
             code_schema=code_schema,
             saved_to_db=True

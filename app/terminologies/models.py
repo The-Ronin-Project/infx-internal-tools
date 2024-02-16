@@ -213,10 +213,6 @@ class Terminology:
                     terminology_version_uuid=code_data.terminology_version_uuid,
                     custom_terminology_code_uuid=code_data.old_uuid,  # todo: update to correct new column
                     from_custom_terminology=True,
-                    depends_on_value=code_data.depends_on_value_simple,
-                    depends_on_display=code_data.depends_on_display,
-                    depends_on_property=code_data.depends_on_property,
-                    depends_on_system=code_data.depends_on_system,
                     code_object=code_object,
                     code_schema=code_schema,
                 )

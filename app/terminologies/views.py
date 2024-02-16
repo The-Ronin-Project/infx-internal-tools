@@ -112,17 +112,7 @@ def create_code():
         terminology = Terminology.load(terminology_version_uuids[0])
         codes = create_code_payload_to_code_list(payload)
 
-        try:
-            terminology.load_new_codes_to_terminology(codes)
-        except Exception as e:
-            info = "".join(traceback.format_exception(*sys.exc_info()))
-            if "psycopg2.errors." in info:
-                raise BadRequestWithCode(
-                    code="Terminology.create_code.database_error",
-                    description=f"""{message_exception_summary(e)}"""
-                )
-            else:
-                raise e
+        terminology.load_new_codes_to_terminology(codes)
 
         return "Complete"
 
