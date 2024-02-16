@@ -193,14 +193,14 @@ class Terminology:
             for code_data in content_data:
                 code_schema_raw = code_data.code_schema
                 code_schema = app.models.codes.RoninCodeSchemas(code_schema_raw)
-                code = None
-                display = None
 
                 code_object = None
                 if code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
                     code_object = app.models.codes.FHIRCodeableConcept.deserialize(
                         code_data.code_jsonb
                     )
+                    code = None
+                    display = None
                 elif code_schema == app.models.codes.RoninCodeSchemas.code:
                     code = code_data.code_simple
                     display = code_data.display

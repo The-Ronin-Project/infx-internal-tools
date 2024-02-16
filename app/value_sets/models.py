@@ -568,8 +568,9 @@ class ICD10CMRule(VSRule):
 class SNOMEDRule(VSRule):
     def concept_in(self):
         conn = get_db()
+        # Todo: Is this function used anymore? There is no schema called snomedct.
         query = """
-    select * from snomedct.simplerefset_f
+    select * from snomedct.simplerefset_f   
     join snomedct.concept_f
     on snomedct.concept_f.id=simplerefset_f.referencedcomponentid
     where refsetid=:value
@@ -623,6 +624,7 @@ class SNOMEDRule(VSRule):
             data = r.json().get("items")
             results = [
                 app.models.codes.Code(
+                    code_schema=app.models.codes.RoninCodeSchemas.code,
                     system=self.fhir_system,
                     version=self.terminology_version.version,
                     code=x.get("conceptId"),
@@ -1298,7 +1300,7 @@ class CustomTerminologyRule(VSRule):
     def include_entire_code_system(self):
         self.terminology_version.load_content()
         codes = self.terminology_version.codes
-        return set(codes)
+        self.results = set(codes)
 
     def display_regex(self):
         conn = get_db()
@@ -2938,7 +2940,7 @@ class ValueSetVersion:
                             if code.code_schema
                             == app.models.codes.RoninCodeSchemas.code
                             else None,
-                            "code_jsonb": json.dumps(code.code)
+                            "code_jsonb": json.dumps(code.code.serialize())
                             if code.code_schema
                             == app.models.codes.RoninCodeSchemas.codeable_concept
                             else None,
