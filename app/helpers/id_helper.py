@@ -189,11 +189,11 @@ def hash_for_code_id(
         raise ValueError("Cannot create mapping_id without a source_code_id")
     concatenated = (
         code_string
-        + display if display is not None else ""
-        + depends_on_value_string if depends_on_value_string is not None else ""
-        + depends_on_property if depends_on_property is not None else ""
-        + depends_on_system if depends_on_system is not None else ""
-        + depends_on_display if depends_on_display is not None else ""
+        + (display if display is not None else "")
+        + (depends_on_value_string if depends_on_value_string is not None else "")
+        + (depends_on_property if depends_on_property is not None else "")
+        + (depends_on_system if depends_on_system is not None else "")
+        + (depends_on_display if depends_on_display is not None else "")
     )
     hashed = hash_string(concatenated)
     return hashed
