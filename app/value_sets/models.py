@@ -566,28 +566,28 @@ class ICD10CMRule(VSRule):
 
 
 class SNOMEDRule(VSRule):
-    def concept_in(self):
-        conn = get_db()
-        query = """
-    select * from snomedct.simplerefset_f
-    join snomedct.concept_f
-    on snomedct.concept_f.id=simplerefset_f.referencedcomponentid
-    where refsetid=:value
-    """
-
-        results_data = conn.execute(text(query), {"value": self.value})
-        results = [
-            app.models.codes.Code(
-                system=self.fhir_system,
-                version=self.terminology_version.version,
-                code=x.conceptid,
-                display=x.term,
-                from_custom_terminology=False,
-                from_fhir_terminology=False,
-            )
-            for x in results_data
-        ]
-        self.results = set(results)
+    # def concept_in(self):
+    #     conn = get_db()
+    #     query = """
+    # select * from snomedct.simplerefset_f
+    # join snomedct.concept_f
+    # on snomedct.concept_f.id=simplerefset_f.referencedcomponentid
+    # where refsetid=:value
+    # """
+    #
+    #     results_data = conn.execute(text(query), {"value": self.value})
+    #     results = [
+    #         app.models.codes.Code(
+    #             system=self.fhir_system,
+    #             version=self.terminology_version.version,
+    #             code=x.conceptid,
+    #             display=x.term,
+    #             from_custom_terminology=False,
+    #             from_fhir_terminology=False,
+    #         )
+    #         for x in results_data
+    #     ]
+    #     self.results = set(results)
 
     def ecl_query(self):
         """
@@ -1298,7 +1298,7 @@ class CustomTerminologyRule(VSRule):
     def include_entire_code_system(self):
         self.terminology_version.load_content()
         codes = self.terminology_version.codes
-        return set(codes)
+        self.results = set(codes)
 
     def display_regex(self):
         conn = get_db()
@@ -2938,7 +2938,7 @@ class ValueSetVersion:
                             if code.code_schema
                             == app.models.codes.RoninCodeSchemas.code
                             else None,
-                            "code_jsonb": json.dumps(code.code)
+                            "code_jsonb": json.dumps(code.code.serialize())
                             if code.code_schema
                             == app.models.codes.RoninCodeSchemas.codeable_concept
                             else None,
