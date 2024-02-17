@@ -7,6 +7,7 @@ from app.helpers.data_helper import is_uuid4_format, is_spark_format, is_json_fo
     normalize_source_ratio, serialize_json_object, escape_sql_input_value, normalize_source_codeable_concept, \
     cleanup_json_string
 from app.helpers.message_helper import message_exception_classname
+from app.models.codes import DependsOnData
 
 
 class DataExtensionUrl(Enum):
@@ -322,11 +323,22 @@ def prepare_json_format_for_storage(json_string: str, display_string: str = None
     return code_schema, code_simple, code_jsonb, code_string, display_string
 
 
-def prepare_object_source_ratio_for_storage(code_object) -> (str, str, str, str):
+def normalized_medication_ingredient_strength_depends_on_list(ingredient_object) -> list:
     """
-    @throws BadDataError if the value does not match the sourceRatio schema
+    @param ingredient_object is an object. It is a FHIR Medication.ingredient list, which may have 0 or more members.
+    @return a list of DependsOnData objects. In each DependsOnData, the depends_on_value is a str that is a FHIR Ratio
+        object normalized to RCDM Ratio and serialized. Each DependsOnData gives the Medication.ingredient.strength
+        value for a member of the input Medication.ingredient list, in the same list order as the Medication.ingredient
+        list. The depends_on_property for each DependsOnData object is the same: "Medication.ingredient.strength".
     """
-    rcdm_object = normalize_source_ratio(code_object)
+    pass  #stub
+
+
+def prepare_object_source_ratio_for_storage(ratio_object) -> (str, str, str, str):
+    """
+    @raise BadDataError if the value does not match the sourceRatio schema
+    """
+    rcdm_object = normalize_source_ratio(ratio_object)
     rcdm_string = serialize_json_object(rcdm_object)
     return (
         DataExtensionUrl.SOURCE_RATIO.value,
