@@ -275,6 +275,32 @@ class FormatHelperTests(unittest.TestCase):
         serialized = normalized_data_dictionary_string(dictionary)
         assert serialized == '{"a":"aaa","b":"bbb","c":"ccc"}'
 
+    def test_prepare_codeable_concept_for_storage_version_is_preserved_if_present(self):
+        unordered_value = '{"coding": [{"system": "http://projectronin.io/fhir/CodeSystem/mock/condition", "version": "1.0", "code": "test_concept_1", "display": "Test Concept 2023-06-27 13:51:27.236517"}], "text": "Test Concept 2023-06-27 13:51:27.236540"}'
+        normalized_value = '{"coding":[{"code":"test_concept_1","display":"Test Concept 2023-06-27 13:51:27.236517","system":"http://projectronin.io/fhir/CodeSystem/mock/condition","version":"1.0"}],"text":"Test Concept 2023-06-27 13:51:27.236540"}'
+        result = prepare_depends_on_value_for_storage(unordered_value)
+        assert result[0] == DataExtensionUrl.SOURCE_CODEABLE_CONCEPT.value
+        assert result[1] is None
+        assert result[2] == normalized_value
+        assert result[3] == normalized_value
+
+    def test_prepare_codeable_concept_for_storage_5_codes_in_coding_random_order(self):
+        unordered_value = '{"text":"Temp", "coding":[{"code":"6","display":"Temp","system":"urn:oid:1.2.840.114350.1.13.412.2.7.2.707679"}, {"code":"8310-5","display":"Body temperature","system":"http://loinc.org"}, {"code":"8310-5","system":"urn:oid:1.2.246.537.6.96"}, {"code":"t.8c3xqZed921mVK294OU1Q0","display":"Temp","system":"http://open.epic.com/FHIR/STU3/StructureDefinition/observation-flowsheet-id"}, {"code":"8716-3","display":"Vital signs","system":"http://loinc.org"}]}'
+        normalized_value = '{"coding":[{"code":"8310-5","system":"urn:oid:1.2.246.537.6.96"},{"code":"6","display":"Temp","system":"urn:oid:1.2.840.114350.1.13.412.2.7.2.707679"},{"code":"t.8c3xqZed921mVK294OU1Q0","display":"Temp","system":"http://open.epic.com/FHIR/STU3/StructureDefinition/observation-flowsheet-id"},{"code":"8716-3","display":"Vital signs","system":"http://loinc.org"},{"code":"8310-5","display":"Body temperature","system":"http://loinc.org"}],"text":"Temp"}'
+        result = prepare_depends_on_value_for_storage(unordered_value)
+        assert result[0] == DataExtensionUrl.SOURCE_CODEABLE_CONCEPT.value
+        assert result[1] is None
+        assert result[2] == normalized_value
+        assert result[3] == normalized_value
+
+    def test_prepare_codeable_concept_for_storage_9_codes_in_coding_fully_reversed(self):
+        unordered_value = '{"coding":[{"code":"656065","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.772305"},{"code":"2827","display":"Globulin","system":"urn:oid:1.2.840.114350.1.13.297.3.7.2.768282"},{"code":"10015","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.532"},{"code":"GLOB","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.1130"},{"code":"GLOBULIN","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.506"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.311"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.539"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.43"},{"code":"10834-0","display":"Globulin [Mass/volume] in Serum by calculation","system":"http://loinc.org"}],"text":"Globulin"}'
+        normalized_value = '{"coding":[{"code":"10834-0","display":"Globulin [Mass/volume] in Serum by calculation","system":"http://loinc.org"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.43"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.539"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.311"},{"code":"GLOBULIN","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.506"},{"code":"GLOB","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.1130"},{"code":"10015","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.532"},{"code":"2827","display":"Globulin","system":"urn:oid:1.2.840.114350.1.13.297.3.7.2.768282"},{"code":"656065","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.772305"}],"text":"Globulin"}'
+        result = prepare_depends_on_value_for_storage(unordered_value)
+        assert result[0] == DataExtensionUrl.SOURCE_CODEABLE_CONCEPT.value
+        assert result[1] is None
+        assert result[2] == normalized_value
+        assert result[3] == normalized_value
 
 if __name__ == '__main__':
     unittest.main()

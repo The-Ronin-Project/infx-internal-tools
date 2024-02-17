@@ -36,6 +36,22 @@ class IdHelperTests(unittest.TestCase):
         )
         self.assertEqual(code_id, "7fea4ba7f959ee712cc4528ebd053a9c")
 
+    def test_generate_code_id_codeable_concept_depends_on_changes_value(self):
+        example_codeable_concept = {"coding": [{"code": "R31.9", "system": "urn:oid:2.16.840.1.113883.6.90"},
+                                               {"code": "95567008", "system": "urn:oid:2.16.840.1.113883.6.96"}],
+                                    "text": "Traumatic hematuria"}
+        display = example_codeable_concept.get("text")
+
+        example_codeable_concept_json = json.dumps(example_codeable_concept)
+
+        code_id = generate_code_id(
+            code_string=example_codeable_concept_json,
+            display=display,
+            depends_on_value_string="a"
+        )
+        self.assertNotEqual(code_id, "7fea4ba7f959ee712cc4528ebd053a9c")  # without "a"
+        self.assertEqual(code_id, "26a21ee4fb659c05fd6e25b5015be17a")  # with "a"
+
     def test_hash_method_order_independent_coding(self):
         example_1 = '{"coding": [{"code": "R31.9", "system": "urn:oid:2.16.840.1.113883.6.90"}, {"code": "95567008", "system": "urn:oid:2.16.840.1.113883.6.96"}], "text": "Traumatic hematuria"}'
         display_1 = "Traumatic hematuria"

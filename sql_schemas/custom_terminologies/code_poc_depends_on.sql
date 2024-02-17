@@ -13,7 +13,6 @@ CREATE TABLE IF NOT EXISTS custom_terminologies.code_poc_depends_on
     depends_on_value_simple character varying COLLATE pg_catalog."default",
     depends_on_value_jsonb jsonb,
     code_uuid uuid NOT NULL,
-    old_uuid character varying COLLATE pg_catalog."default",
     action character varying COLLATE pg_catalog."default",
     CONSTRAINT code_poc_depends_on_pkey PRIMARY KEY (uuid),
     CONSTRAINT code_poc_depends_on_terminology_code_uuid FOREIGN KEY (code_uuid)
