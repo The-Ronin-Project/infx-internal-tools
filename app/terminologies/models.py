@@ -184,7 +184,7 @@ class Terminology:
             content_data = conn.execute(
                 text(  # todo: change to final table instead of code_poc
                     """
-                    select * from custom_terminologies.code_poc
+                    select * from custom_terminologies.code_data
                     where terminology_version_uuid=:terminology_version_uuid
                     """
                 ),
@@ -211,7 +211,7 @@ class Terminology:
                     code=code,
                     display=display,
                     terminology_version_uuid=code_data.terminology_version_uuid,
-                    custom_terminology_code_uuid=code_data.old_uuid,  # todo: update to correct new column
+                    custom_terminology_code_uuid=code_data.uuid,
                     from_custom_terminology=True,
                     code_object=code_object,
                     code_schema=code_schema,

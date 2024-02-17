@@ -498,10 +498,9 @@ class Code:
 
         conn = get_db()
         query_text = """
-                        INSERT INTO custom_terminologies.code_poc 
+                        INSERT INTO custom_terminologies.code_data 
                         (
                             uuid, 
-                            old_uuid,
                             display, 
                             code_schema,
                             code_simple,
@@ -513,7 +512,6 @@ class Code:
                         VALUES 
                         (
                             :uuid,
-                            :old_uuid, 
                             :display, 
                             :code_schema,
                             :code_simple,
@@ -547,7 +545,6 @@ class Code:
                 text(query_text),
                 {
                     "uuid": custom_terminology_code_uuid,
-                    "old_uuid": custom_terminology_code_uuid,
                     "display": self.display,
                     "code_schema": code_schema_to_save,
                     "code_simple": code_simple,
@@ -589,11 +586,11 @@ class Code:
                 select code.uuid, code.code_schema, code.code_simple, code.code_jsonb, 
                 code.display, 
                 tv.fhir_uri as system_url, tv.version, tv.terminology as system_name, tv.uuid as terminology_version_uuid
-                from custom_terminologies.code_poc as code
+                from custom_terminologies.code_data as code
                 join terminology_versions tv
                 on code.terminology_version_uuid = tv.uuid
-                where code.old_uuid=:code_uuid
-                """  # todo: switch from old_uuid to uuid when appropriate
+                where code.uuid=:code_uuid
+                """
             ),
             {"code_uuid": code_uuid},
         ).first()

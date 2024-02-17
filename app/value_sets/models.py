@@ -1267,7 +1267,7 @@ class CustomTerminologyRule(VSRule):
                     display=row.display,
                     terminology_version=self.terminology_version,
                     from_custom_terminology=True,
-                    custom_terminology_code_uuid=row.old_uuid,  # this is the uuid of the code itself todo: update for new table
+                    custom_terminology_code_uuid=row.uuid,
                     from_fhir_terminology=False,
                     saved_to_db=True,
                 )
@@ -1284,7 +1284,7 @@ class CustomTerminologyRule(VSRule):
                     terminology_version=self.terminology_version,
                     code_object=code_object,
                     from_custom_terminology=True,
-                    custom_terminology_code_uuid=row.old_uuid,  # this is the uuid of the code itself todo: update for new table
+                    custom_terminology_code_uuid=row.uuid,
                     from_fhir_terminology=False,
                     saved_to_db=True,
                 )
@@ -1303,7 +1303,7 @@ class CustomTerminologyRule(VSRule):
     def display_regex(self):
         conn = get_db()
         query = """
-        select * from custom_terminologies.code_poc 
+        select * from custom_terminologies.code_data 
         where terminology_version_uuid=:terminology_version_uuid
         and display like :value
         """
@@ -1323,7 +1323,7 @@ class CustomTerminologyRule(VSRule):
         """
         conn = get_db()
         query = """
-        select * from custom_terminologies.code_poc
+        select * from custom_terminologies.code_data
         where code_simple in :value
         and terminology_version_uuid=:terminology_version_uuid
         """
