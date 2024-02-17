@@ -117,6 +117,25 @@ class FHIRCodeableConcept:
             serialized["coding"] = [coding.serialize() for coding in self.coding]
         return serialized
 
+@dataclass
+class DependsOnData:
+    """
+    A simple data class to hold depends on data for a code or concept which needs to be mapped.
+    Values contribute to the dependsOn property of a sourceConcept in a mapping in a FHIR ConceptMap resource.
+    """
+    depends_on_property: Optional[str] = None
+    depends_on_system: Optional[str] = None
+    depends_on_value: Optional[str] = None  # This could be a string or serialized JSON of a FHIR element or resource
+    depends_on_display: Optional[str] = None
+
+
+@dataclass
+class AdditionalData:
+    """
+    A simple data class to hold additional data for a code or concept which needs to be mapped.
+    Internal use only, not part of FHIR or Ronin Common Data Model.
+    """
+    additional_data: dict = None
 
 
 class Code:

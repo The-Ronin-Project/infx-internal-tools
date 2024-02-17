@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from app.database import get_db
 from app.errors import BadRequestWithCode, NotFoundException
-from app.helpers.oci_helper import get_data_from_oci, put_data_to_oci
+from app.helpers.oci_helper import get_data_from_oci, set_up_and_save_to_object_store
 from app.value_sets.models import ValueSet
 
 
@@ -457,15 +457,8 @@ class Registry:
         )
         publish_version_number = registry_version.version
         for env in environment_options:
-            put_data_to_oci(
-                content=output,
-                oci_root=Registry.object_storage_folder_name,
-                resource_schema_version=resource_schema_version,
-                release_status=env,
-                resource_id=registry_uuid,
-                resource_version=publish_version_number,
-                content_type="csv",
-            )
+            path = f"{Registry.object_storage_folder_name}/v{resource_schema_version}/{env}/{registry_uuid}/{publish_version_number}.csv"
+            set_up_and_save_to_object_store(output, path)
 
         # if write did not raise an exception, update current version and (if dev) create new version in database
         registry_version.update(environment)
