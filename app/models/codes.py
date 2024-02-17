@@ -14,8 +14,15 @@ from app.errors import BadRequestWithCode, NotFoundException
 
 
 class RoninCodeSchemas(Enum):
+    """
+    See Ronin Common Data Model ConceptMap V5.
+    Allowed values for code_schema or depends_on_schema in clinical-content table columns.
+    """
     code = "code"
     codeable_concept = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept"
+    needs_example_data = "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData"
+    ratio = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceRatio"
+    string = "string"
 
 
 @dataclass
