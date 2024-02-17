@@ -1,5 +1,4 @@
 from celery import Celery
-from celery.schedules import crontab
 from uuid import UUID
 from decouple import config
 
@@ -7,8 +6,10 @@ from app.errors import NotFoundException
 import app.value_sets.models
 import app.concept_maps.models
 import app.concept_maps.versioning_models
-import app.models.mapping_request_service
-import app.proofs_of_concept.data_migration
+import app.util.mapping_request_service
+import app.util.data_migration
+import app.util.concept_map_duplicate_codes
+import app.util.concept_map_v4_code_deduplication_hash
 from app.database import get_db
 
 
@@ -67,7 +68,7 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     conn = get_db()
 
     # Get the number of outstanding codes, this is stored and used after a new version has been created
-    outstanding_code_count = app.models.mapping_request_service.get_count_of_outstanding_codes(concept_map_uuid)
+    outstanding_code_count = app.util.mapping_request_service.get_count_of_outstanding_codes(concept_map_uuid)
 
     # Step 6: look up source and target value set
     
@@ -78,6 +79,8 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     concept_map_most_recent_version = concept_map.get_most_recent_version(
         active_only=False
     )
+    if concept_map_most_recent_version is None:
+        raise NotFoundException(f"Could not find any version of the concept map with UUID {concept_map_uuid}")
 
     # Get the source_value_set_version_uuid from the concept map object.
     # This source_value_set_version_uuid MAY OR MAY NOT be the most recent version, and MAY OR MAY NOT be active.
@@ -126,7 +129,7 @@ def load_outstanding_codes_to_new_concept_map_version(concept_map_uuid: str):
     )
 
     # Step 8: Publish the new value set version
-    new_source_value_set_version.publish(force_new=True)
+    new_source_value_set_version.publish(force_new_expansion=True)
 
     # Step 9: Create new concept map version
     version_creator = app.concept_maps.versioning_models.ConceptMapVersionCreator()
@@ -167,10 +170,73 @@ def back_fill_concept_maps_to_simplifier():
 
 
 @celery_app.task
-def perform_poc_database_migration(granularity, uuid_segment):
-    app.proofs_of_concept.data_migration.migrate_custom_terminologies_code(
+def perform_database_migration(table_name, granularity, segment_start, segment_count):
+    app.util.data_migration.migrate_database_table(
+        table_name=table_name,
         granularity=granularity,
-        uuid_segment=uuid_segment
+        segment_start=segment_start,
+        segment_count=segment_count
+    )
+
+
+@celery_app.task
+def identify_v4_concept_map_duplicates(segment_start, segment_count):
+    app.util.concept_map_v4_code_deduplication_hash.identify_v4_concept_map_duplicates(
+        number_of_blocks_requested=segment_count,
+        block_to_process_in_this_run=segment_start,
+    )
+
+
+@celery_app.task
+def perform_database_cleanup(table_name, granularity, segment_start, segment_count):
+    app.util.data_migration.cleanup_database_table(
+        table_name=table_name,
+        granularity=granularity,
+        segment_start=segment_start,
+        segment_count=segment_count
+    )
+
+
+@celery_app.task
+def perform_mapping_request_check(page_size, requested_organization_id, requested_resource_type):
+    """
+    Last 2 inputs are strings: if omitted, all known possible values are used: all orgids or all resource types
+    @param page_size (int) number of records to get from the Data Validation Error Service each time, default PAGE_SIZE
+    @param requested_organization_id: Confluence page called "Organization Ids" under "Living Architecture" lists them
+    @param requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
+    """
+    app.util.mapping_request_service.temporary_mapping_request_service(
+        commit_by_batch=True,
+        page_size=page_size,
+        requested_organization_id=requested_organization_id,
+        requested_resource_type=requested_resource_type,
+        requested_issue_type=None
+    )
+
+
+@celery_app.task
+def perform_load_concept_map_duplicates(
+        concept_map_uuid,
+        concept_map_version_uuid,
+        output_table_name,
+        output_pkey_distinct_constraint_name):
+    app.util.concept_map_duplicate_codes.load_duplicate_for_v4_concept_map(
+        concept_map_uuid,
+        concept_map_version_uuid,
+        output_table_name,
+        output_pkey_distinct_constraint_name,
+    )
+
+
+@celery_app.task
+def perform_mark_concept_map_duplicates(
+        concept_map_uuid,
+        concept_map_version_uuid,
+        output_table_name):
+    app.util.concept_map_duplicate_codes.mark_duplicate_for_v4_concept_map(
+        concept_map_uuid,
+        concept_map_version_uuid,
+        output_table_name,
     )
 
 

@@ -1,4 +1,5 @@
 import httpx
+import logging
 
 
 def get_token(url: str, client_id: str, client_secret: str, audience: str) -> str:
@@ -11,7 +12,11 @@ def get_token(url: str, client_id: str, client_secret: str, audience: str) -> st
         "audience": audience,
         "grant_type": "client_credentials",
     }
-    response = httpx.post(url, json=payload)
+    try:
+        response = httpx.post(url, json=payload)
+    except httpx.UnsupportedProtocol as e:
+        logging.error(f"Unable to get token from URL: {url}")
+        raise e
     token = response.json()["access_token"]
     return token
 

@@ -14,7 +14,7 @@ import sys
 import httpx
 from cachetools.func import ttl_cache
 from decouple import config
-from httpx import ReadTimeout, Response
+from httpx import ReadTimeout
 from httpcore import PoolTimeout as HttpcorePoolTimeout
 from httpx import PoolTimeout as HttpxPoolTimeout
 from sqlalchemy import text, Table, Column, MetaData, Text, bindparam
@@ -25,19 +25,20 @@ import app
 import app.concept_maps.models
 import app.models.data_ingestion_registry
 import app.value_sets.models
-from app.errors import BadDataError, NotFoundException
+from app.errors import BadDataError
 from app.helpers.api_helper import (
     get_token,
     make_get_request_async,
     make_get_request,
     make_post_request_async,
 )
-from app.helpers.format_helper import convert_string_to_datetime_or_none
+from app.helpers.format_helper import convert_string_to_datetime_or_none, normalized_codeable_concept_string, \
+    normalized_data_dictionary_string
 from app.helpers.message_helper import (
     message_exception_summary,
     message_exception_classname,
 )
-from app.models.codes import Code
+from app.models.codes import Code, DependsOnData
 from app.models.models import Organization
 from app.terminologies.models import Terminology
 from app.database import get_db
@@ -51,6 +52,7 @@ CLIENT_SECRET = config("DATA_NORMALIZATION_ERROR_SERVICE_CLIENT_SECRET", default
 AUTH_AUDIENCE = config("DATA_NORMALIZATION_ERROR_SERVICE_AUDIENCE", default="")
 AUTH_URL = config("DATA_NORMALIZATION_ERROR_SERVICE_AUTH_URL", default="")
 PAGE_SIZE = 300
+VERBOSE = False  # do not use LOGGER.debug which chokes the log with messages from httpx and other libraries
 
 LOGGER = logging.getLogger()
 
@@ -257,21 +259,6 @@ class ErrorServiceIssue:
         )
 
 
-@dataclass
-class DependsOnData:
-    """ A simple data class to hold depends on data for an item which needs to be mapped. """
-    depends_on_property: Optional[str] = None
-    depends_on_system: Optional[str] = None
-    depends_on_value: Optional[str] = None  # This could be a string or stringified JSON
-    depends_on_display: Optional[str] = None
-
-
-@dataclass
-class AdditionalData:
-    """ A simple data class to additional on data for an item which needs to be mapped. """
-    additional_data: Optional[str] = None
-
-
 metadata = MetaData()
 
 # Define the table using the Table syntax
@@ -337,8 +324,8 @@ class MappingRequestService:
     rest_api_params: dict  # input parameters based on current control values from the main loop
 
     # Control values
-    commit_changes: bool = (
-        False  # true/false to commit to database: control value from the main loop
+    commit_by_batch: bool = (
+        False  # true/false to commit upon completing each page of results: control value from the main loop
     )
     page_size: int  # set in the hundreds to throttle the service based on network factors
     organization_id: str  # tenant organization: control value from the main loop
@@ -388,7 +375,7 @@ class MappingRequestService:
     @classmethod
     def load_concepts_from_errors(
         cls,
-        commit_changes=True,
+        commit_by_batch=True,
         page_size: int = None,
         requested_organization_id: str = None,
         requested_resource_type: str = None,
@@ -430,7 +417,7 @@ class MappingRequestService:
                     6a3. link_codes_back_to_reprocessing
         ```
         Parameters:
-            commit_changes (bool, optional): Whether to commit after each batch
+            commit_by_batch (bool, optional): Whether to commit after each batch
             page_size (int, optional): HTTP GET page size, if empty, use the default PAGE_SIZE
             requested_organization_id (str): If non-empty, get errors only for the organization_id listed; if empty, get all
             requested_resource_type (str): Get errors only for the ResourceType enum string listed; if empty, get all
@@ -450,7 +437,7 @@ class MappingRequestService:
         cls.page_size = page_size
 
         # database
-        cls.commit_changes = commit_changes
+        cls.commit_by_batch = commit_by_batch
 
         # resource type
         unsupported_resource_types = []
@@ -517,7 +504,7 @@ class MappingRequestService:
             + f"  Load from: {DATA_NORMALIZATION_ERROR_SERVICE_BASE_URL}\n"
             + f"  Load to:   {DATABASE_HOST}\n\n"
             + f"  Settings: \n"
-            + f"    commit_changes={commit_changes}\n"
+            + f"    commit_by_batch={commit_by_batch}\n"
             + f"    page_size={page_size}\n"
             + f"    requested_organization_id={requested_organization_id}\n"
             + f"    requested_resource_type={requested_resource_type}\n"
@@ -627,11 +614,13 @@ class MappingRequestService:
                                     loop_total += since_last_time
                                     all_loop_total += loop_total
                                     all_loop_count += 1
-                                    LOGGER.warning(
-                                        f"  {length_of_response} responses received and loaded in {step_1}\n"
-                                        + f"  {cls.total_count_loaded_codes} new codes found and deduplicated in {step_2}\n"
-                                        + f"  loop {all_loop_count} done at time {current_time.time()}, duration {loop_total}"
-                                    )
+                                    if VERBOSE is True:
+                                        # do not use LOGGER.debug which chokes the log with messages from httpx etc.
+                                        LOGGER.warning(
+                                            f"  {length_of_response} responses received and loaded in {step_1}\n"
+                                            + f"  {cls.total_count_loaded_codes} new codes found and deduplicated in {step_2}\n"
+                                            + f"  loop {all_loop_count} done at time {current_time.time()}, duration {loop_total}"
+                                        )
 
                         except Exception as e:
                             LOGGER.warning(
@@ -874,7 +863,7 @@ class MappingRequestService:
         """
 
         if issue.type == IssueType.NOV_CONMAP_LOOKUP.value:
-            # Based on resource_type, identify coding that needs to get into the concept map
+            # Based on resource_type, identify the Code that needs to get into the concept map; get the str values ready
             (found, processed_code, processed_display, depends_on, additional_data) = cls.extract_coding_attributes(
                 resource_type, raw_resource, location, element, index
             )
@@ -910,35 +899,57 @@ class MappingRequestService:
     ) -> (bool, str, str, Optional[DependsOnData], Optional[str]):
         """
         There's something unique about the handling for every resource_type we support
+
+        This function is responsible for serializing any object data using Informatics Systems standard functions
+        that provide consistent JSON format, consistent order for attribute keys and consistent order for list entries.
+        This is to ensure that when a Code or Error is created, it can be accurately deduplicated against existing
+        data to prevent real and false duplicates in our data and to prevent creating needless mapping work for Content.
+
         @param resource_type: a FHIR resource canonical name from the ResourceType enum
         @param raw_resource: the ingested data from the tenant, from the error service resource object
         @param location: the site of the validation issue in the FHIR resource: format defined by the Error Service
         @param element: the site of the validation issue in the FHIR resource: format defined by Informatics tooling
         @param index: for lists of values such as contact telephone numbers, 0-based array position in raw_resource
         @return: (found, processed_code, processed_display)
-            found is True if extracting the data was successful; otherwise False
-            processed_code, processed_display are 2 critically important str attributes of a Coding data type
-            When found is False, processed_code and processed_display are empty strings
+            found is True if extracting the data was successful; otherwise False.
+            processed_code, processed_display are 2 critically important str attributes for input to create a Code()
+                Before being returned by this function, the processed_code (if an object) is normalized to a JSON string
+                that provides consistent format, consistent order for attributes, and consistent order for list entries.
+                When found is False, processed_code and processed_display are empty strings.
+            depends_on, additional_data are optional str inputs for input to create a Code()
+                Before being returned, depends_on (if an object) and additional_data are each normalized to JSON string
+                with consistent format, attribute order, and list entry order as described above.
         """
         processed_code = ""
         processed_display = ""
         depends_on = None
-        additional_data = {}
+        additional_data = None
+        additional_data_dict = {}
         false_result = False, processed_code, processed_display, depends_on, additional_data
 
         # Condition
         if resource_type == ResourceType.CONDITION:
             # Condition.code is a CodeableConcept
+            if "code" not in raw_resource:
+                return false_result
             raw_code = raw_resource["code"]
-            processed_code = raw_code
+            processed_code = normalized_codeable_concept_string(raw_code)
             processed_display = raw_code.get("text")
 
         # Medication
         elif resource_type == ResourceType.MEDICATION:
             # Medication.code is a CodeableConcept
+            if "code" not in raw_resource:
+                return false_result
             raw_code = raw_resource["code"]
-            processed_code = raw_code
+            processed_code = normalized_codeable_concept_string(raw_code)
             processed_display = raw_code.get("text")
+
+            # todo: add a depends_on_list for Medication.ingredient.strength using ingredient, a list object
+            # if "ingredient" in raw_resource:
+            #      raw_ingredient = raw_resource["ingredient"]
+            #      if len(raw_ingredient) > 0:
+            #          depends_on_list = normalized_medication_ingredient_strength_depends_on_list(raw_ingredient)
 
         # Observation
         elif resource_type == ResourceType.OBSERVATION:
@@ -948,14 +959,14 @@ class MappingRequestService:
             if "category" in raw_resource:
                 if raw_resource["category"] and "text" in raw_resource["category"][0]:
                     category_for_additional_data = raw_resource["category"][0]["text"]
-                    additional_data['category'] = category_for_additional_data
+                    additional_data_dict["category"] = category_for_additional_data
 
             # Observation.value is a CodeableConcept
             if element == "Observation.value" or element == "Observation.valueCodeableConcept":
                 if "valueCodeableConcept" not in raw_resource:
                     return false_result
                 raw_code = raw_resource["valueCodeableConcept"]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
 
             # Observation.code is a CodeableConcept
@@ -963,15 +974,18 @@ class MappingRequestService:
                 if "code" not in raw_resource:
                     return false_result
                 raw_code = raw_resource["code"]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
 
             # Observation.interpretation is a CodeableConcept
             elif element == "Observation.interpretation":
-                if "interpretation" not in raw_resource:
+                if (
+                    "interpretation" not in raw_resource
+                    or len(raw_resource["interpretation"]) < (index + 1)
+                ):
                     return false_result
-                raw_code = raw_resource["code"]
-                processed_code = raw_code
+                raw_code = raw_resource["interpretation"][index]
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
 
             # Observation.component.code is a CodeableConcept - location has an index
@@ -985,16 +999,22 @@ class MappingRequestService:
                 ):
                     return false_result
                 raw_code = raw_resource["component"][index]["code"]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
 
                 # Only SmartData category gets depends on
                 if category_for_additional_data == "SmartData":
                     # Set depends_on data
+                    if "code" not in raw_resource:
+                        return false_result
                     depends_on = DependsOnData(
-                        depends_on_value=json.dumps(raw_resource["code"]),
+                        depends_on_value=normalized_codeable_concept_string(raw_resource["code"]),
                         depends_on_property="Observation.code"
                     )
+                    # todo: replace the above depends_on call with a 1-member depends_on_list for Observation.code
+                    # if "code" not in raw_resource:
+                    #      return false_result
+                    # normalized_codeable_concept_string(raw_resource["code"])
 
             # Observation.component.value is a CodeableConcept - location will have an index
             elif element == "Observation.component.value" or element == "Observation.component.valueCodeableConcept":
@@ -1007,7 +1027,7 @@ class MappingRequestService:
                 ):
                     return false_result
                 raw_code = raw_resource["component"][index]["valueCodeableConcept"]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
             else:
                 LOGGER.warning(
@@ -1021,21 +1041,25 @@ class MappingRequestService:
                 if "code" not in raw_resource:
                     return false_result
                 raw_code = raw_resource["code"]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
 
         # DocumentReference
         elif resource_type == ResourceType.DOCUMENT_REFERENCE:
             # DocumentReference.type is a CodeableConcept
             if element == "DocumentReference.type":
+                if "type" not in raw_resource:
+                    return false_result
                 raw_code = raw_resource["type"]
-                processed_code = raw_code
+                processed_code = normalized_codeable_concept_string(raw_code)
                 processed_display = raw_code.get("text")
 
         # Appointment
         elif resource_type == ResourceType.APPOINTMENT:
             # Appointment.status is a raw code - used for code and display
             if element == "Appointment.status":
+                if "status" not in raw_resource:
+                    return false_result
                 raw_code = raw_resource["status"]
                 processed_code = raw_code
                 processed_display = raw_code
@@ -1074,6 +1098,9 @@ class MappingRequestService:
             )
             cls.all_skip_count += 1
             return false_result
+
+        # Collect the additional data
+        additional_data = normalized_data_dictionary_string(additional_data_dict)
 
         return True, processed_code, processed_display, depends_on, additional_data
 
@@ -1214,6 +1241,10 @@ class MappingRequestService:
             version=None,
             terminology_version=terminology_to_load_to,
             custom_terminology_code_uuid=new_code_uuid,
+            depends_on_system=depends_on.depends_on_system if depends_on else None,
+            depends_on_display=depends_on.depends_on_display if depends_on else None,
+            depends_on_property=depends_on.depends_on_property if depends_on else None,
+            depends_on_value=depends_on.depends_on_value if depends_on else None
         )
 
         # Save the data linking this code back to its original error
@@ -1225,13 +1256,9 @@ class MappingRequestService:
                     "resource_uuid": error_service_resource.id,
                     "environment": cls.environment,
                     "status": "pending",
-                    "code": json.dumps(processed_code)
-                    if type(processed_code) == dict
-                    else processed_code,
+                    "code": processed_code,
                     "display": processed_display,
                     "terminology_version_uuid": terminology_to_load_to.uuid,
-                    # todo: no currently supported resource requires the dependsOn data
-                    # but it is part of the unique constraint to look up a row, so use it
                     "depends_on_property": depends_on.depends_on_property if depends_on else None,
                     "depends_on_system": depends_on.depends_on_system if depends_on else None,
                     "depends_on_value": depends_on.depends_on_value if depends_on else None,
@@ -1366,18 +1393,27 @@ class MappingRequestService:
             terminology = cls.terminology_version[terminology_version_uuid]
 
             if len(code_list) > 0:
-                LOGGER.warning(
-                    f"Attempting to load {len(code_list)} new codes to terminology "
-                    + f"{terminology.terminology} version {terminology.version}"
-                )
+                if VERBOSE is True:
+                    # do not use LOGGER.debug which chokes the log with messages from httpx etc.
+                    LOGGER.warning(
+                        f"Attempting to load {len(code_list)} new codes to terminology "
+                        + f"{terminology.terminology} version {terminology.version}"
+                    )
                 inserted_count = terminology.load_new_codes_to_terminology(
                     code_list, on_conflict_do_nothing=True
                 )
-                LOGGER.warning(
-                    f"Actually inserted {inserted_count} codes to "
-                    + f"{terminology.terminology} version {terminology.version} "
-                    + "after deduplication"
-                )
+                if VERBOSE is True:
+                    # do not use LOGGER.debug which chokes the log with messages from httpx etc.
+                    LOGGER.warning(
+                        f"Actually inserted {inserted_count} codes to "
+                        + f"{terminology.terminology} version {terminology.version} "
+                        + "after deduplication"
+                    )
+                if inserted_count > 0:
+                    LOGGER.warning(
+                        f"Inserted {inserted_count} new codes to "
+                        + f"{terminology.terminology} version {terminology.version} "
+                    )
                 return inserted_count
         return 0
 
@@ -1387,53 +1423,55 @@ class MappingRequestService:
         Link codes back to the error resource IDs that originated them, so we can request Interops to reprocess them.
         The request to reprocess is automatically invoked when a new concept map is published that contains these codes.
         """
+        if not cls.error_code_link_data:
+            return
+
         conn = get_db()
         try:
-            if cls.error_code_link_data:
-                # Create a temporary table and insert the data to it
-                conn.execute(
-                    text(
-                        """
-                        CREATE TEMP TABLE temp_error_data (
-                            code text,
-                            display text,
-                            terminology_version_uuid UUID,
-                            depends_on_system text,
-                            depends_on_property text,
-                            depends_on_display text,
-                            depends_on_value text,
-                            issue_uuid UUID,
-                            resource_uuid UUID,
-                            environment text,
-                            status text
-                        )
-                        """
-                    )
-                )
-
-                # Optimized bulk insert
-                conn.execute(temp_error_data.insert(), cls.error_code_link_data)
-
-                # Insert from the temporary table, allowing the database to batch lookups
-                conn.execute(
-                    text(
-                        """
-                        INSERT INTO custom_terminologies.error_service_issue
-                            (custom_terminology_code_uuid, issue_uuid, environment, status, resource_uuid)
-                        SELECT c.uuid, t.issue_uuid, t.environment, t.status, t.resource_uuid
-                        FROM temp_error_data t
-                        JOIN custom_terminologies.code c 
-                        ON c.code = t.code 
-                            AND c.display = t.display 
-                            AND c.terminology_version_uuid = t.terminology_version_uuid
-                            AND c.depends_on_system = t.depends_on_system
-                            AND c.depends_on_property = t.depends_on_property
-                            AND c.depends_on_display = t.depends_on_display
-                            AND c.depends_on_value = t.depends_on_value
-                    ON CONFLICT do nothing
+            # Create a temporary table and insert the data to it
+            conn.execute(
+                text(
                     """
+                    CREATE TEMP TABLE temp_error_data (
+                        code text,
+                        display text,
+                        terminology_version_uuid UUID,
+                        depends_on_system text,
+                        depends_on_property text,
+                        depends_on_display text,
+                        depends_on_value text,
+                        issue_uuid UUID,
+                        resource_uuid UUID,
+                        environment text,
+                        status text
                     )
+                    """
                 )
+            )
+
+            # Optimized bulk insert
+            conn.execute(temp_error_data.insert(), cls.error_code_link_data)
+
+            # Insert from the temporary table, allowing the database to batch lookups
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO custom_terminologies.error_service_issue
+                        (custom_terminology_code_uuid, issue_uuid, environment, status, resource_uuid)
+                    SELECT c.uuid, t.issue_uuid, t.environment, t.status, t.resource_uuid
+                    FROM temp_error_data t
+                    JOIN custom_terminologies.code c 
+                    ON c.code = t.code 
+                        AND c.display = t.display 
+                        AND c.terminology_version_uuid = t.terminology_version_uuid
+                        AND c.depends_on_system = t.depends_on_system
+                        AND c.depends_on_property = t.depends_on_property
+                        AND c.depends_on_display = t.depends_on_display
+                        AND c.depends_on_value = t.depends_on_value
+                ON CONFLICT do nothing
+                """
+                )
+            )
 
             # Delete the temporary table
             conn.execute(
@@ -1443,15 +1481,13 @@ class MappingRequestService:
                     """
                 )
             )
-
-            if cls.commit_changes:
-                conn.commit()
         except Exception as e:
-            LOGGER.warning(
-                f"{message_exception_summary(e)} adding data to custom_terminologies.error_service_issue"
-            )
             conn.rollback()
             raise e
+
+        LOGGER.warning("    .")  # simple heartbeat is useful to avoid mis-diagnosing a long run as a failure
+        if cls.commit_by_batch:
+            conn.commit()
 
 
 @ttl_cache()
@@ -1825,12 +1861,25 @@ async def reprocess_resource(resource_uuid, token, client):
         return None
 
 
-if __name__ == "__main__":
+def temporary_mapping_request_service(
+        commit_by_batch: bool=True,
+        page_size: int=PAGE_SIZE,
+        requested_organization_id: str=None,
+        requested_resource_type: str=None,
+        requested_issue_type: str=None
+):
     # todo: clean out this method altogether, when a temporary, manual error load task is not needed.
-    from app.database import get_db
-
-    # Moved logging setup to here so it does not run in main program and cause duplicate logs
-
+    """
+    With no inputs, this function processes all organization ids, all resource types, all issue types, and waits to
+    commit changes until ALL pages finish, which means if there is an error or exception, no results are committed.
+    @param commit_by_batch (bool) - True to commit each batch as processed - False to commit only after ALL succeed.
+        Developers: for local tests of updates to this function, you may set to False
+    @param page_size (int) number of records to get from the Data Validation Error Service each time, default PAGE_SIZE
+    @param requested_organization_id: Confluence page called "Organization Ids" under "Living Architecture" lists them
+    @param requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
+    @param requested_issue_type: must be a type load_concepts_from_errors() already supports (see IssueType enum)
+    """
+    # Moved logging setup to here, so it does not run in main program and cause duplicate logs
     # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
     # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded
     LOGGER.setLevel("WARNING")
@@ -1840,21 +1889,31 @@ if __name__ == "__main__":
         ch = logging.StreamHandler()
         LOGGER.addHandler(ch)
 
-    # Per our usual practice, open a DatabaseHandler, that database calls within load_concepts_from_errors will re-use
+    # Developers: while locally testing updates to this function, you may temporarily force commit_by_batch to False
+    # commit_by_batch = False
+
+    # Do the work
     conn = get_db()
-    service = MappingRequestService()
+    try:
+        service = MappingRequestService()
+        service.load_concepts_from_errors(
+            commit_by_batch=commit_by_batch,
+            page_size=page_size,
+            requested_organization_id=requested_organization_id,
+            requested_resource_type=requested_resource_type,
+            requested_issue_type=requested_issue_type
+        )
+        if commit_by_batch is False:
+            LOGGER.warning(f"Committing all data now...")
+            conn.commit()
+    except Exception as e:
+        info = "".join(traceback.format_exception(*sys.exc_info()))
+        LOGGER.warning(f"ERROR: {info}")
+        conn.rollback()
+    finally:
+        LOGGER.warning(f"DONE.")
+        conn.close()
 
-    # Instructions for use:
-    # INPUT page_size and/or requested_organization_id and/or requested_resource_type and/or requested_issue_type.
-    #     requested_organization_id: Confluence page called "Organization Ids" under "Living Architecture" lists them
-    #     requested_resource_type: must be a type load_concepts_from_errors() already supports (see ResourceType enum)
-    #     requested_issue_type: must be a type load_concepts_from_errors() already supports (see IssueType enum)
-    # COMMENT the line below, for merge and normal use; uncomment when running the temporary error load task
-    #service.load_concepts_from_errors(commit_changes=True)
 
-    # UNCOMMENT the 2 lines below for GitHub merges and testing; comment them when running the temporary error load task
-    service.load_concepts_from_errors(commit_changes=False)
-    conn.rollback()
-
-    # We have run rollback() and commit() where and as needed; now ask the DatabaseHandler to close() the connection
-    conn.close()
+if __name__ == "__main__":
+    temporary_mapping_request_service()

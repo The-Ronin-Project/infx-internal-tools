@@ -12,7 +12,7 @@ from werkzeug.exceptions import BadRequest
 import app.tasks as tasks
 from app.concept_maps.models import *
 from app.concept_maps.versioning_models import *
-from app.helpers.oci_helper import get_data_from_oci
+from app.helpers.oci_helper import get_data_from_oci, OCI_OVERWRITE_PARAM_CONST
 import app.concept_maps.rxnorm_mapping_models
 
 from app.errors import NotFoundException
@@ -176,73 +176,6 @@ def get_concept_map_draft(version_uuid):
     return output
 
 
-@deprecated(
-    "Has not been used to date. Deprecated but retained for debugging or any internal use within Systems."
-)
-@concept_maps_blueprint.route(
-    "/ConceptMaps/<string:version_uuid>/prerelease", methods=["GET", "POST"]
-)
-def get_concept_map_version_prerelease(version_uuid):
-    """
-    GET: Retrieve a pre-release version of a Concept Map from OCI. The format schema version will be the highest of:
-    the current ConceptMap.database_schema_version (such as 3, as in /ConceptMap/v3/published)
-    or the current ConceptMap.next_schema_version (such as 4, as in /ConceptMap/v4/published).
-
-    POST: Create a new pre-release version of the Concept Map and store it in OCI.
-    If the current ConceptMap.database_schema_version (such as 3)
-    is different from the current ConceptMap.next_schema_version (such as 4)
-    then both formats are output to OCI in /ConceptMap/v3/published and /ConceptMap/v4/published folders.
-
-    @param version_uuid: Concept Map version UUID
-    @raise BadRequestWithCode if the schema_version is v4 or later and there are no mappings in the concept map.
-    """
-    concept_map_version = ConceptMapVersion(version_uuid)
-
-    if request.method == "POST":
-
-        # output as ConceptMap.database_schema_version, which may be the same as ConceptMap.next_schema_version
-        concept_map_to_json, initial_path = concept_map_version.prepare_for_oci(
-            ConceptMap.database_schema_version
-        )
-        concept_map_to_datastore = set_up_object_store(
-            concept_map_to_json,
-            initial_path + f"/prerelease/{concept_map_version.concept_map.uuid}",
-            folder="prerelease",
-            content_type="json",
-        )  # sends to OCI
-
-        # also output as ConceptMap.next_schema_version, if different from ConceptMap.database_schema_version
-        if ConceptMap.database_schema_version != ConceptMap.next_schema_version:
-            concept_map_to_json, initial_path = concept_map_version.prepare_for_oci(
-                ConceptMap.next_schema_version
-            )
-            concept_map_to_datastore = set_up_object_store(
-                concept_map_to_json,
-                initial_path + f"/prerelease/{concept_map_version.concept_map.uuid}",
-                folder="prerelease",
-                content_type="json",
-            )  # sends to OCI
-
-        #  if the values were different, concept_map_to_datastore was serialized using the higher version last
-        return jsonify(
-            concept_map_to_datastore
-        )  # returns the serialized metadata posted to OCI
-
-    if request.method == "GET":
-
-        # get as ConceptMap.next_schema_version, in preference to ConceptMap.database_schema_version if different
-        concept_map_from_object_store = get_data_from_oci(
-            oci_root=ConceptMap.object_storage_folder_name,
-            resource_schema_version=str(ConceptMap.next_schema_version),
-            release_status="prerelease",
-            resource_id=concept_map_version.concept_map.uuid,
-            resource_version=concept_map_version.version,
-            content_type="json",
-            return_content=True,
-        )
-        return jsonify(concept_map_from_object_store)  # returns the file from OCI
-
-
 @concept_maps_blueprint.route(
     "/ConceptMaps/<string:version_uuid>/published", methods=["GET", "POST"]
 )
@@ -266,7 +199,12 @@ def get_concept_map_version_published(version_uuid):
     concept_map_version = ConceptMapVersion(version_uuid)
 
     if request.method == "POST":
-        concept_map_version.publish(resolve_errors=True)
+        oci_overwrite_allowed = request.values.get(OCI_OVERWRITE_PARAM_CONST, "false").lower() == "true"
+        try:
+            concept_map_version.publish(resolve_errors=True, is_overwrite_allowed=oci_overwrite_allowed)
+        except ValueError as value_error:
+            return BadRequest(value_error.args[0])
+
         return "Published"
 
     if request.method == "GET":

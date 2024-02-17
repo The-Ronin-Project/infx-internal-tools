@@ -6,6 +6,9 @@ import json
 from flask import g, has_request_context
 from werkzeug.exceptions import NotFound
 import requests
+import logging
+
+LOGGER = logging.getLogger()
 
 
 # Use config() to read values from the .env file
@@ -172,6 +175,10 @@ def publish_to_simplifier(resource_type, resource_id, resource_body):
     :return: None
     """
 
+    if is_simplifier_write_disabled():
+        LOGGER.info("Simplifier write operations are disabled.")
+        return {"message": "No attempt to publish to simplifier, write operations are disabled"}
+
     try:
         get_from_simplifier(resource_type, resource_id)
         file_in_simplifier = True
@@ -185,6 +192,14 @@ def publish_to_simplifier(resource_type, resource_id, resource_body):
         add_file(resource_type, resource_id, resource_body)
 
 
+def is_simplifier_write_disabled():
+    """
+    For use while testing to disable writing to simplifier
+    """
+    return config("DISABLE_SIMPLIFIER_WRITE", default="False", cast=bool)
+
+
+# TODO What is this commented out stuff?
 # if __name__ == "__main__":
 #     access_token = authenticate_simplifier()
 # #     resource = get_from_simplifier("ValueSet", "administrative-gender")

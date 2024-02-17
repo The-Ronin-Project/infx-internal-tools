@@ -3,6 +3,7 @@ from io import StringIO
 from uuid import uuid4
 
 import structlog
+from decouple import config
 from deprecated.classic import deprecated
 from flask import Flask, jsonify, request, Response
 from werkzeug.exceptions import HTTPException
@@ -14,17 +15,18 @@ import app.tasks as tasks
 import app.terminologies.views as terminology_views
 import app.value_sets.views as value_set_views
 from app.database import close_db, rollback_and_close_connection_if_open
-from app.errors import BadRequestWithCode, NotFoundException, BadSourceCodeError, DuplicateTargetError, OCIException
+from app.errors import BadSourceCodeError, DuplicateTargetError, OCIException
 from app.helpers.structlog import config_structlog, common_handler
 from app.models.data_ingestion_registry import (
     DataNormalizationRegistry,
 )
-from app.models.mapping_request_service import get_outstanding_errors
+from app.util.mapping_request_service import get_outstanding_errors
 from app.models.patient_edu import *
 from app.models.surveys import *
 from app.models.teams import *
 from app.value_sets.models import *
 import app.concept_maps.models as concept_map_models
+from app.helpers.oci_helper import OCI_OVERWRITE_PARAM_CONST
 
 # Configure the logger when the application is imported. This ensures that
 # everything below uses the same configured logger.
@@ -387,17 +389,15 @@ def create_app(script_info=None):
         methods=["POST"],
     )
     def load_outstanding_codes_to_new_concept_map_version():
-        message = "Concept Map was not found during a request to load outstanding codes"
         concept_map_uuid = request.json.get("concept_map_uuid")
         if concept_map_uuid is None:
-            message = "No Concept Map UUID was supplied during a request to load outstanding codes"
-        else:
-            try:
-                tasks.load_outstanding_codes_to_new_concept_map_version(concept_map_uuid)
-                message = "OK"
-            except NotFoundException as e:
-                message = e.message
-        return message
+            raise BadRequestWithCode(
+                code="load_outstanding_codes_to_concept_map.concept_map_uuid",
+                description="No Concept Map UUID was supplied during a request to load outstanding codes"
+            )
+
+        # This isn't actually executing as a delayed task; this is still realtime todo: consider changing that
+        tasks.load_outstanding_codes_to_new_concept_map_version(concept_map_uuid)
 
     @app.route(
         "/data_normalization/actions/resolve_issues_for_concept_map_version",
@@ -446,12 +446,123 @@ def create_app(script_info=None):
         result = tasks.hello_world.delay()
         return "Task Created"
 
-    @app.route("/data_migration_poc", methods=["POST"])
-    def perform_poc_data_migration_endpoint():
+    @app.route("/database_migration", methods=["POST"])
+    def perform_data_migration_endpoint():
+        table_name = request.json.get('table_name')
         granularity = request.json.get('granularity')
-        uuid_segment = request.json.get('uuid_segment')
-        tasks.perform_poc_database_migration.delay(granularity, uuid_segment)
-        return "Task Created"
+        segment_start = request.json.get('segment_start')
+        segment_count = request.json.get('segment_count')
+        tasks.perform_database_migration.delay(table_name, granularity, segment_start, segment_count)
+        return f"Task Created: table_name={table_name} granularity={granularity}, segment_start={segment_start}, segment_count={segment_count}"
+
+
+    @app.route("/populate_v4_deduplication_hash", methods=["POST"])
+    def populate_v4_deduplication_hash_endpoint():
+        segment_count = request.json.get('how_many_blocks_will_we_run_in_parallel_as_a_set')
+        segment_start = request.json.get('starting_from_zero_which_block_in_the_set_to_run_now')
+        tasks.identify_v4_concept_map_duplicates.delay(segment_start, segment_count)
+        return f"Task Created: segment_start={segment_start}, segment_count={segment_count}"
+
+
+    @app.route("/database_cleanup", methods=["POST"])
+    def perform_database_cleanup_endpoint():
+        table_name = request.json.get('table_name')
+        granularity = request.json.get('granularity')
+        segment_start = request.json.get('segment_start')
+        segment_count = request.json.get('segment_count')
+        tasks.perform_database_cleanup.delay(table_name, granularity, segment_start, segment_count)
+        return f"Task Created: table_name={table_name} granularity={granularity}, segment_start={segment_start}, segment_count={segment_count}"
+
+    @app.route("/mapping_request_service", methods=["POST"])
+    def perform_mapping_request_service_endpoint():
+        page_size = request.json.get('page_size')
+        requested_organization_id = request.json.get('requested_organization_id')
+        requested_resource_type = request.json.get('requested_resource_type')
+        tasks.perform_mapping_request_check.delay(page_size, requested_organization_id, requested_resource_type)
+        return f"Task Created: page_size={page_size} requested_organization_id={requested_organization_id}, requested_resource_type={requested_resource_type}"
+
+    @app.route("/concept_map_v4_duplicate_check", methods=["POST"])
+    def perform_concept_map_v4_duplicate_check():
+        concept_map_uuid = request.json.get('concept_map_uuid')
+        concept_map_version_uuid = request.json.get('concept_map_version_uuid')
+        output_table_name = request.json.get('output_table_name')
+        output_pkey_distinct_constraint_name = request.json.get('output_pkey_distinct_constraint_name')
+        if concept_map_uuid is None or output_table_name is None or output_pkey_distinct_constraint_name is None:
+            return "Bad Input"
+        # if version is omitted, process the most recent "pending" and/or "active" version (if any)
+        if concept_map_version_uuid is None:
+            concept_map = concept_map_models.ConceptMap(concept_map_uuid)
+            if concept_map is None:
+                return "Bad Input"
+            # pending
+            concept_map_version = concept_map.get_most_recent_version(
+                active_only=False,
+                load_mappings=False,
+                pending_only=True
+            )
+            if concept_map_version is not None:
+                concept_map_version_uuid = concept_map_version.uuid
+                tasks.perform_load_concept_map_duplicates.delay(
+                    concept_map_uuid,
+                    concept_map_version_uuid,
+                    output_table_name,
+                    output_pkey_distinct_constraint_name
+                )
+            # active
+            concept_map_version = concept_map.get_most_recent_version(
+                active_only=True,
+                load_mappings=False,
+                pending_only=False
+            )
+            if concept_map_version is not None:
+                concept_map_version_uuid = concept_map_version.uuid
+        tasks.perform_load_concept_map_duplicates.delay(
+            concept_map_uuid,
+            concept_map_version_uuid,
+            output_table_name,
+            output_pkey_distinct_constraint_name
+        )
+        return f"Task Created: concept_map_uuid={concept_map_uuid} concept_map_version_uuid={concept_map_version_uuid}, output_table_name={output_table_name}, output_pkey_distinct_constraint_name={output_pkey_distinct_constraint_name}"
+
+    @app.route("/concept_map_v4_duplicate_mark_for_action", methods=["POST"])
+    def perform_concept_map_v4_duplicate_mark_for_action():
+        concept_map_uuid = request.json.get('concept_map_uuid')
+        concept_map_version_uuid = request.json.get('concept_map_version_uuid')
+        output_table_name = request.json.get('output_table_name')
+        if concept_map_uuid is None or output_table_name is None:
+            return "Bad Input"
+        # if version is omitted, process the most recent "pending" and/or "active" version (if any)
+        if concept_map_version_uuid is None:
+            concept_map = concept_map_models.ConceptMap(concept_map_uuid)
+            if concept_map is None:
+                return "Bad Input"
+            # pending
+            concept_map_version = concept_map.get_most_recent_version(
+                active_only=False,
+                load_mappings=False,
+                pending_only=True
+            )
+            if concept_map_version is not None:
+                concept_map_version_uuid = concept_map_version.uuid
+                tasks.perform_mark_concept_map_duplicates.delay(
+                    concept_map_uuid,
+                    concept_map_version_uuid,
+                    output_table_name
+                )
+            # active
+            concept_map_version = concept_map.get_most_recent_version(
+                active_only=True,
+                load_mappings=False,
+                pending_only=False
+            )
+            if concept_map_version is not None:
+                concept_map_version_uuid = concept_map_version.uuid
+        tasks.perform_mark_concept_map_duplicates.delay(
+            concept_map_uuid,
+            concept_map_version_uuid,
+            output_table_name
+        )
+        return f"Task Created: concept_map_uuid={concept_map_uuid} concept_map_version_uuid={concept_map_version_uuid}, output_table_name={output_table_name}\nDid you check both active and pending versions?"
 
     return app
 

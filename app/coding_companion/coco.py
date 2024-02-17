@@ -58,6 +58,7 @@ class Message:
 
 
 def get_coco_enabled_tickets() -> List[Ticket]:
+    """ Deprecated """
     # Get all the epics associated with the 'INFX' board
     jql = f'issuetype = Epic AND project = "INFX"'
     all_epics = jira.search_issues(jql)

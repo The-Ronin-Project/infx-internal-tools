@@ -4,7 +4,7 @@ import uuid
 import app.helpers.format_helper
 from app.database import get_db
 
-import app.models.mapping_request_service
+import app.util.mapping_request_service
 import app.models.models
 
 
@@ -23,7 +23,7 @@ class NormalizationErrorServiceIntegrationTests(unittest.TestCase):
         """
         cerner_sandbox_organization = app.models.models.Organization(id="ejh3j95h")
 
-        concept_map = app.models.mapping_request_service.lookup_concept_map_version_for_data_element(
+        concept_map = app.util.mapping_request_service.lookup_concept_map_version_for_data_element(
             data_element="Observation.code",
             organization=cerner_sandbox_organization,
         )
@@ -37,7 +37,7 @@ class NormalizationErrorServiceIntegrationTests(unittest.TestCase):
         """
         psj_prod_organization = app.models.models.Organization(id="v7r1eczk")
 
-        concept_map = app.models.mapping_request_service.lookup_concept_map_version_for_data_element(
+        concept_map = app.util.mapping_request_service.lookup_concept_map_version_for_data_element(
             data_element="Observation.code",
             organization=psj_prod_organization,
         )
@@ -49,10 +49,10 @@ class NormalizationErrorServiceUnitTests(unittest.TestCase):
     def test_filter_issues_by_type(self):
         cerner_sandbox_organization = app.models.models.Organization(id="ejh3j95h")
 
-        resource = app.models.mapping_request_service.ErrorServiceResource(
+        resource = app.util.mapping_request_service.ErrorServiceResource(
             id=uuid.UUID("22139011-0c6f-4f3e-8e5c-164a2830b367"),
             organization=cerner_sandbox_organization,
-            resource_type=app.models.mapping_request_service.ResourceType.CONDITION,
+            resource_type=app.util.mapping_request_service.ResourceType.CONDITION,
             resource="N/A",
             status="REPORTED",
             severity="FAILED",
@@ -63,7 +63,7 @@ class NormalizationErrorServiceUnitTests(unittest.TestCase):
             token=None
         )
 
-        issue_1 = app.models.mapping_request_service.ErrorServiceIssue(
+        issue_1 = app.util.mapping_request_service.ErrorServiceIssue(
             id=uuid.UUID("9e15647a-7a5c-4cb0-989d-e2b3809ca3f0"),
             severity="FAILED",
             type="NOV_CONMAP_LOOKUP",
@@ -78,7 +78,7 @@ class NormalizationErrorServiceUnitTests(unittest.TestCase):
         )
         resource.issues.append(issue_1)
 
-        issue_2 = app.models.mapping_request_service.ErrorServiceIssue(
+        issue_2 = app.util.mapping_request_service.ErrorServiceIssue(
             id=uuid.UUID("a8469e52-a0e9-4864-b2e8-c5b0caecbc10"),
             severity="FAILED",
             type="SAMPLE_ERROR_TYPE",
