@@ -95,8 +95,12 @@ class FHIRCodeableConcept:
         fhir_text = json_input.get('text')
         coding_array = json_input.get('coding')
 
+        coding_deserialized = None
+        if coding_array:
+            coding_deserialized = [FHIRCoding.deserialize(coding) for coding in coding_array]
+
         instance = cls(
-            coding=[FHIRCoding.deserialize(coding) for coding in coding_array],
+            coding=coding_deserialized,
             text=fhir_text
         )
 
