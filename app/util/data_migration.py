@@ -861,12 +861,15 @@ def migrate_value_sets_expansion_member(
                     code_simple = row.code
                     code_jsonb = None
 
+                if code_jsonb is not None:
+                    code_jsonb = json.loads(code_jsonb)
+
                 data_to_migrate.append({
                     "uuid": row.uuid,
                     "expansion_uuid": row.expansion_uuid,
                     "code_schema": code_schema,
                     "code_simple": code_simple,
-                    "code_jsonb": json.loads(code_jsonb),
+                    "code_jsonb": code_jsonb,
                     "display": row.display,
                     "system": row.system,
                     "version": row.version,
@@ -926,6 +929,10 @@ def migrate_value_sets_expansion_member(
                     try:
                         code_jsonb_dict = json.loads(code_jsonb)
                     except json.decoder.JSONDecodeError as e:
+                        # This except entire section is to handle a single one-off error
+                        # In a single code, deserializing the one field does not work
+                        # But, in that instance, deserializing the other field does work
+                        # Rey inspected the database and verified this row manually
                         print("You should only see this once in the migration")
                         print('row.uuid', row.uuid)
                         print('row.code', row.code)
@@ -940,10 +947,10 @@ def migrate_value_sets_expansion_member(
                 else:
                     raise Exception(f"code_jsonb must be str, dict, or None")
 
-                if code_schema is not None and (
-                        IssuePrefix.COLUMN_VALUE_FORMAT.value in code_schema
-                ):
-                    logging.warning(f"{code_schema}, {row.code}, {row.display}, {row.system}, {row.version}")
+                # if code_schema is not None and (
+                #         IssuePrefix.COLUMN_VALUE_FORMAT.value in code_schema
+                # ):
+                #     logging.warning(f"{code_schema}, {row.code}, {row.display}, {row.system}, {row.version}")
 
                 data_to_migrate.append({
                     "uuid": row.uuid,
