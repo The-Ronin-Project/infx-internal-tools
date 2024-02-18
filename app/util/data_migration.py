@@ -5,6 +5,7 @@ import time
 import uuid
 import traceback
 import sys
+import json
 from math import floor
 
 # from decouple import config
@@ -865,7 +866,7 @@ def migrate_value_sets_expansion_member(
                     "expansion_uuid": row.expansion_uuid,
                     "code_schema": code_schema,
                     "code_simple": code_simple,
-                    "code_jsonb": code_jsonb,
+                    "code_jsonb": json.loads(code_jsonb),
                     "display": row.display,
                     "system": row.system,
                     "version": row.version,
@@ -921,6 +922,24 @@ def migrate_value_sets_expansion_member(
                     _display_string_for_code_id
                 ) = prepare_code_and_display_for_storage(row.code, row.display)
 
+                if type(code_jsonb) == str:
+                    try:
+                        code_jsonb_dict = json.loads(code_jsonb)
+                    except json.decoder.JSONDecodeError as e:
+                        print("You should only see this once in the migration")
+                        print('row.uuid', row.uuid)
+                        print('row.code', row.code)
+                        print('row.display', row.display)
+                        print('code_jsonb', code_jsonb)
+                        code_jsonb_dict = json.loads(_code_string_for_code_id)
+                        print('code_jsonb_dict', code_jsonb_dict)
+                elif type(code_jsonb) == dict:
+                    code_jsonb_dict = code_jsonb
+                elif type(code_jsonb) == type(None):
+                    code_jsonb_dict = None
+                else:
+                    raise Exception(f"code_jsonb must be str, dict, or None")
+
                 if code_schema is not None and (
                         IssuePrefix.COLUMN_VALUE_FORMAT.value in code_schema
                 ):
@@ -931,7 +950,7 @@ def migrate_value_sets_expansion_member(
                     "expansion_uuid": row.expansion_uuid,
                     "code_schema": code_schema,
                     "code_simple": code_simple,
-                    "code_jsonb": code_jsonb,
+                    "code_jsonb": code_jsonb_dict,
                     "display": row.display,
                     "system": row.system,
                     "version": row.version,
