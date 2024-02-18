@@ -8,8 +8,10 @@ import sys
 from math import floor
 
 # from decouple import config
-from sqlalchemy import text
+from sqlalchemy import text, MetaData, Table, Column, String, Row
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 
+from app.database import get_db
 from app.enum.concept_maps_for_content import ConceptMapsForContent
 from app.enum.concept_maps_for_systems import ConceptMapsForSystems
 from app.helpers.format_helper import IssuePrefix, \
@@ -290,7 +292,6 @@ def migrate_custom_terminologies_code(
     """
     migrate_database_table() helper function for when the original table_name is "custom_terminologies.code"
     """
-    from app.database import get_db
 
     # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
     # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded
@@ -783,16 +784,179 @@ def migrate_value_sets_expansion_member(
 ):
     """
     migrate_database_table() helper function for when the original table_name is "value_sets.expansion_member"
+
+    Parameters not implemented at this time; likely not needed due to speed of migration when run in OCI
+
+    Strategy:
+    - We'll first migrate rows without a custom_terminology_uuid (to avoid duplicate concerns)
+    - Then we'll migrate rows with a custom_terminology_uuid AND have been migrated to code_data
     """
-    return  # stub
+    BATCH_SIZE = 25000
+    conn = get_db()
+
+    # Set up SQLAlchemy definitions
+    metadata = MetaData()
+    expansion_member_data = Table(
+        "expansion_member_data",
+        metadata,
+        Column("uuid", UUID, nullable=False, primary_key=True),
+        Column("expansion_uuid", UUID, nullable=False),
+        Column("code_schema", String, nullable=False),
+        Column("code_simple", String, nullable=False),
+        Column(
+            "code_jsonb",
+            JSONB(none_as_null=True),
+            nullable=True,
+        ),
+        Column("display", String, nullable=False),
+        Column("system", String, nullable=False),
+        Column("version", String, nullable=False),
+        Column("custom_terminology_uuid", UUID, nullable=True),
+        Column("fhir_terminology_uuid", UUID, nullable=True),
+        schema="value_sets",
+    )
+
+    # Migrate data without custom_terminology_uuid
+    standard_terminology_migrated = False
+    while standard_terminology_migrated is False:
+        standard_terminology_data = conn.execute(
+            text(
+                """
+                select vem.* from value_sets.expansion_member vem
+                join value_sets.expansion vse
+                on vse.uuid=vem.expansion_uuid
+                join value_sets.value_set_version vsv
+                on vsv.uuid=vse.vs_version_uuid
+                where vem.custom_terminology_uuid is null
+                and vem.uuid not in 
+                (select uuid from value_sets.expansion_member_data)
+                and vsv.migrate=true
+                limit :batch_size
+                """
+            ), {
+                "batch_size": BATCH_SIZE
+            }
+        ).fetchall()
+
+        if standard_terminology_data:
+            data_to_migrate = []
+            for row in standard_terminology_data:
+                (
+                    code_schema,
+                    code_simple,
+                    code_jsonb,
+                    _code_string_for_code_id,
+                    _display_string_for_code_id
+                ) = prepare_code_and_display_for_storage(row.code, row.display)
+
+                if code_schema is not None and row.system != "http://unitsofmeasure.org" and (
+                        IssuePrefix.COLUMN_VALUE_FORMAT.value in code_schema
+                ):
+                    logging.warning(f"{code_schema}, {row.code}, {row.display}, {row.system}, {row.version}")
+
+                # UCUM has codes that look like spark, but aren't
+                if row.system == "http://unitsofmeasure.org":
+                    code_schema = "code"
+                    code_simple = row.code
+                    code_jsonb = None
+
+                data_to_migrate.append({
+                    "uuid": row.uuid,
+                    "expansion_uuid": row.expansion_uuid,
+                    "code_schema": code_schema,
+                    "code_simple": code_simple,
+                    "code_jsonb": code_jsonb,
+                    "display": row.display,
+                    "system": row.system,
+                    "version": row.version,
+                    "custom_terminology_uuid": row.custom_terminology_uuid,
+                    "fhir_terminology_uuid": None,
+                })
+
+            if data_to_migrate:
+                conn.execute(
+                    expansion_member_data.insert(),
+                    data_to_migrate
+                )
+                conn.commit()
+            logging.warning(f"Migrated standard terminology data {BATCH_SIZE}")
+        else:
+            standard_terminology_migrated = True
+
+    # Migrate data with a custom_terminology_uuid AND already migrated to code_data
+    custom_terminology_verified_migrated = False
+    while custom_terminology_verified_migrated is False:
+        custom_terminology_verified = conn.execute(
+            # Join used to select only data marked for migration
+            # Other where clauses to select only data from custom terminologies
+            # where we can verify it was migrated to code_data correctly
+            text(
+                """
+                select vem.* from value_sets.expansion_member vem
+                join value_sets.expansion vse
+                on vse.uuid=vem.expansion_uuid
+                join value_sets.value_set_version vsv
+                on vsv.uuid=vse.vs_version_uuid
+                where vem.custom_terminology_uuid is not null
+                and vsv.migrate = true
+                and vem.uuid not in 
+                (select uuid from value_sets.expansion_member_data)
+                and vem.custom_terminology_uuid in 
+                (select uuid from custom_terminologies.code_data)
+                limit :batch_size
+                """
+            ), {
+                "batch_size": BATCH_SIZE
+            }
+        ).fetchall()
+
+        if custom_terminology_verified:
+            data_to_migrate = []
+            for row in custom_terminology_verified:
+                (
+                    code_schema,
+                    code_simple,
+                    code_jsonb,
+                    _code_string_for_code_id,
+                    _display_string_for_code_id
+                ) = prepare_code_and_display_for_storage(row.code, row.display)
+
+                if code_schema is not None and (
+                        IssuePrefix.COLUMN_VALUE_FORMAT.value in code_schema
+                ):
+                    logging.warning(f"{code_schema}, {row.code}, {row.display}, {row.system}, {row.version}")
+
+                data_to_migrate.append({
+                    "uuid": row.uuid,
+                    "expansion_uuid": row.expansion_uuid,
+                    "code_schema": code_schema,
+                    "code_simple": code_simple,
+                    "code_jsonb": code_jsonb,
+                    "display": row.display,
+                    "system": row.system,
+                    "version": row.version,
+                    "custom_terminology_uuid": row.custom_terminology_uuid,
+                    "fhir_terminology_uuid": None,
+                })
+            if data_to_migrate:
+                conn.execute(
+                    expansion_member_data.insert(),
+                    data_to_migrate
+                )
+                conn.commit()
+            logging.warning(f"Migrated verified batch of {BATCH_SIZE}")
+        else:
+            custom_terminology_verified_migrated = True
+    logging.warning("Complete")
 
 
-def perform_migration():
-    """
-    Command line endpoint for running migration locally. Does not support command line inputs at this time.
-    """
-    # todo: For this command line endpoint, add a line for each table to be migrated.
-    migrate_database_table("custom_terminologies.code", 1, 4, segment_count=1)
+
+# def perform_migration():
+#     """
+#     Command line endpoint for running migration locally. Does not support command line inputs at this time.
+#     """
+#     # todo: For this command line endpoint, add a line for each table to be migrated.
+#     migrate_database_table("custom_terminologies.code", 1, 4, segment_count=1)
 
 
 def cleanup_database_table(
@@ -851,4 +1015,5 @@ def cleanup_database_table(
 
 
 if __name__=="__main__":
-    perform_migration()
+    # perform_migration()
+    migrate_value_sets_expansion_member()
