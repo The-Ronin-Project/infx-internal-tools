@@ -831,7 +831,7 @@ def migrate_concept_maps_source_concept(
                     code_jsonb,
                     _code_string_for_code_id,
                     _display_string_for_code_id
-                ) = prepare_code_and_display_for_storage(row.code, row.display)
+                ) = prepare_code_and_display_for_storage_migration(row.code, row.display)
 
                 data_to_migrate.append({
                     "uuid": row.uuid,
@@ -945,7 +945,7 @@ def migrate_value_sets_expansion_member(
                     code_jsonb,
                     _code_string_for_code_id,
                     _display_string_for_code_id
-                ) = prepare_code_and_display_for_storage(row.code, row.display)
+                ) = prepare_code_and_display_for_storage_migration(row.code, row.display)
 
                 if code_schema is not None and row.system != "http://unitsofmeasure.org" and (
                         IssuePrefix.COLUMN_VALUE_FORMAT.value in code_schema
@@ -1020,7 +1020,7 @@ def migrate_value_sets_expansion_member(
                     code_jsonb,
                     _code_string_for_code_id,
                     _display_string_for_code_id
-                ) = prepare_code_and_display_for_storage(row.code, row.display)
+                ) = prepare_code_and_display_for_storage_migration(row.code, row.display)
 
                 if type(code_jsonb) == str:
                     try:
