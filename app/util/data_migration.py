@@ -764,7 +764,34 @@ def migrate_concept_maps_source_concept(
     """
     migrate_database_table() helper function for when the original table_name is "concept_maps.source_concept"
     """
-    return  # stub
+    BATCH_SIZE = 25000
+    conn = get_db()
+
+    # Set up SQLAlchemy definitions
+    metadata = MetaData()
+    expansion_member_data = Table(
+        "expansion_member_data",
+        metadata,
+        Column("uuid", UUID, nullable=False, primary_key=True),
+        Column("expansion_uuid", UUID, nullable=False),
+        Column("code_schema", String, nullable=False),
+        Column("code_simple", String, nullable=False),
+        Column(
+            "code_jsonb",
+            JSONB(none_as_null=True),
+            nullable=True,
+        ),
+        Column("display", String, nullable=False),
+        Column("system", String, nullable=False),
+        Column("version", String, nullable=False),
+        Column("custom_terminology_uuid", UUID, nullable=True),
+        Column("fhir_terminology_uuid", UUID, nullable=True),
+        schema="value_sets",
+    )
+
+    # Migrate data that has EITHER no custom_terminology_uuid OR the custom_terminology_uuid
+    # is already migrated to custom_terminologies.code_data
+    pass
 
 
 def migrate_concept_maps_concept_relationship(
