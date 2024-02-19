@@ -9,7 +9,7 @@ import json
 from math import floor
 
 # from decouple import config
-from sqlalchemy import text, MetaData, Table, Column, String, Row, Boolean
+from sqlalchemy import text, MetaData, Table, Column, String, Row, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB, JSON
 
 from app.database import get_db
@@ -19,7 +19,7 @@ from app.helpers.format_helper import IssuePrefix, \
     prepare_additional_data_for_storage, filter_unsafe_depends_on_value, prepare_code_and_display_for_storage_migration, \
     prepare_depends_on_value_for_storage, prepare_binding_and_value_for_jsonb_insert_migration, \
     prepare_depends_on_attributes_for_code_id_migration
-from app.helpers.id_helper import generate_code_id
+from app.helpers.id_helper import generate_code_id, generate_mapping_id_with_source_code_values
 from app.helpers.message_helper import message_exception_summary
 
 # from sqlalchemy.dialects.postgresql import UUID as UUID_column_type
@@ -864,6 +864,41 @@ def migrate_concept_maps_source_concept(
             source_concept_migrated = True
 
 
+USER_TO_UUID_MAP = {
+    "Stephen Weaver": "69920e84-4cd6-42de-b522-f8cd239ce051",
+    "Kurt Weber": "b357db91-cfb3-49d8-8db0-377f1ad321d5",
+    "Katelin Brown": "91587bb3-a010-4358-af86-212acf356c84",
+    "Hao Sun": "acfb20b1-361e-4642-bd48-090a8ad93e06",
+    "Rey Johnson": "951d32b4-06a1-4b86-842e-57b8bef9bcd8",
+    "Jonathan Perlin": "4f858880-cf4c-45a3-b546-4fd5f468ed8a",
+    "Katie Ulvestad": "24d248f0-f0f1-4482-bf04-9cc5b1516b23",
+    "Kristine Lynch": "f775072e-57c9-47ba-910f-73dcb36bcd54",
+    "Theresa Aguilar": "915493ef-6d3e-4388-892e-662bedbde652",
+    "Azita Zeyghami": "63be1a69-519c-4de1-bdee-8b6df1b72fe3",
+    "Amanda Steffon": "c40efdc5-ea6f-4b28-8474-b72b7ace53d0",
+    "Addison Stuart": "854a187d-dcf9-4aed-a247-47478ae7781e",
+    "Elise Gatsby": "dd4c4e75-b046-446e-986c-2c8ed4607465",
+    "Automap": "8990714d-8eeb-4acf-a5b7-abf92007a53a",
+    "Automapping": "8990714d-8eeb-4acf-a5b7-abf92007a53a",
+    "Rita Baroni": "f5562414-ec96-4939-98f7-debfb452afde",
+    "Jon Barton": "ccaf4963-9613-4846-b53e-64b55a1dcd18",
+    "Swapna Abhyankar": "88dddd13-bac3-44b6-ba14-20e5358ff6bc",
+    "Susan Korgen": "6cb6ec1a-49b6-4dca-ad57-c45bc3176283",
+    "NLP": "8abf5747-121b-48e0-9edf-dbd820d397fb",
+    "Dan Angelis": "ba48e55b-cb9f-4943-b794-d50aa7b03368",
+}
+
+
+def user_to_uuid(user_name):
+    if user_name is None:
+        return None
+    return USER_TO_UUID_MAP[user_name]
+
+
+CODEABLE_CONCEPT_SCHEMA = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept"
+CODE_SCHEMA = "code"
+
+
 def migrate_concept_maps_concept_relationship(
     granularity: int=1,
     segment_start: int=None,
@@ -872,7 +907,161 @@ def migrate_concept_maps_concept_relationship(
     """
     migrate_database_table() helper function for when the original table_name is "concept_maps.concept_relationshi"
     """
-    return  # stub
+    BATCH_SIZE = 25000
+    conn = get_db()
+
+    # Set up SQLAlchemy definitions
+    metadata = MetaData()
+    concept_relationship_data = Table(
+        "concept_relationship_data",
+        metadata,
+        Column("uuid", UUID, nullable=False, primary_key=True),
+        Column("mapping_id", String, nullable=False),
+        Column("deduplication_hash", String, nullable=False),
+        Column("source_concept_uuid", UUID, nullable=False),
+        Column("target_concept_code", String, nullable=False),
+        Column("target_concept_display", String, nullable=False),
+        Column("target_concept_terminology_version_uuid", UUID, nullable=False),
+        Column("mapping_coments", String, nullable=True),
+        Column("mapped_by", UUID, nullable=False),
+        Column("mapped_date_time", DateTime, nullable=False),
+        Column("relationship_code_uuid", UUID, nullable=False),
+        Column("review_status", String, nullable=True),
+        Column("reviewed_by", UUID, nullable=True),
+        Column("reviewed_date_time", DateTime, nullable=True),
+        Column("map_program_date_time", DateTime, nullable=True),
+        Column("map_program_version", String, nullable=True),
+        Column("map_program_prediction_id", String, nullable=True),
+        Column("map_program_confidence_score", String, nullable=True),
+        Column("deleted_by", UUID, nullable=True),
+        Column("deleted_date_time", DateTime, nullable=True),
+        schema="concept_maps",
+    )
+
+    # Migrate data without custom_terminology_uuid
+    concept_relationship_migrated = False
+    while concept_relationship_migrated is False:
+        concept_relationship_results = conn.execute(
+            text(
+                """
+                select cr.*, sc.no_map,
+                sc.code_schema as sc_code_schema, sc.code_simple as sc_code_simple,
+                sc.code_jsonb as sc_code_jsonb, sc.display as sc_display,
+                cdo.depends_on_property, cdo.depends_on_system, cdo.depends_on_display,
+                cdo.depends_on_value_schema, cdo.depends_on_value_simple, cdo.depends_on_value_jsonb
+                from concept_maps.concept_relationship cr
+                join concept_maps.source_concept_data sc
+                on cr.source_concept_uuid = sc.uuid
+                join concept_maps.concept_map_version cmv
+                on cmv.uuid = sc.concept_map_version_uuid
+                -- need to join all the way back to code_data so we can make the mapping_id
+                left join custom_terminologies.code_data code_data
+                on sc.custom_terminology_code_uuid=code_data.uuid
+                -- need depends on (if available) for mapping_id
+                left join custom_terminologies.code_depends_on cdo
+                on code_data.uuid = cdo.code_uuid
+                where cmv.migrate=true
+                and cr.uuid not in (select uuid from concept_maps.concept_relationship_data)
+                limit :batch_size
+                """
+            ), {
+                "batch_size": BATCH_SIZE
+            }
+        ).fetchall()
+
+        if concept_relationship_results:
+            data_to_migrate = []
+            for row in concept_relationship_results:
+
+                # Calculate new mapping_id
+                if row.sc_code_schema == CODEABLE_CONCEPT_SCHEMA:
+                    source_code_string = row.sc_code_jsonb
+                elif row.sc_code_schema == CODE_SCHEMA:
+                    source_code_string = row.sc_code_simple
+                else:
+                    raise Exception("Unable to calculate source_code_string")
+
+                depends_on_value = None
+                if row.depends_on_value_schema is not None:
+                    if row.depends_on_value_simple:
+                        depends_on_value = row.depends_on_value_simple
+                    else:
+                        depends_on_value = json.dumps(row.depends_on_value_jsonb)
+                    if not depends_on_value:
+                        raise Exception("Unable to calculate depends on value")
+
+                new_mapping_id = generate_mapping_id_with_source_code_values(
+                    source_code_string=source_code_string,
+                    display_string=row.sc_display,
+                    relationship_code=str(row.relationship_code_uuid) if row.relationship_code_uuid else "",
+                    target_concept_code=str(row.target_concept_display),
+                    target_concept_display=str(row.target_concept_display),
+                    target_concept_system=str(row.target_concept_system_version_uuid),
+                    depends_on_value_string=depends_on_value,
+                    depends_on_property=row.depends_on_property,
+                    depends_on_system=row.depends_on_system,
+                    depends_on_display=row.depends_on_display,
+                )
+                new_deduplication_hash = new_mapping_id
+
+                # Concatenate mapping_comments and review_comment
+                new_mapping_comments = row.mapping_comments
+                if row.review_comment:
+                    if new_mapping_comments is None:
+                        new_mapping_comments = ""
+                    new_mapping_comments += row.review_comment
+
+                new_mapped_by = user_to_uuid(row.author)
+                if new_mapped_by is None:
+                    new_mapped_by = '70b5405d-b2ab-481b-85a5-d5b305164851'  # Unknown user to populate required column
+                new_reviewed_by = user_to_uuid(row.reviewed_by)
+                new_deleted_by = user_to_uuid(row.deleted_by)
+
+                # Handle no maps
+                new_target_concept_terminology_version_uuid = row.target_concept_system_version_uuid
+                if new_target_concept_terminology_version_uuid is None:
+                    if row.target_concept_code == 'No map' and row.target_concept_display == 'No matching concept':
+                        new_target_concept_terminology_version_uuid = '93ec9286-17cf-4837-a4dc-218ce3015de6'
+
+                # Previously only had time, not datetime
+                # So we will migrate these rows with current datetime
+                new_deleted_date_time = None
+                if row.deleted_timestamp:
+                    new_deleted_date_time = datetime.datetime.now()
+
+                data_to_migrate.append({
+                    "uuid": row.uuid,
+                    "mapping_id": new_mapping_id,
+                    "deduplication_hash": new_deduplication_hash,
+                    "source_concept_uuid": row.source_concept_uuid,
+                    "target_concept_code": row.target_concept_code,
+                    "target_concept_display": row.target_concept_display,
+                    "target_concept_terminology_version_uuid": new_target_concept_terminology_version_uuid,
+                    "mapping_comments": new_mapping_comments,
+                    "mapped_date_time": row.created_date,
+                    "mapped_by": new_mapped_by,
+                    "relationship_code_uuid": row.relationship_code_uuid,
+                    "review_status": row.review_status,
+                    "reviewed_by": new_reviewed_by,
+                    "reviewed_date_time": row.reviewed_date,
+                    "map_program_date_time": row.model_run_time,
+                    "map_program_version": row.model_version,
+                    "map_program_prediction_id": None,
+                    "map_program_confidence_score": row.model_output_score,
+                    "deleted_date_time": new_deleted_date_time,
+                    "deleted_by": new_deleted_by
+                })
+
+            if data_to_migrate:
+                conn.execute(
+                    concept_relationship_data.insert(),
+                    data_to_migrate
+                )
+                conn.commit()
+            logging.warning(f"Migrated concept relationship data {BATCH_SIZE}")
+        else:
+            concept_relationship_migrated = True
+    print("Complete")
 
 
 def migrate_value_sets_expansion_member(
@@ -1139,4 +1328,4 @@ def cleanup_database_table(
 
 if __name__=="__main__":
     # perform_migration()
-    migrate_concept_maps_source_concept()
+    migrate_concept_maps_concept_relationship()
