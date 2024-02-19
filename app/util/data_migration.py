@@ -9,8 +9,8 @@ import json
 from math import floor
 
 # from decouple import config
-from sqlalchemy import text, MetaData, Table, Column, String, Row
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import text, MetaData, Table, Column, String, Row, Boolean
+from sqlalchemy.dialects.postgresql import UUID, JSONB, JSON
 
 from app.database import get_db
 from app.enum.concept_maps_for_content import ConceptMapsForContent
@@ -767,34 +767,101 @@ def migrate_concept_maps_source_concept(
     BATCH_SIZE = 25000
     conn = get_db()
 
-    # Work in progress
+    # Set up SQLAlchemy definitions
+    metadata = MetaData()
+    source_concept_data = Table(
+        "source_concept_data",
+        metadata,
+        Column("uuid", UUID, nullable=False, primary_key=True),
+        Column("code_schema", String, nullable=False),
+        Column("code_simple", String, nullable=True),
+        Column(
+            "code_jsonb",
+            JSONB(none_as_null=True),
+            nullable=True,
+        ),
+        Column("display", String, nullable=False),
+        Column("system_uuid", UUID, nullable=False),
+        Column("comments", String, nullable=True),
+        Column("map_status", String, nullable=False),
+        Column("concept_map_version_uuid", UUID, nullable=False),
+        Column("assigned_mapper", UUID, nullable=True),
+        Column("assigned_reviewer", UUID, nullable=True),
+        Column("no_map", Boolean, nullable=True),
+        Column("reason_for_no_map", String, nullable=True),
+        Column("mapping_group", String, nullable=True),
+        Column(
+            "previous_version_context",
+            JSON(none_as_null=True),
+            nullable=True,
+        ),
+        Column("custom_terminology_code_uuid", UUID, nullable=True),
+        Column("save_for_discussion", Boolean, nullable=True),
+        schema="concept_maps",
+    )
 
+    # Migrate data that has EITHER no custom_terminology_uuid OR the custom_terminology_uuid
+    # is already migrated to custom_terminologies.code_data
+    source_concept_migrated = False
+    while source_concept_migrated is False:
+        source_concept_results = conn.execute(
+            text(
+                """
+                select sc.*
+                from concept_maps.source_concept sc
+                join concept_maps.concept_map_version cmv
+                on cmv.uuid = sc.concept_map_version_uuid
+                where cmv.migrate=true
+                and (custom_terminology_uuid is null
+                or custom_terminology_uuid in (select uuid from custom_terminologies.code_data))
+                and sc.uuid not in (select uuid from concept_maps.source_concept_data)
+                limit :batch_size
+                """
+            ), {
+                "batch_size": BATCH_SIZE
+            }
+        ).fetchall()
 
-    # # Set up SQLAlchemy definitions
-    # metadata = MetaData()
-    # expansion_member_data = Table(
-    #     "expansion_member_data",
-    #     metadata,
-    #     Column("uuid", UUID, nullable=False, primary_key=True),
-    #     Column("expansion_uuid", UUID, nullable=False),
-    #     Column("code_schema", String, nullable=False),
-    #     Column("code_simple", String, nullable=False),
-    #     Column(
-    #         "code_jsonb",
-    #         JSONB(none_as_null=True),
-    #         nullable=True,
-    #     ),
-    #     Column("display", String, nullable=False),
-    #     Column("system", String, nullable=False),
-    #     Column("version", String, nullable=False),
-    #     Column("custom_terminology_uuid", UUID, nullable=True),
-    #     Column("fhir_terminology_uuid", UUID, nullable=True),
-    #     schema="value_sets",
-    # )
-    #
-    # # Migrate data that has EITHER no custom_terminology_uuid OR the custom_terminology_uuid
-    # # is already migrated to custom_terminologies.code_data
-    # pass
+        if source_concept_results:
+            data_to_migrate = []
+            for row in source_concept_results:
+                (
+                    code_schema,
+                    code_simple,
+                    code_jsonb,
+                    _code_string_for_code_id,
+                    _display_string_for_code_id
+                ) = prepare_code_and_display_for_storage(row.code, row.display)
+
+                data_to_migrate.append({
+                    "uuid": row.uuid,
+                    "code_schema": code_schema,
+                    "code_simple": code_simple,
+                    "code_jsonb": code_jsonb,
+                    "display": row.display,
+                    "system_uuid": row.system, # Note name change
+                    "comments": row.comments,
+                    "map_status": row.map_status,
+                    "concept_map_version_uuid": row.concept_map_version_uuid,
+                    "assigned_mapper": row.assigned_mapper,
+                    "assigned_reviewer": row.assigned_reviewer,
+                    "no_map": row.no_map,
+                    "reason_for_no_map": row.reason_for_no_map,
+                    "mapping_group": row.mapping_group,
+                    "previous_version_context": row.previous_version_context,
+                    "custom_terminology_code_uuid": row.custom_terminology_uuid, # Note name change
+                    "save_for_discussion": row.save_for_discussion
+                })
+
+            if data_to_migrate:
+                conn.execute(
+                    source_concept_data.insert(),
+                    data_to_migrate
+                )
+                conn.commit()
+            logging.warning(f"Migrated standard terminology data {BATCH_SIZE}")
+        else:
+            source_concept_migrated = True
 
 
 def migrate_concept_maps_concept_relationship(
@@ -1072,4 +1139,4 @@ def cleanup_database_table(
 
 if __name__=="__main__":
     # perform_migration()
-    migrate_value_sets_expansion_member()
+    migrate_concept_maps_source_concept()
