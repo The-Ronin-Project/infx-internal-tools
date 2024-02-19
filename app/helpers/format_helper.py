@@ -2,31 +2,43 @@ import datetime
 import json
 import re
 from enum import Enum
+from typing import Optional
 
-from app.helpers.data_helper import is_uuid4_format, is_spark_format, is_json_format, load_json_string, \
-    normalize_source_ratio, serialize_json_object, escape_sql_input_value, normalize_source_codeable_concept, \
+from app.helpers.data_helper import is_spark_format, is_json_format, load_json_string, \
+    normalized_source_ratio, serialize_json_object, escape_sql_input_value, normalized_source_codeable_concept, \
     cleanup_json_string
-from app.helpers.message_helper import message_exception_classname
 from app.models.codes import DependsOnData
 
 
 class DataExtensionUrl(Enum):
     """
-    DataExtensionUrls for ConceptMaps from the RCDM specification
+    Supported DataExtensionUrls for ConceptMap dynamic values, from the RCDM specification
     """
     SOURCE_CODEABLE_CONCEPT = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept"
     SOURCE_RATIO = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceRatio"
     NEEDS_EXAMPLE_DATA = "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData"
 
 
+class FHIRPrimitiveName(Enum):
+    """
+    Supported FHIR primitive data types for ConceptMap dynamic values, from the RCDM specification
+    """
+    CODE = "code"
+    STRING = "string"
+
+
 class IssuePrefix(Enum):
     """
-    Prefix for messages reporting format issues
+    Prefix for messages reporting format issues.
+    # todo: delete this Enum after v5 migration is complete
     """
     COLUMN_VALUE_FORMAT = "format issue: "
 
 
 def convert_string_to_datetime_or_none(input_string):
+    """
+    This is the standard, top-level function to prepare a datetime value in Informatics desired format, or return None.
+    """
     if input_string is None:
         return None
     else:
@@ -36,11 +48,58 @@ def convert_string_to_datetime_or_none(input_string):
             return datetime.datetime.strptime(input_string, "%Y-%m-%dT%H:%M:%SZ")
 
 
-def prepare_code_and_display_for_storage(raw_code: str = None, raw_display: str = None) -> (str, str, str, str, str):
+def prepare_code_and_display_for_storage(raw_code = None, raw_display: str = None) -> (str, str, str, str, str):
     """
-    This is the function to call to store an RCDM FHIR sourceConcept element value in the clinical-content database.
-    Documentation is provided at the prepare_dynamic_value_for_storage() function. Provides all 5 return values.
+    This is the standard, top-level function to prepare 1 source concept object for input to 3 columns of a table.
+
+    There is NO reason to validate results from this function, since it does ALL required validation internally.
+
+    @param raw_code any object or string: may be a FHIR attribute from raw data, or a JSON binary or string column value
+    @param raw_display optional, may appear with simple codes; for CodeableConcept will be overwritten with text value
+
+    JSON binary column values (such as values from code_jsonb and depends_on_value_jsonb columns) are objects.
+    If, during earlier processing logic, you read them values from tables into objects in your Python,
+    and now you need to write these objects into tables, call this function to prepare the object values for storage.
+
+    When receiving raw attributes values from tenant objects, they may be strings or objects.
+    Call this function to prepare these string or object values for storage. It accepts any data type as raw_code.
+
+    clinical-content tables that use this 3-column convention for source concepts are custom_terminologies.code_data,
+    concept_maps.source_concept_data, and concept_maps.concept_relationship_data.
+    Compare/contrast with prepare_depends_on_for_storage() which does not overlap with these use cases.
+    @return
+        value_schema (str) - FHIR primitive name or DataExtensionUrls value - if None, inputs could not be processed
+        value_simple (str) - old_code if primitive  - else None
+        value_jsonb (str) - None if primitive - else, object with that value_schema - string prepared for SQL
+            Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
+        value_string (string) - either value_simple, or value_jsonb binary JSON value, correctly serialized to a string
+            - this returned value_string value is ready for the caller to input to the hash function generate_code_id().
+        display_string (string) - in the case of code being CodeableConcept, normalize display to the code.text value
     """
+    normalized_code = normalized_codeable_concept_string(raw_code)
+    normalized_display = raw_code.get("text")
+    (
+        value_schema,
+        value_simple,
+        value_jsonb,
+        value_string,
+        display_string
+    ) = prepare_dynamic_value_for_storage(normalized_code, normalized_display)
+    # the FHIR primitive data type named "code" in FHIR, looks like a string to Python, so adjust value_schema to "code"
+    if value_schema == FHIRPrimitiveName.STRING.value:
+        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_source_code_for_storage(
+            code_string=normalized_code
+        )
+    return value_schema, value_simple, value_jsonb, value_string, display_string
+
+
+def prepare_code_and_display_for_storage_migration(raw_code: str = None, raw_display: str = None) -> (str, str, str, str, str):
+    """
+    # todo: delete this function after v5 migration is complete
+    Low-level helper function. DO NOT call this function directly.
+    For reading old, inconsistently serialized code column values from v4 tables and preparing them for storage in v5 tables.
+    """
+    # prepare_dynamic_value_for_storage(), prepare_string_source_code_for_storage() ensure all values are correct
     (
         value_schema,
         value_simple,
@@ -48,6 +107,7 @@ def prepare_code_and_display_for_storage(raw_code: str = None, raw_display: str 
         value_string,
         display_string
     ) = prepare_dynamic_value_for_storage(raw_code, raw_display)
+    # the FHIR primitive data type named "code" in FHIR, looks like a string to Python, so adjust value_schema to "code"
     if value_schema == "string":
         (value_schema, value_simple, value_jsonb, value_string) = prepare_string_source_code_for_storage(
             code_string=raw_code
@@ -55,11 +115,160 @@ def prepare_code_and_display_for_storage(raw_code: str = None, raw_display: str 
     return value_schema, value_simple, value_jsonb, value_string, display_string
 
 
+def prepare_depends_on_for_storage(depends_on: list = None) -> (str, list):
+    """
+    This is the standard, top-level function to prepare a DependsOnData list for custom_terminologies.code_depends_on.
+    Compare/contrast with prepare_code_and_display_for_storage() which does not overlap with this use case.
+    @param depends_on - list of DependsOnData objects - see the following notes on FHIR ConceptMap dependsOn as a list.
+
+    There is NO reason to validate results from this function, since it does ALL required validation internally.
+
+    FHIR defines the dependsOn attribute of a ConceptMap as a list because a mapping can depend on multiple factors.
+    Even when there is only one dependsOn factor for a code, ConceptMap dependsOn is still a list (a 1-member list).
+
+    This function expects that, as FHIR data is ingested from tenants, for each FHIR attribute that Ronin maps, whenever
+    we need to collect a dependsOn list for that attribute we will write a purpose-built helper function for extracting
+    the needed DependsOnData and creating a list of DependsOnData rows to store in custom_terminologies.code_depends_on
+    for that source code. Examples of purpose-built FHIR attribute helper functions today:
+
+        - normalized_codeable_concept_depends_on() is used on Observation.code when Observation.category is "SmartData".
+            It is a general-purpose function for using 1 CodeableConcept value as a dependsOn (could serve other cases).
+        - normalized_medication_ingredient_strength_depends_on() is used on Medication.ingredient (a list on Medication)
+            It is a purpose-built function to walk the Medication.ingredient list structure to get the data we need.
+
+    @return
+        depends_on_value_string (str) - contains ALL the DependsOnData list items correctly ordered, serialized, and joined
+            - ready for the caller to input to generate_code_id() as the depends_on_value_string.
+        code_depends_on_insert_list - Each list entry is a tuple of several values as follows:
+            sequence (int) - value to put in the sequence column
+            value_schema (str) - FHIR primitive name or DataExtensionUrls value - if None, inputs could not be processed
+            value_simple (str) - column for dependsOn.value - old_code if primitive - else None
+            value_jsonb (str) - column for dependsOn.value - None if primitive - else, serialized object string
+                prepared for SQL (Note: SQLAlchemy can do SQL escaping but does not cover all the cases in our data)
+            property (str) - value to put in the property column
+            system (str) - dependsOn.system - usually not in data - the system column
+            display (str) - dependsOn.display - usually not in data - the display column
+    """
+    sequence = 0
+    depends_on_value_string = ""
+    depends_on_list = []
+    for row in depends_on:
+        # prepare_depends_on_columns_for_storage() ensures all values are correct
+        (
+            value_schema,
+            value_simple,
+            value_jsonb,
+            value_string,
+            display_string
+        ) = prepare_depends_on_columns_for_storage(row.depends_on_value)
+        sequence += 1
+        depends_on_value_string += prepare_depends_on_attributes_for_code_id_migration(
+            value_string,
+            row.depends_on_property,
+            row.depends_on_system,
+            row.depends_on_display
+        )
+        depends_on_list.append(
+            (
+                sequence,
+                value_schema,
+                value_simple,
+                value_jsonb,
+                row.depends_on_property,
+                row.depends_on_system,
+                row.depends_on_display
+            )
+        )
+
+    return depends_on_value_string, depends_on_list
+
+
+def prepare_depends_on_attributes_for_code_id(input_object: DependsOnData) -> str:
+    """
+    Low-level helper to correctly combine the 4 DependsOnData string values into one string as input for a code_id.
+    """
+    return prepare_depends_on_attributes_for_code_id_migration(
+        input_object.depends_on_value,
+        input_object.depends_on_property,
+        input_object.depends_on_system,
+        input_object.depends_on_display,
+)
+
+
+def prepare_depends_on_attributes_for_code_id_migration(
+        depends_on_value_string: str,
+        depends_on_property: Optional[str] = None,
+        depends_on_system: Optional[str] = None,
+        depends_on_display: Optional[str] = None,
+) -> str:
+    """
+    Low-level helper to correctly combine the 4 DependsOnData string values into one string as input for a code_id.
+    """
+    if depends_on_value_string is None or depends_on_value_string == "":
+        return ""
+    return (depends_on_value_string
+        + (depends_on_property if depends_on_property is not None else "")
+        + (depends_on_system if depends_on_system is not None else "")
+        + (depends_on_display if depends_on_display is not None else "")
+    )
+
+
+def prepare_depends_on_columns_for_storage(depends_on_row: DependsOnData = None) -> (str, str, str, str):
+    """
+    Helper function. DO NOT call this function directly.
+
+    There is NO reason to validate results from this function, since it does ALL required validation internally.
+
+    Low-level helper to prepare several values in DependsOnData for columns in custom_terminologies.code_depends_on.
+
+    Does call prepare_depends_on_value_for_storage() to prepare 1 depends_on_value for 3 columns in code_depends_on.
+    Does not process or supply a sequence value for the row. So, since FHIR dependsOn is always an ordered list, in
+    specific sequence, do not call this function directly. Instead, call prepare_depends_on_for_storage() which provides
+    detailed doc with examples. A summary of these details:
+        1. Call (or write) the purpose-built function for this FHIR attribute's dependsOn data;
+            this function will create a correct list of DependsOnData objects. Examples exist in current codebase.
+        2. Input this list to prepare_depends_on_for_storage();
+            this function orders the list in proper sequence and returns more values you need for the row inserts.
+    @return
+        value_schema (str) - FHIR primitive name or DataExtensionUrls value - if None, inputs could not be processed
+        value_simple (str) - old_code if primitive  - else None
+        value_jsonb (str) - None if primitive - else, object with that value_schema - string prepared for SQL
+            Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
+        value_string (string) - either value_simple, or value_jsonb binary JSON value, correctly serialized to a string
+            - this returned value_string value is ready for the caller to input to the hash function generate_code_id().
+    """
+    # prepare_depends_on_value_for_storage(), prepare_string_depends_on_for_storage() ensure all values are correct
+    (
+        value_schema,
+        value_simple,
+        value_jsonb,
+        value_string,
+        display_string
+    ) = prepare_depends_on_value_for_storage(depends_on_row.depends_on_value)
+    if value_schema == FHIRPrimitiveName.STRING.value:
+        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_depends_on_for_storage(
+            code_string=depends_on_row.depends_on_value
+        )
+    return value_schema, value_simple, value_jsonb, value_string
+
+
 def prepare_depends_on_value_for_storage(raw_depends_on_value: str = None) -> (str, str, str, str):
     """
-    This is the function to call to store a RCDM FHIR DependsOn element value in the clinical-content database.
-    Documentation is provided at the prepare_dynamic_value_for_storage() function. Returns 4 values, no display_string.
+    Helper function. DO NOT call this function directly.
+
+    There is NO reason to validate results from this function, since it does ALL required validation internally.
+
+    Lowest-level helper to prepare 1 depends_on_value for 3 columns in the custom_terminologies.code_depends_on table.
+
+    @return
+        value_schema (str) - FHIR primitive name or DataExtensionUrls value - if None, inputs could not be processed
+        value_simple (str) - old_code if primitive  - else None
+        value_jsonb (str) - None if primitive - else, object with that value_schema - string prepared for SQL
+            Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
+        value_string (string) - either value_simple, or value_jsonb binary JSON value, correctly serialized to a string
+            - this returned value_string value is ready for the caller to input to the hash function generate_code_id().
     """
+    # prepare_dynamic_value_for_storage(), prepare_string_depends_on_for_storage() ensure all values are correct
     (
         value_schema,
         value_simple,
@@ -67,19 +276,24 @@ def prepare_depends_on_value_for_storage(raw_depends_on_value: str = None) -> (s
         value_string,
         display_string
     ) = prepare_dynamic_value_for_storage(raw_depends_on_value, None)
-    if value_schema == "string":
+    if value_schema == FHIRPrimitiveName.STRING.value:
         (value_schema, value_simple, value_jsonb, value_string) = prepare_string_depends_on_for_storage(
             code_string=raw_depends_on_value
         )
     return value_schema, value_simple, value_jsonb, value_string
 
-    
+
 def prepare_dynamic_value_for_storage(old_value: str = None, old_display: str = None) -> (str, str, str, str, str):
     """
     Helper function. DO NOT call this function directly.
 
+    # todo: this function was written for migration. A future function would want an object as the first argument.
+    # To avoid disrupting the migration while it is in progress, the top-level format helper functions do accept
+    # objects as arguments, and then carefully (behind the curtain) ensure they call a standard normalization
+    # function on the input object before sending the resulting serialized string into this function as old_value.
+
     For each FHIR element type we need, we write a wrapper function, which must be called instead of this function.
-    For current examples, see prepare_code_and_display_for_storage() and prepare_depends_on_value_for_storage()
+    For examples, see doc in prepare_code_and_display_for_storage() and prepare_depends_on_value_for_storage().
 
     For inserting dynamic value columns into a table that has already been migrated to the ConceptMap v5 schema.
     the input string in old_value may be a string or a serialized object. The end result is to prepare and return
@@ -91,13 +305,12 @@ def prepare_dynamic_value_for_storage(old_value: str = None, old_display: str = 
     @param old_display - this value is optional and might be present when the dynamic value is for a source code
 
     @return
-        value_schema (string) - FHIR primitive name, DataExtensionUrls value, or message prefixed with "format issue:"
-        value_simple (string) - old_code if primitive or old_code has "format issue: " - else None
-        value_jsonb (string) - None if primitive or old_value has "format issue:" - else, object with that value_schema
-            - note: because this function prepares these values for SQL INSERT query formation, this value is a string -
-            all JSON uses double quotes, and if there is a single quote value in the JSON, it is '' for SQL escaping
+        value_schema (str) - FHIR primitive name or DataExtensionUrls value - if None, inputs could not be processed
+        value_simple (str) - old_code if primitive  - else None
+        value_jsonb (str) - None if primitive - else, object with that value_schema - string prepared for SQL
+            Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
         value_string (string) - either value_simple, or value_jsonb binary JSON value, correctly serialized to a string
-            - this returned value_string value is ready for the caller to input to hash_string to create the code_id
+            - this returned value_string value is ready for the caller to input to the hash function generate_code_id().
         display_string (string) - in the case of code being CodeableConcept, normalize display to the code.text value
     """
     (
@@ -107,20 +320,17 @@ def prepare_dynamic_value_for_storage(old_value: str = None, old_display: str = 
         value_string,
         display_string
     ) = prepare_dynamic_value_for_storage_report_issue(old_value, old_display)
-    
-    # todo: This block is intended for use only after database migration is complete. During migration we need issues!
-    # @raise ValueError if the old_value cannot be correctly stored, so the caller should not insert it in the database.
-    # if value_schema is None:
-    #     raise ValueError("Value cannot be stored: format issues found")
-    # if IssuePrefix.COLUMN_VALUE_FORMAT.value in value_schema:
-    #     raise ValueError(value_schema)
-    
     return value_schema, value_simple, value_jsonb, value_string, display_string
 
 
 def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_display: str = None) -> (str, str, str, str, str):
     """
     Helper function does the work for prepare_dynamic_value_for_storage(). DO NOT call this function directly.
+
+    # todo: this function was written for migration. A future function would want an object as the first argument.
+    # To avoid disrupting the migration while it is in progress, the top-level format helper functions do accept
+    # objects as arguments, and then carefully (behind the curtain) ensure they call a standard normalization
+    # function on the input object before sending the resulting serialized string into this function as old_value.
 
     @param old_value - may be a string, or may be a FHIR code or serialized FHIR object.
     @param old_display - (Optional) the old_display value that came with the old_code value, if available.
@@ -131,13 +341,12 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
     - (if old_display is input) 1 display value, normalized to CodeableConcept.text if the old_value was CodeableConcept
 
     @return
-        value_schema (string) - FHIR primitive name, DataExtensionUrls value, or message prefixed with "format issue:"
-        value_simple (string) - old_code if primitive or old_code has "format issue: " - else None
-        value_jsonb (string) - None if primitive or old_value has "format issue:" - else, object with that value_schema
-            - note: because this function prepares these values for SQL INSERT query formation, this value is a string -
-            all JSON uses double quotes, and if there is a single quote value in the JSON, it is '' for SQL escaping
+        value_schema (str) - FHIR primitive name or DataExtensionUrls value - if None, inputs could not be processed
+        value_simple (str) - old_code if primitive - else None
+        value_jsonb (str) - None if primitive - else, object with that value_schema - string prepared for SQL
+            Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
         value_string (string) - either value_simple, or value_jsonb binary JSON value, correctly serialized to a string
-            - this returned value_string value is ready for the caller to input to hash_string to create the code_id
+            - this returned value_string value is ready for the caller to input to the hash function generate_code_id().
         display_string (string) - in the case of code being CodeableConcept, normalize display to the "text" value
     """
 
@@ -249,7 +458,7 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
 
     # string
     else:
-        value_schema = "string"
+        value_schema = FHIRPrimitiveName.STRING.value
         value_simple = old_value
 
     return value_schema, value_simple, value_jsonb, value_string, display_string
@@ -257,29 +466,37 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
 
 def prepare_json_format_for_storage(json_string: str, display_string: str = None) -> (str, str, str, str, str):
     """
+    Low-level helper function for prepare_dynamic_value_for_storage(). DO NOT call this function directly.
+
+    There is NO reason to validate results from this function, since it does ALL required validation internally.
+
+    # todo: this function was written for migration. A future function would want an object as the first argument.
+    # To avoid disrupting the migration while it is in progress, the top-level format helper functions do accept
+    # objects as arguments, and then carefully (behind the curtain) ensure they call a standard normalization
+    # function on the input object before sending the resulting serialized string into this function as old_value.
+
     Normalizes the JSON string to an expected format with double quotes and no wasted space - calls helper functions
-    in the correct order: load the object, normalize to RCDM (sorts lists), serialize (sorts keys, strips space)
+    in the correct order: load the object, normalize to RCDM (sorts lists), serialize (sorts keys, strips space).
     @param json_string - serialized JSON string for an object to be processed
     @param display_string (Optional) - if a display value was supplied along with the object value
     @return
         code_schema (string) - FHIR primitive name, DataExtensionUrls value, or message prefixed with "format issue:"
         code_simple (string) - old_code if primitive or old_code has "format issue: " - else None
-        code_jsonb (string) - None if primitive or old_code has "format issue:" - else, the object with that code_schema
-            - note: because this function prepares these values for SQL INSERT query formation, this value is a string -
-            all JSON uses double quotes, and if there is a single quote value in the JSON, it is '' for SQL escaping
+        value_jsonb (str) - None if primitive - else, object with that value_schema - string prepared for SQL
+            Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
         code_string (string) - either code_simple, or the code_jsonb binary JSON value correctly serialized to a string
+            - this returned code_string value is ready for the caller to input to the hash function generate_code_id().
         display_string (string) - if code is CodeableConcept, the code.text value, otherwise the input value
+        Note: We no longer encounter format issues we cannot resolve. Just in case, if that happens return all 5 None.
     """
+    false_result = None, None, None, None, None
     try:
         json_object = load_json_string(json_string)
 
         # Ratio
         if '"numerator"' in json_string or '"denominator"' in json_string:
             # todo: prepare_object_source_ratio_for_storage(ratio_object=json_object) - we do not yet have data to test
-            (code_schema, code_simple, code_jsonb, code_string) = prepare_object_format_issue_for_storage(
-                issue="Ratio needs to be supported",
-                code_string=json_string
-            )
+            return false_result
 
         # CodeableConcept
         elif '"text"' in json_string or (
@@ -296,49 +513,99 @@ def prepare_json_format_for_storage(json_string: str, display_string: str = None
                 )
                 display_string = json_object.get("text")
             except Exception as e:
-                name = message_exception_classname(e)
-                if name == "BadDataError":
-                    name = "invalid JSON for CodeableConcept"
-                (code_schema, code_simple, code_jsonb, code_string) = prepare_object_format_issue_for_storage(
-                    issue=name,
-                    code_string=json_string
-                )
+                return false_result
 
         # unsupported FHIR resource type, or an unexpected data dictionary
         else:
-            (code_schema, code_simple, code_jsonb, code_string) = prepare_object_format_issue_for_storage(
-                issue="JSON is an unsupported FHIR resource type, or an unexpected data dictionary",
-                code_string=json_string
-            )
+            return false_result
 
     except Exception as e:
-        name = message_exception_classname(e)
-        if name == "JSONDecodeError":
-            name = "invalid JSON for json.loads()"
-        (code_schema, code_simple, code_jsonb, code_string) = prepare_string_format_issue_for_storage(
-            issue=name,
-            code_string=json_string
-        )
+        return false_result
 
     return code_schema, code_simple, code_jsonb, code_string, display_string
 
 
-def normalized_medication_ingredient_strength_depends_on_list(ingredient_object) -> list:
+def prepare_binding_and_value_for_jsonb_insert(insert_column_name: str, value_schema: str, jsonb_column_value) -> (str, str):
     """
-    @param ingredient_object is an object. It is a FHIR Medication.ingredient list, which may have 0 or more members.
+    This is the top-level, standard function for preparing JSON Binary values for use in INFX insert queries.
+
+    Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
+
+    @param insert_column_name (str) - column name in the table for the INSERT or UPDATE
+    @param value_schema (str) - valid value for a code_schema or depends_on_schema column in INFX clinical-content.
+    @param jsonb_column_value (JSON Binary object)
+
+    @return (insert_binding_string, insert_none_value) means ("for the INSERT/UPDATE list", "for the VALUES list")
+        The insert_none_value is a dictionary entry to be appended to the values being input to conn.execute().
+        To prep before your query do this: if insert_none_value is not None: values_for_query.append(insert_none_value)
+        There are 3 possible pairs of return value from this function:
+        - EITHER: jsonb_column_value is None, returns: ( f" :{insert_column_name}, ", {f"{insert_column_name}": None} )
+        - OR: jsonb_column_value is a JSON Binary object, returns: ( f" '{jsonb_sql_escaped}'::jsonb, None )
+        - If value_schema is not a valid schema for a JSON Binary object in INFX clinical-content, returns (None, None)
+    """
+    # Call (or write) the appropriate helper function for each supported schema type - current examples are shown below
+    if value_schema == DataExtensionUrl.SOURCE_CODEABLE_CONCEPT.value:
+        normalized_json_string = normalized_codeable_concept_string(jsonb_column_value)
+    elif value_schema == DataExtensionUrl.SOURCE_RATIO.value:
+        normalized_json_string = normalized_ratio_string(jsonb_column_value)
+    else:
+        normalized_json_string = None
+    return prepare_binding_and_value_for_jsonb_insert_migration(insert_column_name, normalized_json_string)
+
+
+def prepare_binding_and_value_for_jsonb_insert_migration(insert_column_name: str, normalized_json_string: str) -> (str, str):
+    """
+    Helper function does the work for prepare_binding_and_value_for_jsonb_insert(). DO NOT call this function directly.
+
+    Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
+    For examples of use see data_migration.py.
+
+    @param insert_column_name (str) - column name in the table for the INSERT or UPDATE
+    @param normalized_json_string (str) - normalized, serialized JSON string produced by the appropriate helper function
+        for the schema type for the data, for example normalized_codeable_concept_string() or normalized_ratio_string()
+
+    @return (insert_binding_string, insert_none_value) means ("for the INSERT/UPDATE list", "for the VALUES list")
+        The insert_none_value is a dictionary entry to be appended to the values being input to conn.execute().
+        To prep before your query do this: if insert_none_value is not None: values_for_query.append(insert_none_value)
+        There are 3 possible pairs of return value from this function:
+        - EITHER: jsonb_column_value is None, returns: ( f" :{insert_column_name}, ", {f"{insert_column_name}": None} )
+        - OR: jsonb_column_value is a JSON Binary object, returns: ( f" '{jsonb_sql_escaped}'::jsonb, None )
+        - If normalized_json_string is None, returns (None, None)
+    """
+    # todo: Remove after migration is complete.
+    if normalized_json_string is None:
+        return None, None
+    jsonb_sql_escaped = escape_sql_input_value(normalized_json_string)
+    if jsonb_sql_escaped is None:
+        insert_binding_string = f" :{insert_column_name}, "
+        insert_none_value = {f"{insert_column_name}": None}
+    else:
+        insert_binding_string = f" '{jsonb_sql_escaped}'::jsonb, "
+        insert_none_value = None
+    return (insert_binding_string, insert_none_value)
+
+
+def normalized_medication_ingredient_strength_depends_on(ingredient_list_object) -> list:
+    """
+    Purpose-built function for creating a list of DependsOnData from a FHIR Medication.ingredient list object.
+
+    @param ingredient_list_object is a FHIR Medication.ingredient list object, which may have 0 or more members,
+        although at least 1 and usually more than 1 are expected. Caller is responsible for inputting an object
+        (not a serialized string). Object must be FHIR but is raw upon ingestion, so need not conform to RCDM profiles.
     @return a list of DependsOnData objects. In each DependsOnData, the depends_on_value is a str that is a FHIR Ratio
         object normalized to RCDM Ratio and serialized. Each DependsOnData gives the Medication.ingredient.strength
         value for a member of the input Medication.ingredient list, in the same list order as the Medication.ingredient
         list. The depends_on_property for each DependsOnData object is the same: "Medication.ingredient.strength".
+        If the input object is None, or if the input object is an empty list, function returns None: no dependsOn data.
     """
-    pass  #stub
+    pass  # todo: this is a stub to be implemented
 
 
 def prepare_object_source_ratio_for_storage(ratio_object) -> (str, str, str, str):
     """
     @raise BadDataError if the value does not match the sourceRatio schema
     """
-    rcdm_object = normalize_source_ratio(ratio_object)
+    rcdm_object = normalized_source_ratio(ratio_object)
     rcdm_string = serialize_json_object(rcdm_object)
     return (
         DataExtensionUrl.SOURCE_RATIO.value,
@@ -353,7 +620,7 @@ def normalized_ratio_string(code_object) -> str:
     @raise BadDataError if the value is not a Ratio
     @return (str) serialized RCDM Ratio normalized for: JSON format, JSON key order, coding list member order
     """
-    rcdm_object = normalize_source_ratio(code_object)
+    rcdm_object = normalized_source_ratio(code_object)
     rcdm_string = serialize_json_object(rcdm_object)
     return rcdm_string
 
@@ -362,7 +629,7 @@ def prepare_object_source_code_for_storage(code_object) -> (str, str, str, str):
     """
     @raise BadDataError if the value does not match the sourceCodeableConcept schema
     """
-    rcdm_object = normalize_source_codeable_concept(code_object)
+    rcdm_object = normalized_source_codeable_concept(code_object)
     rcdm_string = serialize_json_object(rcdm_object)
     return (
         DataExtensionUrl.SOURCE_CODEABLE_CONCEPT.value,
@@ -377,9 +644,102 @@ def normalized_codeable_concept_string(code_object) -> str:
     @raise BadDataError if the value is not a CodeableConcept
     @return (str) serialized RCDM CodeableConcept normalized for: JSON format, JSON key order, coding list member order
     """
-    rcdm_object = normalize_source_codeable_concept(code_object)
+    rcdm_object = normalized_source_codeable_concept(code_object)
     rcdm_string = serialize_json_object(rcdm_object)
     return rcdm_string
+
+
+def normalized_codeable_concept_and_display(
+    raw_code: dict = None
+) -> (str, str):
+    """
+    Top-level, standard function.
+
+    Prepares raw, new, ingested attributes from tenant FHIR data for safe entry into in Informatics custom terminologies
+    - for use in Mapping Request and all successor services to ensure data format correction at the FIRST point of entry
+    """
+    if raw_code is None or len(raw_code) == 0:
+        return None
+    if "text" not in raw_code and "coding" not in raw_code:
+        return None
+    normalized_code = normalized_codeable_concept_string(raw_code)
+    normalized_display = raw_code.get("text")
+    return (normalized_code, normalized_display)
+
+
+def normalized_primitive_code_and_display(
+        raw_data: dict = None,
+        attribute: str = None,
+        raw_display: Optional[str] = None
+) -> (str, str):
+    """
+    Top-level, standard function.
+
+    Prepares raw, new, ingested attributes from tenant FHIR data for safe entry into in Informatics custom terminologies
+    - for use in Mapping Request and all successor services to ensure data format correction at the FIRST point of entry
+    """
+    if attribute is None or raw_data is None or attribute not in raw_data:
+        return None
+    raw_code = raw_data[attribute]
+    return (raw_code, raw_display)
+
+
+def normalized_codeable_concept_depends_on(
+        codeable_concept_object,
+        depends_on_property: str,
+        depends_on_system: Optional[str] = None,
+        depends_on_display: Optional[str] = None
+):
+    """
+    Top-level, standard function.
+
+    Prepares raw, new, ingested attributes from tenant FHIR data for safe entry into in Informatics custom terminologies
+    - for use in Mapping Request and all successor services to ensure data format correction at the FIRST point of entry
+
+    Purpose-built function for creating a list of DependsOnData from any FHIR attribute that is a 0..1 CodeableConcept.
+    This function does NOT accept a LIST of CodeableConcept as input; see normalized_codeable_concept_list_depends_on().
+
+    Given a CodeableConcept value, return DependsOnData to use as input into the creation of a new Terminology Code.
+    @raise BadDataError if the value is not a CodeableConcept
+    @return - (see todo)
+    # todo: align with changes: now> @return DependsOnData object, soon> @return 1-member list of DependsOnData
+    """
+    return DependsOnData(
+        depends_on_value=normalized_codeable_concept_string(codeable_concept_object),
+        depends_on_property=depends_on_property
+    )
+
+
+def normalized_codeable_concept_list_depends_on(
+        list_object,
+        depends_on_property: str,
+        depends_on_system: Optional[str] = None,
+        depends_on_display: Optional[str] = None
+) -> list:
+    """
+    Top-level, standard function.
+
+    Prepares raw, new, ingested attributes from tenant FHIR data for safe entry into in Informatics custom terminologies
+    - for use in Mapping Request and all successor services to ensure data format correction at the FIRST point of entry
+
+    Purpose-built function for creating a list of DependsOnData from any FHIR attribute that is a CodeableConcept LIST.
+    This function does NOT accept a single CodeableConcept as input; see normalized_codeable_concept_depends_on().
+
+    Given a CodeableConcept value, return DependsOnData to use as input into the creation of a new Terminology Code.
+    @raise BadDataError if the value is not a CodeableConcept
+    @return - list of DependsOnData
+    """
+    result_list = []
+    for codeable_concept_object in list_object:
+        result_list.append(
+            DependsOnData(
+                depends_on_value=normalized_codeable_concept_string(codeable_concept_object),
+                depends_on_property=depends_on_property,
+                depends_on_system=depends_on_system,
+                depends_on_display=depends_on_display,
+            )
+        )
+    return result_list
 
 
 def prepare_additional_data_for_storage(additional_data: str, rejected_depends_on_value: str = None):
@@ -450,7 +810,7 @@ def prepare_string_depends_on_for_storage(code_string: str) -> (str, str, str, s
         )
     else:
         return (
-            "string",
+            FHIRPrimitiveName.STRING.value,
             code_string,
             None,
             code_string
@@ -459,7 +819,7 @@ def prepare_string_depends_on_for_storage(code_string: str) -> (str, str, str, s
 
 def prepare_string_source_code_for_storage(code_string: str) -> (str, str, str, str):
     return (
-        "code",
+        FHIRPrimitiveName.CODE.value,
         code_string,
         None,
         code_string
@@ -653,13 +1013,13 @@ def convert_source_concept_spark_export_string_to_json_string_normalized_ordered
         Possible values are a malformed FHIR Medication.ingredient.strength Ratio for a target dependsOn (do not
         process, return the input string unchanged) or a CodeableConcept (process and return a serialized JSON string).
     @return JSON serialized string for a FHIR CodeableConcept, if successful. Otherwise, returns the input string.
-        This function calls normalize_source_codeable_concept() and serialize_json_object() to return an RCDM model
+        This function calls normalized_source_codeable_concept() and serialize_json_object() to return an RCDM model
         compliant sourceCodeableConcept serialized as a string with correctly ordered JSON keys and list members.
         This output is suitable as input to id_helper.py functions as a code_string to create a code_id or mapping_id.
     """
     code_string = convert_source_concept_spark_export_string_to_json_string_unordered(spark_export_string)
     code_object = load_json_string(code_string)
-    rcdm_object = normalize_source_codeable_concept(code_object)
+    rcdm_object = normalized_source_codeable_concept(code_object)
     rcdm_string = serialize_json_object(rcdm_object)
     return rcdm_string
 

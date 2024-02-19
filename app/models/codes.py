@@ -12,8 +12,6 @@ from uuid import UUID
 from app.errors import BadRequestWithCode
 
 
-# INTERNAL_TOOLS_BASE_URL = "https://infx-internal.prod.projectronin.io"
-
 class Code:
     """
     This class represents a code object used for encoding and maintaining information about a specific concept or term within a coding system or terminology. It provides a way to manage various attributes related to the code and the coding system it belongs to.
@@ -44,6 +42,7 @@ class Code:
         system_name=None,
         terminology_version: 'app.terminologies.models.Terminology' = None,
         terminology_version_uuid=None,
+        # todo: align with changes: now> 4 str, soon> list of DependsOnData objects
         depends_on_property: str = None,
         depends_on_system: str = None,
         depends_on_value: str = None,
@@ -65,6 +64,7 @@ class Code:
         # it serves as the primary key in the custom_terminologies.code table
         self.custom_terminology_code_uuid = custom_terminology_code_uuid
 
+        # todo: align with changes: now> 4 str, soon> list of DependsOnData objects
         self.depends_on_property = depends_on_property
         self.depends_on_system = depends_on_system
         self.depends_on_value = depends_on_value
@@ -321,10 +321,11 @@ class DependsOnData:
     A simple data class to hold depends on data for a code or concept which needs to be mapped.
     Values contribute to the dependsOn property of a sourceConcept in a mapping in a FHIR ConceptMap resource.
     """
-    depends_on_property: Optional[str] = None
+    depends_on_property: str = None
     depends_on_system: Optional[str] = None
-    depends_on_value: Optional[str] = None  # This could be a string or serialized JSON of a FHIR element or resource
+    depends_on_value: str = None  # This could be a string or serialized JSON of a FHIR element or resource
     depends_on_display: Optional[str] = None
+    sequence: Optional[int] = 1
 
 
 @dataclass

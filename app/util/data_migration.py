@@ -16,8 +16,9 @@ from app.database import get_db
 from app.enum.concept_maps_for_content import ConceptMapsForContent
 from app.enum.concept_maps_for_systems import ConceptMapsForSystems
 from app.helpers.format_helper import IssuePrefix, \
-    prepare_additional_data_for_storage, filter_unsafe_depends_on_value, prepare_code_and_display_for_storage, \
-    prepare_depends_on_value_for_storage
+    prepare_additional_data_for_storage, filter_unsafe_depends_on_value, prepare_code_and_display_for_storage_migration, \
+    prepare_depends_on_value_for_storage, prepare_binding_and_value_for_jsonb_insert_migration, \
+    prepare_depends_on_attributes_for_code_id_migration
 from app.helpers.id_helper import generate_code_id
 from app.helpers.message_helper import message_exception_summary
 
@@ -504,7 +505,7 @@ def migrate_custom_terminologies_code(
                             code_jsonb,
                             code_string_for_code_id,
                             display_string_for_code_id
-                        ) = prepare_code_and_display_for_storage(row.code, row.display)
+                        ) = prepare_code_and_display_for_storage_migration(row.code, row.display)
 
                         # filter_unsafe_depends_on_value
                         (
@@ -513,7 +514,6 @@ def migrate_custom_terminologies_code(
                         ) = filter_unsafe_depends_on_value(row.depends_on_value)
 
                         # has_depends_on
-                        # todo: for today, pretend we do not know depends_on is a list
                         has_depends_on = (rejected_depends_on_value is None and depends_on_value is not None)
                         (
                             depends_on_value_schema,
@@ -521,12 +521,11 @@ def migrate_custom_terminologies_code(
                             depends_on_value_jsonb,
                             depends_on_value_string
                         ) = prepare_depends_on_value_for_storage(depends_on_value)
-                        depends_on_value_for_code_id = ""
-                        depends_on_value_for_code_id += (
-                                convert_null_to_empty(depends_on_value_string) +
-                                convert_null_to_empty(row.depends_on_property) +
-                                convert_null_to_empty(row.depends_on_system) +
-                                convert_null_to_empty(row.depends_on_display)
+                        depends_on_value_for_code_id = prepare_depends_on_attributes_for_code_id_migration(
+                            convert_null_to_empty(depends_on_value_string),
+                            convert_null_to_empty(row.depends_on_property),
+                            convert_null_to_empty(row.depends_on_system),
+                            convert_null_to_empty(row.depends_on_display)
                         )
 
                         # prepare_additional_data_for_storage
@@ -538,7 +537,7 @@ def migrate_custom_terminologies_code(
                         # code_id (and deduplication_hash)
                         code_id = generate_code_id(
                             code_string=code_string_for_code_id,
-                            display=display_string_for_code_id,
+                            display_string=display_string_for_code_id,
                             depends_on_value_string=depends_on_value_for_code_id,
                         )
                         deduplication_hash = code_id
@@ -547,10 +546,13 @@ def migrate_custom_terminologies_code(
                         code_uuid = uuid.uuid4()
 
                         # jsonb columns get special handling
-                        if code_jsonb is None:
-                            insert_code_jsonb = " :code_jsonb, "
-                        else:
-                            insert_code_jsonb = f" '{code_jsonb}'::jsonb, "
+                        (
+                            insert_code_jsonb,
+                            insert_none_jsonb
+                        ) = prepare_binding_and_value_for_jsonb_insert_migration(
+                            insert_column_name="code_jsonb",
+                            normalized_json_string=code_jsonb
+                        )
 
                         # code_insert_query vs. code_insert_issue_query - send issues to the issue table
                         code_insert_query = (
@@ -581,10 +583,8 @@ def migrate_custom_terminologies_code(
                             "additional_data": additional_data,
                             "old_uuid": row.uuid,
                         }
-
-                        # jsonb
-                        if code_jsonb is None:
-                            insert_values.update({"code_jsonb": code_jsonb})
+                        if insert_none_jsonb is not None:
+                            insert_values.update(insert_none_jsonb)
 
                         # issue_type
                         has_code_issue = False
@@ -652,17 +652,19 @@ def migrate_custom_terminologies_code(
 
                         # In real data, the only lists were unsafe: ALL migrated depends_on lists have exactly 1 member
                         # created by converting the single value to a 1-member list. That's why this block need not loop
-                        # todo: for today, pretend we do not know depends_on is a list
                         if has_depends_on:
 
                             # uuid
                             depends_on_uuid = uuid.uuid4()
 
                             # jsonb
-                            if depends_on_value_jsonb is None:
-                                insert_depends_on_value_jsonb = " :depends_on_value_jsonb, "
-                            else:
-                                insert_depends_on_value_jsonb = f" '{depends_on_value_jsonb}'::jsonb, "
+                            (
+                                insert_depends_on_value_jsonb,
+                                insert_none_jsonb
+                            ) = prepare_binding_and_value_for_jsonb_insert_migration(
+                                insert_column_name="depends_on_value_jsonb",
+                                normalized_json_string=depends_on_value_jsonb
+                            )
 
                             # depends_on_insert_query vs. depends_on_insert_issue_query - FK to normal vs. issues table
                             depends_on_insert_query = (
@@ -691,10 +693,8 @@ def migrate_custom_terminologies_code(
                                 "code_uuid": code_uuid,
                                 "old_uuid": row.uuid,
                             }
-
-                            # jsonb
-                            if depends_on_value_jsonb is None:
-                                insert_values.update({"depends_on_value_jsonb": depends_on_value_jsonb})
+                            if insert_none_jsonb is not None:
+                                insert_values.update(insert_none_jsonb)
 
                             # issue_type
                             if has_code_issue is True or has_depends_on_issue is True:

@@ -33,7 +33,8 @@ from app.helpers.api_helper import (
     make_post_request_async,
 )
 from app.helpers.format_helper import convert_string_to_datetime_or_none, normalized_codeable_concept_string, \
-    normalized_data_dictionary_string
+    normalized_data_dictionary_string, normalized_codeable_concept_depends_on, normalized_codeable_concept_and_display, \
+    normalized_primitive_code_and_display
 from app.helpers.message_helper import (
     message_exception_summary,
     message_exception_classname,
@@ -932,24 +933,23 @@ class MappingRequestService:
             # Condition.code is a CodeableConcept
             if "code" not in raw_resource:
                 return false_result
-            raw_code = raw_resource["code"]
-            processed_code = normalized_codeable_concept_string(raw_code)
-            processed_display = raw_code.get("text")
+            (
+                processed_code,
+                processed_display
+            ) = normalized_codeable_concept_and_display(raw_resource["code"])
 
         # Medication
         elif resource_type == ResourceType.MEDICATION:
             # Medication.code is a CodeableConcept
             if "code" not in raw_resource:
                 return false_result
-            raw_code = raw_resource["code"]
-            processed_code = normalized_codeable_concept_string(raw_code)
-            processed_display = raw_code.get("text")
+            (
+                processed_code,
+                processed_display
+            ) = normalized_codeable_concept_and_display(raw_resource["code"])
 
             # todo: add a depends_on_list for Medication.ingredient.strength using ingredient, a list object
-            # if "ingredient" in raw_resource:
-            #      raw_ingredient = raw_resource["ingredient"]
-            #      if len(raw_ingredient) > 0:
-            #          depends_on_list = normalized_medication_ingredient_strength_depends_on_list(raw_ingredient)
+            # todo: see normalized_medication_ingredient_strength_depends_on_list(raw_resource["ingredient"])
 
         # Observation
         elif resource_type == ResourceType.OBSERVATION:
@@ -965,17 +965,19 @@ class MappingRequestService:
             if element == "Observation.value" or element == "Observation.valueCodeableConcept":
                 if "valueCodeableConcept" not in raw_resource:
                     return false_result
-                raw_code = raw_resource["valueCodeableConcept"]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["valueCodeableConcept"])
 
             # Observation.code is a CodeableConcept
             elif element == "Observation.code":
                 if "code" not in raw_resource:
                     return false_result
-                raw_code = raw_resource["code"]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["code"])
 
             # Observation.interpretation is a CodeableConcept
             elif element == "Observation.interpretation":
@@ -984,9 +986,10 @@ class MappingRequestService:
                     or len(raw_resource["interpretation"]) < (index + 1)
                 ):
                     return false_result
-                raw_code = raw_resource["interpretation"][index]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["interpretation"][index])
 
             # Observation.component.code is a CodeableConcept - location has an index
             elif element == "Observation.component.code":
@@ -998,23 +1001,21 @@ class MappingRequestService:
                     or "code" not in raw_resource["component"][index]
                 ):
                     return false_result
-                raw_code = raw_resource["component"][index]["code"]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["component"][index]["code"])
 
                 # Only SmartData category gets depends on
                 if category_for_additional_data == "SmartData":
                     # Set depends_on data
                     if "code" not in raw_resource:
                         return false_result
-                    depends_on = DependsOnData(
-                        depends_on_value=normalized_codeable_concept_string(raw_resource["code"]),
+                    depends_on = normalized_codeable_concept_depends_on(
+                        codeable_concept_object=raw_resource["code"],
                         depends_on_property="Observation.code"
                     )
-                    # todo: replace the above depends_on call with a 1-member depends_on_list for Observation.code
-                    # if "code" not in raw_resource:
-                    #      return false_result
-                    # normalized_codeable_concept_string(raw_resource["code"])
+                    # todo: align with changes: now> DependsOnData object, soon> list of DependsOnData objects
 
             # Observation.component.value is a CodeableConcept - location will have an index
             elif element == "Observation.component.value" or element == "Observation.component.valueCodeableConcept":
@@ -1026,9 +1027,11 @@ class MappingRequestService:
                     or "valueCodeableConcept" not in raw_resource["component"][index]
                 ):
                     return false_result
-                raw_code = raw_resource["component"][index]["valueCodeableConcept"]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["component"][index]["valueCodeableConcept"])
+
             else:
                 LOGGER.warning(
                     f"Unrecognized location for Observation error: {location}"
@@ -1040,9 +1043,10 @@ class MappingRequestService:
             if element == "Procedure.code":
                 if "code" not in raw_resource:
                     return false_result
-                raw_code = raw_resource["code"]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["code"])
 
         # DocumentReference
         elif resource_type == ResourceType.DOCUMENT_REFERENCE:
@@ -1050,9 +1054,10 @@ class MappingRequestService:
             if element == "DocumentReference.type":
                 if "type" not in raw_resource:
                     return false_result
-                raw_code = raw_resource["type"]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["type"])
 
         # Appointment
         elif resource_type == ResourceType.APPOINTMENT:
@@ -1060,9 +1065,10 @@ class MappingRequestService:
             if element == "Appointment.status":
                 if "status" not in raw_resource:
                     return false_result
-                raw_code = raw_resource["status"]
-                processed_code = raw_code
-                processed_display = raw_code
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_primitive_code_and_display(raw_resource["status"])
 
         # Use extract_telecom_data function to extract the codes from each resource type
         # Extract codes for issues from all resource types for ContactPoint.system, .use
@@ -1241,6 +1247,7 @@ class MappingRequestService:
             version=None,
             terminology_version_uuid=terminology_to_load_to.uuid,
             custom_terminology_code_uuid=new_code_uuid,
+            # todo: align with changes: now> input 4 str to Code(), soon> input 1 list of DependsOnData to Code()
             depends_on_system=depends_on.depends_on_system if depends_on else None,
             depends_on_display=depends_on.depends_on_display if depends_on else None,
             depends_on_property=depends_on.depends_on_property if depends_on else None,
@@ -1259,6 +1266,7 @@ class MappingRequestService:
                     "code": processed_code,
                     "display": processed_display,
                     "terminology_version_uuid": terminology_to_load_to.uuid,
+                    # todo: align with changes: inputs and query must be overhauled, now> 4 str, soon> code_depends_on
                     "depends_on_property": depends_on.depends_on_property if depends_on else None,
                     "depends_on_system": depends_on.depends_on_system if depends_on else None,
                     "depends_on_value": depends_on.depends_on_value if depends_on else None,
@@ -1426,6 +1434,7 @@ class MappingRequestService:
         if not cls.error_code_link_data:
             return
 
+        # todo: align with changes: depends_on* now> 4 str, soon> list of DependsOnData and use of code_depends_on table
         conn = get_db()
         try:
             # Create a temporary table and insert the data to it
@@ -1452,6 +1461,7 @@ class MappingRequestService:
             # Optimized bulk insert
             conn.execute(temp_error_data.insert(), cls.error_code_link_data)
 
+            # todo: align with: depends_on* now> 4 str, soon> list of DependsOnData and use of code_depends_on table
             # Insert from the temporary table, allowing the database to batch lookups
             conn.execute(
                 text(
