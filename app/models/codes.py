@@ -201,6 +201,7 @@ class DependsOnData:
 
 @dataclass
 class AdditionalData:
+    # todo: why is this a separate class just for a dict?
     """
     A simple data class to hold additional data for a code or concept which needs to be mapped.
     Internal use only, not part of FHIR or Ronin Common Data Model.
@@ -240,10 +241,7 @@ class Code:
         additional_data=None,
         terminology_version: 'app.terminologies.models.Terminology' = None,
         terminology_version_uuid=None,
-        depends_on_property: str = None,
-        depends_on_system: str = None,
-        depends_on_value: str = None,
-        depends_on_display: str = None,
+        depends_on: DependsOnData = None,
         custom_terminology_code_uuid: Optional[uuid.UUID] = None,
         fhir_terminology_code_uuid: Optional[uuid.UUID] = None,
         code_object: FHIRCodeableConcept = None,
@@ -373,10 +371,7 @@ class Code:
         # Other set up
         self.additional_data = additional_data
 
-        self.depends_on_property = depends_on_property
-        self.depends_on_system = depends_on_system
-        self.depends_on_value = depends_on_value
-        self.depends_on_display = depends_on_display
+        self.depends_on = depends_on
 
         self._saved_to_db = saved_to_db
 
@@ -392,6 +387,7 @@ class Code:
             terminology_version_uuid=None,
             depends_on_property: str = None,
             depends_on_system: str = None,
+            depends_on_value_schema: DependsOnSchemas = None,
             depends_on_value: str = None,
             depends_on_display: str = None,
         ):
@@ -399,6 +395,17 @@ class Code:
         Instantiates a new code (not loaded from database).
         Be sure to call save() on it.
         """
+        depends_on = None
+        if depends_on_property or depends_on_value_schema:
+            depends_on = DependsOnData(
+                depends_on_property=depends_on_property,
+                depends_on_value_schema=depends_on_value_schema,
+                depends_on_value=depends_on_value,
+                depends_on_system=depends_on_system,
+                depends_on_display=depends_on_display
+
+            )
+
         return cls(
             system=system,
             version=version,
@@ -407,10 +414,7 @@ class Code:
             additional_data=additional_data,
             terminology_version=terminology_version,
             terminology_version_uuid=terminology_version_uuid,
-            depends_on_property=depends_on_property,
-            depends_on_system=depends_on_system,
-            depends_on_value=depends_on_value,
-            depends_on_display=depends_on_display,
+            depends_on=depends_on,
             custom_terminology_code_uuid=uuid.uuid4(),
             code_schema=RoninCodeSchemas.code,
             from_custom_terminology=True,
@@ -430,12 +434,24 @@ class Code:
             version: Optional[str] = None,
             depends_on_property: str = None,
             depends_on_system: str = None,
+            depends_on_value_schema: DependsOnSchemas = None,
             depends_on_value: str = None,
             depends_on_display: str = None,
     ):
         custom_terminology_code_uuid = custom_terminology_code_uuid
         if custom_terminology_code_uuid is None:
             custom_terminology_code_uuid = uuid.uuid4()
+
+        depends_on = None
+        if depends_on_property or depends_on_value_schema:
+            depends_on = DependsOnData(
+                depends_on_property=depends_on_property,
+                depends_on_value_schema=depends_on_value_schema,
+                depends_on_value=depends_on_value,
+                depends_on_system=depends_on_system,
+                depends_on_display=depends_on_display
+
+            )
 
         return cls(
                 system=system,
@@ -445,10 +461,7 @@ class Code:
                 additional_data=additional_data,
                 terminology_version=terminology_version,
                 terminology_version_uuid=terminology_version_uuid,
-                depends_on_property=depends_on_property,
-                depends_on_system=depends_on_system,
-                depends_on_value=depends_on_value,
-                depends_on_display=depends_on_display,
+                depends_on=depends_on,
                 custom_terminology_code_uuid=custom_terminology_code_uuid,
                 fhir_terminology_code_uuid=None,
                 code_object=code_object,
