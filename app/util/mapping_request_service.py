@@ -433,7 +433,7 @@ class MappingRequestService:
         # Step 0: Initialize and setup
 
         # API call paging
-        if page_size is None:
+        if page_size is None or page_size == 0:
             page_size = PAGE_SIZE
         cls.page_size = page_size
 
@@ -441,20 +441,21 @@ class MappingRequestService:
         cls.commit_by_batch = commit_by_batch
 
         # resource type
+        has_requested_resource_type = not (requested_resource_type is None or requested_resource_type == "")
         unsupported_resource_types = []
         supported_resource_types = [r.value for r in ResourceType]
         if (
-            requested_resource_type is not None
+            has_requested_resource_type
             and requested_resource_type not in supported_resource_types
         ):
             LOGGER.warning(
                 f"Support for the {requested_resource_type} resource type has not been implemented"
             )
             return
-        if requested_resource_type is None:
-            requested_resource_types = supported_resource_types
-        else:
+        if has_requested_resource_type:
             requested_resource_types = [requested_resource_type]
+        else:
+            requested_resource_types = supported_resource_types
 
         # issue type
         supported_issue_types = [u.value for u in IssueType]
@@ -472,20 +473,21 @@ class MappingRequestService:
             requested_issue_types = [requested_issue_type]
 
         # organization IDs
+        has_requested_organization_id = not (requested_organization_id is None or requested_organization_id == "")
         unsupported_organization_ids = [x.value for x in ExcludeTenant]
         supported_organization_ids = [i.value for i in IncludeTenant]
         if requested_organization_id in unsupported_organization_ids or (
             requested_organization_id not in supported_organization_ids
         ):
-            if requested_organization_id is not None:
+            if has_requested_organization_id:
                 LOGGER.warning(
                     f"The Content team does not provide concept maps for the tenant ID: {requested_organization_id}"
                 )
                 return
-        if requested_organization_id is None:
-            organization_ids = supported_organization_ids
-        else:
+        if has_requested_organization_id:
             organization_ids = [requested_organization_id]
+        else:
+            organization_ids = supported_organization_ids
 
         # Logging variables
         time_start = datetime.datetime.now()
@@ -917,16 +919,13 @@ class MappingRequestService:
                 Before being returned by this function, the processed_code (if an object) is normalized to a JSON string
                 that provides consistent format, consistent order for attributes, and consistent order for list entries.
                 When found is False, processed_code and processed_display are empty strings.
-            depends_on, additional_data are optional str inputs for input to create a Code()
-                Before being returned, depends_on (if an object) and additional_data are each normalized to JSON string
-                with consistent format, attribute order, and list entry order as described above.
+            depends_on, additional_data are inputs into prepare_code_for_terminology() which then creates the Code()
         """
         processed_code = ""
         processed_display = ""
         depends_on = None
-        additional_data = None
-        additional_data_dict = {}
-        false_result = False, processed_code, processed_display, depends_on, additional_data
+        additional_data = {}
+        false_result = False, processed_code, processed_display, None, None
 
         # Condition
         if resource_type == ResourceType.CONDITION:
@@ -959,7 +958,7 @@ class MappingRequestService:
             if "category" in raw_resource:
                 if raw_resource["category"] and "text" in raw_resource["category"][0]:
                     category_for_additional_data = raw_resource["category"][0]["text"]
-                    additional_data_dict["category"] = category_for_additional_data
+                    additional_data["category"] = category_for_additional_data
 
             # Observation.value is a CodeableConcept
             if element == "Observation.value" or element == "Observation.valueCodeableConcept":
@@ -1104,9 +1103,6 @@ class MappingRequestService:
             )
             cls.all_skip_count += 1
             return false_result
-
-        # Collect the additional data
-        additional_data = normalized_data_dictionary_string(additional_data_dict)
 
         return True, processed_code, processed_display, depends_on, additional_data
 
@@ -1873,9 +1869,9 @@ async def reprocess_resource(resource_uuid, token, client):
 
 def temporary_mapping_request_service(
         commit_by_batch: bool=True,
-        page_size: int=None,
-        requested_organization_id: str=None,
-        requested_resource_type: str=None,
+        page_size: int=0,
+        requested_organization_id: str="",
+        requested_resource_type: str="",
         requested_issue_type: str=None
 ):
     # todo: clean out this method altogether, when a temporary, manual error load task is not needed.
