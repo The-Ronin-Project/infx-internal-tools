@@ -929,6 +929,7 @@ def migrate_concept_maps_concept_relationship(
         Column("review_status", String, nullable=True),
         Column("reviewed_by", UUID, nullable=True),
         Column("reviewed_date_time", DateTime, nullable=True),
+        Column("review_comments", String, nullable=True),
         Column("map_program_date_time", DateTime, nullable=True),
         Column("map_program_version", String, nullable=True),
         Column("map_program_prediction_id", String, nullable=True),
@@ -1004,13 +1005,6 @@ def migrate_concept_maps_concept_relationship(
                 )
                 new_deduplication_hash = new_mapping_id
 
-                # Concatenate mapping_comments and review_comment
-                new_mapping_comments = row.mapping_comments
-                if row.review_comment:
-                    if new_mapping_comments is None:
-                        new_mapping_comments = ""
-                    new_mapping_comments += row.review_comment
-
                 new_mapped_by = user_to_uuid(row.author)
                 if new_mapped_by is None:
                     new_mapped_by = '70b5405d-b2ab-481b-85a5-d5b305164851'  # Unknown user to populate required column
@@ -1037,12 +1031,13 @@ def migrate_concept_maps_concept_relationship(
                     "target_concept_code": row.target_concept_code,
                     "target_concept_display": row.target_concept_display,
                     "target_concept_terminology_version_uuid": new_target_concept_terminology_version_uuid,
-                    "mapping_comments": new_mapping_comments,
+                    "mapping_comments": row.mapping_comments,
                     "mapped_date_time": row.created_date,
                     "mapped_by": new_mapped_by,
                     "relationship_code_uuid": row.relationship_code_uuid,
                     "review_status": row.review_status,
                     "reviewed_by": new_reviewed_by,
+                    "review_comments": row.review_comment,
                     "reviewed_date_time": row.reviewed_date,
                     "map_program_date_time": row.model_run_time,
                     "map_program_version": row.model_version,
