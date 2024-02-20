@@ -1873,7 +1873,7 @@ async def reprocess_resource(resource_uuid, token, client):
 
 def temporary_mapping_request_service(
         commit_by_batch: bool=True,
-        page_size: int=PAGE_SIZE,
+        page_size: int=None,
         requested_organization_id: str=None,
         requested_resource_type: str=None,
         requested_issue_type: str=None
@@ -1898,6 +1898,16 @@ def temporary_mapping_request_service(
     if not LOGGER.hasHandlers():
         ch = logging.StreamHandler()
         LOGGER.addHandler(ch)
+
+    LOGGER.warning(
+        f"Loading data from the Interops Data Ingestion Validation Error Service\n"
+        + f"  Inputs: \n"
+        + f"    commit_by_batch={commit_by_batch}\n"
+        + f"    page_size={page_size}\n"
+        + f"    requested_organization_id={requested_organization_id}\n"
+        + f"    requested_resource_type={requested_resource_type}\n"
+        + f"    requested_issue_type={requested_issue_type}\n\n"
+    )
 
     # Developers: while locally testing updates to this function, you may temporarily force commit_by_batch to False
     # commit_by_batch = False
