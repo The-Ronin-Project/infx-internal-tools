@@ -121,16 +121,82 @@ class FHIRCodeableConcept:
             serialized["coding"] = [coding.serialize() for coding in self.coding]
         return serialized
 
-@dataclass
+
+class DependsOnSchemas(Enum):
+    STRING = "string"
+    CODEABLE_CONCEPT = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept"
+    # todo: add the rest in
+
+
 class DependsOnData:
     """
     A simple data class to hold depends on data for a code or concept which needs to be mapped.
     Values contribute to the dependsOn property of a sourceConcept in a mapping in a FHIR ConceptMap resource.
     """
-    depends_on_property: Optional[str] = None
-    depends_on_system: Optional[str] = None
-    depends_on_value: Optional[str] = None  # This could be a string or serialized JSON of a FHIR element or resource
-    depends_on_display: Optional[str] = None
+    def __init__(self,
+                 depends_on_property: str,
+                 depends_on_value_schema: DependsOnSchemas,
+                 depends_on_value=None,
+                 depends_on_system: Optional[str] = None,  # todo: validate this?
+                 depends_on_display: Optional[str] = None,
+                 saved_to_db: bool = True,
+                 ):
+        self.depends_on_property = depends_on_property
+        self.depends_on_system = depends_on_system
+        self.depends_on_display = depends_on_display
+
+        if not isinstance(depends_on_value_schema, DependsOnSchemas):
+            raise ValueError('depends_on_value_schema must be a DependsOnSchemas enum')
+        self.depends_on_value_schema = depends_on_value_schema,
+
+        if self.depends_on_value_schema == DependsOnSchemas.STRING:
+            if not isinstance(depends_on_value, str):
+                raise ValueError(f"depends_on_value_schema declared as string, so depends_on_value must be string")
+        elif self.depends_on_value_schema == DependsOnSchemas.CODEABLE_CONCEPT:
+            if not isinstance(depends_on_value, FHIRCodeableConcept):
+                raise ValueError(f"depends_on_value_schema declared as string, so depends_on_value must be FHIRCodeableConcept")
+        self.depends_on_value = depends_on_value
+
+    @classmethod
+    def setup_from_database_columns(
+            cls,
+            depends_on_property: str,
+            depends_on_value_schema: str,
+            depends_on_value_simple: Optional[str],
+            depends_on_value_jsonb: Optional[str],
+            depends_on_system: Optional[str],
+            depends_on_display: Optional[str]
+    ):
+        depends_on_value_schema_enum = DependsOnSchemas(depends_on_value_schema)
+
+        if depends_on_value_schema_enum == DependsOnSchemas.STRING:
+            if depends_on_value_simple is None:
+                raise ValueError("depends_on_value_simple must be provided when depends_on_value_schema is 'string'")
+            depends_on_value = depends_on_value_simple
+        elif depends_on_value_schema_enum == DependsOnSchemas.CODEABLE_CONCEPT:
+            try:
+                depends_on_value = FHIRCodeableConcept.deserialize(depends_on_value_jsonb)
+            except (json.JSONDecodeError, ValueError) as e:
+                raise ValueError("Unable to deserialize value provided in depends_on_jsonb")
+        else:
+            raise NotImplementedError("Only string and codeable concept supported in DependsOnData.setup_from_database_columns")
+
+        return cls(
+            depends_on_property=depends_on_property,
+            depends_on_value_schema=depends_on_value_schema_enum,
+            depends_on_value=depends_on_value,
+            depends_on_display=depends_on_display,
+            depends_on_system=depends_on_system,
+            saved_to_db=True  # since we are explicitly loading from database columns
+        )
+
+
+    @classmethod
+    def new(cls):
+        pass
+
+    def save_to_db(self):
+        pass
 
 
 @dataclass
