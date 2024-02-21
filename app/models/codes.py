@@ -11,6 +11,7 @@ from sqlalchemy import text
 import app.terminologies.models
 from app.database import get_db
 from app.errors import BadRequestWithCode, NotFoundException
+from app.helpers.id_helper import generate_code_id
 
 
 class RoninCodeSchemas(Enum):
@@ -156,6 +157,15 @@ class DependsOnData:
             if not isinstance(depends_on_value, FHIRCodeableConcept):
                 raise ValueError(f"depends_on_value_schema declared as string, so depends_on_value must be FHIRCodeableConcept")
         self.depends_on_value = depends_on_value
+
+    @property
+    def depends_on_value_string(self):
+        if self.depends_on_value_schema == DependsOnSchemas.STRING:
+            return self.depends_on_value
+        elif self.depends_on_value_schema == DependsOnSchemas.CODEABLE_CONCEPT:
+            return json.dumps(self.depends_on_value.serialize())
+        else:
+            raise NotImplementedError(f"DependsOnData.depends_on_value_string not implemented for schema {self.depends_on_value_schema}")
 
     @classmethod
     def setup_from_database_columns(
@@ -589,7 +599,21 @@ class Code:
     #     pass
 
     def generate_deduplicate_hash(self):
-        return ""  # todo: obviously, change this for the hash
+        if self.code_schema == RoninCodeSchemas.code:
+            code_string = self.code
+        elif self.code_schema == RoninCodeSchemas.codeable_concept:
+            code_string = json.dumps(self.code.serialize())
+        else:
+            raise NotImplementedError(f"generate_deduplicate_hash not implemented for code_schema: {self.code_schema}")
+
+        return generate_code_id(
+            code_string=code_string,
+            display=self.display,
+            depends_on_value_string=self.depends_on.depends_on_value_string if self.depends_on else "",
+            depends_on_property=self.depends_on.depends_on_property if self.depends_on else "",
+            depends_on_system=self.depends_on.depends_on_system if self.depends_on else "",
+            depends_on_display=self.depends_on.depends_on_display if self.depends_on else ""
+        )
 
     def save(self,
              on_conflict_do_nothing: bool = False
@@ -608,6 +632,7 @@ class Code:
                             code_simple,
                             code_jsonb,
                             code_id,
+                            deduplication_hash,
                             terminology_version_uuid, 
                             additional_data
                         )
@@ -619,6 +644,7 @@ class Code:
                             :code_simple,
                             :code_jsonb,
                             :code_id,
+                            :deduplication_hash,
                             :terminology_version_uuid, 
                             :additional_data
                         )
@@ -652,6 +678,7 @@ class Code:
                     "code_simple": code_simple,
                     "code_jsonb": code_jsonb,
                     "code_id": self.generate_deduplicate_hash(),
+                    "deduplication_hash": self.generate_deduplicate_hash(),
                     "terminology_version_uuid": self.terminology_version_uuid,
                     "additional_data": json.dumps(self.additional_data),
                 },
