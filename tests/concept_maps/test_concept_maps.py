@@ -1,6 +1,6 @@
 import unittest
 
-from app.app import create_app
+import app.app
 from app.database import get_db
 import app.concept_maps.models
 
@@ -25,7 +25,7 @@ class ConceptMapTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.conn = get_db()
-        self.app = create_app()
+        self.app = app.app.create_app()
         self.app.config.update({
             "TESTING": True,
         })

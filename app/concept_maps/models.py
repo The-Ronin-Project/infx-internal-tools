@@ -268,7 +268,7 @@ class ConceptMap:
         self.publisher = data.publisher
         self.experimental = data.experimental
         self.author = data.author
-        self.created_date = data.mapped_date_time
+        self.created_date = data.created_date
         self.source_value_set_uuid = data.source_value_set_uuid
         self.target_value_set_uuid = data.target_value_set_uuid
 
@@ -781,7 +781,7 @@ class ConceptMapVersion:
         self.description = data.description
         self.comments = data.comments
         self.status = data.status
-        self.created_date = data.mapped_date_time
+        self.created_date = data.created_date
         self.version = data.version
         self.published_date = data.published_date
         self.source_value_set_version_uuid = data.source_value_set_version_uuid

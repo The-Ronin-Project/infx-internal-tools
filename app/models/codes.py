@@ -11,7 +11,7 @@ from sqlalchemy import text
 import app.terminologies.models
 from app.database import get_db
 from app.errors import BadRequestWithCode, NotFoundException
-from app.helpers.id_helper import generate_code_id
+import app.helpers.id_helper
 
 
 class RoninCodeSchemas(Enum):
@@ -606,9 +606,9 @@ class Code:
         else:
             raise NotImplementedError(f"generate_deduplicate_hash not implemented for code_schema: {self.code_schema}")
 
-        return generate_code_id(
+        return app.helpers.id_helper.generate_code_id(
             code_string=code_string,
-            display=self.display,
+            display_string=self.display if self.display else "",
             depends_on_value_string=self.depends_on.depends_on_value_string if self.depends_on else "",
             depends_on_property=self.depends_on.depends_on_property if self.depends_on else "",
             depends_on_system=self.depends_on.depends_on_system if self.depends_on else "",
