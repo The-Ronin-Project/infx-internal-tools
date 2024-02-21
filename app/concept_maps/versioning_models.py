@@ -864,8 +864,8 @@ class ConceptMapVersionCreator:
             "mapping_comments": previous_mapping.mapping_comments,
             "author": previous_mapping.mapped_by,
             "review_status": previous_mapping.review_status,
-            "created_date": previous_mapping.created_date,
-            "reviewed_date": previous_mapping.created_date,
+            "created_date": previous_mapping.mapped_date_time,
+            "reviewed_date": previous_mapping.mapped_date_time,
             "review_comment": previous_mapping.review_comments,
             "reviewed_by": previous_mapping.reviewed_by,
         }
@@ -902,8 +902,8 @@ class ConceptMapVersionCreator:
             mapping_comments=previous_mapping.mapping_comments,
             author=previous_mapping.mapped_by,
             review_status=previous_mapping.review_status,
-            created_date=previous_mapping.created_date,
-            reviewed_date=previous_mapping.reviewed_date,
+            created_date=previous_mapping.mapped_date_time,
+            reviewed_date=previous_mapping.reviewed_date_time,
             review_comment=previous_mapping.review_comments,
             reviewed_by=previous_mapping.reviewed_by,
         )
@@ -942,7 +942,7 @@ class ConceptMapVersionCreator:
             mapping_comments=previous_mapping.mapping_comments,
             author=previous_mapping.mapped_by,
             review_status="ready for review",
-            created_date=previous_mapping.created_date,
+            created_date=previous_mapping.mapped_date_time,
             review_comment=previous_mapping.review_comments,  # todo: how to handle this
         )
 

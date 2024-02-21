@@ -268,7 +268,7 @@ class ConceptMap:
         self.publisher = data.publisher
         self.experimental = data.experimental
         self.author = data.author
-        self.created_date = data.created_date
+        self.created_date = data.mapped_date_time
         self.source_value_set_uuid = data.source_value_set_uuid
         self.target_value_set_uuid = data.target_value_set_uuid
 
@@ -781,7 +781,7 @@ class ConceptMapVersion:
         self.description = data.description
         self.comments = data.comments
         self.status = data.status
-        self.created_date = data.created_date
+        self.created_date = data.mapped_date_time
         self.version = data.version
         self.published_date = data.published_date
         self.source_value_set_version_uuid = data.source_value_set_version_uuid
@@ -1890,7 +1890,7 @@ class SourceConcept:
     mapping_group: Optional[str] = None
     previous_version_context: Optional[dict] = None
     concept_map_version_uuid: Optional[UUID] = None  # why is this optional
-    # save_for_discussion isn't here. Not needed yet?
+    save_for_discussion: Optional[bool] = None
 
     @property
     def display(self):
@@ -2071,15 +2071,23 @@ class Mapping:
     relationship: MappingRelationship
     target: app.models.codes.Code
     uuid: Optional[UUID] = None
-    mapping_comments: Optional[str] = None
     mapped_by: ContentCreator = None
+    mapped_date_time: Optional[datetime.datetime] = None
+    mapping_comments: Optional[str] = None
     conn: Optional[None] = None
     review_status: str = "ready for review"
-    created_date: Optional[datetime.datetime] = None
-    reviewed_date: Optional[datetime.datetime] = None
-    review_comments: Optional[str] = None
     reviewed_by: Optional[ContentCreator] = None
+    reviewed_date_time: Optional[datetime.datetime] = None
+    review_comments: Optional[str] = None
     reason_for_no_map: Optional[str] = None
+
+    # todo: implement at later date, but not needed at migration time
+    # map_program_date_time: Optional[datetime.datetime] = None
+    # map_program_version: Optional[str] = None
+    # map_program_prediction_id: Optional[str] = None
+    # map_program_confidence_score: Optional[str] = None
+    # deleted_date_time: Optional[datetime.datetime] = None
+    # deleted_by: Optional[ContentCreator] = None
 
     def __post_init__(self):
         self.conn = get_db()
@@ -2120,6 +2128,12 @@ class Mapping:
         hash_object.update(concat_str.encode("utf-8"))
         # return the hexadecimal representation of the hash
         return hash_object.hexdigest()
+
+    @property
+    def deduplication_hash(self):
+        # todo: should this be a property?
+        # todo: maybe we have a _stored_deduplication_hash as well?
+        pass
 
     @classmethod
     def load(cls, uuid):
