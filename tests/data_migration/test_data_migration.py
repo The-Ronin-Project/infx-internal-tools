@@ -223,7 +223,7 @@ class DataMigrationTests(unittest.TestCase):
         assert result[3] == code
         assert result[4] == display
 
-    def test_prepare_code_and_display_for_storage_migration_simply_null(self):
+    def test_prepare_code_and_display_for_storage_migration_quoted_null_is_simply_a_string(self):
         code = "null"
         display = "Potassium Level"
         result = prepare_code_and_display_for_storage_migration(code, display)
@@ -415,37 +415,45 @@ class DataMigrationTests(unittest.TestCase):
 
     def test_prepare_depends_on_value_for_storage_spark_null1(self):
         depends_on_value = "[null]"
-        result = prepare_depends_on_value_for_storage(depends_on_value)
+        property = "Medication.ingredient.strength"
+        result = prepare_depends_on_value_for_storage(depends_on_value, property)
         assert result[0] is None
         assert result[1] is None
         assert result[2] is None
         assert result[3] is None
+        assert result[4] is None
 
     def test_prepare_depends_on_value_for_storage_spark_null2(self):
         depends_on_value = "[null, null, null]"
-        result = prepare_depends_on_value_for_storage(depends_on_value)
+        property = "Medication.ingredient.strength"
+        result = prepare_depends_on_value_for_storage(depends_on_value, property)
         assert result[0] is None
         assert result[1] is None
         assert result[2] is None
         assert result[3] is None
+        assert result[4] is None
 
     def test_prepare_depends_on_value_for_storage_spark_rejected(self):
         depends_on_value = "[projectronin]"
-        result = prepare_depends_on_value_for_storage(depends_on_value)
+        property = "Medication.ingredient.strength"
+        result = prepare_depends_on_value_for_storage(depends_on_value, property)
         assert result[0] is None
         assert result[1] is None
         assert result[2] is None
         assert result[3] is None
+        assert result[4] is None
 
     def test_prepare_depends_on_value_for_storage_happy_spark(self):
         unordered_value = "{[{300352008, Murphy's sign positive (situation), http://snomed.info/sct}, {787.99, Positive Murphy's Sign, http://hl7.org/fhir/sid/icd-9-cm/diagnosis}, {R19.8, Positive Murphy's Sign, http://hl7.org/fhir/sid/icd-10-cm}], Positive Murphy's Sign}"
+        property = "Observation.code"
         normalized_value = '{"coding":[{"code":"787.99","display":"Positive Murphy\'s Sign","system":"http://hl7.org/fhir/sid/icd-9-cm/diagnosis"},{"code":"300352008","display":"Murphy\'s sign positive (situation)","system":"http://snomed.info/sct"},{"code":"R19.8","display":"Positive Murphy\'s Sign","system":"http://hl7.org/fhir/sid/icd-10-cm"}],"text":"Positive Murphy\'s Sign"}'
         sql_escaped = '{"coding":[{"code":"787.99","display":"Positive Murphy\'\'s Sign","system":"http://hl7.org/fhir/sid/icd-9-cm/diagnosis"},{"code":"300352008","display":"Murphy\'\'s sign positive (situation)","system":"http://snomed.info/sct"},{"code":"R19.8","display":"Positive Murphy\'\'s Sign","system":"http://hl7.org/fhir/sid/icd-10-cm"}],"text":"Positive Murphy\'\'s Sign"}'
-        result = prepare_depends_on_value_for_storage(unordered_value)
+        result = prepare_depends_on_value_for_storage(unordered_value, property)
         assert result[0] == DataExtensionUrl.SOURCE_CODEABLE_CONCEPT.value
         assert result[1] is None
         assert result[2] == sql_escaped
         assert result[3] == normalized_value
+        assert result[4] is property
 
 
 if __name__ == '__main__':

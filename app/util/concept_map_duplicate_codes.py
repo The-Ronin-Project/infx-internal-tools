@@ -269,11 +269,12 @@ def load_duplicate_for_v4_concept_map(
                             depends_on_value_schema,
                             depends_on_value_simple,
                             depends_on_value_jsonb,
-                            depends_on_value_string
-                        ) = prepare_depends_on_value_for_storage(depends_on_value)
+                            depends_on_value_string,
+                            depends_on_property_string
+                        ) = prepare_depends_on_value_for_storage(depends_on_value, row.depends_on_property)
                         depends_on_value_for_code_id = prepare_depends_on_attributes_for_code_id_migration(
                             depends_on_value_string,
-                            row.depends_on_property,
+                            depends_on_property_string,
                             row.depends_on_system,
                             row.depends_on_display
                         )

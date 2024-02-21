@@ -24,7 +24,6 @@ class FHIRPrimitiveName(Enum):
     Supported FHIR primitive data types for ConceptMap dynamic values, from the RCDM specification
     """
     CODE = "code"
-    STRING = "string"
 
 
 class IssuePrefix(Enum):
@@ -85,11 +84,6 @@ def prepare_code_and_display_for_storage(raw_code = None, raw_display: str = Non
         value_string,
         display_string
     ) = prepare_dynamic_value_for_storage(normalized_code, normalized_display)
-    # the FHIR primitive data type named "code" in FHIR, looks like a string to Python, so adjust value_schema to "code"
-    if value_schema == FHIRPrimitiveName.STRING.value:
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_source_code_for_storage(
-            code_string=normalized_code
-        )
     return value_schema, value_simple, value_jsonb, value_string, display_string
 
 
@@ -98,8 +92,16 @@ def prepare_code_and_display_for_storage_migration(raw_code: str = None, raw_dis
     # todo: delete this function after v5 migration is complete
     Low-level helper function. DO NOT call this function directly.
     For reading old, inconsistently serialized code column values from v4 tables and preparing them for storage in v5 tables.
+    @return
+        value_schema (str) - FHIR primitive name or DataExtensionUrls value - if None, inputs could not be processed
+        value_simple (str) - old_code if primitive  - else None
+        value_jsonb (str) - None if primitive - else, object with that value_schema - string prepared for SQL
+            Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
+        value_string (string) - either value_simple, or value_jsonb binary JSON value, correctly serialized to a string
+            - this returned value_string value is ready for the caller to input to the hash function generate_code_id().
+        display_string (string) - in the case of code being CodeableConcept, normalize display to the code.text value
     """
-    # prepare_dynamic_value_for_storage(), prepare_string_source_code_for_storage() ensure all values are correct
+    # prepare_dynamic_value_for_storage() ensures all values are correct
     (
         value_schema,
         value_simple,
@@ -107,16 +109,12 @@ def prepare_code_and_display_for_storage_migration(raw_code: str = None, raw_dis
         value_string,
         display_string
     ) = prepare_dynamic_value_for_storage(raw_code, raw_display)
-    # the FHIR primitive data type named "code" in FHIR, looks like a string to Python, so adjust value_schema to "code"
-    if value_schema == "string":
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_source_code_for_storage(
-            code_string=raw_code
-        )
     return value_schema, value_simple, value_jsonb, value_string, display_string
 
 
 def prepare_depends_on_for_storage(depends_on: list = None) -> (str, list):
     """
+    # todo: NOT USED during v5 migration. Fast-follow-on: Top-level function for n-member dependsOn lists
     This is the standard, top-level function to prepare a DependsOnData list for custom_terminologies.code_depends_on.
     Compare/contrast with prepare_code_and_display_for_storage() which does not overlap with this use case.
     @param depends_on - list of DependsOnData objects - see the following notes on FHIR ConceptMap dependsOn as a list.
@@ -159,12 +157,12 @@ def prepare_depends_on_for_storage(depends_on: list = None) -> (str, list):
             value_simple,
             value_jsonb,
             value_string,
-            display_string
-        ) = prepare_depends_on_columns_for_storage(row.depends_on_value)
+            property
+        ) = prepare_depends_on_columns_for_storage(row)
         sequence += 1
         depends_on_value_string += prepare_depends_on_attributes_for_code_id_migration(
             value_string,
-            row.depends_on_property,
+            property,
             row.depends_on_system,
             row.depends_on_display
         )
@@ -174,7 +172,7 @@ def prepare_depends_on_for_storage(depends_on: list = None) -> (str, list):
                 value_schema,
                 value_simple,
                 value_jsonb,
-                row.depends_on_property,
+                property,
                 row.depends_on_system,
                 row.depends_on_display
             )
@@ -185,6 +183,7 @@ def prepare_depends_on_for_storage(depends_on: list = None) -> (str, list):
 
 def prepare_depends_on_attributes_for_code_id(input_object: DependsOnData) -> str:
     """
+    # todo: NOT USED during v5 migration. Fast-follow-on: replaces prepare_depends_on_attributes_for_code_id_migration()
     Low-level helper to correctly combine the 4 DependsOnData string values into one string as input for a code_id.
     """
     return prepare_depends_on_attributes_for_code_id_migration(
@@ -202,6 +201,7 @@ def prepare_depends_on_attributes_for_code_id_migration(
         depends_on_display: Optional[str] = None,
 ) -> str:
     """
+    # todo: Top-level for v5 migration. Fast-follow-on: replace with prepare_depends_on_attributes_for_code_id()
     Low-level helper to correctly combine the 4 DependsOnData string values into one string as input for a code_id.
     """
     if depends_on_value_string is None or depends_on_value_string == "":
@@ -213,8 +213,9 @@ def prepare_depends_on_attributes_for_code_id_migration(
     )
 
 
-def prepare_depends_on_columns_for_storage(depends_on_row: DependsOnData = None) -> (str, str, str, str):
+def prepare_depends_on_columns_for_storage(depends_on_row: DependsOnData = None) -> (str, str, str, str, str):
     """
+    # todo: NOT USED during v5 migration. Fast-follow-on: helper for prepare_depends_on_for_storage()
     Helper function. DO NOT call this function directly.
 
     There is NO reason to validate results from this function, since it does ALL required validation internally.
@@ -235,25 +236,23 @@ def prepare_depends_on_columns_for_storage(depends_on_row: DependsOnData = None)
         value_jsonb (str) - None if primitive - else, object with that value_schema - string prepared for SQL
             Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
         value_string (string) - either value_simple, or value_jsonb binary JSON value, correctly serialized to a string
-            - this returned value_string value is ready for the caller to input to the hash function generate_code_id().
+            - this returned value_string value is ready for the caller to contribute to generate_code_id().
+        property_string (str) - returned property_string is ready for the caller to contribute to generate_code_id().
     """
-    # prepare_depends_on_value_for_storage(), prepare_string_depends_on_for_storage() ensure all values are correct
+    # prepare_depends_on_value_for_storage() ensures all values are correct
     (
         value_schema,
         value_simple,
         value_jsonb,
         value_string,
-        display_string
-    ) = prepare_depends_on_value_for_storage(depends_on_row.depends_on_value)
-    if value_schema == FHIRPrimitiveName.STRING.value:
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_depends_on_for_storage(
-            code_string=depends_on_row.depends_on_value
-        )
-    return value_schema, value_simple, value_jsonb, value_string
+        property_string
+    ) = prepare_depends_on_value_for_storage(depends_on_row.depends_on_value, depends_on_row.depends_on_property)
+    return value_schema, value_simple, value_jsonb, value_string, property_string
 
 
-def prepare_depends_on_value_for_storage(raw_depends_on_value: str = None) -> (str, str, str, str):
+def prepare_depends_on_value_for_storage(raw_depends_on_value: str = None, raw_depends_on_property: str = None) -> (str, str, str, str, str):
     """
+    # todo: Top-level for v5 migration. Fast-follow-on: replace with prepare_depends_on_for_storage()
     Helper function. DO NOT call this function directly.
 
     There is NO reason to validate results from this function, since it does ALL required validation internally.
@@ -267,8 +266,12 @@ def prepare_depends_on_value_for_storage(raw_depends_on_value: str = None) -> (s
             Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
         value_string (string) - either value_simple, or value_jsonb binary JSON value, correctly serialized to a string
             - this returned value_string value is ready for the caller to input to the hash function generate_code_id().
+        property_string (str) - returned property string is ready for the caller to contribute to generate_code_id().
+        IF the inputs do not match the v4 legacy case this function returns 5 None values
     """
-    # prepare_dynamic_value_for_storage(), prepare_string_depends_on_for_storage() ensure all values are correct
+    # prepare_dynamic_value_for_storage() ensures all values are correctly;
+    # discard display_string from prepare_dynamic_value_for_storage() and correct any legacy v4 property_string value
+    property_string = raw_depends_on_property
     (
         value_schema,
         value_simple,
@@ -276,11 +279,53 @@ def prepare_depends_on_value_for_storage(raw_depends_on_value: str = None) -> (s
         value_string,
         display_string
     ) = prepare_dynamic_value_for_storage(raw_depends_on_value, None)
-    if value_schema == FHIRPrimitiveName.STRING.value:
-        (value_schema, value_simple, value_jsonb, value_string) = prepare_string_depends_on_for_storage(
-            code_string=raw_depends_on_value
+    if value_schema is None:
+        # not usable, return 5 None values
+        property_string = None
+    elif value_schema == FHIRPrimitiveName.CODE.value:
+        # if the value was a string (legacy v4; not supported in v5) FHIR primitive data type named "code" was assigned
+        (
+            value_schema,
+            value_simple,
+            value_jsonb,
+            value_string,
+            property_string
+        ) = convert_string_depends_on_to_codeable_concept(
+            depends_on_value=value_simple,
+            depends_on_property=raw_depends_on_property
         )
-    return value_schema, value_simple, value_jsonb, value_string
+    return value_schema, value_simple, value_jsonb, value_string, property_string
+
+
+def convert_string_depends_on_to_codeable_concept(depends_on_value: str, depends_on_property: str) -> (str, str, str, str, str):
+    """
+    # todo: a migration-only function for handling v4 legacy staging data
+    @return
+        value_schema (str) - DataExtensionUrls.SOURCE_CODEABLE_CONCEPT.value
+        value_simple (str) - None
+        value_jsonb (str) - CodeableConcept object serialized string prepared for SQL
+            - depends_on_value converted to a CodeableConcept with a text attribute that holds the string value
+            Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
+        value_string (str) - value_jsonb binary JSON value, correctly serialized to a string
+            - this returned value_string value is ready for the caller to input to the hash function generate_code_id().
+        property_string (str) - returned property_string is ready for the caller to contribute to generate_code_id()
+            - depends_on_property with ".text" removed from the end of the string
+        IF the inputs do not match the v4 legacy case this function returns 5 None values
+    """
+    false_result = None, None, None, None, None
+    if depends_on_value is None or depends_on_property is None:
+        return false_result
+    if depends_on_value == "" or (depends_on_property is not None and ".text" not in depends_on_property[-5:]):
+        return false_result
+    # convert the legacy v4 string value to a v5 CodeableConcept
+    (
+        value_schema,
+        value_simple,
+        value_jsonb,
+        value_string
+    ) = prepare_object_source_code_for_storage({"text": depends_on_value})
+    property_string = depends_on_property[:-5]
+    return value_schema, value_simple, value_jsonb, value_string, property_string
 
 
 def prepare_dynamic_value_for_storage(old_value: str = None, old_display: str = None) -> (str, str, str, str, str):
@@ -458,8 +503,9 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
 
     # string
     else:
-        value_schema = FHIRPrimitiveName.STRING.value
+        value_schema = FHIRPrimitiveName.CODE.value
         value_simple = old_value
+        value_string = old_value
 
     return value_schema, value_simple, value_jsonb, value_string, display_string
 
@@ -628,6 +674,13 @@ def normalized_ratio_string(code_object) -> str:
 def prepare_object_source_code_for_storage(code_object) -> (str, str, str, str):
     """
     @raise BadDataError if the value does not match the sourceCodeableConcept schema
+    @return
+        value_schema (str) - DataExtensionUrls.SOURCE_CODEABLE_CONCEPT.value
+        value_simple (str) - None
+        value_jsonb (str) - CodeableConcept object serialized string prepared for SQL
+            Note: SQLAlchemy can do SQL escaping, but does not cover all cases in our data. We supplement as needed.
+        value_string (string) - value_jsonb binary JSON value, correctly serialized to a string
+            - this returned value_string value is ready for the caller to input to the hash function generate_code_id().
     """
     rcdm_object = normalized_source_codeable_concept(code_object)
     rcdm_string = serialize_json_object(rcdm_object)
@@ -798,32 +851,6 @@ def normalized_data_dictionary_string(info_dict):
     info_string = json.dumps(info_dict)
     clean_info = cleanup_json_string(info_string)
     return clean_info
-
-
-def prepare_string_depends_on_for_storage(code_string: str) -> (str, str, str, str):
-    if code_string is None or code_string == "":
-        return (
-            None,
-            None,
-            None,
-            None
-        )
-    else:
-        return (
-            FHIRPrimitiveName.STRING.value,
-            code_string,
-            None,
-            code_string
-        )
-
-
-def prepare_string_source_code_for_storage(code_string: str) -> (str, str, str, str):
-    return (
-        FHIRPrimitiveName.CODE.value,
-        code_string,
-        None,
-        code_string
-    )
 
 
 def prepare_code_none_issue_for_storage(issue: str, id: str) -> (str, str, str, str):

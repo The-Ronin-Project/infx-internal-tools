@@ -2,6 +2,7 @@ import unittest
 
 from app.database import get_db
 from app.app import create_app
+from app.helpers.data_helper import normalized_source_codeable_concept
 from app.helpers.format_helper import DataExtensionUrl, \
     prepare_code_and_display_for_storage_migration, \
     prepare_depends_on_value_for_storage, normalized_data_dictionary_string, normalized_codeable_concept_string, \
@@ -48,10 +49,11 @@ class FormatHelperTests(unittest.TestCase):
     def test_prepare_depends_on_value_for_storage_null_display_means_string(self):
         code = "Potassium Level"
         result = prepare_depends_on_value_for_storage(code)
-        assert result[0] == "string"
-        assert result[1] == code
+        assert result[0] is None
+        assert result[1] is None
         assert result[2] is None
-        assert result[3] == code
+        assert result[3] is None
+        assert result[4] is None
 
     def test_prepare_code_and_display_for_storage_migration_all_digits(self):
         code = "12345678"
@@ -66,10 +68,11 @@ class FormatHelperTests(unittest.TestCase):
     def test_prepare_depends_on_value_for_storage_all_digits(self):
         code = "12345678"
         result = prepare_depends_on_value_for_storage(code)
-        assert result[0] == "string"
-        assert result[1] == code
+        assert result[0] is None
+        assert result[1] is None
         assert result[2] is None
-        assert result[3] == code
+        assert result[3] is None
+        assert result[4] is None
 
     def test_prepare_code_and_display_for_storage_migration_empty_code(self):
         code = ""
@@ -195,7 +198,6 @@ class FormatHelperTests(unittest.TestCase):
 
     def test_prepare_code_and_display_for_storage_migration_bad_json_unexpected_key(self):
         code = '{"unexpectedKey":{"coding":[{"display":"Potassium Level","code":"21704910","system":"https://fhir.cerner.com/ec2458f2-1e24-41c8-b71b-0e701af7583d/codeSet/72","userSelected":true},{"code":"2823-3","system":"http://loinc.org","display":"Potassium [Moles/volume] in Serum or Plasma","userSelected":false}],"text":"Potassium Level"}}'
-        key_sorted_code = '{"unexpectedKey":{"coding":[{"code":"21704910","display":"Potassium Level","system":"https://fhir.cerner.com/ec2458f2-1e24-41c8-b71b-0e701af7583d/codeSet/72","userSelected":true},{"code":"2823-3","display":"Potassium [Moles/volume] in Serum or Plasma","system":"http://loinc.org","userSelected":false}],"text":"Potassium Level"}}'
         display = "overwrite upon success"
         result = prepare_code_and_display_for_storage_migration(code, display)
         assert result[0] is None
@@ -230,13 +232,28 @@ class FormatHelperTests(unittest.TestCase):
         assert result[2] is None
         assert result[3] is None
 
-    def test_prepare_depends_on_value_for_storage_happy_string(self):
+
+    def test_prepare_depends_on_value_for_storage_happy_string_dropped(self):
         depends_on_value = "Today's whim"
         result = prepare_depends_on_value_for_storage(depends_on_value)
-        assert result[0] is "string"
-        assert result[1] is "Today's whim"
+        assert result[0] is None
+        assert result[1] is None
         assert result[2] is None
-        assert result[3] is "Today's whim"
+        assert result[3] is None
+        assert result[4] is None
+
+
+    def test_prepare_depends_on_value_for_storage_happy_string_converted(self):
+        depends_on_value = "FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - PROGNOSTIC INDICATORS - KI-67 (%)"
+        normalized_string = '{"text":"FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - PROGNOSTIC INDICATORS - KI-67 (%)"}'
+        depends_on_property_text = "Observation.code.text"
+        depends_on_property = "Observation.code"
+        result = prepare_depends_on_value_for_storage(depends_on_value, depends_on_property_text)
+        assert result[0] == DataExtensionUrl.SOURCE_CODEABLE_CONCEPT.value
+        assert result[1] is None
+        assert result[2] == normalized_string
+        assert result[3] == normalized_string
+        assert result[4] == depends_on_property
 
     def test_prepare_depends_on_value_for_storage_happy_object(self):
         unordered_value = '{"coding":[{"code":"A09AA02","system":"http://www.whocc.no/atc"},{"code":"65328","system":"urn:oid:2.16.840.1.113883.6.208"},{"code":"65329","system":"urn:oid:2.16.840.1.113883.6.208"},{"code":"65330","system":"urn:oid:2.16.840.1.113883.6.208"},{"code":"67625","system":"urn:oid:2.16.840.1.113883.6.208"},{"code":"70893","system":"urn:oid:2.16.840.1.113883.6.208"},{"code":"743","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"6406","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"8031","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"48470","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"204305","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"204306","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"217712","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"217933","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"218027","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"219066","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"219073","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"219074","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"219095","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"219475","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"220607","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"220831","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"221049","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"228015","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"352895","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"392491","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"541208","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"546427","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"546431","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"546435","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"546439","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"546443","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"797520","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1089860","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1117097","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1245754","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1245781","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1294123","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1372686","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1372702","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1372724","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1372736","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1372743","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1372760","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1372764","system":"http://www.nlm.nih.gov/research/umls/rxnorm"},{"code":"1372765","system":"http://www.nlm.nih.gov/research/umls/rxnorm"}],"text":"CREON ORAL"}'
