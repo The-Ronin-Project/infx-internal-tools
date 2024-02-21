@@ -4,10 +4,8 @@ import re
 from enum import Enum
 from typing import Optional
 
-from app.helpers.data_helper import is_spark_format, is_json_format, load_json_string, \
-    normalized_source_ratio, serialize_json_object, escape_sql_input_value, normalized_source_codeable_concept, \
-    cleanup_json_string
-from app.models.codes import DependsOnData
+import app.models.codes
+import app.helpers.data_helper
 
 
 class DataExtensionUrl(Enum):
@@ -181,7 +179,7 @@ def prepare_depends_on_for_storage(depends_on: list = None) -> (str, list):
     return depends_on_value_string, depends_on_list
 
 
-def prepare_depends_on_attributes_for_code_id(input_object: DependsOnData) -> str:
+def prepare_depends_on_attributes_for_code_id(input_object: 'app.models.codes.DependsOnData') -> str:
     """
     # todo: NOT USED during v5 migration. Fast-follow-on: replaces prepare_depends_on_attributes_for_code_id_migration()
     Low-level helper to correctly combine the 4 DependsOnData string values into one string as input for a code_id.
@@ -213,7 +211,7 @@ def prepare_depends_on_attributes_for_code_id_migration(
     )
 
 
-def prepare_depends_on_columns_for_storage(depends_on_row: DependsOnData = None) -> (str, str, str, str, str):
+def prepare_depends_on_columns_for_storage(depends_on_row: 'app.models.codes.DependsOnData' = None) -> (str, str, str, str, str):
     """
     # todo: NOT USED during v5 migration. Fast-follow-on: helper for prepare_depends_on_for_storage()
     Helper function. DO NOT call this function directly.
@@ -466,7 +464,7 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
 
     # handle spark case (bad)
     # todo: delete this legacy check after v5 migration is complete
-    elif is_spark_format(old_value):
+    elif app.helpers.data_helper.is_spark_format(old_value):
         # 2 steps to final: convert spark to JSON, then process as in the JSON case
         # try to convert to json
         json_string = convert_source_concept_spark_export_string_to_json_string_unordered(old_value)
@@ -492,7 +490,7 @@ def prepare_dynamic_value_for_storage_report_issue(old_value: str = None, old_di
 
     # json
     # todo: after v5 migration is complete, the if/elif/else should begin here; cases above here should be discarded
-    elif is_json_format(old_value):
+    elif app.helpers.data_helper.is_json_format(old_value):
         (
             value_schema,
             value_simple,
@@ -537,7 +535,7 @@ def prepare_json_format_for_storage(json_string: str, display_string: str = None
     """
     false_result = None, None, None, None, None
     try:
-        json_object = load_json_string(json_string)
+        json_object = app.helpers.data_helper.load_json_string(json_string)
 
         # Ratio
         if '"numerator"' in json_string or '"denominator"' in json_string:
@@ -621,7 +619,7 @@ def prepare_binding_and_value_for_jsonb_insert_migration(insert_column_name: str
     # todo: Remove after migration is complete.
     if normalized_json_string is None:
         return None, None
-    jsonb_sql_escaped = escape_sql_input_value(normalized_json_string)
+    jsonb_sql_escaped = app.helpers.data_helper.escape_sql_input_value(normalized_json_string)
     if jsonb_sql_escaped is None:
         insert_binding_string = f" :{insert_column_name}, "
         insert_none_value = {f"{insert_column_name}": None}
@@ -651,12 +649,12 @@ def prepare_object_source_ratio_for_storage(ratio_object) -> (str, str, str, str
     """
     @raise BadDataError if the value does not match the sourceRatio schema
     """
-    rcdm_object = normalized_source_ratio(ratio_object)
-    rcdm_string = serialize_json_object(rcdm_object)
+    rcdm_object = app.helpers.data_helper.normalized_source_ratio(ratio_object)
+    rcdm_string = app.helpers.data_helper.serialize_json_object(rcdm_object)
     return (
         DataExtensionUrl.SOURCE_RATIO.value,
         None,
-        escape_sql_input_value(rcdm_string),
+        app.helpers.data_helper.escape_sql_input_value(rcdm_string),
         rcdm_string
     )
 
@@ -666,8 +664,8 @@ def normalized_ratio_string(code_object) -> str:
     @raise BadDataError if the value is not a Ratio
     @return (str) serialized RCDM Ratio normalized for: JSON format, JSON key order, coding list member order
     """
-    rcdm_object = normalized_source_ratio(code_object)
-    rcdm_string = serialize_json_object(rcdm_object)
+    rcdm_object = app.helpers.data_helper.normalized_source_ratio(code_object)
+    rcdm_string = app.helpers.data_helper.serialize_json_object(rcdm_object)
     return rcdm_string
 
 
@@ -682,12 +680,12 @@ def prepare_object_source_code_for_storage(code_object) -> (str, str, str, str):
         value_string (string) - value_jsonb binary JSON value, correctly serialized to a string
             - this returned value_string value is ready for the caller to input to the hash function generate_code_id().
     """
-    rcdm_object = normalized_source_codeable_concept(code_object)
-    rcdm_string = serialize_json_object(rcdm_object)
+    rcdm_object = app.helpers.data_helper.normalized_source_codeable_concept(code_object)
+    rcdm_string = app.helpers.data_helper.serialize_json_object(rcdm_object)
     return (
         DataExtensionUrl.SOURCE_CODEABLE_CONCEPT.value,
         None,
-        escape_sql_input_value(rcdm_string),
+        app.helpers.data_helper.escape_sql_input_value(rcdm_string),
         rcdm_string
     )
 
@@ -697,8 +695,8 @@ def normalized_codeable_concept_string(code_object) -> str:
     @raise BadDataError if the value is not a CodeableConcept
     @return (str) serialized RCDM CodeableConcept normalized for: JSON format, JSON key order, coding list member order
     """
-    rcdm_object = normalized_source_codeable_concept(code_object)
-    rcdm_string = serialize_json_object(rcdm_object)
+    rcdm_object = app.helpers.data_helper.normalized_source_codeable_concept(code_object)
+    rcdm_string = app.helpers.data_helper.serialize_json_object(rcdm_object)
     return rcdm_string
 
 
@@ -757,7 +755,7 @@ def normalized_codeable_concept_depends_on(
     @return - (see todo)
     # todo: align with changes: now> @return DependsOnData object, soon> @return 1-member list of DependsOnData
     """
-    return DependsOnData(
+    return app.models.codes.DependsOnData(
         depends_on_value=normalized_codeable_concept_string(codeable_concept_object),
         depends_on_property=depends_on_property
     )
@@ -785,7 +783,7 @@ def normalized_codeable_concept_list_depends_on(
     result_list = []
     for codeable_concept_object in list_object:
         result_list.append(
-            DependsOnData(
+            app.models.codes.DependsOnData(
                 depends_on_value=normalized_codeable_concept_string(codeable_concept_object),
                 depends_on_property=depends_on_property,
                 depends_on_system=depends_on_system,
@@ -807,7 +805,7 @@ def prepare_additional_data_for_storage(additional_data: str, rejected_depends_o
             additional_data_dict = {}
         else:
             try:
-                additional_data_dict = load_json_string(additional_data)
+                additional_data_dict = app.helpers.data_helper.load_json_string(additional_data)
             except Exception as e:
                 # for bad old data, simply discard what was there and add the necessary info
                 additional_data_dict = {}
@@ -834,8 +832,8 @@ def prepare_data_dictionary_for_storage(info_dict):
     if info_dict is None or len(info_dict) == 0:
         return None
     info_string = json.dumps(info_dict)
-    clean_info = cleanup_json_string(info_string)
-    sql_escaped = escape_sql_input_value(clean_info)
+    clean_info = app.helpers.data_helper.cleanup_json_string(info_string)
+    sql_escaped = app.helpers.data_helper.escape_sql_input_value(clean_info)
     if len(sql_escaped) == 0:
         return None
     return sql_escaped
@@ -849,7 +847,7 @@ def normalized_data_dictionary_string(info_dict):
     if info_dict is None or len(info_dict) == 0:
         return None
     info_string = json.dumps(info_dict)
-    clean_info = cleanup_json_string(info_string)
+    clean_info = app.helpers.data_helper.cleanup_json_string(info_string)
     return clean_info
 
 
@@ -879,7 +877,7 @@ def append_string_format_issue_for_storage(issue: str, schema: str) -> str:
 
 
 def prepare_object_format_issue_for_storage(issue: str, code_string: str) -> (str, str, str, str):
-    code_clean = cleanup_json_string(code_string)
+    code_clean = app.helpers.data_helper.cleanup_json_string(code_string)
     return (
         f"{IssuePrefix.COLUMN_VALUE_FORMAT.value}{issue}",
         code_clean,
@@ -895,14 +893,14 @@ def remove_deprecated_wrapper(input_string: str) -> str:
     @return (bool: whether the wrapper was found and removed, str: the string to use after unwrapping)
     """
     output_string = input_string
-    if is_json_format(input_string):
+    if app.helpers.data_helper.is_json_format(input_string):
         try:
-            json_object = load_json_string(input_string)
+            json_object = app.helpers.data_helper.load_json_string(input_string)
             component = json_object.get("component")
             if component is None:
                 codeable_concept = json_object.get("valueCodeableConcept")
                 if codeable_concept is not None:
-                    output_string = serialize_json_object(codeable_concept)
+                    output_string = app.helpers.data_helper.serialize_json_object(codeable_concept)
             else:
                 if isinstance(component, list):
                     # It is only safe to grab the valueCodeableConcept for this repair if it is single
@@ -910,11 +908,11 @@ def remove_deprecated_wrapper(input_string: str) -> str:
                         for concept in component:
                             codeable_concept = concept.get("valueCodeableConcept")
                             if codeable_concept is not None:
-                                output_string = serialize_json_object(codeable_concept)
+                                output_string = app.helpers.data_helper.serialize_json_object(codeable_concept)
                 else:
                     codeable_concept = component.get("valueCodeableConcept")
                     if codeable_concept is not None:
-                        output_string = serialize_json_object(codeable_concept)
+                        output_string = app.helpers.data_helper.serialize_json_object(codeable_concept)
         except Exception as e:
             pass
     return output_string
@@ -929,10 +927,10 @@ def filter_unsafe_depends_on_value(input_string: str) -> (str, str):
     """
     if input_string is None or input_string == "":
         return None, None
-    if is_json_format(input_string):
+    if app.helpers.data_helper.is_json_format(input_string):
         try:
             # Handle cases based on the real data: a list of unsafe strength data from spark, a CodeableConcept, or text
-            json_object = load_json_string(input_string)
+            json_object = app.helpers.data_helper.load_json_string(input_string)
             if isinstance(json_object, list):
                 # Came from a spark list of unsafe Medication.ingredient.strength values with mixed orders of num/denom
                 return None, input_string
@@ -941,7 +939,7 @@ def filter_unsafe_depends_on_value(input_string: str) -> (str, str):
                 return input_string, None
         except Exception as e:
             pass
-    if is_spark_format:
+    if app.helpers.data_helper.is_spark_format:
         # All spark in real data are unsafe Medication.ingredient.strength values with some mixed orders of num/denom
         return None, input_string
     else:
@@ -1045,9 +1043,9 @@ def convert_source_concept_spark_export_string_to_json_string_normalized_ordered
         This output is suitable as input to id_helper.py functions as a code_string to create a code_id or mapping_id.
     """
     code_string = convert_source_concept_spark_export_string_to_json_string_unordered(spark_export_string)
-    code_object = load_json_string(code_string)
-    rcdm_object = normalized_source_codeable_concept(code_object)
-    rcdm_string = serialize_json_object(rcdm_object)
+    code_object = app.helpers.data_helper.load_json_string(code_string)
+    rcdm_object = app.helpers.data_helper.normalized_source_codeable_concept(code_object)
+    rcdm_string = app.helpers.data_helper.serialize_json_object(rcdm_object)
     return rcdm_string
 
 
@@ -1114,4 +1112,4 @@ def convert_source_concept_spark_export_string_to_json_string_unordered(spark_ex
             json_object.update({"text": text_value})
 
     # done
-    return serialize_json_object(json_object)
+    return app.helpers.data_helper.serialize_json_object(json_object)

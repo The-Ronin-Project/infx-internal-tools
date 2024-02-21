@@ -1,9 +1,8 @@
 from typing import Optional
 
-from app.helpers.data_helper import hash_string, serialize_json_object, load_json_string, cleanup_json_string, \
-    normalized_source_codeable_concept
-from app.helpers.format_helper import prepare_depends_on_attributes_for_code_id_migration
-from app.helpers.message_helper import message_exception_classname
+import app.helpers.data_helper
+import app.helpers.format_helper
+import app.helpers.message_helper
 
 
 def generate_code_id(
@@ -163,18 +162,18 @@ def prepare_code_string_for_code_id(code_string: str) -> str:
            return f"{code_string}"
 
         # an object value of a known schema, such as FHIR CodeableConcept
-        json_object = load_json_string(code_string)
+        json_object = app.helpers.data_helper.load_json_string(code_string)
 
         # CodeableConcept
         try:
-            rcdm_object = normalized_source_codeable_concept(json_object)
-            rcdm_string = serialize_json_object(rcdm_object)
+            rcdm_object = app.helpers.data_helper.normalized_source_codeable_concept(json_object)
+            rcdm_string = app.helpers.data_helper.serialize_json_object(rcdm_object)
             return rcdm_string
         except Exception as e:
             raise e
 
     except Exception as e:
-        name = message_exception_classname(e)
+        name = app.helpers.message_helper.message_exception_classname(e)
         if name == "JSONDecodeError":
             # a string value, such as FHIR code
             return code_string
@@ -234,14 +233,14 @@ def hash_for_code_id(
     concatenated = (
         code_string
         + "|" + (display_string if display_string is not None else "")
-        + "|" + prepare_depends_on_attributes_for_code_id_migration(
+        + "|" + app.helpers.format_helper.prepare_depends_on_attributes_for_code_id_migration(
             depends_on_value_string,
             depends_on_property,
             depends_on_system,
             depends_on_display
         )
     )
-    hashed = hash_string(concatenated)
+    hashed = app.helpers.data_helper.hash_string(concatenated)
     return hashed
 
 
@@ -279,5 +278,5 @@ def hash_for_mapping_id(
         + "^" + (target_concept_system if target_concept_system is not None else "")
     )
 
-    hashed = hash_string(concatenated)
+    hashed = app.helpers.data_helper.hash_string(concatenated)
     return hashed
