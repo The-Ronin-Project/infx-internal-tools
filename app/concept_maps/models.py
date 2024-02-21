@@ -1026,7 +1026,7 @@ class ConceptMapVersion:
                 reviewed_date_time=item.reviewed_date_time,
                 uuid=item.mapping_uuid,
                 review_status=item.review_status,
-                reason_for_no_map=item.reason_for_no_map,  # todo: Why does this have this when the source_concept has it?
+                # reason_for_no_map=item.reason_for_no_map,  # todo: Why does this have this when the source_concept has it?
                 map_program_date_time=item.map_program_date_time,
                 map_program_version=item.map_program_version,
                 map_program_prediction_id=item.map_program_prediction_id,
@@ -2098,7 +2098,7 @@ class Mapping:
     reviewed_by: Optional[ContentCreator] = None
     reviewed_date_time: Optional[datetime.datetime] = None
     review_comments: Optional[str] = None
-    reason_for_no_map: Optional[str] = None  # todo: this should only be accessed via the source
+    # reason_for_no_map: Optional[str] = None  # todo: this should only be accessed via the source
     map_program_date_time: Optional[datetime.datetime] = None
     map_program_version: Optional[str] = None
     map_program_prediction_id: Optional[str] = None
