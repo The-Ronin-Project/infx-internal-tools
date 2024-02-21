@@ -855,8 +855,10 @@ class ConceptMapVersion:
                 crd.deduplication_hash,
                 crd.uuid as mapping_uuid, 
                 crd.mapped_by, 
+                crd.reviewed_by, 
                 crd.review_status, 
                 crd.mapping_comments,
+                crd.review_comments,
                 scd.uuid as source_concept_uuid, 
                 scd.code_schema as source_code_schema, 
                 scd.code_simple as source_code_simple, 
@@ -912,10 +914,9 @@ class ConceptMapVersion:
         )
 
         # todo: consider changing from this self-made cache to a regular one
-        terminology = dict()
+        terminology_cache = dict()
 
         for item in results:
-
             # Get the system
             source_system = item.source_system
             if source_system is None:
@@ -925,8 +926,8 @@ class ConceptMapVersion:
                 )
 
             # Get the Terminology
-            if source_system not in terminology.keys():
-                terminology.update(
+            if source_system not in terminology_cache.keys():
+                terminology_cache.update(
                     {source_system: load_terminology_version_with_cache(source_system)}
                 )
 
@@ -943,16 +944,30 @@ class ConceptMapVersion:
             else:
                 raise NotImplementedError("Only codeable concept and code schemas available for source concepts")
 
+            # Set up the depends on for the source concept
+            depends_on = None
+            if item.depends_on_property or item.depends_on_value_schema:
+                depends_on = app.models.codes.DependsOnData.setup_from_database_columns(
+                    depends_on_value_schema=item.depends_on_value_schema,
+                    depends_on_value_simple=item.depends_on_value_simple,
+                    depends_on_value_jsonb=item.depends_on_value_jsonb,
+                    depends_on_property=item.depends_on_property,
+                    depends_on_system=item.depends_on_system,
+                    depends_on_display=item.depends_on_display
+                )
+
             source_code_code_object = app.models.codes.Code(
                 system=None,
                 version=None,
+                code_schema=source_code_schema,
                 code=source_code_code,
                 display=source_code_display,
                 code_object=source_code_fhir_object,
-                terminology_version=source_system,
+                terminology_version=terminology_cache[source_system],
                 # from_fhir_terminology=None,  # In the future, we can check this if needed
                 from_custom_terminology=True if item.custom_terminology_code_uuid is not None else False,
-                custom_terminology_code_uuid=item.custom_terminology_code_uuid
+                custom_terminology_code_uuid=item.custom_terminology_code_uuid,
+                depends_on=depends_on
             )
 
             # Set up assigned_mapper
@@ -974,27 +989,29 @@ class ConceptMapVersion:
                 mapping_group=item.source_mapping_group,
                 previous_version_context=item.source_previous_version_context,
                 concept_map_version_uuid=self.uuid,
-                depends_on_property=item.depends_on_property,  # todo: update for new schema
-                depends_on_system=item.depends_on_system,  # todo: update for new schema
-                depends_on_value=item.depends_on_value,  # todo: update for new schema
-                depends_on_display=item.depends_on_display,  # todo: update for new schema
             )
             target_code = app.models.codes.Code(  # We only map to standards of code type
                 system=item.target_fhir_uri,
                 version=item.target_version,
                 code=item.target_concept_code,
                 display=item.target_concept_display,
+                from_custom_terminology=False  # we currently only map to standards
             )
             relationship = MappingRelationship.load_by_code_from_cache(
                 item.relationship_code
             )  # this needs optimization
+
+            mapped_by = ContentCreator.load_by_uuid_from_cache(item.mapped_by)
+            reviewed_by = ContentCreator.load_by_uuid_from_cache(item.reviewed_by)
 
             mapping = Mapping(
                 source_concept,
                 relationship,
                 target_code,
                 mapping_comments=item.mapping_comments,
-                author=item.author,
+                review_comments=item.review_comments,
+                mapped_by=mapped_by,
+                reviewed_by=reviewed_by,
                 uuid=item.mapping_uuid,
                 review_status=item.review_status,
                 reason_for_no_map=item.reason_for_no_map,  # todo: Why does this have this when the source_concept has it?
@@ -1427,7 +1444,7 @@ class ConceptMapVersion:
             "title": self.concept_map.title,
             "id": str(self.concept_map.uuid),
             "name": rcdm_name if self.concept_map.name is not None else None,
-            "contact": [{"name": self.concept_map.author}],
+            "contact": [{"name": self.concept_map.mapped_by}],
             "url": f"http://projectronin.io/fhir/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
             "purpose": self.get_use_case_description(),
@@ -1835,6 +1852,9 @@ class ContentCreator:  # Unless we have a better name for mapper/reviewer that c
 
     @classmethod
     def load_by_uuid(cls, uuid):
+        if uuid is None:
+            return None
+
         conn = get_db()
         result = conn.execute(
             text(
@@ -1870,10 +1890,6 @@ class SourceConcept:
     mapping_group: Optional[str] = None
     previous_version_context: Optional[dict] = None
     concept_map_version_uuid: Optional[UUID] = None  # why is this optional
-    depends_on_property: Optional[str] = None  # move to depends on object
-    depends_on_system: Optional[str] = None
-    depends_on_value: Optional[str] = None
-    depends_on_display: Optional[str] = None
     # save_for_discussion isn't here. Not needed yet?
 
     @property
@@ -1905,10 +1921,10 @@ class SourceConcept:
                 self.code,
                 self.display,
                 self.system,
-                self.depends_on_property,
-                self.depends_on_system,
-                self.depends_on_value,
-                self.depends_on_display,
+                self.code.depends_on.depends_on_property if self.code.depends_on else None,
+                self.code.depends_on.depends_on_system if self.code.depends_on else None,
+                self.code.depends_on.depends_on_value if self.code.depends_on else None,
+                self.code.depends_on.depends_on_display if self.code.depends_on else None,
             )
         )
 
@@ -2030,7 +2046,6 @@ class SourceConcept:
             "display": self.display,
             "system": self.system.serialize(),
             "comments": self.comments,
-            "additional_context": self.additional_context,
             "map_status": self.map_status,
             "assigned_mapper": str(self.assigned_mapper)
             if self.assigned_mapper
@@ -2054,16 +2069,16 @@ class Mapping:
 
     source: SourceConcept
     relationship: MappingRelationship
-    target: Code
+    target: app.models.codes.Code
     uuid: Optional[UUID] = None
     mapping_comments: Optional[str] = None
-    author: Optional[str] = None
+    mapped_by: ContentCreator = None
     conn: Optional[None] = None
     review_status: str = "ready for review"
     created_date: Optional[datetime.datetime] = None
     reviewed_date: Optional[datetime.datetime] = None
-    review_comment: Optional[str] = None
-    reviewed_by: Optional[str] = None
+    review_comments: Optional[str] = None
+    reviewed_by: Optional[ContentCreator] = None
     reason_for_no_map: Optional[str] = None
 
     def __post_init__(self):
@@ -2072,6 +2087,7 @@ class Mapping:
 
     @property
     def id(self):
+        # todo: investigate what to do here
         """
         Generates and returns an MD5 hash as a hexadecimal string.
 
@@ -2089,10 +2105,10 @@ class Mapping:
         # concatenate the required attributes into a string
         concat_str = (
             str(self.source.id)
-            + str(self.source.depends_on_property).strip()
-            + str(self.source.depends_on_system).strip()
-            + str(self.source.depends_on_value).strip()
-            + str(self.source.depends_on_display).strip()
+            # + str(self.source.depends_on_property).strip()
+            # + str(self.source.depends_on_system).strip()
+            # + str(self.source.depends_on_value).strip()
+            # + str(self.source.depends_on_display).strip()
             + self.relationship.code
             + self.target.code
             + self.target.display
@@ -2111,6 +2127,7 @@ class Mapping:
         pass
 
     def save(self):
+        # todo: update for CMv5
         """Saves the mapping relationship instance to the database."""
         self.conn.execute(
             text(
@@ -2133,7 +2150,7 @@ class Mapping:
                 "target_concept_display": self.target.display,
                 "target_concept_system_version_uuid": self.target.terminology_version_uuid,
                 "mapping_comments": self.mapping_comments,
-                "author": self.author,
+                "author": self.mapped_by,
                 "created_date": datetime.datetime.now(),
             },
         )
@@ -2154,7 +2171,7 @@ class Mapping:
             "relationship": self.relationship.serialize(),
             "target": self.target.serialize(),
             "mapping_comments": self.mapping_comments,
-            "author": self.author,
+            "author": self.mapped_by.first_last_name,
             "uuid": self.uuid,
             "review_status": self.review_status,
         }
@@ -2185,7 +2202,7 @@ class MappingSuggestion:
 
     uuid: UUID
     source_concept_uuid: UUID
-    code: Code
+    code: app.models.codes.Code
     suggestion_source: str
     confidence: float
     timestamp: datetime.datetime = None

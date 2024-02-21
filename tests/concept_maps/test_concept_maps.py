@@ -2,6 +2,7 @@ import unittest
 
 from app.app import create_app
 from app.database import get_db
+import app.concept_maps.models
 
 
 class ConceptMapTests(unittest.TestCase):
@@ -33,3 +34,9 @@ class ConceptMapTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.conn.rollback()
         self.conn.close()
+
+    def test_load_concept_map(self):
+        test_cm_version_uuid = "3534855d-e9f5-4514-9446-5a5d7b30edb4"  # Apposnd Observation to Ronin Observation version 12
+        cm_version = app.concept_maps.models.ConceptMapVersion(test_cm_version_uuid)
+
+        print(cm_version.mappings)

@@ -862,11 +862,11 @@ class ConceptMapVersionCreator:
             "target_code": previous_mapping.target.code,
             "target_display": previous_mapping.target.display,
             "mapping_comments": previous_mapping.mapping_comments,
-            "author": previous_mapping.author,
+            "author": previous_mapping.mapped_by,
             "review_status": previous_mapping.review_status,
             "created_date": previous_mapping.created_date,
             "reviewed_date": previous_mapping.created_date,
-            "review_comment": previous_mapping.review_comment,
+            "review_comment": previous_mapping.review_comments,
             "reviewed_by": previous_mapping.reviewed_by,
         }
         new_source_concept.update(
@@ -900,11 +900,11 @@ class ConceptMapVersionCreator:
             relationship=relationship,
             target=target_code,
             mapping_comments=previous_mapping.mapping_comments,
-            author=previous_mapping.author,
+            author=previous_mapping.mapped_by,
             review_status=previous_mapping.review_status,
             created_date=previous_mapping.created_date,
             reviewed_date=previous_mapping.reviewed_date,
-            review_comment=previous_mapping.review_comment,
+            review_comment=previous_mapping.review_comments,
             reviewed_by=previous_mapping.reviewed_by,
         )
 
@@ -940,10 +940,10 @@ class ConceptMapVersionCreator:
             relationship=relationship,
             target=target_code,
             mapping_comments=previous_mapping.mapping_comments,
-            author=previous_mapping.author,
+            author=previous_mapping.mapped_by,
             review_status="ready for review",
             created_date=previous_mapping.created_date,
-            review_comment=previous_mapping.review_comment,  # todo: how to handle this
+            review_comment=previous_mapping.review_comments,  # todo: how to handle this
         )
 
         new_mapping.save()

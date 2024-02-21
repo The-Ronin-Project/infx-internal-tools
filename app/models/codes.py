@@ -532,14 +532,14 @@ class Code:
         repr_string = f"Code({self.code}, {self.display}, {self.system}, {self.version}"
         depends_on_parts = []
 
-        if self.depends_on_property:
-            depends_on_parts.append(f"depends_on_property={self.depends_on_property}")
-        if self.depends_on_system:
-            depends_on_parts.append(f"depends_on_system={self.depends_on_system}")
-        if self.depends_on_value:
-            depends_on_parts.append(f"depends_on_value={self.depends_on_value}")
-        if self.depends_on_display:
-            depends_on_parts.append(f"depends_on_display={self.depends_on_display}")
+        if self.depends_on:
+            depends_on_parts.append(f"depends_on_property={self.depends_on.depends_on_property}")
+        if self.depends_on:
+            depends_on_parts.append(f"depends_on_system={self.depends_on.depends_on_system}")
+        if self.depends_on:
+            depends_on_parts.append(f"depends_on_value={self.depends_on.depends_on_value}")
+        if self.depends_on:
+            depends_on_parts.append(f"depends_on_display={self.depends_on.depends_on_display}")
 
         if depends_on_parts:
             repr_string += ", " + ", ".join(depends_on_parts)
