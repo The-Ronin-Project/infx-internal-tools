@@ -848,6 +848,7 @@ class ConceptMapVersion:
         Raises:
             BadRequestWithCode: If a source concept in the concept map version is missing a source system.
         """
+
         conn = get_db()
         query = """
             select 
@@ -858,7 +859,15 @@ class ConceptMapVersion:
                 crd.reviewed_by, 
                 crd.review_status, 
                 crd.mapping_comments,
+                crd.mapped_date_time,
                 crd.review_comments,
+                crd.reviewed_date_time,
+                crd.map_program_date_time,
+                crd.map_program_version,
+                crd.map_program_prediction_id,
+                crd.map_program_confidence_score,
+                crd.deleted_date_time,
+                crd.deleted_by,
                 scd.uuid as source_concept_uuid, 
                 scd.code_schema as source_code_schema, 
                 scd.code_simple as source_code_simple, 
@@ -1003,6 +1012,7 @@ class ConceptMapVersion:
 
             mapped_by = ContentCreator.load_by_uuid_from_cache(item.mapped_by)
             reviewed_by = ContentCreator.load_by_uuid_from_cache(item.reviewed_by)
+            deleted_by = ContentCreator.load_by_uuid_from_cache(item.deleted_by)
 
             mapping = Mapping(
                 source_concept,
@@ -1011,10 +1021,18 @@ class ConceptMapVersion:
                 mapping_comments=item.mapping_comments,
                 review_comments=item.review_comments,
                 mapped_by=mapped_by,
+                mapped_date_time=item.mapped_date_time,
                 reviewed_by=reviewed_by,
+                reviewed_date_time=item.reviewed_date_time,
                 uuid=item.mapping_uuid,
                 review_status=item.review_status,
                 reason_for_no_map=item.reason_for_no_map,  # todo: Why does this have this when the source_concept has it?
+                map_program_date_time=item.map_program_date_time,
+                map_program_version=item.map_program_version,
+                map_program_prediction_id=item.map_program_prediction_id,
+                map_program_confidence_score=item.map_program_confidence_score,
+                deleted_by=deleted_by,
+                deleted_date_time=item.deleted_date_time
             )
             if source_concept in self.mappings:
                 self.mappings[source_concept].append(mapping)
@@ -1205,12 +1223,13 @@ class ConceptMapVersion:
                                 source_code_code,
                             )
 
-                        # We want the text string array that is supposed to be json to be formatted correctly
-                        # If it's not an array it should return the original string
-                        if is_coding_array(source_code_code):
-                            source_code_code = transform_struct_string_to_json(
-                                source_code_code
-                            )
+                        # No longer needed in CMv5
+                        # # We want the text string array that is supposed to be json to be formatted correctly
+                        # # If it's not an array it should return the original string
+                        # if is_coding_array(source_code_code):
+                        #     source_code_code = transform_struct_string_to_json(
+                        #         source_code_code
+                        #     )
 
                         # Convert OIDs to URLs
                         for oid, uri in OID_URL_CONVERSIONS.items():
@@ -2079,19 +2098,19 @@ class Mapping:
     reviewed_by: Optional[ContentCreator] = None
     reviewed_date_time: Optional[datetime.datetime] = None
     review_comments: Optional[str] = None
-    reason_for_no_map: Optional[str] = None
-
-    # todo: implement at later date, but not needed at migration time
-    # map_program_date_time: Optional[datetime.datetime] = None
-    # map_program_version: Optional[str] = None
-    # map_program_prediction_id: Optional[str] = None
-    # map_program_confidence_score: Optional[str] = None
-    # deleted_date_time: Optional[datetime.datetime] = None
-    # deleted_by: Optional[ContentCreator] = None
+    reason_for_no_map: Optional[str] = None  # todo: this should only be accessed via the source
+    map_program_date_time: Optional[datetime.datetime] = None
+    map_program_version: Optional[str] = None
+    map_program_prediction_id: Optional[str] = None
+    map_program_confidence_score: Optional[str] = None
+    deleted_date_time: Optional[datetime.datetime] = None
+    deleted_by: Optional[ContentCreator] = None
 
     def __post_init__(self):
         self.conn = get_db()
         self.uuid = uuid.uuid4()
+
+        # todo: add warning if deleted data is populated but status is not deleted
 
     @property
     def id(self):
