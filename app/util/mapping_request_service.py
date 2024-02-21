@@ -1757,6 +1757,8 @@ def set_issues_resolved(issue_uuid_list):
     Assign an Informatics custom_terminologies.error_service_issue the final status of 'resolved'.
     @param issue_uuid_list: List of issue_uuid values from custom_terminologies.error_service_issue
     """
+    if issue_uuid_list is None or len(issue_uuid_list) == 0:
+        return
     conn = get_db()
     query = """
             UPDATE custom_terminologies.error_service_issue 
