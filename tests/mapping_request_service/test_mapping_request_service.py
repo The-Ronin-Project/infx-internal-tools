@@ -68,7 +68,7 @@ class MappingRequestServiceTests(unittest.TestCase):
 
             self.assertIn("category", additional_data)
             self.assertEqual(
-                json.loads(additional_data).get("category"),
+                additional_data.get("category"),
                 "SmartData",
             )
 

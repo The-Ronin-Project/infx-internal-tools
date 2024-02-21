@@ -842,3 +842,12 @@ class Code:
             deduplicated_list = list(set(json_list))
             unjsoned_list = [json.loads(x) for x in deduplicated_list]
             self.additional_data[key] = unjsoned_list[:5]
+
+@dataclass
+class AdditionalData:
+    # todo: do we need this?
+    """
+    A simple data class to hold additional data for a code or concept which needs to be mapped.
+    Internal use only, not part of FHIR or Ronin Common Data Model.
+    """
+    additional_data: dict = None

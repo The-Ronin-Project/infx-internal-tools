@@ -33,7 +33,8 @@ from app.helpers.api_helper import (
     make_post_request_async,
 )
 from app.helpers.format_helper import convert_string_to_datetime_or_none, normalized_codeable_concept_string, \
-    normalized_data_dictionary_string
+    normalized_data_dictionary_string, normalized_codeable_concept_depends_on, normalized_codeable_concept_and_display, \
+    normalized_primitive_code_and_display
 from app.helpers.message_helper import (
     message_exception_summary,
     message_exception_classname,
@@ -432,7 +433,7 @@ class MappingRequestService:
         # Step 0: Initialize and setup
 
         # API call paging
-        if page_size is None:
+        if page_size is None or page_size == 0:
             page_size = PAGE_SIZE
         cls.page_size = page_size
 
@@ -440,20 +441,21 @@ class MappingRequestService:
         cls.commit_by_batch = commit_by_batch
 
         # resource type
+        has_requested_resource_type = not (requested_resource_type is None or requested_resource_type == "")
         unsupported_resource_types = []
         supported_resource_types = [r.value for r in ResourceType]
         if (
-            requested_resource_type is not None
+            has_requested_resource_type
             and requested_resource_type not in supported_resource_types
         ):
             LOGGER.warning(
                 f"Support for the {requested_resource_type} resource type has not been implemented"
             )
             return
-        if requested_resource_type is None:
-            requested_resource_types = supported_resource_types
-        else:
+        if has_requested_resource_type:
             requested_resource_types = [requested_resource_type]
+        else:
+            requested_resource_types = supported_resource_types
 
         # issue type
         supported_issue_types = [u.value for u in IssueType]
@@ -471,20 +473,21 @@ class MappingRequestService:
             requested_issue_types = [requested_issue_type]
 
         # organization IDs
+        has_requested_organization_id = not (requested_organization_id is None or requested_organization_id == "")
         unsupported_organization_ids = [x.value for x in ExcludeTenant]
         supported_organization_ids = [i.value for i in IncludeTenant]
         if requested_organization_id in unsupported_organization_ids or (
             requested_organization_id not in supported_organization_ids
         ):
-            if requested_organization_id is not None:
+            if has_requested_organization_id:
                 LOGGER.warning(
                     f"The Content team does not provide concept maps for the tenant ID: {requested_organization_id}"
                 )
                 return
-        if requested_organization_id is None:
-            organization_ids = supported_organization_ids
-        else:
+        if has_requested_organization_id:
             organization_ids = [requested_organization_id]
+        else:
+            organization_ids = supported_organization_ids
 
         # Logging variables
         time_start = datetime.datetime.now()
@@ -916,40 +919,36 @@ class MappingRequestService:
                 Before being returned by this function, the processed_code (if an object) is normalized to a JSON string
                 that provides consistent format, consistent order for attributes, and consistent order for list entries.
                 When found is False, processed_code and processed_display are empty strings.
-            depends_on, additional_data are optional str inputs for input to create a Code()
-                Before being returned, depends_on (if an object) and additional_data are each normalized to JSON string
-                with consistent format, attribute order, and list entry order as described above.
+            depends_on, additional_data are inputs into prepare_code_for_terminology() which then creates the Code()
         """
         processed_code = ""
         processed_display = ""
         depends_on = None
-        additional_data = None
-        additional_data_dict = {}
-        false_result = False, processed_code, processed_display, depends_on, additional_data
+        additional_data = {}
+        false_result = False, processed_code, processed_display, None, None
 
         # Condition
         if resource_type == ResourceType.CONDITION:
             # Condition.code is a CodeableConcept
             if "code" not in raw_resource:
                 return false_result
-            raw_code = raw_resource["code"]
-            processed_code = normalized_codeable_concept_string(raw_code)
-            processed_display = raw_code.get("text")
+            (
+                processed_code,
+                processed_display
+            ) = normalized_codeable_concept_and_display(raw_resource["code"])
 
         # Medication
         elif resource_type == ResourceType.MEDICATION:
             # Medication.code is a CodeableConcept
             if "code" not in raw_resource:
                 return false_result
-            raw_code = raw_resource["code"]
-            processed_code = normalized_codeable_concept_string(raw_code)
-            processed_display = raw_code.get("text")
+            (
+                processed_code,
+                processed_display
+            ) = normalized_codeable_concept_and_display(raw_resource["code"])
 
             # todo: add a depends_on_list for Medication.ingredient.strength using ingredient, a list object
-            # if "ingredient" in raw_resource:
-            #      raw_ingredient = raw_resource["ingredient"]
-            #      if len(raw_ingredient) > 0:
-            #          depends_on_list = normalized_medication_ingredient_strength_depends_on_list(raw_ingredient)
+            # todo: see normalized_medication_ingredient_strength_depends_on_list(raw_resource["ingredient"])
 
         # Observation
         elif resource_type == ResourceType.OBSERVATION:
@@ -959,23 +958,25 @@ class MappingRequestService:
             if "category" in raw_resource:
                 if raw_resource["category"] and "text" in raw_resource["category"][0]:
                     category_for_additional_data = raw_resource["category"][0]["text"]
-                    additional_data_dict["category"] = category_for_additional_data
+                    additional_data["category"] = category_for_additional_data
 
             # Observation.value is a CodeableConcept
             if element == "Observation.value" or element == "Observation.valueCodeableConcept":
                 if "valueCodeableConcept" not in raw_resource:
                     return false_result
-                raw_code = raw_resource["valueCodeableConcept"]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["valueCodeableConcept"])
 
             # Observation.code is a CodeableConcept
             elif element == "Observation.code":
                 if "code" not in raw_resource:
                     return false_result
-                raw_code = raw_resource["code"]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["code"])
 
             # Observation.interpretation is a CodeableConcept
             elif element == "Observation.interpretation":
@@ -984,9 +985,10 @@ class MappingRequestService:
                     or len(raw_resource["interpretation"]) < (index + 1)
                 ):
                     return false_result
-                raw_code = raw_resource["interpretation"][index]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["interpretation"][index])
 
             # Observation.component.code is a CodeableConcept - location has an index
             elif element == "Observation.component.code":
@@ -998,23 +1000,21 @@ class MappingRequestService:
                     or "code" not in raw_resource["component"][index]
                 ):
                     return false_result
-                raw_code = raw_resource["component"][index]["code"]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["component"][index]["code"])
 
                 # Only SmartData category gets depends on
                 if category_for_additional_data == "SmartData":
                     # Set depends_on data
                     if "code" not in raw_resource:
                         return false_result
-                    depends_on = DependsOnData(
-                        depends_on_value=normalized_codeable_concept_string(raw_resource["code"]),
+                    depends_on = normalized_codeable_concept_depends_on(
+                        codeable_concept_object=raw_resource["code"],
                         depends_on_property="Observation.code"
                     )
-                    # todo: replace the above depends_on call with a 1-member depends_on_list for Observation.code
-                    # if "code" not in raw_resource:
-                    #      return false_result
-                    # normalized_codeable_concept_string(raw_resource["code"])
+                    # todo: align with changes: now> DependsOnData object, soon> list of DependsOnData objects
 
             # Observation.component.value is a CodeableConcept - location will have an index
             elif element == "Observation.component.value" or element == "Observation.component.valueCodeableConcept":
@@ -1026,9 +1026,11 @@ class MappingRequestService:
                     or "valueCodeableConcept" not in raw_resource["component"][index]
                 ):
                     return false_result
-                raw_code = raw_resource["component"][index]["valueCodeableConcept"]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["component"][index]["valueCodeableConcept"])
+
             else:
                 LOGGER.warning(
                     f"Unrecognized location for Observation error: {location}"
@@ -1040,9 +1042,10 @@ class MappingRequestService:
             if element == "Procedure.code":
                 if "code" not in raw_resource:
                     return false_result
-                raw_code = raw_resource["code"]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["code"])
 
         # DocumentReference
         elif resource_type == ResourceType.DOCUMENT_REFERENCE:
@@ -1050,9 +1053,10 @@ class MappingRequestService:
             if element == "DocumentReference.type":
                 if "type" not in raw_resource:
                     return false_result
-                raw_code = raw_resource["type"]
-                processed_code = normalized_codeable_concept_string(raw_code)
-                processed_display = raw_code.get("text")
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_codeable_concept_and_display(raw_resource["type"])
 
         # Appointment
         elif resource_type == ResourceType.APPOINTMENT:
@@ -1060,9 +1064,10 @@ class MappingRequestService:
             if element == "Appointment.status":
                 if "status" not in raw_resource:
                     return false_result
-                raw_code = raw_resource["status"]
-                processed_code = raw_code
-                processed_display = raw_code
+                (
+                    processed_code,
+                    processed_display
+                ) = normalized_primitive_code_and_display(raw_resource["status"])
 
         # Use extract_telecom_data function to extract the codes from each resource type
         # Extract codes for issues from all resource types for ContactPoint.system, .use
@@ -1098,9 +1103,6 @@ class MappingRequestService:
             )
             cls.all_skip_count += 1
             return false_result
-
-        # Collect the additional data
-        additional_data = normalized_data_dictionary_string(additional_data_dict)
 
         return True, processed_code, processed_display, depends_on, additional_data
 
@@ -1241,6 +1243,7 @@ class MappingRequestService:
             version=None,
             terminology_version=terminology_to_load_to,
             custom_terminology_code_uuid=new_code_uuid,
+            # todo: align with changes: now> input 4 str to Code(), soon> input 1 list of DependsOnData to Code()
             depends_on_system=depends_on.depends_on_system if depends_on else None,
             depends_on_display=depends_on.depends_on_display if depends_on else None,
             depends_on_property=depends_on.depends_on_property if depends_on else None,
@@ -1259,6 +1262,7 @@ class MappingRequestService:
                     "code": processed_code,
                     "display": processed_display,
                     "terminology_version_uuid": terminology_to_load_to.uuid,
+                    # todo: align with changes: inputs and query must be overhauled, now> 4 str, soon> code_depends_on
                     "depends_on_property": depends_on.depends_on_property if depends_on else None,
                     "depends_on_system": depends_on.depends_on_system if depends_on else None,
                     "depends_on_value": depends_on.depends_on_value if depends_on else None,
@@ -1426,6 +1430,7 @@ class MappingRequestService:
         if not cls.error_code_link_data:
             return
 
+        # todo: align with changes: depends_on* now> 4 str, soon> list of DependsOnData and use of code_depends_on table
         conn = get_db()
         try:
             # Create a temporary table and insert the data to it
@@ -1452,6 +1457,7 @@ class MappingRequestService:
             # Optimized bulk insert
             conn.execute(temp_error_data.insert(), cls.error_code_link_data)
 
+            # todo: align with: depends_on* now> 4 str, soon> list of DependsOnData and use of code_depends_on table
             # Insert from the temporary table, allowing the database to batch lookups
             conn.execute(
                 text(
@@ -1751,6 +1757,8 @@ def set_issues_resolved(issue_uuid_list):
     Assign an Informatics custom_terminologies.error_service_issue the final status of 'resolved'.
     @param issue_uuid_list: List of issue_uuid values from custom_terminologies.error_service_issue
     """
+    if issue_uuid_list is None or len(issue_uuid_list) == 0:
+        return
     conn = get_db()
     query = """
             UPDATE custom_terminologies.error_service_issue 
@@ -1863,9 +1871,9 @@ async def reprocess_resource(resource_uuid, token, client):
 
 def temporary_mapping_request_service(
         commit_by_batch: bool=True,
-        page_size: int=PAGE_SIZE,
-        requested_organization_id: str=None,
-        requested_resource_type: str=None,
+        page_size: int=0,
+        requested_organization_id: str="",
+        requested_resource_type: str="",
         requested_issue_type: str=None
 ):
     # todo: clean out this method altogether, when a temporary, manual error load task is not needed.
@@ -1888,6 +1896,16 @@ def temporary_mapping_request_service(
     if not LOGGER.hasHandlers():
         ch = logging.StreamHandler()
         LOGGER.addHandler(ch)
+
+    LOGGER.warning(
+        f"Loading data from the Interops Data Ingestion Validation Error Service\n"
+        + f"  Inputs: \n"
+        + f"    commit_by_batch={commit_by_batch}\n"
+        + f"    page_size={page_size}\n"
+        + f"    requested_organization_id={requested_organization_id}\n"
+        + f"    requested_resource_type={requested_resource_type}\n"
+        + f"    requested_issue_type={requested_issue_type}\n\n"
+    )
 
     # Developers: while locally testing updates to this function, you may temporarily force commit_by_batch to False
     # commit_by_batch = False
