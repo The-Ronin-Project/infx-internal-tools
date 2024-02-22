@@ -382,9 +382,9 @@ class Code:
             if custom_terminology_code_uuid is None:
                 raise ValueError(
                     "If initializing from a custom terminology, the custom_terminology_uuid must be provided")
-            if custom_terminology_code_id is None:
+            if custom_terminology_code_id is None and saved_to_db is True:
                 raise ValueError(
-                    "If initializing from a custom terminology, the code_id must be provided"
+                    "If loading from a custom terminology, custom_terminology_code_id must be provided; except for when it is first created and this is calculated"
                 )
 
         # Other set up
