@@ -8,6 +8,7 @@ import app.concept_maps.models
 import app.concept_maps.versioning_models
 import app.util.mapping_request_service
 import app.util.data_migration
+import app.util.mark_for_migration
 import app.util.concept_map_duplicate_codes
 import app.util.concept_map_v4_code_deduplication_hash
 from app.database import get_db
@@ -238,6 +239,26 @@ def perform_mark_concept_map_duplicates(
         concept_map_version_uuid,
         output_table_name,
     )
+
+
+@celery_app.task
+def mark_for_migration_task():
+    app.util.mark_for_migration.mark_content_for_migration()
+
+
+@celery_app.task
+def migrate_value_sets_expansion_member_data_task():
+    app.util.data_migration.migrate_value_sets_expansion_member()
+
+
+@celery_app.task
+def migrate_concept_maps_source_concept_data_task():
+    app.util.data_migration.migrate_concept_maps_source_concept()
+
+
+@celery_app.task
+def migrate_concept_maps_concept_relationship_data_task():
+    app.util.data_migration.migrate_concept_maps_concept_relationship()
 
 
 @celery_app.task

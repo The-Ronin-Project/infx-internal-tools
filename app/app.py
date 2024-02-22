@@ -576,6 +576,26 @@ def create_app(script_info=None):
         )
         return f"Task Created: concept_map_uuid={concept_map_uuid} concept_map_version_uuid={concept_map_version_uuid}, output_table_name={output_table_name}\nDid you check both active and pending versions?"
 
+    @app.route('/cmv5_migration/mark_for_migration', methods=["POST"])
+    def mark_for_migration_endpoint():
+        tasks.mark_for_migration_task.delay()
+        return "Mark for Migration Initiated"
+
+    @app.route('/cmv5_migration/migrate_expansion_member_data', methods=["POST"])
+    def expansion_member_data_migration_endpoint():
+        tasks.migrate_value_sets_expansion_member_data_task.delay()
+        return "Expansion Member Data Initiated"
+
+    @app.route('/cmv5_migration/migrate_source_concept_data', methods=["POST"])
+    def source_concept_data_migration_endpoint():
+        tasks.migrate_concept_maps_source_concept_data_task.delay()
+        return "Source Concept Data Initiated"
+
+    @app.route('/cmv5_migration/migrate_concept_relationship_data', methods=["POST"])
+    def concept_relationship_data_migration_endpoint():
+        tasks.migrate_concept_maps_concept_relationship_data_task.delay()
+        return "Concept Relationship Data Initiated"
+
     return app
 
 
