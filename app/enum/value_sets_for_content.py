@@ -18,4 +18,7 @@ class ValueSetsForContent(Enum):
     CERNER_SANDBOX_PROVIDER = "376fd0cc-6eb7-463c-bb67-7d01e1a5c1e2"
     P1941_PROVIDER = "59bb5f39-9541-458b-a681-1e1697f1bf28"
     APPOSND_PROVIDER = "29c8ff28-a088-44b3-b33e-60b393a146a0"
+    # Added post-migration to track things we've moved added to the migration
+    SURVEY_CANCER_ASSIGNMENT_VALUE_SETS = "a3fe57fd-ad6e-4cd6-850d-de7a0e680174"
+    TEST_CUSTOM_TERMINOLOGY_CODEABLE_CONCEPTS = "38b71457-88ba-4db3-b53d-0ce98f3bd54e"
 

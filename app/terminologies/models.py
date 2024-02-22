@@ -182,7 +182,7 @@ class Terminology:
         elif self.is_custom_terminology is True:
             conn = get_db()
             content_data = conn.execute(
-                text(  # todo: change to final table instead of code_poc
+                text(
                     """
                     select * from custom_terminologies.code_data
                     where terminology_version_uuid=:terminology_version_uuid
