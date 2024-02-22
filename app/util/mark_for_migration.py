@@ -333,6 +333,47 @@ def mark_custom_terminology_codes_for_migration():
         )
     )
 
+    # Finally, if a more recent version of a terminology exists than the one marked for migration, mark it too
+    # For example, if MDA Observations v10 was marked, we'd want to move v11 and v12 if they exist
+
+    conn.execute(
+        text(
+            """
+            -- Step 1: Identify Codes to Migrate with their Versions and Terminology
+            WITH CodesToMigrate AS (
+                SELECT
+                    ct.terminology_version_uuid,
+                    tv.terminology,
+                    CAST(tv.version AS FLOAT) AS version_marked
+                FROM custom_terminologies.code ct
+                JOIN public.terminology_versions tv ON ct.terminology_version_uuid = tv.uuid
+                WHERE ct.migrate = true
+                and tv.is_standard = false and tv.fhir_terminology=false
+                and tv.version != 'N/A'
+            ),
+            
+            -- Step 2: Find All More Recent Versions for Each Terminology
+            MoreRecentVersions AS (
+                SELECT
+                    tv.uuid,
+                    tv.terminology,
+                    CAST(tv.version AS FLOAT) AS version
+                FROM public.terminology_versions tv
+                JOIN CodesToMigrate ctm ON tv.terminology = ctm.terminology
+                WHERE CAST(tv.version AS FLOAT) > ctm.version_marked
+                and tv.is_standard = false and tv.fhir_terminology=false
+                and tv.version != 'N/A'
+            )
+            
+            -- Step 3: Update Records for All More Recent Versions
+            UPDATE custom_terminologies.code
+            SET migrate = true
+            WHERE terminology_version_uuid IN (SELECT uuid FROM MoreRecentVersions)
+              AND migrate = false
+            """
+        )
+    )
+
 
 def generate_report_of_content_to_move():
     conn = get_db()
@@ -668,16 +709,16 @@ def unmark_duplicates():
 def mark_content_for_migration():
     conn = get_db()
 
-    # data_normalization_registry = app.models.data_ingestion_registry.DataNormalizationRegistry()
-    # data_normalization_registry.load_entries()
-    #
-    # reset_mark_to_move()
-    #
-    # mark_concept_maps_for_migration(data_normalization_registry)
-    # mark_value_sets_for_migration(data_normalization_registry)
-    # mark_custom_terminology_codes_for_migration()
-    #
-    # generate_report_of_content_to_move()
+    data_normalization_registry = app.models.data_ingestion_registry.DataNormalizationRegistry()
+    data_normalization_registry.load_entries()
+
+    reset_mark_to_move()
+
+    mark_concept_maps_for_migration(data_normalization_registry)
+    mark_value_sets_for_migration(data_normalization_registry)
+    mark_custom_terminology_codes_for_migration()
+
+    generate_report_of_content_to_move()
 
     # Finally, identify specific duplicates which should NOT be moved and unmark them for moving
     unmark_duplicates()
