@@ -1473,7 +1473,7 @@ class ConceptMapVersion:
             "title": self.concept_map.title,
             "id": str(self.concept_map.uuid),
             "name": rcdm_name if self.concept_map.name is not None else None,
-            "contact": [{"name": self.concept_map.mapped_by}],
+            # "contact": [{"name": self.concept_map.mapped_by}],  # todo: we don't need serialization to work for migration
             "url": f"http://projectronin.io/fhir/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
             "purpose": self.get_use_case_description(),

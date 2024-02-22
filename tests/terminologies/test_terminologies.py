@@ -72,7 +72,7 @@ class TerminologyTests(unittest.TestCase):
         duplicate_insert_test_terminology = app.terminologies.models.Terminology.load(
             self.safe_term_uuid_dupl
         )
-
+        # todo: verify the underlying content is actually a duplicate and using migrated data
         code1 = app.models.codes.Code(
             code="test1",
             display="Test 1",
@@ -80,6 +80,7 @@ class TerminologyTests(unittest.TestCase):
             version=None,
             terminology_version=duplicate_insert_test_terminology,
             custom_terminology_code_uuid=uuid.uuid4(),
+            saved_to_db=False
         )  # This code is known to already exist in this terminology
 
         current_unix_timestamp = str(time.time())
@@ -90,6 +91,7 @@ class TerminologyTests(unittest.TestCase):
             version=None,
             terminology_version=duplicate_insert_test_terminology,
             custom_terminology_code_uuid=uuid.uuid4(),
+            saved_to_db=False
         )  # Use a unit timestamp to form a new code
 
         inserted_count = (

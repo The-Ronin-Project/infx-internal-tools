@@ -756,7 +756,8 @@ def normalized_codeable_concept_depends_on(
     # todo: align with changes: now> @return DependsOnData object, soon> @return 1-member list of DependsOnData
     """
     return app.models.codes.DependsOnData(
-        depends_on_value=normalized_codeable_concept_string(codeable_concept_object),
+        depends_on_value=codeable_concept_object,
+        depends_on_value_schema=app.models.codes.DependsOnSchemas.CODEABLE_CONCEPT,
         depends_on_property=depends_on_property
     )
 

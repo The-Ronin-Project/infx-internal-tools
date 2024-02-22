@@ -1268,6 +1268,8 @@ class CustomTerminologyRule(VSRule):
                     terminology_version=self.terminology_version,
                     from_custom_terminology=True,
                     custom_terminology_code_uuid=row.uuid,
+                    custom_terminology_code_id=row.code_id,
+                    stored_custom_terminology_deduplication_hash=row.deduplication_hash,
                     from_fhir_terminology=False,
                     saved_to_db=True,
                 )
@@ -1285,6 +1287,8 @@ class CustomTerminologyRule(VSRule):
                     code_object=code_object,
                     from_custom_terminology=True,
                     custom_terminology_code_uuid=row.uuid,
+                    custom_terminology_code_id=row.code_id,
+                    stored_custom_terminology_deduplication_hash=row.deduplication_hash,
                     from_fhir_terminology=False,
                     saved_to_db=True,
                 )

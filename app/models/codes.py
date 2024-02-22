@@ -12,6 +12,8 @@ import app.terminologies.models
 from app.database import get_db
 from app.errors import BadRequestWithCode, NotFoundException
 import app.helpers.id_helper
+from app.helpers.data_helper import serialize_json_object, load_json_string
+from app.helpers.format_helper import normalized_codeable_concept_string, normalized_data_dictionary_string
 
 
 class RoninCodeSchemas(Enum):
@@ -36,7 +38,7 @@ class FHIRCoding:
     @classmethod
     def deserialize(cls, json_input_raw) -> 'FHIRCoding':
         if type(json_input_raw) == str:
-            json_input = json.loads(json_input_raw)
+            json_input = load_json_string(json_input_raw)
         elif type(json_input_raw) == dict:
             json_input = json_input_raw
         else:
@@ -87,7 +89,7 @@ class FHIRCodeableConcept:
     @classmethod
     def deserialize(cls, json_input_raw) -> 'FHIRCodeableConcept':
         if type(json_input_raw) == str:
-            json_input = json.loads(json_input_raw)
+            json_input = load_json_string(json_input_raw)
         elif type(json_input_raw) == dict:
             json_input = json_input_raw
         else:
@@ -113,8 +115,18 @@ class FHIRCodeableConcept:
 
         return instance
 
+    def serialize_for_code_id(self):
+        """
+        Any calculations for code_id or deduplication_hash MUST use this method and NOT the general serialize method
+        """
+        return normalized_codeable_concept_string(
+            self.serialize()
+        )
+
     def serialize(self):
-        """ Serialize to a dict appropriate for json.dumps """
+        """
+        Should be used for unit tests and preparing data to go out over the wire of go into the database
+        """
         serialized = {}
         if self.text:
             serialized["text"] = self.text
@@ -133,12 +145,13 @@ class DependsOnData:
     """
     A simple data class to hold depends on data for a code or concept which needs to be mapped.
     Values contribute to the dependsOn property of a sourceConcept in a mapping in a FHIR ConceptMap resource.
+    Note: property and value are nearly always both present; system and display are almost never present.
     """
     def __init__(self,
                  depends_on_property: str,
                  depends_on_value_schema: DependsOnSchemas,
                  depends_on_value=None,
-                 depends_on_system: Optional[str] = None,  # todo: validate this?
+                 depends_on_system: Optional[str] = None,
                  depends_on_display: Optional[str] = None,
                  saved_to_db: bool = True,
                  ):
@@ -163,7 +176,7 @@ class DependsOnData:
         if self.depends_on_value_schema == DependsOnSchemas.STRING:
             return self.depends_on_value
         elif self.depends_on_value_schema == DependsOnSchemas.CODEABLE_CONCEPT:
-            return json.dumps(self.depends_on_value.serialize())
+            return self.depends_on_value.serialize_for_code_id()
         else:
             raise NotImplementedError(f"DependsOnData.depends_on_value_string not implemented for schema {self.depends_on_value_schema}")
 
@@ -586,16 +599,26 @@ class Code:
         are_equal = code1 == code2
         """
         if isinstance(other, Code):
-            return (
+            equal_check = (
                 (self.code == other.code)
                 and (self.display == other.display)
                 and (self.system == other.system)
                 and (self.version == other.version)
-                and (self.depends_on_property == other.depends_on_property)
-                and (self.depends_on_system == other.depends_on_system)
-                and (self.depends_on_value == other.depends_on_value)
-                and (self.depends_on_display == other.depends_on_display)
             )
+            if equal_check is True:
+                if self.depends_on is None and other.depends_on is None:
+                    return True
+                elif self.depends_on is not None and other.depends_on is None:
+                    return False
+                elif self.depends_on is None and other.depends_on is not None:
+                    return False
+                else:
+                    return(
+                        (self.depends_on.depends_on_property == other.depends_on.depends_on_property)
+                        and (self.depends_on.depends_on_system == other.depends_on.depends_on_system)
+                        and (self.depends_on.depends_on_value == other.depends_on.depends_on_value)
+                        and (self.depends_on.depends_on_display == other.depends_on.depends_on_display)
+                    )
         return False
 
     # @classmethod
@@ -612,17 +635,17 @@ class Code:
         if self.code_schema == RoninCodeSchemas.code:
             code_string = self.code
         elif self.code_schema == RoninCodeSchemas.codeable_concept:
-            code_string = json.dumps(self.code.serialize())
+            code_string = self.code.serialize_for_code_id()
         else:
             raise NotImplementedError(f"generate_deduplicate_hash not implemented for code_schema: {self.code_schema}")
 
         deduplication_hash = app.helpers.id_helper.generate_code_id(
             code_string=code_string,
-            display_string=self.display if self.display else "",
-            depends_on_value_string=self.depends_on.depends_on_value_string if self.depends_on else "",
-            depends_on_property=self.depends_on.depends_on_property if self.depends_on else "",
-            depends_on_system=self.depends_on.depends_on_system if self.depends_on else "",
-            depends_on_display=self.depends_on.depends_on_display if self.depends_on else ""
+            display_string=self.display,
+            depends_on_value_string=self.depends_on.depends_on_value_string if self.depends_on else None,
+            depends_on_property=self.depends_on.depends_on_property if self.depends_on else None,
+            depends_on_system=self.depends_on.depends_on_system if self.depends_on else None,
+            depends_on_display=self.depends_on.depends_on_display if self.depends_on else None
         )
 
         if self._stored_custom_terminology_deduplication_hash:
@@ -692,7 +715,7 @@ class Code:
             code_simple = self.code
         elif self.code_schema == RoninCodeSchemas.codeable_concept:
             code_schema_to_save = RoninCodeSchemas.codeable_concept.value
-            code_jsonb = json.dumps(self.code.serialize())
+            code_jsonb = self.code.serialize_for_code_id()
         else:
             raise NotImplementedError("Save only implemented for code and codeable concepts")
 
@@ -709,7 +732,7 @@ class Code:
                     "code_id": self.deduplication_hash,  # When saved for the first time, we generate this
                     "deduplication_hash": self.deduplication_hash,
                     "terminology_version_uuid": self.terminology_version_uuid,
-                    "additional_data": json.dumps(self.additional_data),
+                    "additional_data": normalized_data_dictionary_string(self.additional_data),
                 },
             ).fetchall()
         except Exception as e:
@@ -879,9 +902,9 @@ class Code:
             json_list = []
             for x in self.additional_data[key]:
                 if x is not None:
-                    json_list.append(json.dumps(x))
+                    json_list.append(serialize_json_object(x))
             deduplicated_list = list(set(json_list))
-            unjsoned_list = [json.loads(x) for x in deduplicated_list]
+            unjsoned_list = [load_json_string(x) for x in deduplicated_list]
             self.additional_data[key] = unjsoned_list[:5]
 
 @dataclass

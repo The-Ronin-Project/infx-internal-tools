@@ -383,6 +383,7 @@ class ValueSetTerminologyTests(unittest.TestCase):
         """
         Legacy unit test from the value_sets folder.
         """
+        # todo: verify content and update post-migration
         loinc_2_74 = Terminology.load("554805c6-4ad1-4504-b8c7-3bab4e5196fd")  # LOINC 2.74
 
         value_set_version = ValueSetVersion.load(
