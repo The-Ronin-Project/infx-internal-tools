@@ -854,7 +854,7 @@ class ConceptMapVersion:
         query = """
             select 
                 crd.mapping_id, 
-                crd.deduplication_hash,
+                crd.deduplication_hash as mapping_deduplication_hash,
                 crd.uuid as mapping_uuid, 
                 crd.mapped_by, 
                 crd.reviewed_by, 
@@ -898,11 +898,15 @@ class ConceptMapVersion:
                 cdo.depends_on_value_schema,
                 cdo.depends_on_value_simple,
                 cdo.depends_on_value_jsonb,
-                cdo.depends_on_display
+                cdo.depends_on_display,
+                ctcd.code_id as source_code_id,
+                ctcd.deduplication_hash as source_deduplication_hash
             from 
                 concept_maps.source_concept_data as scd
             left join concept_maps.concept_relationship_data as crd
                 on scd.uuid = crd.source_concept_uuid
+            left join custom_terminologies.code_data ctcd
+                on scd.custom_terminology_code_uuid = ctcd.uuid
             left join custom_terminologies.code_depends_on cdo
                 on scd.custom_terminology_code_uuid = cdo.code_uuid
             join concept_maps.relationship_codes
@@ -977,7 +981,9 @@ class ConceptMapVersion:
                 # from_fhir_terminology=None,  # In the future, we can check this if needed
                 from_custom_terminology=True if item.custom_terminology_code_uuid is not None else False,
                 custom_terminology_code_uuid=item.custom_terminology_code_uuid,
-                depends_on=depends_on
+                depends_on=depends_on,
+                custom_terminology_code_id=item.source_code_id,
+                stored_custom_terminology_deduplication_hash=item.source_deduplication_hash
             )
 
             # Set up assigned_mapper
@@ -1019,6 +1025,8 @@ class ConceptMapVersion:
                 source_concept,
                 relationship,
                 target_code,
+                mapping_id=item.mapping_id,
+                _stored_deduplication_hash=item.mapping_deduplication_hash,
                 saved_to_db=True,
                 mapping_comments=item.mapping_comments,
                 review_comments=item.review_comments,
