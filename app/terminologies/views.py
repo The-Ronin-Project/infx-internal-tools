@@ -4,6 +4,8 @@ import traceback
 from deprecated.classic import deprecated
 from flask import Blueprint, request, jsonify
 import dataclasses
+import sqlalchemy.exc
+from werkzeug.exceptions import Conflict
 
 from app.helpers.message_helper import message_exception_classname, message_exception_summary
 from app.models.codes import *
@@ -112,7 +114,10 @@ def create_code():
         terminology = Terminology.load(terminology_version_uuids[0])
         codes = create_code_payload_to_code_list(payload)
 
-        terminology.load_new_codes_to_terminology(codes)
+        try:
+            terminology.load_new_codes_to_terminology(codes)
+        except sqlalchemy.exc.IntegrityError as e:
+            raise Conflict("Cannot create a duplicate code.")
 
         return "Complete"
 

@@ -11,6 +11,7 @@ from sqlalchemy import text
 import app.terminologies.models
 from app.database import get_db
 from app.errors import BadRequestWithCode, NotFoundException
+import app.helpers.id_helper
 
 
 class RoninCodeSchemas(Enum):
@@ -121,20 +122,96 @@ class FHIRCodeableConcept:
             serialized["coding"] = [coding.serialize() for coding in self.coding]
         return serialized
 
-@dataclass
+
+class DependsOnSchemas(Enum):
+    STRING = "string"
+    CODEABLE_CONCEPT = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept"
+    # todo: add the rest in
+
+
 class DependsOnData:
     """
     A simple data class to hold depends on data for a code or concept which needs to be mapped.
     Values contribute to the dependsOn property of a sourceConcept in a mapping in a FHIR ConceptMap resource.
     """
-    depends_on_property: Optional[str] = None
-    depends_on_system: Optional[str] = None
-    depends_on_value: Optional[str] = None  # This could be a string or serialized JSON of a FHIR element or resource
-    depends_on_display: Optional[str] = None
+    def __init__(self,
+                 depends_on_property: str,
+                 depends_on_value_schema: DependsOnSchemas,
+                 depends_on_value=None,
+                 depends_on_system: Optional[str] = None,  # todo: validate this?
+                 depends_on_display: Optional[str] = None,
+                 saved_to_db: bool = True,
+                 ):
+        self.depends_on_property = depends_on_property
+        self.depends_on_system = depends_on_system
+        self.depends_on_display = depends_on_display
+
+        if not isinstance(depends_on_value_schema, DependsOnSchemas):
+            raise ValueError('depends_on_value_schema must be a DependsOnSchemas enum')
+        self.depends_on_value_schema = depends_on_value_schema,
+
+        if self.depends_on_value_schema == DependsOnSchemas.STRING:
+            if not isinstance(depends_on_value, str):
+                raise ValueError(f"depends_on_value_schema declared as string, so depends_on_value must be string")
+        elif self.depends_on_value_schema == DependsOnSchemas.CODEABLE_CONCEPT:
+            if not isinstance(depends_on_value, FHIRCodeableConcept):
+                raise ValueError(f"depends_on_value_schema declared as string, so depends_on_value must be FHIRCodeableConcept")
+        self.depends_on_value = depends_on_value
+
+    @property
+    def depends_on_value_string(self):
+        if self.depends_on_value_schema == DependsOnSchemas.STRING:
+            return self.depends_on_value
+        elif self.depends_on_value_schema == DependsOnSchemas.CODEABLE_CONCEPT:
+            return json.dumps(self.depends_on_value.serialize())
+        else:
+            raise NotImplementedError(f"DependsOnData.depends_on_value_string not implemented for schema {self.depends_on_value_schema}")
+
+    @classmethod
+    def setup_from_database_columns(
+            cls,
+            depends_on_property: str,
+            depends_on_value_schema: str,
+            depends_on_value_simple: Optional[str],
+            depends_on_value_jsonb: Optional[str],
+            depends_on_system: Optional[str],
+            depends_on_display: Optional[str]
+    ):
+        depends_on_value_schema_enum = DependsOnSchemas(depends_on_value_schema)
+
+        if depends_on_value_schema_enum == DependsOnSchemas.STRING:
+            if depends_on_value_simple is None:
+                raise ValueError("depends_on_value_simple must be provided when depends_on_value_schema is 'string'")
+            depends_on_value = depends_on_value_simple
+        elif depends_on_value_schema_enum == DependsOnSchemas.CODEABLE_CONCEPT:
+            try:
+                depends_on_value = FHIRCodeableConcept.deserialize(depends_on_value_jsonb)
+            except (json.JSONDecodeError, ValueError) as e:
+                raise ValueError("Unable to deserialize value provided in depends_on_jsonb")
+        else:
+            raise NotImplementedError("Only string and codeable concept supported in DependsOnData.setup_from_database_columns")
+
+        return cls(
+            depends_on_property=depends_on_property,
+            depends_on_value_schema=depends_on_value_schema_enum,
+            depends_on_value=depends_on_value,
+            depends_on_display=depends_on_display,
+            depends_on_system=depends_on_system,
+            saved_to_db=True  # since we are explicitly loading from database columns
+        )
+
+
+    @classmethod
+    def new(cls):
+        pass
+
+    def save_to_db(self):
+        pass
 
 
 @dataclass
 class AdditionalData:
+    # todo: why is this a separate class just for a dict?
     """
     A simple data class to hold additional data for a code or concept which needs to be mapped.
     Internal use only, not part of FHIR or Ronin Common Data Model.
@@ -174,11 +251,10 @@ class Code:
         additional_data=None,
         terminology_version: 'app.terminologies.models.Terminology' = None,
         terminology_version_uuid=None,
-        depends_on_property: str = None,
-        depends_on_system: str = None,
-        depends_on_value: str = None,
-        depends_on_display: str = None,
+        depends_on: DependsOnData = None,
         custom_terminology_code_uuid: Optional[uuid.UUID] = None,
+        custom_terminology_code_id: Optional[str] = None,
+        stored_custom_terminology_deduplication_hash: Optional[str] = None,
         fhir_terminology_code_uuid: Optional[uuid.UUID] = None,
         code_object: FHIRCodeableConcept = None,
         code_schema: RoninCodeSchemas = RoninCodeSchemas.code,
@@ -295,22 +371,26 @@ class Code:
         # Designate as custom terminology code or FHIR terminology code if applicable
         self.from_custom_terminology = from_custom_terminology
         self.from_fhir_terminology = from_fhir_terminology
+        self.custom_terminology_code_id = custom_terminology_code_id
+        self._stored_custom_terminology_deduplication_hash = stored_custom_terminology_deduplication_hash
 
         # Validate inputs for custom terminology requirements
         if code_schema == RoninCodeSchemas.codeable_concept:
             if self.from_custom_terminology is None or self.from_custom_terminology is False:
                 raise ValueError("Codeable concepts are only supported in custom terminologies")
-        if from_custom_terminology and custom_terminology_code_uuid is None:
-            raise ValueError(
-                "If initializing from a custom terminology, the custom_terminology_uuid must be provided")
+        if from_custom_terminology:
+            if custom_terminology_code_uuid is None:
+                raise ValueError(
+                    "If initializing from a custom terminology, the custom_terminology_uuid must be provided")
+            if custom_terminology_code_id is None and saved_to_db is True:
+                raise ValueError(
+                    "If loading from a custom terminology, custom_terminology_code_id must be provided; except for when it is first created and this is calculated"
+                )
 
         # Other set up
         self.additional_data = additional_data
 
-        self.depends_on_property = depends_on_property
-        self.depends_on_system = depends_on_system
-        self.depends_on_value = depends_on_value
-        self.depends_on_display = depends_on_display
+        self.depends_on = depends_on
 
         self._saved_to_db = saved_to_db
 
@@ -326,6 +406,7 @@ class Code:
             terminology_version_uuid=None,
             depends_on_property: str = None,
             depends_on_system: str = None,
+            depends_on_value_schema: DependsOnSchemas = None,
             depends_on_value: str = None,
             depends_on_display: str = None,
         ):
@@ -333,6 +414,17 @@ class Code:
         Instantiates a new code (not loaded from database).
         Be sure to call save() on it.
         """
+        depends_on = None
+        if depends_on_property or depends_on_value_schema:
+            depends_on = DependsOnData(
+                depends_on_property=depends_on_property,
+                depends_on_value_schema=depends_on_value_schema,
+                depends_on_value=depends_on_value,
+                depends_on_system=depends_on_system,
+                depends_on_display=depends_on_display
+
+            )
+
         return cls(
             system=system,
             version=version,
@@ -341,10 +433,7 @@ class Code:
             additional_data=additional_data,
             terminology_version=terminology_version,
             terminology_version_uuid=terminology_version_uuid,
-            depends_on_property=depends_on_property,
-            depends_on_system=depends_on_system,
-            depends_on_value=depends_on_value,
-            depends_on_display=depends_on_display,
+            depends_on=depends_on,
             custom_terminology_code_uuid=uuid.uuid4(),
             code_schema=RoninCodeSchemas.code,
             from_custom_terminology=True,
@@ -364,12 +453,24 @@ class Code:
             version: Optional[str] = None,
             depends_on_property: str = None,
             depends_on_system: str = None,
+            depends_on_value_schema: DependsOnSchemas = None,
             depends_on_value: str = None,
             depends_on_display: str = None,
     ):
         custom_terminology_code_uuid = custom_terminology_code_uuid
         if custom_terminology_code_uuid is None:
             custom_terminology_code_uuid = uuid.uuid4()
+
+        depends_on = None
+        if depends_on_property or depends_on_value_schema:
+            depends_on = DependsOnData(
+                depends_on_property=depends_on_property,
+                depends_on_value_schema=depends_on_value_schema,
+                depends_on_value=depends_on_value,
+                depends_on_system=depends_on_system,
+                depends_on_display=depends_on_display
+
+            )
 
         return cls(
                 system=system,
@@ -379,10 +480,7 @@ class Code:
                 additional_data=additional_data,
                 terminology_version=terminology_version,
                 terminology_version_uuid=terminology_version_uuid,
-                depends_on_property=depends_on_property,
-                depends_on_system=depends_on_system,
-                depends_on_value=depends_on_value,
-                depends_on_display=depends_on_display,
+                depends_on=depends_on,
                 custom_terminology_code_uuid=custom_terminology_code_uuid,
                 fhir_terminology_code_uuid=None,
                 code_object=code_object,
@@ -443,14 +541,14 @@ class Code:
         repr_string = f"Code({self.code}, {self.display}, {self.system}, {self.version}"
         depends_on_parts = []
 
-        if self.depends_on_property:
-            depends_on_parts.append(f"depends_on_property={self.depends_on_property}")
-        if self.depends_on_system:
-            depends_on_parts.append(f"depends_on_system={self.depends_on_system}")
-        if self.depends_on_value:
-            depends_on_parts.append(f"depends_on_value={self.depends_on_value}")
-        if self.depends_on_display:
-            depends_on_parts.append(f"depends_on_display={self.depends_on_display}")
+        if self.depends_on:
+            depends_on_parts.append(f"depends_on_property={self.depends_on.depends_on_property}")
+        if self.depends_on:
+            depends_on_parts.append(f"depends_on_system={self.depends_on.depends_on_system}")
+        if self.depends_on:
+            depends_on_parts.append(f"depends_on_value={self.depends_on.depends_on_value}")
+        if self.depends_on:
+            depends_on_parts.append(f"depends_on_display={self.depends_on.depends_on_display}")
 
         if depends_on_parts:
             repr_string += ", " + ", ".join(depends_on_parts)
@@ -509,8 +607,40 @@ class Code:
     #     # todo: implement as future optimization
     #     pass
 
-    def generate_deduplicate_hash(self):
-        return ""  # todo: obviously, change this for the hash
+    @property
+    def deduplication_hash(self):
+        if self.code_schema == RoninCodeSchemas.code:
+            code_string = self.code
+        elif self.code_schema == RoninCodeSchemas.codeable_concept:
+            code_string = json.dumps(self.code.serialize())
+        else:
+            raise NotImplementedError(f"generate_deduplicate_hash not implemented for code_schema: {self.code_schema}")
+
+        deduplication_hash = app.helpers.id_helper.generate_code_id(
+            code_string=code_string,
+            display_string=self.display if self.display else "",
+            depends_on_value_string=self.depends_on.depends_on_value_string if self.depends_on else "",
+            depends_on_property=self.depends_on.depends_on_property if self.depends_on else "",
+            depends_on_system=self.depends_on.depends_on_system if self.depends_on else "",
+            depends_on_display=self.depends_on.depends_on_display if self.depends_on else ""
+        )
+
+        if self._stored_custom_terminology_deduplication_hash:
+            if deduplication_hash != self._stored_custom_terminology_deduplication_hash:
+                logging.warning(f"Stored deduplication hash does not match calculated one. Custom terminology code uuid: {self.custom_terminology_code_uuid}")
+
+        return deduplication_hash
+
+    @property
+    def code_id(self):
+        """
+        If the code is in a custom terminology, it will retrieve the code_id.
+        Otherwise, it will generate it on the fly.
+        """
+        if self.from_custom_terminology:
+            return self.custom_terminology_code_id
+        else:
+            return self.deduplication_hash
 
     def save(self,
              on_conflict_do_nothing: bool = False
@@ -518,6 +648,8 @@ class Code:
         if self._saved_to_db is True:
             # todo: should this raise an exception or just return?
             raise Exception("Code object is already saved; cannot save again")
+        if not self.from_custom_terminology:
+            raise Exception("Code object can only save if custom terminology")
 
         conn = get_db()
         query_text = """
@@ -529,6 +661,7 @@ class Code:
                             code_simple,
                             code_jsonb,
                             code_id,
+                            deduplication_hash,
                             terminology_version_uuid, 
                             additional_data
                         )
@@ -540,6 +673,7 @@ class Code:
                             :code_simple,
                             :code_jsonb,
                             :code_id,
+                            :deduplication_hash,
                             :terminology_version_uuid, 
                             :additional_data
                         )
@@ -572,7 +706,8 @@ class Code:
                     "code_schema": code_schema_to_save,
                     "code_simple": code_simple,
                     "code_jsonb": code_jsonb,
-                    "code_id": self.generate_deduplicate_hash(),
+                    "code_id": self.deduplication_hash,  # When saved for the first time, we generate this
+                    "deduplication_hash": self.deduplication_hash,
                     "terminology_version_uuid": self.terminology_version_uuid,
                     "additional_data": json.dumps(self.additional_data),
                 },
@@ -606,12 +741,22 @@ class Code:
         code_data = conn.execute(
             text(
                 """
-                select code.uuid, code.code_schema, code.code_simple, code.code_jsonb, 
-                code.display, 
-                tv.fhir_uri as system_url, tv.version, tv.terminology as system_name, tv.uuid as terminology_version_uuid
+                select 
+                    code.uuid, 
+                    code.code_id,
+                    code.deduplication_hash,
+                    code.code_schema, 
+                    code.code_simple, 
+                    code.code_jsonb, 
+                    code.display, 
+                    code.deduplication_hash,
+                    tv.fhir_uri as system_url, 
+                    tv.version, 
+                    tv.terminology as system_name, 
+                    tv.uuid as terminology_version_uuid
                 from custom_terminologies.code_data as code
                 join terminology_versions tv
-                on code.terminology_version_uuid = tv.uuid
+                    on code.terminology_version_uuid = tv.uuid
                 where code.uuid=:code_uuid
                 """
             ),
@@ -640,6 +785,8 @@ class Code:
             display=display,
             terminology_version_uuid=code_data.terminology_version_uuid,
             custom_terminology_code_uuid=code_uuid,
+            custom_terminology_code_id=code_data.code_id,
+            stored_custom_terminology_deduplication_hash=code_data.deduplication_hash,
             from_custom_terminology=True,
             code_object=code_object,
             code_schema=code_schema,
@@ -736,3 +883,12 @@ class Code:
             deduplicated_list = list(set(json_list))
             unjsoned_list = [json.loads(x) for x in deduplicated_list]
             self.additional_data[key] = unjsoned_list[:5]
+
+@dataclass
+class AdditionalData:
+    # todo: do we need this?
+    """
+    A simple data class to hold additional data for a code or concept which needs to be mapped.
+    Internal use only, not part of FHIR or Ronin Common Data Model.
+    """
+    additional_data: dict = None

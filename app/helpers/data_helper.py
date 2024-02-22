@@ -67,7 +67,12 @@ def serialize_json_object(json_object) -> str:
     sort_keys=True - sort the keys in the output string alphabetically; respects the current order of list elements
     ensure_ascii=False - ensures that double quotes are used to wrap strings in the output, needed for SQL query format
     separators=(",", ":") - omits space characters from JSON syntax, but retains space characters inside JSON content
+
+    @return (str) - a serialized JSON string, or "" (an empty string) if the input json_object was None
     """
+    # Avoid returning the str value "null" which is what json.dumps() returns for a None json_object
+    if json_object is None:
+        return ""
     return json.dumps(json_object, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
@@ -104,7 +109,7 @@ def order_object_list(input_object_list) -> list:
 
 def cleanup_json_string(input_json_string: str) -> str:
     """
-    A convenience function for steps in JSON string re-formatting. See notes for p.
+    A convenience function for steps in JSON string re-formatting.
 
     A function to put any JSON serialized string into a consistent format and consistent attribute order.
     This function does NOT address list member order which is a critical issue in INFX Systems processing.
@@ -117,9 +122,11 @@ def cleanup_json_string(input_json_string: str) -> str:
 
     2. RCDM profile JSON:
     Call load_json_string(),
-    provide and call a normalization function like normalize_source_codeable_concept() to prune the object attributes,
+    provide and call a normalization function like normalized_source_codeable_concept() to prune the object attributes,
     call order_object_list() on any lists, then
     call serialize_json_object().
+
+    @return a serialized JSON string, or None if the input string was None.
     """
     json_object = load_json_string(input_json_string)
     return serialize_json_object(json_object)
@@ -127,8 +134,11 @@ def cleanup_json_string(input_json_string: str) -> str:
 
 def hash_string(input_string: str) -> str:
     """
-    For all hashed id values - like mapping_id and code_id - caller is responsible for a correctly formed input_string
+    For all hashed id values - like mapping_id and code_id - caller is responsible for a correctly formed input_string.
+    @return a serialized JSON string, or "" (an empty string) if the input string was None.
     """
+    if input_string is None:
+        return ""
     # create a new md5 hash object
     hash_object = hashlib.md5()
     # update the hash object with the bytes-like object
@@ -139,7 +149,8 @@ def hash_string(input_string: str) -> str:
 
 def hash_jsonb(input_object) -> str:
     """
-    serialize an object to a string and then hash the string
+    Serialize an object to a string and then hash the string
+    @return a serialized JSON string, or "" (an empty string) if the input object was None.
     """
     return hash_string(serialize_json_object(input_object))
 
@@ -207,11 +218,14 @@ def escape_sql_input_value(input_string: str) -> str:
     # The split('".') used to find colon characters in content could also be handy to find cases like {"mine":true}
 
 
-def normalize_source_ratio(input_object):
+def normalized_source_ratio(input_object):
     """
     shape the Ratio attributes as needed to conform to the RCDM profile - remove the unsupported attributes -
     require required attributes
+    @return the normalized JSON object, or None if no valid attributes were present in the input_object
     """
+    if input_object is None:
+        return None
     numerator = input_object.get("numerator")
     denominator = input_object.get("denominator")
     if numerator is None or denominator is None:
@@ -220,24 +234,54 @@ def normalize_source_ratio(input_object):
             description="Ratio was expected, but one or more attributes is missing",
             errors="Invalid Ratio"
         )
+    normalized_numerator = normalized_quantity(numerator)
+    normalized_denominator = normalized_quantity(denominator)
+    if normalized_numerator is None or normalized_denominator is None:
+        return None
     output_object = {
-        "numerator": numerator,
-        "denominator": denominator
+        "numerator": normalized_numerator,
+        "denominator": normalized_denominator
     }
     return output_object
 
 
-def normalize_source_codeable_concept(input_object):
+def normalized_quantity(input_object):
+    """
+    shape Quantity attributes as needed to conform to the RCDM profile - remove the unsupported attributes -
+    require required attributes
+    @return the normalized JSON object, or None if no valid attributes were present in the input_object
+    """
+    if input_object is None:
+        return None
+    output_object = {}
+    code = input_object.get("code")
+    if code is not None:
+        output_object["code"] = code
+    system = input_object.get("system")
+    if system is not None:
+        output_object["system"] = system
+    unit = input_object.get("unit")
+    if unit is not None:
+        output_object["unit"] = unit
+    value = input_object.get("value")
+    if value is not None:
+        output_object["value"] = value
+    return output_object if len(output_object) > 0 else None
+
+
+def normalized_source_codeable_concept(input_object):
     """
     shape the CodeableConcept attributes as needed to conform to the RCDM profile - remove the unsupported attributes -
     require required attributes - calls order_object_list() on "coding" list to ensure members are in consistent order
     """
+    if input_object is None:
+        return None
     coding_list = input_object.get("coding")
     text_value = input_object.get("text")
     if coding_list is None and text_value is None:
         raise BadDataError(
             code="CodeableConcept.schema",
-            description="CodeableConcept was expected, but the object has no coding or text attribute at the top level",
+            description="CodeableConcept was expected, but the object has no coding or text attribute",
             errors="Invalid CodeableConcept"
         )
     if coding_list is not None:
@@ -256,6 +300,7 @@ def normalize_source_codeable_concept(input_object):
     if text_value is not None:
         output_object["text"] = text_value
     return output_object
+    # todo: revise to cover the unlikely edge case that non-standard attributes are in tenant data - see ratio function
 
 
 def contains_double_quoted_strings(input_string: str) -> bool:

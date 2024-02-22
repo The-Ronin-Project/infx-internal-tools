@@ -6,7 +6,7 @@ import structlog
 from decouple import config
 from deprecated.classic import deprecated
 from flask import Flask, jsonify, request, Response
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, Conflict
 
 import app.concept_maps.views as concept_map_views
 import app.models.rxnorm as rxnorm
@@ -62,6 +62,14 @@ def create_app(script_info=None):
     def ping():
         """Returns a simple 'OK' response to indicate that the service is up and running."""
         return "OK"
+
+    @app.errorhandler(Conflict)
+    def handle_werkzeug_conflict(e):
+        rollback_and_close_connection_if_open()
+        return jsonify({
+            "code": "409 Conflict",
+            "message": e.description
+        }), 409
 
     @app.errorhandler(BadRequestWithCode)
     def handle_bad_request_with_code(e):
@@ -475,10 +483,22 @@ def create_app(script_info=None):
 
     @app.route("/mapping_request_service", methods=["POST"])
     def perform_mapping_request_service_endpoint():
-        page_size = request.json.get('page_size')
-        requested_organization_id = request.json.get('requested_organization_id')
-        requested_resource_type = request.json.get('requested_resource_type')
+        # set the params that indicate "get everything"
+        page_size = 0
+        requested_organization_id = ""
+        requested_resource_type = ""
+        # see if we should do anything different from "get everything"
+        params = request.json
+        if params is not None and len(request.json) > 0:
+            if params.get('page_size') is not None:
+                page_size = params.get('page_size')
+            if params.get('requested_organization_id') is not None:
+                requested_organization_id = params.get('requested_organization_id')
+            if params.get('requested_resource_type') is not None:
+                requested_resource_type = params.get('requested_resource_type')
+        # do the work
         tasks.perform_mapping_request_check.delay(page_size, requested_organization_id, requested_resource_type)
+        # created
         return f"Task Created: page_size={page_size} requested_organization_id={requested_organization_id}, requested_resource_type={requested_resource_type}"
 
     @app.route("/concept_map_v4_duplicate_check", methods=["POST"])

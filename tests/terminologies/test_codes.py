@@ -113,7 +113,9 @@ class CodeClassTests(unittest.TestCase):
             code_object=self.example_codeable_concept,
             terminology_version=self.example_terminology,
             from_custom_terminology=True,
-            custom_terminology_code_uuid=uuid.uuid4()
+            custom_terminology_code_uuid=uuid.uuid4(),
+            custom_terminology_code_id="md5hash",
+            stored_custom_terminology_deduplication_hash="md5hash"
         )
 
         self.assertEqual("Anemia, hemolytic, acquired (CMS/HCC)", codeable_concept.display)
@@ -413,10 +415,8 @@ class CodeAPITests(unittest.TestCase):
             content_type="application/json",
         )
         result = response.json
-        assert response.status == "400 BAD REQUEST"
-        assert result.get("code") == "Terminology.create_code.database_error"
-        error_text = "(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint"
-        assert error_text in result.get("message")
+        assert response.status == "409 CONFLICT"
+        assert result.get("code") == "409 Conflict"
 
     def test_create_code_fhir(self):
         """

@@ -5,17 +5,21 @@ import time
 import uuid
 import traceback
 import sys
+import json
 from math import floor
 
 # from decouple import config
-from sqlalchemy import text
+from sqlalchemy import text, MetaData, Table, Column, String, Row, Boolean, DateTime
+from sqlalchemy.dialects.postgresql import UUID, JSONB, JSON
 
+from app.database import get_db
 from app.enum.concept_maps_for_content import ConceptMapsForContent
 from app.enum.concept_maps_for_systems import ConceptMapsForSystems
 from app.helpers.format_helper import IssuePrefix, \
-    prepare_additional_data_for_storage, filter_unsafe_depends_on_value, prepare_code_and_display_for_storage, \
-    prepare_depends_on_value_for_storage
-from app.helpers.id_helper import generate_code_id
+    prepare_additional_data_for_storage, filter_unsafe_depends_on_value, prepare_code_and_display_for_storage_migration, \
+    prepare_depends_on_value_for_storage, prepare_binding_and_value_for_jsonb_insert_migration, \
+    prepare_depends_on_attributes_for_code_id_migration
+from app.helpers.id_helper import generate_code_id, generate_mapping_id_with_source_code_values
 from app.helpers.message_helper import message_exception_summary
 
 # from sqlalchemy.dialects.postgresql import UUID as UUID_column_type
@@ -290,7 +294,6 @@ def migrate_custom_terminologies_code(
     """
     migrate_database_table() helper function for when the original table_name is "custom_terminologies.code"
     """
-    from app.database import get_db
 
     # INFO log level leads to I/O overload due to httpx logging per issue, for 1000s of issues. At an arbitrary point in
     # processing, the error task overloads and experiences a TCP timeout, causing some number of errors to not be loaded
@@ -502,7 +505,7 @@ def migrate_custom_terminologies_code(
                             code_jsonb,
                             code_string_for_code_id,
                             display_string_for_code_id
-                        ) = prepare_code_and_display_for_storage(row.code, row.display)
+                        ) = prepare_code_and_display_for_storage_migration(row.code, row.display)
 
                         # filter_unsafe_depends_on_value
                         (
@@ -511,20 +514,19 @@ def migrate_custom_terminologies_code(
                         ) = filter_unsafe_depends_on_value(row.depends_on_value)
 
                         # has_depends_on
-                        # todo: for today, pretend we do not know depends_on is a list
                         has_depends_on = (rejected_depends_on_value is None and depends_on_value is not None)
                         (
                             depends_on_value_schema,
                             depends_on_value_simple,
                             depends_on_value_jsonb,
-                            depends_on_value_string
-                        ) = prepare_depends_on_value_for_storage(depends_on_value)
-                        depends_on_value_for_code_id = ""
-                        depends_on_value_for_code_id += (
-                                convert_null_to_empty(depends_on_value_string) +
-                                convert_null_to_empty(row.depends_on_property) +
-                                convert_null_to_empty(row.depends_on_system) +
-                                convert_null_to_empty(row.depends_on_display)
+                            depends_on_value_string,
+                            depends_on_property_string
+                        ) = prepare_depends_on_value_for_storage(depends_on_value, row.depends_on_property)
+                        depends_on_value_for_code_id = prepare_depends_on_attributes_for_code_id_migration(
+                            convert_null_to_empty(depends_on_value_string),
+                            convert_null_to_empty(depends_on_property_string),
+                            convert_null_to_empty(row.depends_on_system),
+                            convert_null_to_empty(row.depends_on_display)
                         )
 
                         # prepare_additional_data_for_storage
@@ -536,7 +538,7 @@ def migrate_custom_terminologies_code(
                         # code_id (and deduplication_hash)
                         code_id = generate_code_id(
                             code_string=code_string_for_code_id,
-                            display=display_string_for_code_id,
+                            display_string=display_string_for_code_id,
                             depends_on_value_string=depends_on_value_for_code_id,
                         )
                         deduplication_hash = code_id
@@ -545,10 +547,13 @@ def migrate_custom_terminologies_code(
                         code_uuid = uuid.uuid4()
 
                         # jsonb columns get special handling
-                        if code_jsonb is None:
-                            insert_code_jsonb = " :code_jsonb, "
-                        else:
-                            insert_code_jsonb = f" '{code_jsonb}'::jsonb, "
+                        (
+                            insert_code_jsonb,
+                            insert_none_jsonb
+                        ) = prepare_binding_and_value_for_jsonb_insert_migration(
+                            insert_column_name="code_jsonb",
+                            normalized_json_string=code_jsonb
+                        )
 
                         # code_insert_query vs. code_insert_issue_query - send issues to the issue table
                         code_insert_query = (
@@ -579,10 +584,8 @@ def migrate_custom_terminologies_code(
                             "additional_data": additional_data,
                             "old_uuid": row.uuid,
                         }
-
-                        # jsonb
-                        if code_jsonb is None:
-                            insert_values.update({"code_jsonb": code_jsonb})
+                        if insert_none_jsonb is not None:
+                            insert_values.update(insert_none_jsonb)
 
                         # issue_type
                         has_code_issue = False
@@ -650,17 +653,19 @@ def migrate_custom_terminologies_code(
 
                         # In real data, the only lists were unsafe: ALL migrated depends_on lists have exactly 1 member
                         # created by converting the single value to a 1-member list. That's why this block need not loop
-                        # todo: for today, pretend we do not know depends_on is a list
                         if has_depends_on:
 
                             # uuid
                             depends_on_uuid = uuid.uuid4()
 
                             # jsonb
-                            if depends_on_value_jsonb is None:
-                                insert_depends_on_value_jsonb = " :depends_on_value_jsonb, "
-                            else:
-                                insert_depends_on_value_jsonb = f" '{depends_on_value_jsonb}'::jsonb, "
+                            (
+                                insert_depends_on_value_jsonb,
+                                insert_none_jsonb
+                            ) = prepare_binding_and_value_for_jsonb_insert_migration(
+                                insert_column_name="depends_on_value_jsonb",
+                                normalized_json_string=depends_on_value_jsonb
+                            )
 
                             # depends_on_insert_query vs. depends_on_insert_issue_query - FK to normal vs. issues table
                             depends_on_insert_query = (
@@ -689,10 +694,8 @@ def migrate_custom_terminologies_code(
                                 "code_uuid": code_uuid,
                                 "old_uuid": row.uuid,
                             }
-
-                            # jsonb
-                            if depends_on_value_jsonb is None:
-                                insert_values.update({"depends_on_value_jsonb": depends_on_value_jsonb})
+                            if insert_none_jsonb is not None:
+                                insert_values.update(insert_none_jsonb)
 
                             # issue_type
                             if has_code_issue is True or has_depends_on_issue is True:
@@ -762,7 +765,139 @@ def migrate_concept_maps_source_concept(
     """
     migrate_database_table() helper function for when the original table_name is "concept_maps.source_concept"
     """
-    return  # stub
+    BATCH_SIZE = 25000
+    conn = get_db()
+
+    # Set up SQLAlchemy definitions
+    metadata = MetaData()
+    source_concept_data = Table(
+        "source_concept_data",
+        metadata,
+        Column("uuid", UUID, nullable=False, primary_key=True),
+        Column("code_schema", String, nullable=False),
+        Column("code_simple", String, nullable=True),
+        Column(
+            "code_jsonb",
+            JSONB(none_as_null=True),
+            nullable=True,
+        ),
+        Column("display", String, nullable=False),
+        Column("system_uuid", UUID, nullable=False),
+        Column("comments", String, nullable=True),
+        Column("map_status", String, nullable=False),
+        Column("concept_map_version_uuid", UUID, nullable=False),
+        Column("assigned_mapper", UUID, nullable=True),
+        Column("assigned_reviewer", UUID, nullable=True),
+        Column("no_map", Boolean, nullable=True),
+        Column("reason_for_no_map", String, nullable=True),
+        Column("mapping_group", String, nullable=True),
+        Column(
+            "previous_version_context",
+            JSON(none_as_null=True),
+            nullable=True,
+        ),
+        Column("custom_terminology_code_uuid", UUID, nullable=True),
+        Column("save_for_discussion", Boolean, nullable=True),
+        schema="concept_maps",
+    )
+
+    # Migrate data that has EITHER no custom_terminology_uuid OR the custom_terminology_uuid
+    # is already migrated to custom_terminologies.code_data
+    source_concept_migrated = False
+    while source_concept_migrated is False:
+        source_concept_results = conn.execute(
+            text(
+                """
+                select sc.*
+                from concept_maps.source_concept sc
+                join concept_maps.concept_map_version cmv
+                on cmv.uuid = sc.concept_map_version_uuid
+                where cmv.migrate=true
+                and (custom_terminology_uuid is null
+                or custom_terminology_uuid in (select uuid from custom_terminologies.code_data))
+                and sc.uuid not in (select uuid from concept_maps.source_concept_data)
+                limit :batch_size
+                """
+            ), {
+                "batch_size": BATCH_SIZE
+            }
+        ).fetchall()
+
+        if source_concept_results:
+            data_to_migrate = []
+            for row in source_concept_results:
+                (
+                    code_schema,
+                    code_simple,
+                    code_jsonb,
+                    _code_string_for_code_id,
+                    _display_string_for_code_id
+                ) = prepare_code_and_display_for_storage_migration(row.code, row.display)
+
+                data_to_migrate.append({
+                    "uuid": row.uuid,
+                    "code_schema": code_schema,
+                    "code_simple": code_simple,
+                    "code_jsonb": code_jsonb,
+                    "display": row.display,
+                    "system_uuid": row.system, # Note name change
+                    "comments": row.comments,
+                    "map_status": row.map_status,
+                    "concept_map_version_uuid": row.concept_map_version_uuid,
+                    "assigned_mapper": row.assigned_mapper,
+                    "assigned_reviewer": row.assigned_reviewer,
+                    "no_map": row.no_map,
+                    "reason_for_no_map": row.reason_for_no_map,
+                    "mapping_group": row.mapping_group,
+                    "previous_version_context": row.previous_version_context,
+                    "custom_terminology_code_uuid": row.custom_terminology_uuid, # Note name change
+                    "save_for_discussion": row.save_for_discussion
+                })
+
+            if data_to_migrate:
+                conn.execute(
+                    source_concept_data.insert(),
+                    data_to_migrate
+                )
+                conn.commit()
+            logging.warning(f"Migrated standard terminology data {BATCH_SIZE}")
+        else:
+            source_concept_migrated = True
+
+
+USER_TO_UUID_MAP = {
+    "Stephen Weaver": "69920e84-4cd6-42de-b522-f8cd239ce051",
+    "Kurt Weber": "b357db91-cfb3-49d8-8db0-377f1ad321d5",
+    "Katelin Brown": "91587bb3-a010-4358-af86-212acf356c84",
+    "Hao Sun": "acfb20b1-361e-4642-bd48-090a8ad93e06",
+    "Rey Johnson": "951d32b4-06a1-4b86-842e-57b8bef9bcd8",
+    "Jonathan Perlin": "4f858880-cf4c-45a3-b546-4fd5f468ed8a",
+    "Katie Ulvestad": "24d248f0-f0f1-4482-bf04-9cc5b1516b23",
+    "Kristine Lynch": "f775072e-57c9-47ba-910f-73dcb36bcd54",
+    "Theresa Aguilar": "915493ef-6d3e-4388-892e-662bedbde652",
+    "Azita Zeyghami": "63be1a69-519c-4de1-bdee-8b6df1b72fe3",
+    "Amanda Steffon": "c40efdc5-ea6f-4b28-8474-b72b7ace53d0",
+    "Addison Stuart": "854a187d-dcf9-4aed-a247-47478ae7781e",
+    "Elise Gatsby": "dd4c4e75-b046-446e-986c-2c8ed4607465",
+    "Automap": "8990714d-8eeb-4acf-a5b7-abf92007a53a",
+    "Automapping": "8990714d-8eeb-4acf-a5b7-abf92007a53a",
+    "Rita Baroni": "f5562414-ec96-4939-98f7-debfb452afde",
+    "Jon Barton": "ccaf4963-9613-4846-b53e-64b55a1dcd18",
+    "Swapna Abhyankar": "88dddd13-bac3-44b6-ba14-20e5358ff6bc",
+    "Susan Korgen": "6cb6ec1a-49b6-4dca-ad57-c45bc3176283",
+    "NLP": "8abf5747-121b-48e0-9edf-dbd820d397fb",
+    "Dan Angelis": "ba48e55b-cb9f-4943-b794-d50aa7b03368",
+}
+
+
+def user_to_uuid(user_name):
+    if user_name is None:
+        return None
+    return USER_TO_UUID_MAP[user_name]
+
+
+CODEABLE_CONCEPT_SCHEMA = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept"
+CODE_SCHEMA = "code"
 
 
 def migrate_concept_maps_concept_relationship(
@@ -773,7 +908,156 @@ def migrate_concept_maps_concept_relationship(
     """
     migrate_database_table() helper function for when the original table_name is "concept_maps.concept_relationshi"
     """
-    return  # stub
+    BATCH_SIZE = 25000
+    conn = get_db()
+
+    # Set up SQLAlchemy definitions
+    metadata = MetaData()
+    concept_relationship_data = Table(
+        "concept_relationship_data",
+        metadata,
+        Column("uuid", UUID, nullable=False, primary_key=True),
+        Column("mapping_id", String, nullable=False),
+        Column("deduplication_hash", String, nullable=False),
+        Column("source_concept_uuid", UUID, nullable=False),
+        Column("target_concept_code", String, nullable=False),
+        Column("target_concept_display", String, nullable=False),
+        Column("target_concept_terminology_version_uuid", UUID, nullable=False),
+        Column("mapping_coments", String, nullable=True),
+        Column("mapped_by", UUID, nullable=False),
+        Column("mapped_date_time", DateTime, nullable=False),
+        Column("relationship_code_uuid", UUID, nullable=False),
+        Column("review_status", String, nullable=True),
+        Column("reviewed_by", UUID, nullable=True),
+        Column("reviewed_date_time", DateTime, nullable=True),
+        Column("review_comments", String, nullable=True),
+        Column("map_program_date_time", DateTime, nullable=True),
+        Column("map_program_version", String, nullable=True),
+        Column("map_program_prediction_id", String, nullable=True),
+        Column("map_program_confidence_score", String, nullable=True),
+        Column("deleted_by", UUID, nullable=True),
+        Column("deleted_date_time", DateTime, nullable=True),
+        schema="concept_maps",
+    )
+
+    # Migrate data without custom_terminology_uuid
+    concept_relationship_migrated = False
+    while concept_relationship_migrated is False:
+        concept_relationship_results = conn.execute(
+            text(
+                """
+                select cr.*, sc.no_map,
+                sc.code_schema as sc_code_schema, sc.code_simple as sc_code_simple,
+                sc.code_jsonb as sc_code_jsonb, sc.display as sc_display,
+                cdo.depends_on_property, cdo.depends_on_system, cdo.depends_on_display,
+                cdo.depends_on_value_schema, cdo.depends_on_value_simple, cdo.depends_on_value_jsonb
+                from concept_maps.concept_relationship cr
+                join concept_maps.source_concept_data sc
+                on cr.source_concept_uuid = sc.uuid
+                join concept_maps.concept_map_version cmv
+                on cmv.uuid = sc.concept_map_version_uuid
+                -- need to join all the way back to code_data so we can make the mapping_id
+                left join custom_terminologies.code_data code_data
+                on sc.custom_terminology_code_uuid=code_data.uuid
+                -- need depends on (if available) for mapping_id
+                left join custom_terminologies.code_depends_on cdo
+                on code_data.uuid = cdo.code_uuid
+                where cmv.migrate=true
+                and cr.uuid not in (select uuid from concept_maps.concept_relationship_data)
+                limit :batch_size
+                """
+            ), {
+                "batch_size": BATCH_SIZE
+            }
+        ).fetchall()
+
+        if concept_relationship_results:
+            data_to_migrate = []
+            for row in concept_relationship_results:
+
+                # Calculate new mapping_id
+                if row.sc_code_schema == CODEABLE_CONCEPT_SCHEMA:
+                    source_code_string = row.sc_code_jsonb
+                elif row.sc_code_schema == CODE_SCHEMA:
+                    source_code_string = row.sc_code_simple
+                else:
+                    raise Exception("Unable to calculate source_code_string")
+
+                depends_on_value = None
+                if row.depends_on_value_schema is not None:
+                    if row.depends_on_value_simple:
+                        depends_on_value = row.depends_on_value_simple
+                    else:
+                        depends_on_value = json.dumps(row.depends_on_value_jsonb)
+                    if not depends_on_value:
+                        raise Exception("Unable to calculate depends on value")
+
+                new_mapping_id = generate_mapping_id_with_source_code_values(
+                    source_code_string=source_code_string,
+                    display_string=row.sc_display,
+                    relationship_code=str(row.relationship_code_uuid) if row.relationship_code_uuid else "",
+                    target_concept_code=str(row.target_concept_display),
+                    target_concept_display=str(row.target_concept_display),
+                    target_concept_system=str(row.target_concept_system_version_uuid),
+                    depends_on_value_string=depends_on_value,
+                    depends_on_property=row.depends_on_property,
+                    depends_on_system=row.depends_on_system,
+                    depends_on_display=row.depends_on_display,
+                )
+                new_deduplication_hash = new_mapping_id
+
+                new_mapped_by = user_to_uuid(row.author)
+                if new_mapped_by is None:
+                    new_mapped_by = '70b5405d-b2ab-481b-85a5-d5b305164851'  # Unknown user to populate required column
+                new_reviewed_by = user_to_uuid(row.reviewed_by)
+                new_deleted_by = user_to_uuid(row.deleted_by)
+
+                # Handle no maps
+                new_target_concept_terminology_version_uuid = row.target_concept_system_version_uuid
+                if new_target_concept_terminology_version_uuid is None:
+                    if row.target_concept_code == 'No map' and row.target_concept_display == 'No matching concept':
+                        new_target_concept_terminology_version_uuid = '93ec9286-17cf-4837-a4dc-218ce3015de6'
+
+                # Previously only had time, not datetime
+                # So we will migrate these rows with current datetime
+                new_deleted_date_time = None
+                if row.deleted_timestamp:
+                    new_deleted_date_time = datetime.datetime.now()
+
+                data_to_migrate.append({
+                    "uuid": row.uuid,
+                    "mapping_id": new_mapping_id,
+                    "deduplication_hash": new_deduplication_hash,
+                    "source_concept_uuid": row.source_concept_uuid,
+                    "target_concept_code": row.target_concept_code,
+                    "target_concept_display": row.target_concept_display,
+                    "target_concept_terminology_version_uuid": new_target_concept_terminology_version_uuid,
+                    "mapping_comments": row.mapping_comments,
+                    "mapped_date_time": row.created_date,
+                    "mapped_by": new_mapped_by,
+                    "relationship_code_uuid": row.relationship_code_uuid,
+                    "review_status": row.review_status,
+                    "reviewed_by": new_reviewed_by,
+                    "review_comments": row.review_comment,
+                    "reviewed_date_time": row.reviewed_date,
+                    "map_program_date_time": row.model_run_time,
+                    "map_program_version": row.model_version,
+                    "map_program_prediction_id": None,
+                    "map_program_confidence_score": row.model_output_score,
+                    "deleted_date_time": new_deleted_date_time,
+                    "deleted_by": new_deleted_by
+                })
+
+            if data_to_migrate:
+                conn.execute(
+                    concept_relationship_data.insert(),
+                    data_to_migrate
+                )
+                conn.commit()
+            logging.warning(f"Migrated concept relationship data {BATCH_SIZE}")
+        else:
+            concept_relationship_migrated = True
+    print("Complete")
 
 
 def migrate_value_sets_expansion_member(
@@ -783,16 +1067,204 @@ def migrate_value_sets_expansion_member(
 ):
     """
     migrate_database_table() helper function for when the original table_name is "value_sets.expansion_member"
+
+    Parameters not implemented at this time; likely not needed due to speed of migration when run in OCI
+
+    Strategy:
+    - We'll first migrate rows without a custom_terminology_uuid (to avoid duplicate concerns)
+    - Then we'll migrate rows with a custom_terminology_uuid AND have been migrated to code_data
     """
-    return  # stub
+    BATCH_SIZE = 25000
+    conn = get_db()
+
+    # Set up SQLAlchemy definitions
+    metadata = MetaData()
+    expansion_member_data = Table(
+        "expansion_member_data",
+        metadata,
+        Column("uuid", UUID, nullable=False, primary_key=True),
+        Column("expansion_uuid", UUID, nullable=False),
+        Column("code_schema", String, nullable=False),
+        Column("code_simple", String, nullable=False),
+        Column(
+            "code_jsonb",
+            JSONB(none_as_null=True),
+            nullable=True,
+        ),
+        Column("display", String, nullable=False),
+        Column("system", String, nullable=False),
+        Column("version", String, nullable=False),
+        Column("custom_terminology_uuid", UUID, nullable=True),
+        Column("fhir_terminology_uuid", UUID, nullable=True),
+        schema="value_sets",
+    )
+
+    # Migrate data without custom_terminology_uuid
+    standard_terminology_migrated = False
+    while standard_terminology_migrated is False:
+        standard_terminology_data = conn.execute(
+            text(
+                """
+                select vem.* from value_sets.expansion_member vem
+                join value_sets.expansion vse
+                on vse.uuid=vem.expansion_uuid
+                join value_sets.value_set_version vsv
+                on vsv.uuid=vse.vs_version_uuid
+                where vem.custom_terminology_uuid is null
+                and vem.uuid not in 
+                (select uuid from value_sets.expansion_member_data)
+                and vsv.migrate=true
+                limit :batch_size
+                """
+            ), {
+                "batch_size": BATCH_SIZE
+            }
+        ).fetchall()
+
+        if standard_terminology_data:
+            data_to_migrate = []
+            for row in standard_terminology_data:
+                (
+                    code_schema,
+                    code_simple,
+                    code_jsonb,
+                    _code_string_for_code_id,
+                    _display_string_for_code_id
+                ) = prepare_code_and_display_for_storage_migration(row.code, row.display)
+
+                if code_schema is not None and row.system != "http://unitsofmeasure.org" and (
+                        IssuePrefix.COLUMN_VALUE_FORMAT.value in code_schema
+                ):
+                    logging.warning(f"{code_schema}, {row.code}, {row.display}, {row.system}, {row.version}")
+
+                # UCUM has codes that look like spark, but aren't
+                if row.system == "http://unitsofmeasure.org":
+                    code_schema = "code"
+                    code_simple = row.code
+                    code_jsonb = None
+
+                if code_jsonb is not None:
+                    code_jsonb = json.loads(code_jsonb)
+
+                data_to_migrate.append({
+                    "uuid": row.uuid,
+                    "expansion_uuid": row.expansion_uuid,
+                    "code_schema": code_schema,
+                    "code_simple": code_simple,
+                    "code_jsonb": code_jsonb,
+                    "display": row.display,
+                    "system": row.system,
+                    "version": row.version,
+                    "custom_terminology_uuid": row.custom_terminology_uuid,
+                    "fhir_terminology_uuid": None,
+                })
+
+            if data_to_migrate:
+                conn.execute(
+                    expansion_member_data.insert(),
+                    data_to_migrate
+                )
+                conn.commit()
+            logging.warning(f"Migrated standard terminology data {BATCH_SIZE}")
+        else:
+            standard_terminology_migrated = True
+
+    # Migrate data with a custom_terminology_uuid AND already migrated to code_data
+    custom_terminology_verified_migrated = False
+    while custom_terminology_verified_migrated is False:
+        custom_terminology_verified = conn.execute(
+            # Join used to select only data marked for migration
+            # Other where clauses to select only data from custom terminologies
+            # where we can verify it was migrated to code_data correctly
+            text(
+                """
+                select vem.* from value_sets.expansion_member vem
+                join value_sets.expansion vse
+                on vse.uuid=vem.expansion_uuid
+                join value_sets.value_set_version vsv
+                on vsv.uuid=vse.vs_version_uuid
+                where vem.custom_terminology_uuid is not null
+                and vsv.migrate = true
+                and vem.uuid not in 
+                (select uuid from value_sets.expansion_member_data)
+                and vem.custom_terminology_uuid in 
+                (select uuid from custom_terminologies.code_data)
+                limit :batch_size
+                """
+            ), {
+                "batch_size": BATCH_SIZE
+            }
+        ).fetchall()
+
+        if custom_terminology_verified:
+            data_to_migrate = []
+            for row in custom_terminology_verified:
+                (
+                    code_schema,
+                    code_simple,
+                    code_jsonb,
+                    _code_string_for_code_id,
+                    _display_string_for_code_id
+                ) = prepare_code_and_display_for_storage_migration(row.code, row.display)
+
+                if type(code_jsonb) == str:
+                    try:
+                        code_jsonb_dict = json.loads(code_jsonb)
+                    except json.decoder.JSONDecodeError as e:
+                        # This except entire section is to handle a single one-off error
+                        # In a single code, deserializing the one field does not work
+                        # But, in that instance, deserializing the other field does work
+                        # Rey inspected the database and verified this row manually
+                        print("You should only see this once in the migration")
+                        print('row.uuid', row.uuid)
+                        print('row.code', row.code)
+                        print('row.display', row.display)
+                        print('code_jsonb', code_jsonb)
+                        code_jsonb_dict = json.loads(_code_string_for_code_id)
+                        print('code_jsonb_dict', code_jsonb_dict)
+                elif type(code_jsonb) == dict:
+                    code_jsonb_dict = code_jsonb
+                elif type(code_jsonb) == type(None):
+                    code_jsonb_dict = None
+                else:
+                    raise Exception(f"code_jsonb must be str, dict, or None")
+
+                # if code_schema is not None and (
+                #         IssuePrefix.COLUMN_VALUE_FORMAT.value in code_schema
+                # ):
+                #     logging.warning(f"{code_schema}, {row.code}, {row.display}, {row.system}, {row.version}")
+
+                data_to_migrate.append({
+                    "uuid": row.uuid,
+                    "expansion_uuid": row.expansion_uuid,
+                    "code_schema": code_schema,
+                    "code_simple": code_simple,
+                    "code_jsonb": code_jsonb_dict,
+                    "display": row.display,
+                    "system": row.system,
+                    "version": row.version,
+                    "custom_terminology_uuid": row.custom_terminology_uuid,
+                    "fhir_terminology_uuid": None,
+                })
+            if data_to_migrate:
+                conn.execute(
+                    expansion_member_data.insert(),
+                    data_to_migrate
+                )
+                conn.commit()
+            logging.warning(f"Migrated verified batch of {BATCH_SIZE}")
+        else:
+            custom_terminology_verified_migrated = True
+    logging.warning("Complete")
 
 
-def perform_migration():
-    """
-    Command line endpoint for running migration locally. Does not support command line inputs at this time.
-    """
-    # todo: For this command line endpoint, add a line for each table to be migrated.
-    migrate_database_table("custom_terminologies.code", 1, 4, segment_count=1)
+
+# def perform_migration():
+#     """
+#     Command line endpoint for running migration locally. Does not support command line inputs at this time.
+#     """
+#     # todo: For this command line endpoint, add a line for each table to be migrated.
+#     migrate_database_table("custom_terminologies.code", 1, 4, segment_count=1)
 
 
 def cleanup_database_table(
@@ -851,4 +1323,5 @@ def cleanup_database_table(
 
 
 if __name__=="__main__":
-    perform_migration()
+    # perform_migration()
+    migrate_concept_maps_concept_relationship()

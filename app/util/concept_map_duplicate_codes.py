@@ -10,8 +10,8 @@ import uuid
 from sqlalchemy import text
 
 from app.database import get_db
-from app.helpers.format_helper import prepare_code_and_display_for_storage, filter_unsafe_depends_on_value, \
-    prepare_depends_on_value_for_storage
+from app.helpers.format_helper import prepare_code_and_display_for_storage_migration, filter_unsafe_depends_on_value, \
+    prepare_depends_on_value_for_storage, prepare_depends_on_attributes_for_code_id_migration
 from app.helpers.message_helper import message_exception_summary
 from app.helpers.id_helper import generate_code_id, generate_mapping_id_with_source_code_id
 from app.util.data_migration import convert_empty_to_null
@@ -259,7 +259,7 @@ def load_duplicate_for_v4_concept_map(
                             code_jsonb,
                             code_string,
                             display_string
-                        ) = prepare_code_and_display_for_storage(row.code, row.display)
+                        ) = prepare_code_and_display_for_storage_migration(row.code, row.display)
                         (
                             depends_on_value,
                             rejected_depends_on_value
@@ -269,20 +269,18 @@ def load_duplicate_for_v4_concept_map(
                             depends_on_value_schema,
                             depends_on_value_simple,
                             depends_on_value_jsonb,
-                            depends_on_value_string
-                        ) = prepare_depends_on_value_for_storage(depends_on_value)
-                        depends_on_value_for_code_id = ""
-                        if has_depends_on:
-                            depends_on_value_for_code_id += (
-                                    depends_on_value_string +
-                                    row.depends_on_property +
-                                    row.depends_on_system +
-                                    row.depends_on_display
-                            )
-                        # todo: for today, the v5 generate_code_id() pretends it does not know depends_on is a list
+                            depends_on_value_string,
+                            depends_on_property_string
+                        ) = prepare_depends_on_value_for_storage(depends_on_value, row.depends_on_property)
+                        depends_on_value_for_code_id = prepare_depends_on_attributes_for_code_id_migration(
+                            depends_on_value_string,
+                            depends_on_property_string,
+                            row.depends_on_system,
+                            row.depends_on_display
+                        )
                         code_deduplication_hash = generate_code_id(
                             code_string=code_string,
-                            display=display_string,
+                            display_string=display_string,
                             depends_on_value_string=depends_on_value_for_code_id,
                         )
                         mapping_deduplication_hash = generate_mapping_id_with_source_code_id(
