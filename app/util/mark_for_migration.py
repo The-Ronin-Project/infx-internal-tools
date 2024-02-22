@@ -668,16 +668,16 @@ def unmark_duplicates():
 def mark_content_for_migration():
     conn = get_db()
 
-    # data_normalization_registry = app.models.data_ingestion_registry.DataNormalizationRegistry()
-    # data_normalization_registry.load_entries()
-    #
-    # reset_mark_to_move()
-    #
-    # mark_concept_maps_for_migration(data_normalization_registry)
-    # mark_value_sets_for_migration(data_normalization_registry)
-    # mark_custom_terminology_codes_for_migration()
-    #
-    # generate_report_of_content_to_move()
+    data_normalization_registry = app.models.data_ingestion_registry.DataNormalizationRegistry()
+    data_normalization_registry.load_entries()
+
+    reset_mark_to_move()
+
+    mark_concept_maps_for_migration(data_normalization_registry)
+    mark_value_sets_for_migration(data_normalization_registry)
+    mark_custom_terminology_codes_for_migration()
+
+    generate_report_of_content_to_move()
 
     # Finally, identify specific duplicates which should NOT be moved and unmark them for moving
     unmark_duplicates()
