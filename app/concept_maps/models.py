@@ -460,7 +460,7 @@ class ConceptMap:
             text(
                 """
                 insert into concept_maps.source_concept
-                (uuid, code, display, system, map_status, concept_map_version_uuid, custom_terminology_uuid)
+                (uuid, code_schema, code_simple, code_jsonb, display, system_uuid, map_status, concept_map_version_uuid, custom_terminology_code_uuid)
                 select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid, custom_terminology_uuid from value_sets.expansion_member_data
                 join public.terminology_versions tv
                 on tv.fhir_uri=expansion_member_data.system
