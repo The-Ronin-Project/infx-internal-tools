@@ -620,7 +620,7 @@ def prepare_binding_and_value_for_jsonb_insert_migration(insert_column_name: str
     """
     # todo: Remove after migration is complete.
     if normalized_json_string is None:
-        return None, None
+        return f" :{insert_column_name}, ", {f"{insert_column_name}": None}
     jsonb_sql_escaped = escape_sql_input_value(normalized_json_string)
     if jsonb_sql_escaped is None:
         insert_binding_string = f" :{insert_column_name}, "
