@@ -631,6 +631,17 @@ class Code:
 
         return deduplication_hash
 
+    @property
+    def code_id(self):
+        """
+        If the code is in a custom terminology, it will retrieve the code_id.
+        Otherwise, it will generate it on the fly.
+        """
+        if self.from_custom_terminology:
+            return self.custom_terminology_code_id
+        else:
+            return self.deduplication_hash
+
     def save(self,
              on_conflict_do_nothing: bool = False
              ):
