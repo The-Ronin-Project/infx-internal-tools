@@ -2843,9 +2843,15 @@ class ValueSetVersion:
         query_result = conn.execute(
             text(
                 """
-            select * from value_sets.expansion_member_data
-            where expansion_uuid = :expansion_uuid
-            """
+                select 
+                    emd.*, 
+                    cd.code_id, 
+                    cd.deduplication_hash 
+                from value_sets.expansion_member_data emd
+                left join custom_terminologies.code_data cd
+                    on emd.custom_terminology_uuid=cd.uuid
+                where expansion_uuid = :expansion_uuid
+                """
             ),
             {"expansion_uuid": self.expansion_uuid},
         )
@@ -2869,6 +2875,8 @@ class ValueSetVersion:
                     display=row.display,
                     from_custom_terminology=from_custom_terminology,
                     custom_terminology_code_uuid=row.custom_terminology_uuid,
+                    custom_terminology_code_id=row.code_id,
+                    stored_custom_terminology_deduplication_hash=row.deduplication_hash,
                     from_fhir_terminology=from_fhir_terminology,
                     fhir_terminology_code_uuid=row.fhir_terminology_uuid,
                     saved_to_db=True,
@@ -2886,6 +2894,8 @@ class ValueSetVersion:
                     code_object=code_object,
                     from_custom_terminology=from_custom_terminology,
                     custom_terminology_code_uuid=row.custom_terminology_uuid,
+                    custom_terminology_code_id=row.code_id,
+                    stored_custom_terminology_deduplication_hash=row.deduplication_hash,
                     from_fhir_terminology=from_fhir_terminology,
                     fhir_terminology_code_uuid=row.fhir_terminology_uuid,
                     saved_to_db=True,
@@ -2906,7 +2916,7 @@ class ValueSetVersion:
 
         # Create a new expansion entry in the value_sets.expansion table
         current_time_string = (
-            datetime.now()
+            datetime.utcnow()
         )  # + timedelta(days=1) # Must explicitly create this, since SQLite can't use now()
         self.expansion_timestamp = current_time_string
         try:
@@ -3695,7 +3705,7 @@ class ValueSetVersion:
                     "value_set_uuid": input_version.value_set.uuid,
                     "status": "pending",
                     "description": new_version_description or input_version.description,
-                    "created_date": datetime.now(),
+                    "created_date": datetime.utcnow(),
                     "version": new_version_number,
                 },
             )
