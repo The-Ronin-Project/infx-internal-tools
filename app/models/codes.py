@@ -253,6 +253,8 @@ class Code:
         terminology_version_uuid=None,
         depends_on: DependsOnData = None,
         custom_terminology_code_uuid: Optional[uuid.UUID] = None,
+        custom_terminology_code_id: Optional[str] = None,
+        stored_custom_terminology_deduplication_hash: Optional[str] = None,
         fhir_terminology_code_uuid: Optional[uuid.UUID] = None,
         code_object: FHIRCodeableConcept = None,
         code_schema: RoninCodeSchemas = RoninCodeSchemas.code,
@@ -369,14 +371,21 @@ class Code:
         # Designate as custom terminology code or FHIR terminology code if applicable
         self.from_custom_terminology = from_custom_terminology
         self.from_fhir_terminology = from_fhir_terminology
+        self.custom_terminology_code_id = custom_terminology_code_id
+        self._stored_custom_terminology_deduplication_hash = stored_custom_terminology_deduplication_hash
 
         # Validate inputs for custom terminology requirements
         if code_schema == RoninCodeSchemas.codeable_concept:
             if self.from_custom_terminology is None or self.from_custom_terminology is False:
                 raise ValueError("Codeable concepts are only supported in custom terminologies")
-        if from_custom_terminology and custom_terminology_code_uuid is None:
-            raise ValueError(
-                "If initializing from a custom terminology, the custom_terminology_uuid must be provided")
+        if from_custom_terminology:
+            if custom_terminology_code_uuid is None:
+                raise ValueError(
+                    "If initializing from a custom terminology, the custom_terminology_uuid must be provided")
+            if custom_terminology_code_id is None:
+                raise ValueError(
+                    "If initializing from a custom terminology, the code_id must be provided"
+                )
 
         # Other set up
         self.additional_data = additional_data
@@ -598,7 +607,8 @@ class Code:
     #     # todo: implement as future optimization
     #     pass
 
-    def generate_deduplicate_hash(self):
+    @property
+    def deduplication_hash(self):
         if self.code_schema == RoninCodeSchemas.code:
             code_string = self.code
         elif self.code_schema == RoninCodeSchemas.codeable_concept:
@@ -606,7 +616,7 @@ class Code:
         else:
             raise NotImplementedError(f"generate_deduplicate_hash not implemented for code_schema: {self.code_schema}")
 
-        return app.helpers.id_helper.generate_code_id(
+        deduplication_hash = app.helpers.id_helper.generate_code_id(
             code_string=code_string,
             display_string=self.display if self.display else "",
             depends_on_value_string=self.depends_on.depends_on_value_string if self.depends_on else "",
@@ -615,12 +625,20 @@ class Code:
             depends_on_display=self.depends_on.depends_on_display if self.depends_on else ""
         )
 
+        if self._stored_custom_terminology_deduplication_hash:
+            if deduplication_hash != self._stored_custom_terminology_deduplication_hash:
+                logging.warning(f"Stored deduplication hash does not match calculated one. Custom terminology code uuid: {self.custom_terminology_code_uuid}")
+
+        return deduplication_hash
+
     def save(self,
              on_conflict_do_nothing: bool = False
              ):
         if self._saved_to_db is True:
             # todo: should this raise an exception or just return?
             raise Exception("Code object is already saved; cannot save again")
+        if not self.from_custom_terminology:
+            raise Exception("Code object can only save if custom terminology")
 
         conn = get_db()
         query_text = """
@@ -677,8 +695,8 @@ class Code:
                     "code_schema": code_schema_to_save,
                     "code_simple": code_simple,
                     "code_jsonb": code_jsonb,
-                    "code_id": self.generate_deduplicate_hash(),
-                    "deduplication_hash": self.generate_deduplicate_hash(),
+                    "code_id": self.deduplication_hash,  # When saved for the first time, we generate this
+                    "deduplication_hash": self.deduplication_hash,
                     "terminology_version_uuid": self.terminology_version_uuid,
                     "additional_data": json.dumps(self.additional_data),
                 },
@@ -712,12 +730,21 @@ class Code:
         code_data = conn.execute(
             text(
                 """
-                select code.uuid, code.code_schema, code.code_simple, code.code_jsonb, 
-                code.display, 
-                tv.fhir_uri as system_url, tv.version, tv.terminology as system_name, tv.uuid as terminology_version_uuid
+                select 
+                    code.uuid, 
+                    code.code_id,
+                    code.code_schema, 
+                    code.code_simple, 
+                    code.code_jsonb, 
+                    code.display, 
+                    code.deduplication_hash,
+                    tv.fhir_uri as system_url, 
+                    tv.version, 
+                    tv.terminology as system_name, 
+                    tv.uuid as terminology_version_uuid
                 from custom_terminologies.code_data as code
                 join terminology_versions tv
-                on code.terminology_version_uuid = tv.uuid
+                    on code.terminology_version_uuid = tv.uuid
                 where code.uuid=:code_uuid
                 """
             ),
