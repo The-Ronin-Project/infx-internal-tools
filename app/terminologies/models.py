@@ -215,6 +215,8 @@ class Terminology:
                     from_custom_terminology=True,
                     code_object=code_object,
                     code_schema=code_schema,
+                    stored_custom_terminology_deduplication_hash=code_data.deduplication_hash,
+                    custom_terminology_code_id=code_data.code_id
                 )
                 self.codes.append(new_code)
         else:
