@@ -3999,7 +3999,7 @@ def value_sets_terminology_update_report(terminology_fhir_uri, exclude_version):
         most_recent_version_rules_query = conn.execute(
             text(
                 """
-                select distinct em.system, em.version, em.expansion_uuid from value_sets.expansion_member em
+                select distinct em.system, em.version, em.expansion_uuid from value_sets.expansion_member_data em
                 join value_sets.expansion ex on em.expansion_uuid=ex.uuid
                 join value_sets.value_set_version vsv on ex.vs_version_uuid=vsv.uuid
                 where vsv.uuid=:version_uuid

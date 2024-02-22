@@ -387,10 +387,10 @@ class ConceptMapVersionCreator:
         target_value_set_expansion = self.conn.execute(
             text(
                 """
-                select expansion_member.*, tv.uuid as terminology_uuid from value_sets.expansion_member
+                select expansion_member_data.*, tv.uuid as terminology_uuid from value_sets.expansion_member_data
                 join public.terminology_versions tv
-                on tv.fhir_uri=expansion_member.system
-                and tv.version=expansion_member.version
+                on tv.fhir_uri=expansion_member_data.system
+                and tv.version=expansion_member_data.version
                 where expansion_uuid in (
                     select uuid from value_sets.expansion
                     where vs_version_uuid=:vs_version_uuid
