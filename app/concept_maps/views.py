@@ -313,8 +313,14 @@ def create_mappings():
             "target_concept_terminology_version_uuid"
         )
         mapping_comments = request.json.get("mapping_comments")
-        author = request.json.get("author")
+        mapped_by_uuid = request.json.get("mapped_by_uuid")
         review_status = request.json.get("review_status")
+
+        # metadata for mapping via programs (algorithms or models)
+        map_program_date_time = request.json.get("map_program_date_time")
+        map_program_version = request.json.get("map_program_version")
+        map_program_prediction_id = request.json.get("map_program_prediction_id")
+        map_program_confidence_score = request.json.get("map_program_confidence_score")
 
         relationship = MappingRelationship.load(relationship_code_uuid)
 
@@ -324,19 +330,29 @@ def create_mappings():
             system=None,
             version=None,
             terminology_version_uuid=target_concept_terminology_version_uuid,
+            from_custom_terminology=False  # We do not currently support mapping to custom terminologies
         )
+
+        mapped_by = ContentCreator.load_by_uuid_from_cache(mapped_by_uuid)
 
         new_mappings = []
         for source_concept_uuid in source_concept_uuids:
-            make_author_assigned_mapper(source_concept_uuid, author)
             source_code = SourceConcept.load(source_concept_uuid)
+            source_code.update(
+                assigned_mapper=mapped_by
+            )
             new_mapping = Mapping(
+                saved_to_db=False,
                 source=source_code,
                 relationship=relationship,
                 target=target_code,
+                mapped_by=mapped_by,
                 mapping_comments=mapping_comments,
-                author=author,
                 review_status=review_status,
+                map_program_date_time=map_program_date_time,
+                map_program_version=map_program_version,
+                map_program_prediction_id=map_program_prediction_id,
+                map_program_confidence_score=map_program_confidence_score,
             )
             new_mapping.save()
             new_mappings.append(new_mapping.serialize())

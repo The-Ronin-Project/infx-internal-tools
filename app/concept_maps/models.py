@@ -28,6 +28,7 @@ from app.errors import (
 from app.helpers.oci_helper import set_up_and_save_to_object_store, folder_path_for_oci
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.helpers.data_helper import OID_URL_CONVERSIONS
+import app.helpers.id_helper
 import app.models.data_ingestion_registry
 from app.terminologies.models import (
     Terminology,
@@ -1018,6 +1019,7 @@ class ConceptMapVersion:
                 source_concept,
                 relationship,
                 target_code,
+                saved_to_db=True,
                 mapping_comments=item.mapping_comments,
                 review_comments=item.review_comments,
                 mapped_by=mapped_by,
@@ -1900,6 +1902,7 @@ class ContentCreator:  # Unless we have a better name for mapper/reviewer that c
 class SourceConcept:
     uuid: UUID
     code: app.models.codes.Code
+    concept_map_version_uuid: UUID
     comments: Optional[str] = None
     map_status: Optional[str] = None
     assigned_mapper: Optional[ContentCreator] = None
@@ -1908,7 +1911,6 @@ class SourceConcept:
     reason_for_no_map: Optional[str] = None
     mapping_group: Optional[str] = None
     previous_version_context: Optional[dict] = None
-    concept_map_version_uuid: Optional[UUID] = None  # why is this optional
     save_for_discussion: Optional[bool] = None
 
     @property
@@ -1972,10 +1974,8 @@ class SourceConcept:
         conn = get_db()
         query = text(
             """
-                SELECT uuid, code, display, system, comments,
-                       additional_context, map_status, assigned_mapper,
-                       assigned_reviewer, no_map, reason_for_no_map,
-                       mapping_group, previous_version_context, concept_map_version_uuid
+                SELECT 
+                    *
                 FROM concept_maps.source_concept
                 WHERE uuid = :uuid
             """
@@ -1983,21 +1983,34 @@ class SourceConcept:
         result = conn.execute(query, {"uuid": str(source_concept_uuid)}).fetchone()
 
         if result:
+            if result.custom_terminology_code_uuid:
+                code_object = app.models.codes.Code.load_from_custom_terminology(result.custom_terminology_code_uuid)
+            else:
+                # Verify the code_schema is "code" since it's not a custom terminology
+                if app.models.codes.RoninCodeSchemas(result.code_schema) != app.models.codes.RoninCodeSchemas.code:
+                    raise NotImplementedError("SourceConcept.load only supports 'code' schema for non-custom terminologies")
+                code_object = app.models.codes.Code(
+                    code_schema=app.models.codes.RoninCodeSchemas.code,
+                    code=result.code_simple,
+                    display=result.display,
+                    terminology_version_uuid=result.system_uuid,
+                    system=None,
+                    version=None,
+                    from_custom_terminology=False
+                )
             return cls(
                 uuid=result.uuid,
-                code=result.code,
-                display=result.display,
-                system=Terminology.load(result.system),
+                code=code_object,
+                concept_map_version_uuid=result.concept_map_version_uuid,
                 comments=result.comments,
-                additional_context=result.additional_context,
                 map_status=result.map_status,
-                assigned_mapper=result.assigned_mapper,
-                assigned_reviewer=result.assigned_reviewer,
+                assigned_mapper=ContentCreator.load_by_uuid_from_cache(result.assigned_mapper),
+                assigned_reviewer=ContentCreator.load_by_uuid_from_cache(result.assigned_reviewer),
                 no_map=result.no_map,
                 reason_for_no_map=result.reason_for_no_map,
                 mapping_group=result.mapping_group,
                 previous_version_context=result.previous_version_context,
-                concept_map_version_uuid=result.concept_map_version_uuid,
+                save_for_discussion=result.save_for_discussion
             )
         else:
             raise ValueError(f"No source concept found with UUID {source_concept_uuid}")
@@ -2005,14 +2018,14 @@ class SourceConcept:
     def update(
         self,
         comments: Optional[str] = None,
-        additional_context: Optional[str] = None,
         map_status: Optional[str] = None,
-        assigned_mapper: Optional[UUID] = None,
-        assigned_reviewer: Optional[UUID] = None,
+        assigned_mapper: Optional[ContentCreator] = None,
+        assigned_reviewer: Optional[ContentCreator] = None,
         no_map: Optional[bool] = None,
         reason_for_no_map: Optional[str] = None,
         mapping_group: Optional[str] = None,
         previous_version_context: Optional[str] = None,
+        save_for_discussion: Optional[bool] = None
     ):
         conn = get_db()
         # Create a dictionary to store the column names and their corresponding new values
@@ -2021,17 +2034,14 @@ class SourceConcept:
         if comments is not None:
             updates["comments"] = comments
 
-        if additional_context is not None:
-            updates["additional_context"] = additional_context
-
         if map_status is not None:
             updates["map_status"] = map_status
 
         if assigned_mapper is not None:
-            updates["assigned_mapper"] = str(assigned_mapper)
+            updates["assigned_mapper"] = str(assigned_mapper.uuid)
 
         if assigned_reviewer is not None:
-            updates["assigned_reviewer"] = str(assigned_reviewer)
+            updates["assigned_reviewer"] = str(assigned_reviewer.uuid)
 
         if no_map is not None:
             updates["no_map"] = no_map
@@ -2044,6 +2054,9 @@ class SourceConcept:
 
         if previous_version_context is not None:
             updates["previous_version_context"] = previous_version_context
+
+        if save_for_discussion is not None:
+            updates["save_for_discussion"] = save_for_discussion
 
         # Generate the SQL query
         query = f"UPDATE concept_maps.source_concept SET "
@@ -2085,74 +2098,91 @@ class Mapping:
     """
     Represents a mapping relationship between two codes, and provides methods to load, save and use the relationships.
     """
-
     source: SourceConcept
     relationship: MappingRelationship
     target: app.models.codes.Code
+    saved_to_db: bool
     uuid: Optional[UUID] = None
     mapped_by: ContentCreator = None
     mapped_date_time: Optional[datetime.datetime] = None
     mapping_comments: Optional[str] = None
-    conn: Optional[None] = None
     review_status: str = "ready for review"
     reviewed_by: Optional[ContentCreator] = None
     reviewed_date_time: Optional[datetime.datetime] = None
     review_comments: Optional[str] = None
-    # reason_for_no_map: Optional[str] = None  # todo: this should only be accessed via the source
     map_program_date_time: Optional[datetime.datetime] = None
     map_program_version: Optional[str] = None
     map_program_prediction_id: Optional[str] = None
     map_program_confidence_score: Optional[str] = None
     deleted_date_time: Optional[datetime.datetime] = None
     deleted_by: Optional[ContentCreator] = None
+    mapping_id: Optional[str] = None
+    conn: Optional[None] = None
+    _stored_deduplication_hash: Optional[str] = None
 
     def __post_init__(self):
         self.conn = get_db()
-        self.uuid = uuid.uuid4()
+        if self.uuid is None:
+            self.uuid = uuid.uuid4()
+
+        if self.saved_to_db:
+            if not self.mapping_id:
+                raise ValueError("mapping_id must be provided if loading Mapping from database")
+            if not self._stored_deduplication_hash:
+                raise ValueError("_stored_deduplication_hash must be provided if loading Mapping from database")
 
         # todo: add warning if deleted data is populated but status is not deleted
 
-    @property
-    def id(self):
-        # todo: investigate what to do here
-        """
-        Generates and returns an MD5 hash as a hexadecimal string.
-
-        The hash is created using the following attributes:
-        - source.id
-        - relationship.code
-        - target.code
-        - target.display
-        - target.system
-
-        This method does not take any arguments, and it returns a string representing the hexadecimal value of the MD5 hash.
-
-        :return: a string of hexadecimal digits representing an MD5 hash
-        """
-        # concatenate the required attributes into a string
-        concat_str = (
-            str(self.source.id)
-            # + str(self.source.depends_on_property).strip()
-            # + str(self.source.depends_on_system).strip()
-            # + str(self.source.depends_on_value).strip()
-            # + str(self.source.depends_on_display).strip()
-            + self.relationship.code
-            + self.target.code
-            + self.target.display
-            + self.target.system
-        )
-        # create a new md5 hash object
-        hash_object = hashlib.md5()
-        # update the hash object with the bytes-like object
-        hash_object.update(concat_str.encode("utf-8"))
-        # return the hexadecimal representation of the hash
-        return hash_object.hexdigest()
+    # @property
+    # def id(self):
+    #     # todo: investigate what to do here
+    #     """
+    #     Generates and returns an MD5 hash as a hexadecimal string.
+    #
+    #     The hash is created using the following attributes:
+    #     - source.id
+    #     - relationship.code
+    #     - target.code
+    #     - target.display
+    #     - target.system
+    #
+    #     This method does not take any arguments, and it returns a string representing the hexadecimal value of the MD5 hash.
+    #
+    #     :return: a string of hexadecimal digits representing an MD5 hash
+    #     """
+    #     # concatenate the required attributes into a string
+    #     concat_str = (
+    #         str(self.source.id)
+    #         # + str(self.source.depends_on_property).strip()
+    #         # + str(self.source.depends_on_system).strip()
+    #         # + str(self.source.depends_on_value).strip()
+    #         # + str(self.source.depends_on_display).strip()
+    #         + self.relationship.code
+    #         + self.target.code
+    #         + self.target.display
+    #         + self.target.system
+    #     )
+    #     # create a new md5 hash object
+    #     hash_object = hashlib.md5()
+    #     # update the hash object with the bytes-like object
+    #     hash_object.update(concat_str.encode("utf-8"))
+    #     # return the hexadecimal representation of the hash
+    #     return hash_object.hexdigest()
 
     @property
     def deduplication_hash(self):
-        # todo: should this be a property?
-        # todo: maybe we have a _stored_deduplication_hash as well?
-        pass
+        deduplication_hash = app.helpers.id_helper.generate_mapping_id_with_source_code_id(
+            source_code_id=self.source.code.code_id,
+            relationship_code=self.relationship.code,
+            target_concept_code=self.target.code,  # Don't need to handle codeable concepts so long as we don't map to them
+            target_concept_display=self.target.display,
+            target_concept_system=self.target.terminology_version.fhir_uri
+        )
+
+        if self._stored_deduplication_hash:
+            if deduplication_hash != self._stored_deduplication_hash:
+                logging.warning(f"Stored deduplication hash does not match calculated one for Mapping. Mapping UUID: {self.uuid}")
+        return deduplication_hash
 
     @classmethod
     def load(cls, uuid):
@@ -2160,31 +2190,85 @@ class Mapping:
         pass
 
     def save(self):
-        # todo: update for CMv5
         """Saves the mapping relationship instance to the database."""
+        if self.saved_to_db:
+            raise Exception("Mapping already saved to database; cannot save again.")
+
         self.conn.execute(
             text(
                 """
-                INSERT INTO concept_maps.concept_relationship(
-                uuid, review_status, source_concept_uuid, relationship_code_uuid, target_concept_code, 
-                target_concept_display, target_concept_system_version_uuid, mapping_comments, author, created_date
-                ) VALUES (
-                :uuid, :review_status, :source_concept_uuid, :relationship_code_uuid, :target_concept_code, 
-                :target_concept_display, :target_concept_system_version_uuid, :mapping_comments, :author, :created_date
+                INSERT INTO concept_maps.concept_relationship_data
+                (
+                    uuid, 
+                    mapping_id,
+                    deduplication_hash,
+                    source_concept_uuid, 
+                    target_concept_code, 
+                    target_concept_display, 
+                    target_concept_terminology_version_uuid, 
+                    mapping_comments,
+                    mapped_date_time,
+                    mapped_by,
+                    relationship_code_uuid,
+                    review_status, 
+                    reviewed_by,
+                    reviewed_date_time,
+                    review_comments,
+                    map_program_date_time,
+                    map_program_version,
+                    map_program_prediction_id,
+                    map_program_confidence_score,
+                    deleted_date_time,
+                    deleted_by
+                ) 
+                VALUES 
+                (
+                    :uuid, 
+                    :mapping_id,
+                    :deduplication_hash,
+                    :source_concept_uuid, 
+                    :target_concept_code, 
+                    :target_concept_display, 
+                    :target_concept_terminology_version_uuid, 
+                    :mapping_comments,
+                    :mapped_date_time,
+                    :mapped_by,
+                    :relationship_code_uuid,
+                    :review_status, 
+                    :reviewed_by,
+                    :reviewed_date_time,
+                    :review_comments,
+                    :map_program_date_time,
+                    :map_program_version,
+                    :map_program_prediction_id,
+                    :map_program_confidence_score,
+                    :deleted_date_time,
+                    :deleted_by
                 );
                 """
             ),
             {
                 "uuid": self.uuid,
-                "review_status": self.review_status,
+                "mapping_id": self.deduplication_hash,
+                "deduplication_hash": self.deduplication_hash,
                 "source_concept_uuid": self.source.uuid,
-                "relationship_code_uuid": self.relationship.uuid,
                 "target_concept_code": self.target.code,
                 "target_concept_display": self.target.display,
-                "target_concept_system_version_uuid": self.target.terminology_version_uuid,
+                "target_concept_terminology_version_uuid": self.target.terminology_version.uuid,
                 "mapping_comments": self.mapping_comments,
-                "author": self.mapped_by,
-                "created_date": datetime.datetime.now(),
+                "mapped_date_time": datetime.datetime.utcnow(),
+                "mapped_by": self.mapped_by.uuid,
+                "relationship_code_uuid": self.relationship.uuid,
+                "review_status": self.review_status,
+                "reviewed_by": self.reviewed_by.uuid,
+                "reviewed_date_time": self.reviewed_date_time,
+                "review_comments": self.review_comments,
+                "map_program_date_time": self.map_program_date_time,
+                "map_program_version": self.map_program_version,
+                "map_program_prediction_id": self.map_program_prediction_id,
+                "map_program_confidence_score": self.map_program_confidence_score,
+                "deleted_date_time": self.deleted_date_time,
+                "deleted_by": self.deleted_by,
             },
         )
 
@@ -2196,6 +2280,8 @@ class Mapping:
         )
         if concept_map_settings.auto_advance_after_mapping:
             self.source.update(map_status="ready for review")
+
+        self.saved_to_db = True
 
     def serialize(self):
         """Prepares a JSON representation of the Mapping instance to return to the API."""
@@ -2355,41 +2441,6 @@ def update_comments_source_concept(source_concept_uuid, comments):
         ),
         {"source_concept_uuid": source_concept_uuid, "comments": comments},
     )
-
-
-def make_author_assigned_mapper(source_concept_uuid, author):
-    conn = get_db()
-    user_uuid_query = conn.execute(
-        text(
-            """  
-            select uuid from project_management.user  
-            where first_last_name = :author
-            """
-        ),
-        {
-            "author": author,
-        },
-    ).first()
-
-    if user_uuid_query:
-        assigned_mapper_update = (
-            conn.execute(
-                text(
-                    """  
-                update concept_maps.source_concept  
-                set assigned_mapper = :user_uuid  
-                where uuid = :source_concept_uuid  
-                """
-                ),
-                {
-                    "user_uuid": user_uuid_query.uuid,
-                    "source_concept_uuid": source_concept_uuid,
-                },
-            ),
-        )
-        return "ok"
-    else:
-        return "Author not found"
 
 
 def get_concepts_for_assignment(version_uuid):
