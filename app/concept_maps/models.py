@@ -1978,13 +1978,12 @@ class SourceConcept:
 
     @classmethod
     def load(cls, source_concept_uuid: UUID) -> "SourceConcept":
-        # todo: update to new database schema
         conn = get_db()
         query = text(
             """
                 SELECT 
                     *
-                FROM concept_maps.source_concept
+                FROM concept_maps.source_concept_data
                 WHERE uuid = :uuid
             """
         )
@@ -2077,20 +2076,25 @@ class SourceConcept:
 
         # Update the instance attributes
         for column, value in updates.items():
-            setattr(self, column, value)
+            if column not in ['assigned_mapper', 'assigned_reviewer']:
+                setattr(self, column, value)
+            elif column == 'assigned_mapper':
+                self.assigned_mapper = assigned_mapper
+            elif column == 'assigned_reviewer':
+                self.assigned_reviewer = assigned_reviewer
 
     def serialize(self) -> dict:
         serialized_data = {
             "uuid": str(self.uuid),
-            "code": self.code,
+            "code": self.code.serialize(),
             "display": self.display,
             "system": self.system.serialize(),
             "comments": self.comments,
             "map_status": self.map_status,
-            "assigned_mapper": str(self.assigned_mapper)
+            "assigned_mapper": str(self.assigned_mapper.first_last_name)
             if self.assigned_mapper
             else None,
-            "assigned_reviewer": str(self.assigned_reviewer)
+            "assigned_reviewer": str(self.assigned_reviewer.first_last_name)
             if self.assigned_reviewer
             else None,
             "no_map": self.no_map,
@@ -2268,7 +2272,7 @@ class Mapping:
                 "mapped_by": self.mapped_by.uuid,
                 "relationship_code_uuid": self.relationship.uuid,
                 "review_status": self.review_status,
-                "reviewed_by": self.reviewed_by.uuid,
+                "reviewed_by": self.reviewed_by.uuid if self.reviewed_by else None,
                 "reviewed_date_time": self.reviewed_date_time,
                 "review_comments": self.review_comments,
                 "map_program_date_time": self.map_program_date_time,
@@ -2298,7 +2302,7 @@ class Mapping:
             "relationship": self.relationship.serialize(),
             "target": self.target.serialize(),
             "mapping_comments": self.mapping_comments,
-            "author": self.mapped_by.first_last_name,
+            "mapped_by": self.mapped_by.first_last_name,
             "uuid": self.uuid,
             "review_status": self.review_status,
         }

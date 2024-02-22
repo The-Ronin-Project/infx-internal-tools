@@ -744,6 +744,7 @@ class Code:
                 select 
                     code.uuid, 
                     code.code_id,
+                    code.deduplication_hash,
                     code.code_schema, 
                     code.code_simple, 
                     code.code_jsonb, 
@@ -784,6 +785,8 @@ class Code:
             display=display,
             terminology_version_uuid=code_data.terminology_version_uuid,
             custom_terminology_code_uuid=code_uuid,
+            custom_terminology_code_id=code_data.code_id,
+            stored_custom_terminology_deduplication_hash=code_data.deduplication_hash,
             from_custom_terminology=True,
             code_object=code_object,
             code_schema=code_schema,
