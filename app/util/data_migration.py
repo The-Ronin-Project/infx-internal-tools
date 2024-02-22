@@ -1323,9 +1323,7 @@ def cleanup_database_table(
 
 
 if __name__=="__main__":
-    # perform_migration()
-    migrate_custom_terminologies_code(
-        granularity=1,
-        segment_start=0,
-        segment_count=16
-    )
+    # migrate_value_sets_expansion_member()
+    # migrate_concept_maps_source_concept()
+    # migrate_concept_maps_concept_relationship()
+    pass
