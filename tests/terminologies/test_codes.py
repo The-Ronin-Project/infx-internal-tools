@@ -1,6 +1,7 @@
 import datetime
 import json
 import unittest
+import uuid
 
 from pytest import raises
 from sqlalchemy import text
@@ -26,6 +27,34 @@ class CodeClassTests(unittest.TestCase):
         })
         self.client = self.app.test_client()
 
+        example_codeable_concept_json = """
+                                    {
+                                      "coding": [
+                                        {
+                                          "system": "http://hl7.org/fhir/sid/icd-10-cm",
+                                          "code": "D59.9"
+                                        },
+                                        {
+                                          "system": "http://snomed.info/sct",
+                                          "code": "4854004"
+                                        }
+                                      ],
+                                      "text": "Anemia, hemolytic, acquired (CMS/HCC)"
+                                    }
+                                    """
+        self.example_codeable_concept = app.models.codes.FHIRCodeableConcept.deserialize(example_codeable_concept_json)
+
+        self.example_terminology = app.terminologies.models.Terminology(
+            uuid=uuid.uuid4(),
+            terminology="sample_terminology",
+            version="1",
+            effective_start="2024-01-01",
+            effective_end="2024-01-10",
+            fhir_uri="http://fake_url",
+            fhir_terminology=False,
+            is_standard=False,
+        )
+
     def tearDown(self) -> None:
         # this executes after each test function, but does not stop lower-level functions from committing db changes
         self.conn.rollback()
@@ -44,11 +73,118 @@ class CodeClassTests(unittest.TestCase):
         # From the "Test ONLY: Codeable Concepts" terminology v1
         codeable_concept = app.models.codes.Code.load_from_custom_terminology("15552373-c736-4b28-b284-6c0009225796")
 
-        self.assertEqual("""{ "coding": [ { "system": "http://hl7.org/fhir/sid/icd-10-cm", "code": "D59.9" }, { "system": "http://snomed.info/sct", "code": "4854004" } ], "text": "Anemia, hemolytic, acquired (CMS/HCC)" }""",
-                         codeable_concept.code)
+        self.assertEqual(app.models.codes.FHIRCodeableConcept, type(codeable_concept.code_object))
+        self.assertEqual("Anemia, hemolytic, acquired (CMS/HCC)", codeable_concept.code_object.text)
+
+        ordered_coding = sorted(codeable_concept.code_object.coding, key=lambda coding: coding.code)
+        first_item = ordered_coding[0]
+        second_item = ordered_coding[1]
+
+        self.assertEqual("4854004", first_item.code)
+        self.assertEqual("http://snomed.info/sct", first_item.system)
+
+        self.assertEqual("D59.9", second_item.code)
+        self.assertEqual("http://hl7.org/fhir/sid/icd-10-cm", second_item.system)
+
         self.assertEqual("Anemia, hemolytic, acquired (CMS/HCC)", codeable_concept.display)
         self.assertEqual("http://projectronin.io/fhir/CodeSystem/mock/codeableConcepts", codeable_concept.system)
         self.assertEqual("1", codeable_concept.version)
+
+    def test_valid_initialization_with_simple_code(self):
+        code = "Test Code"
+        display = "Test Display"
+        simple_code = app.models.codes.Code.new_code(
+            code=code,
+            display=display,
+            system=None,
+            version=None,
+            terminology_version=self.example_terminology
+        )
+        self.assertEqual(code, simple_code.code)
+        self.assertEqual(display, simple_code.display)
+
+    def test_valid_initialization_with_codeable_concept(self):
+        codeable_concept = app.models.codes.Code(
+            code_schema=app.models.codes.RoninCodeSchemas.codeable_concept,
+            system=None,
+            version=None,
+            code=None,
+            display=None,
+            code_object=self.example_codeable_concept,
+            terminology_version=self.example_terminology,
+            from_custom_terminology=True,
+            custom_terminology_code_uuid=uuid.uuid4(),
+            custom_terminology_code_id="md5hash",
+            stored_custom_terminology_deduplication_hash="md5hash"
+        )
+
+        self.assertEqual("Anemia, hemolytic, acquired (CMS/HCC)", codeable_concept.display)
+        self.assertEqual(2, len(codeable_concept.code_object.coding))
+
+    def test_invalid_initialization_terminology_version_wrong_type(self):
+        with self.assertRaises(ValueError):
+            app.models.codes.Code(
+                code_schema=app.models.codes.RoninCodeSchemas.codeable_concept,
+                system=None,
+                version=None,
+                code=None,
+                display=None,
+                code_object=self.example_codeable_concept,
+                terminology_version=uuid.uuid4(),
+                from_custom_terminology=True,
+                custom_terminology_code_uuid=uuid.uuid4()
+            )
+
+    def test_invalid_initialization_without_code_and_display_for_simple_code_schema(self):
+        with self.assertRaises(TypeError):
+            # TypeError raised when required positional params not included
+            app.models.codes.Code(
+                code_schema=app.models.codes.RoninCodeSchemas.code, code_object=None)
+
+        with self.assertRaises(ValueError):
+            app.models.codes.Code(
+                code=None,
+                display=None,
+                system=None,
+                version=None,
+                code_schema=app.models.codes.RoninCodeSchemas.code,
+                code_object=None)
+
+    def test_invalid_initialization_with_code_and_display_for_codeable_concept_schema(self):
+        with self.assertRaises(ValueError):
+            app.models.codes.Code(
+                code_schema=app.models.codes.RoninCodeSchemas.codeable_concept,
+                code="123",
+                display="Test Display",
+                system=None,
+                version=None,
+                code_object=self.example_codeable_concept
+            )
+
+    def test_invalid_initialization_missing_code_object_for_codeable_concept_schema(self):
+        with self.assertRaises(ValueError):
+            app.models.codes.Code(
+                code_schema=app.models.codes.RoninCodeSchemas.codeable_concept,
+                system=None,
+                version=None,
+                code=None,
+                display=None,
+                code_object=None
+            )
+
+    def test_invalid_initialization_from_custom_terminology_without_uuid(self):
+        with self.assertRaises(ValueError):
+
+            codeable_concept = app.models.codes.Code(
+                code_schema=app.models.codes.RoninCodeSchemas.codeable_concept,
+                system=None,
+                version=None,
+                code=None,
+                display=None,
+                code_object=self.example_codeable_concept,
+                terminology_version=self.example_terminology,
+                from_custom_terminology=True
+            )
 
 
 class CodeAPITests(unittest.TestCase):
@@ -87,6 +223,12 @@ class CodeAPITests(unittest.TestCase):
         self.client = self.app.test_client()
 
     def tearDown(self) -> None:
+        self.app.config.update({
+            "DISABLE_ROLLBACK_AFTER_REQUEST": False
+        })
+        self.app.config.update({
+            "DISABLE_CLOSE_AFTER_REQUEST": False
+        })
         # this executes after each test function, but does not stop lower-level functions from committing db changes
         self.conn.rollback()
         self.conn.close()
@@ -96,6 +238,57 @@ class CodeAPITests(unittest.TestCase):
     safe_term_uuid_dupl = "d14cbd3a-aabe-4b26-b754-5ae2fbd20949"
     safe_term_uuid_fhir = "34eb844c-ffff-4462-ad6d-48af68f1e8a1"
     safe_term_uuid_std = "c96200d7-9e30-4a0c-b98e-22d0ff146a99"
+
+    def test_create_codeable_concept_happy(self):
+        # Allow us to make multiple requests without database rolling back after each one
+        self.app.config.update({
+            "DISABLE_ROLLBACK_AFTER_REQUEST": True
+        })
+        self.app.config.update({
+            "DISABLE_CLOSE_AFTER_REQUEST": True
+        })
+
+        # First, add a code to a test terminology
+        response = self.client.post(
+            "/terminology/new_code",
+            data=json.dumps(
+                [
+                    {
+                        "code_schema": "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept",
+                        "code_object": {
+                            "text": "Automated Codeable Concept for Test",
+                            "coding": [
+                                {
+                                  "code": "D59.9",
+                                  "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                                },
+                                {
+                                  "code": "4854004",
+                                  "system": "http://snomed.info/sct"
+                                }
+                            ]
+                        },
+                        "terminology_version_uuid": self.safe_term_uuid_dupl,
+                    }
+                ]
+            ),
+            content_type="application/json",
+        )
+        assert response.text == "Complete"
+
+        self.assertEqual(self.conn.closed, False)
+
+        # Then, load that terminology and verify the code is there and correct
+        terminology = app.terminologies.models.Terminology.load(self.safe_term_uuid_dupl)
+        terminology.load_content()
+
+        display_to_code_object = {code.display: code for code in terminology.codes}
+        new_code = display_to_code_object.get("Automated Codeable Concept for Test")
+        self.assertIsNotNone(new_code)
+        if new_code is not None:
+            self.assertEqual(new_code.code_schema, app.models.codes.RoninCodeSchemas.codeable_concept)
+            self.assertEqual(type(new_code.code), app.models.codes.FHIRCodeableConcept)
+            self.assertEqual(new_code.display, "Automated Codeable Concept for Test")
 
     def test_create_code_happy_future(self):
         """
@@ -222,10 +415,8 @@ class CodeAPITests(unittest.TestCase):
             content_type="application/json",
         )
         result = response.json
-        assert response.status == "400 BAD REQUEST"
-        assert result.get("code") == "Terminology.create_code.database_error"
-        error_text = "(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint"
-        assert error_text in result.get("message")
+        assert response.status == "409 CONFLICT"
+        assert result.get("code") == "409 Conflict"
 
     def test_create_code_fhir(self):
         """
@@ -379,9 +570,7 @@ class CodeAPITests(unittest.TestCase):
         )
         result = response.json
         assert response.status == "400 BAD REQUEST"
-        assert result.get("code") == "Terminology.create_code.database_error"
-        error_text = """(psycopg2.errors.NotNullViolation) null value in column "code" of relation "code" violates not-null constraint"""
-        assert error_text in result.get("message")
+        assert result.get("code") == "Terminology.create_code.code_required"
 
     def test_create_code_no_code_display(self):
         """
@@ -408,9 +597,7 @@ class CodeAPITests(unittest.TestCase):
         )
         result = response.json
         assert response.status == "400 BAD REQUEST"
-        assert result.get("code") == "Terminology.create_code.database_error"
-        error_text = """(psycopg2.errors.NotNullViolation) null value in column "display" of relation "code" violates not-null constraint"""
-        assert error_text in result.get("message")
+        assert result.get("code") == "Terminology.create_code.display_required"
 
     def test_load_codes_multiple_terminologies(self):
         """
@@ -468,12 +655,14 @@ class CodeAPITests(unittest.TestCase):
                 }
             }
         ]
-        codes = create_code_payload_to_code_list(payload)
+
         with raises(BadRequestWithCode) as e:
+            codes = create_code_payload_to_code_list(payload)
             terminology.load_new_codes_to_terminology(codes)
+
         result = e.value
-        assert result.code == "Terminology.load_new_codes.no_terminology"
-        assert result.description == "Cannot load codes when no terminology is input"
+        assert result.code == "Terminology.create_code.terminology_version_uuid_required"
+        assert result.description == "A terminology_version_uuid must be provided for each code to create"
 
     def test_load_codes_class_conflict(self):
         """

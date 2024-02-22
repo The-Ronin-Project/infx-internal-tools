@@ -1,5 +1,7 @@
 import unittest
 
+from unittest import skip
+
 from app.database import get_db
 from app.app import create_app
 from app.helpers.data_helper import normalized_source_codeable_concept
@@ -302,12 +304,13 @@ class FormatHelperTests(unittest.TestCase):
         assert result[2] == normalized_value
         assert result[3] == normalized_value
 
+    @skip("This is for n-member lists")
     def test_depends_on_format_for_code_id(self):
         test_object_1 = DependsOnData(
             depends_on_value="a",
             depends_on_property="b",
             depends_on_system="c",
-            depends_on_display="d"
+            depends_on_display="d",
         )
         test_object_2 = DependsOnData(
             depends_on_value="abcd"

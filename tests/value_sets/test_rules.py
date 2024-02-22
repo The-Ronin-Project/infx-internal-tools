@@ -84,7 +84,7 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(first_item.system, "http://snomed.info/sct")
         self.assertEqual(first_item.version, "2023-03-01")
 
-    def test_custom_terminology_rule(self):
+    def test_custom_terminology_entire_code_system_rule(self):
         """
         Tests that the include_entire_code_system rule for custom terminologies works
         """
@@ -116,6 +116,71 @@ class RuleTests(unittest.TestCase):
             "http://projectronin.io/fhir/CodeSystem/ronin/TestConceptMapVersioningSourceTerminology",
         )
         self.assertEqual(first_code.version, "1")
+
+    def test_custom_terminology_code_rule(self):
+        """
+        Tests that the code_rule rule for custom terminologies works
+        """
+
+        terminology_version = app.terminologies.models.Terminology.load(
+            "e28d33cb-a09c-4202-b0f1-f71fa20ffb14"
+        )  # Custom_Cancer Staging Nomenclature version 3
+
+        rule = app.value_sets.models.CustomTerminologyRule(
+            uuid=None,
+            position=None,
+            description=None,
+            prop="code",
+            operator="in",
+            value="N1",
+            include=True,
+            value_set_version=None,
+            fhir_system="http://projectronin.io/fhir/CodeSystem/agnostic/AJCCStagingNomenclatures",
+            terminology_version=terminology_version,
+        )
+        rule.execute()
+
+        self.assertEqual(len(rule.results), 1)
+
+        first_code = list(rule.results)[0]
+        self.assertEqual(
+            first_code.system,
+            "http://projectronin.io/fhir/CodeSystem/agnostic/AJCCStagingNomenclatures",
+        )
+        self.assertEqual(first_code.version, "3")
+        self.assertEqual(first_code.display, "Node stage N1")
+
+    def test_custom_terminology_display_rule(self):
+        """
+        Tests that the display_regex rule for custom terminologies works
+        """
+
+        terminology_version = app.terminologies.models.Terminology.load(
+            "e28d33cb-a09c-4202-b0f1-f71fa20ffb14"
+        )  # Custom_Cancer Staging Nomenclature version 3
+
+        rule = app.value_sets.models.CustomTerminologyRule(
+            uuid=None,
+            position=None,
+            description=None,
+            prop="display",
+            operator="regex",
+            value="Node stage N1",
+            include=True,
+            value_set_version=None,
+            fhir_system="http://projectronin.io/fhir/CodeSystem/agnostic/AJCCStagingNomenclatures",
+            terminology_version=terminology_version,
+        )
+        rule.execute()
+
+        self.assertEqual(len(rule.results), 1)
+
+        first_code = list(rule.results)[0]
+        self.assertEqual(
+            first_code.system,
+            "http://projectronin.io/fhir/CodeSystem/agnostic/AJCCStagingNomenclatures",
+        )
+        self.assertEqual(first_code.code, "N1")
 
     def test_rxnorm_rule(self):
         terminology_version = app.terminologies.models.Terminology.load(
@@ -168,9 +233,9 @@ class RuleTests(unittest.TestCase):
             first_code.system, "http://www.nlm.nih.gov/research/umls/rxnorm"
         )
         self.assertEqual(first_code.version, "2024-01-02")
-        self.assertEqual(
-            4397, len(rule.results)
-        )  # This requires maintenance: 4397 is the correct count for February 2024; in January 2024 it was 4388, etc.
+        self.assertLessEqual(
+            4388, len(rule.results)
+        )  # 4388 is the correct count for 691 RxNorm codes with BPCK as the term type and 3697 codes with status of quantified in January 2024; we expect this count to increase over time
 
     def test_icd10_cm_rule(self):
         terminology_version = app.terminologies.models.Terminology.load(

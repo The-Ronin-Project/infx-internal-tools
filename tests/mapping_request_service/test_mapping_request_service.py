@@ -60,7 +60,7 @@ class MappingRequestServiceTests(unittest.TestCase):
                 processed_display, "Line 1"
             )
             self.assertEqual(
-                depends_on.depends_on_value, '{"coding":[{"code":"SNOMED#260767000","system":"http://snomed.info/sct"},{"code":"EPIC#42384","display":"regional lymph nodes (N)","system":"urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"}],"text":"FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - TNM CLASSIFICATION - AJCC N - REGIONAL LYMPH NODES (N)"}'
+                depends_on.depends_on_value, {"coding":[{"code":"SNOMED#260767000","system":"http://snomed.info/sct"},{"code":"EPIC#42384","display":"regional lymph nodes (N)","system":"urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"}],"text":"FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - TNM CLASSIFICATION - AJCC N - REGIONAL LYMPH NODES (N)"}
             )
             self.assertEqual({"text": "Line 1"}, raw_resource["component"][index]["code"])
             self.assertEqual("Line 1", raw_resource["component"][index]["code"]["text"])

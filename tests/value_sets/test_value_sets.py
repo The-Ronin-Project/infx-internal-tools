@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch, Mock
 
 from pytest import raises
+from sqlalchemy import text
 
 import app.value_sets.models
 import app.terminologies.models
@@ -53,12 +54,15 @@ class ValueSetTests(unittest.TestCase):
     order by value_set_uuid desc
     ```
     """
+
     def setUp(self) -> None:
         self.conn = get_db()
         self.app = create_app()
-        self.app.config.update({
-            "TESTING": True,
-        })
+        self.app.config.update(
+            {
+                "TESTING": True,
+            }
+        )
         self.client = self.app.test_client()
 
     def tearDown(self) -> None:
@@ -90,6 +94,26 @@ class ValueSetTests(unittest.TestCase):
     safe_term_uuid_old = "3c9ed300-0cb8-47af-8c04-a06352a14b8d"
     safe_term_uuid_dupl = "d14cbd3a-aabe-4b26-b754-5ae2fbd20949"
 
+    # UUID value of Test ONLY: Custom Terminology Value Set version
+    custom_terminology_value_set_version = "b8de6b05-5f0e-4a9d-a872-7cb265a52311"
+    # UUID value of "Testing ONLY: Custom RxNorm Value Set" version
+    custom_rxnorm_value_set_version = "64be42af-ded8-40b4-838e-56df16a18ba8"
+    # UUID value of Test Only: LOINC Value Set value set version
+    loinc_value_set_version = "7e34e437-add3-4224-9018-31e447c26d26"
+
+    # UUID value of Testing ONLY: Custom Terminology Codeable Concept Value Set version
+    codeable_concept_custom_terminology_value_set_version = (
+        "8c73a151-8bf8-46d1-bae6-e275c1e4a14e"
+    )
+    # UUID value of Testing ONLY: UCUM Value Set version
+    ucum_value_set_version = "a7f8a7a2-7294-4dd8-b3d4-ffac95054af1"
+
+    # UUID value of Testing ONLY: SNOMED Value Set version
+    snomed_value_set_version = "43d730b4-7191-4d92-b3ce-b61dc31998c7"
+
+    icd_10_cm_value_set_version = "f50ab829-110a-493a-be22-a49ec18c2161"
+    fhir_terminology_value_set_version = "770f63eb-793f-4be5-9870-510c05f5801c"
+
     def test_value_set_expand(self):
         """
         Expand the 'Automated Testing Value Set' value set and verify the outputs,
@@ -102,24 +126,543 @@ class ValueSetTests(unittest.TestCase):
 
         self.assertEqual(11509, len(value_set_version.expansion))
 
+    def test_custom_terminology_code_schema_value_set(self):
+        """
+        Tests making a new expansion and loading the expansion for custom terminology value set.
+        """
+        #
+        # Step 1: Expand the value set and verify the expansion
+        #
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.custom_terminology_value_set_version
+        )
+        value_set_version.expand(force_new=True)
+
+        self.assertEqual(28, len(value_set_version.expansion))
+
+        expected_subset_codes = ["N2", "N0b", "N3"]
+        actual_codes = [code.code for code in value_set_version.expansion]
+        # Check that each expected code in the subset is present in the actual codes
+        for expected_code in expected_subset_codes:
+            self.assertIn(expected_code, actual_codes)
+
+        #
+        # Step 2: Test loading the expansion from the database
+        #
+
+        del value_set_version
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.custom_terminology_value_set_version
+        )
+        self.assertTrue(value_set_version.expansion_already_exists())
+        # value_set_version.expand()
+        value_set_version.load_current_expansion()
+        current_expansion = value_set_version.expansion
+
+        self.assertEqual(len(current_expansion), 28)
+
+        #
+        # Step 3: Directly query the database and verify a complete row
+        #
+        expansion_uuid = value_set_version.expansion_uuid
+        code_to_check = "N2"
+
+        result = self.conn.execute(
+            text(
+                """
+                select * from value_sets.expansion_member_data
+                where expansion_uuid=:expansion_uuid
+                and code_simple=:code_to_check
+                """
+            ), {
+                "expansion_uuid": expansion_uuid,
+                "code_to_check": code_to_check
+            }
+        ).one_or_none()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(app.models.codes.RoninCodeSchemas.code.value, result.code_schema)
+        self.assertEqual(code_to_check, result.code_simple)
+        self.assertIsNone(result.code_jsonb)
+        self.assertEqual("http://projectronin.io/fhir/CodeSystem/agnostic/AJCCStagingNomenclatures", result.system)
+        self.assertEqual("3", result.version)
+
+    def test_codeable_concept_custom_terminology_value_set(self):
+        """
+        Tests making a new expanison and loading the expansion for custom terminology value set.
+        """
+        #
+        # Step 1: Expand the value set and verify the expansion
+        #
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.codeable_concept_custom_terminology_value_set_version
+        )
+        value_set_version.expand(force_new=True)
+
+        self.assertEqual(1, len(value_set_version.expansion))
+
+        expected_code_object_json = {
+            "coding": [
+                {"system": "http://hl7.org/fhir/sid/icd-10-cm", "code": "D59.9"},
+                {"system": "http://snomed.info/sct", "code": "4854004"},
+            ],
+            "text": "Anemia, hemolytic, acquired (CMS/HCC)",
+        }
+        example_codeable_concept = app.models.codes.FHIRCodeableConcept.deserialize(
+            expected_code_object_json
+        )
+        actual_code_object = list(value_set_version.expansion)[0]
+        # Check that each expected code in the subset is present in the actual codes
+        self.assertEqual(type(example_codeable_concept), type(actual_code_object.code))
+        self.assertEqual(
+            "Anemia, hemolytic, acquired (CMS/HCC)", actual_code_object.display
+        )
+
+        #
+        # Step 2: Test loading the expansion from the database
+        #
+
+        del value_set_version
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.codeable_concept_custom_terminology_value_set_version
+        )
+        self.assertTrue(value_set_version.expansion_already_exists())
+        # value_set_version.expand()
+        value_set_version.load_current_expansion()
+        current_expansion = value_set_version.expansion
+
+        self.assertEqual(len(current_expansion), 1)
+
+        #
+        # Step 3: Directly query the database and verify a complete row
+        #
+        expansion_uuid = value_set_version.expansion_uuid
+        target_display_to_check = list(value_set_version.expansion)[0].display
+
+        result = self.conn.execute(
+            text(
+                """
+                select * from value_sets.expansion_member_data
+                where expansion_uuid=:expansion_uuid
+                and display=:target_display_to_check
+                """
+            ),
+            {
+                "expansion_uuid": expansion_uuid,
+                "target_display_to_check": target_display_to_check,
+            },
+        ).one_or_none()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(
+            app.models.codes.RoninCodeSchemas.codeable_concept.value, result.code_schema
+        )
+        # self.assertEqual(code_to_check, result.code_simple)
+        self.assertIsNotNone(result.code_jsonb)
+        self.assertEqual(result.display, target_display_to_check)
+
+    def test_snomed_value_set(self):
+        """
+        Tests making a new expanison and loading the expansion for custom terminology value set.
+        """
+        #
+        # Step 1: Expand the value set and verify the expansion
+        #
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.snomed_value_set_version
+        )
+        value_set_version.expand(force_new=True)
+
+        self.assertEqual(1988, len(value_set_version.expansion))
+
+        expected_subset_codes = ["9058002", "697897003", "845006"]
+        actual_codes = [code.code for code in value_set_version.expansion]
+        # Check that each expected code in the subset is present in the actual codes
+        for expected_code in expected_subset_codes:
+            self.assertIn(expected_code, actual_codes)
+
+        #
+        # Step 2: Test loading the expansion from the database
+        #
+
+        del value_set_version
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.snomed_value_set_version
+        )
+        self.assertTrue(value_set_version.expansion_already_exists())
+        # value_set_version.expand()
+        value_set_version.load_current_expansion()
+        current_expansion = value_set_version.expansion
+
+        self.assertEqual(len(current_expansion), 1988)
+
+        #
+        # Step 3: Directly query the database and verify a complete row
+        #
+        expansion_uuid = value_set_version.expansion_uuid
+        code_to_check = "9058002"
+
+        result = self.conn.execute(
+            text(
+                """
+                select * from value_sets.expansion_member_data
+                where expansion_uuid=:expansion_uuid
+                and code_simple=:code_to_check
+                """
+            ),
+            {"expansion_uuid": expansion_uuid, "code_to_check": code_to_check},
+        ).one_or_none()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(
+            app.models.codes.RoninCodeSchemas.code.value, result.code_schema
+        )
+        self.assertEqual(code_to_check, result.code_simple)
+        self.assertIsNone(result.code_jsonb)
+        self.assertEqual(
+            "http://snomed.info/sct",
+            result.system,
+        )
+        self.assertEqual("2023-09-01", result.version)
+
+    def test_ucum_value_set(self):
+        """
+        Tests making a new expanison and loading the expansion for custom terminology value set.
+        """
+        #
+        # Step 1: Expand the value set and verify the expansion
+        #
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.ucum_value_set_version
+        )
+        value_set_version.expand(force_new=True)
+
+        self.assertEqual(2, len(value_set_version.expansion))
+
+        expected_subset_codes = ["cm", "[in_i]"]
+        actual_codes = [code.code for code in value_set_version.expansion]
+        # Check that each expected code in the subset is present in the actual codes
+        for expected_code in expected_subset_codes:
+            self.assertIn(expected_code, actual_codes)
+
+        #
+        # Step 2: Test loading the expansion from the database
+        #
+
+        del value_set_version
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.ucum_value_set_version
+        )
+        self.assertTrue(value_set_version.expansion_already_exists())
+        # value_set_version.expand()
+        value_set_version.load_current_expansion()
+        current_expansion = value_set_version.expansion
+
+        self.assertEqual(len(current_expansion), 2)
+
+        #
+        # Step 3: Directly query the database and verify a complete row
+        #
+        expansion_uuid = value_set_version.expansion_uuid
+        code_to_check = "cm"
+
+        result = self.conn.execute(
+            text(
+                """
+                select * from value_sets.expansion_member_data
+                where expansion_uuid=:expansion_uuid
+                and code_simple=:code_to_check
+                """
+            ),
+            {"expansion_uuid": expansion_uuid, "code_to_check": code_to_check},
+        ).one_or_none()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(
+            app.models.codes.RoninCodeSchemas.code.value, result.code_schema
+        )
+        self.assertEqual(code_to_check, result.code_simple)
+        self.assertIsNone(result.code_jsonb)
+        self.assertEqual(
+            "http://unitsofmeasure.org",
+            result.system,
+        )
+        self.assertEqual("3.0.0", result.version)
+
+    def test_loinc_value_set(self):
+        """
+        Tests making a new expanison and loading the expansion for a LOINC value set.
+        """
+        #
+        # Step 1: Expand the value set and verify the expansion
+        #
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.loinc_value_set_version
+        )
+        value_set_version.expand(force_new=True)
+
+        self.assertEqual(1, len(value_set_version.expansion))
+
+        expected_subset_codes = ["41021-7"]
+        actual_codes = [code.code for code in value_set_version.expansion]
+        # Check that each expected code in the subset is present in the actual codes
+        for expected_code in expected_subset_codes:
+            self.assertIn(expected_code, actual_codes)
+
+        #
+        # Step 2: Test loading the expansion from the database
+        #
+
+        del value_set_version
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.loinc_value_set_version
+        )
+        self.assertTrue(value_set_version.expansion_already_exists())
+        # value_set_version.expand()
+        value_set_version.load_current_expansion()
+        current_expansion = value_set_version.expansion
+
+        self.assertEqual(len(current_expansion), 1)
+
+        #
+        # Step 3: Directly query the database and verify a complete row
+        #
+        expansion_uuid = value_set_version.expansion_uuid
+        code_to_check = "41021-7"
+
+        result = self.conn.execute(
+            text(
+                """
+                select * from value_sets.expansion_member_data
+                where expansion_uuid=:expansion_uuid
+                and code_simple=:code_to_check
+                """
+            ),
+            {"expansion_uuid": expansion_uuid, "code_to_check": code_to_check},
+        ).one_or_none()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(
+            app.models.codes.RoninCodeSchemas.code.value, result.code_schema
+        )
+        self.assertEqual(code_to_check, result.code_simple)
+        self.assertIsNone(result.code_jsonb)
+        self.assertEqual(
+            "http://loinc.org",
+            result.system,
+        )
+        self.assertEqual("2.76", result.version)
+
+    def test_rxnorm_value_set(self):
+        """
+        Tests making a new expansion and loading the expansion for rxnorm value set.
+        """
+
+        expected_value_set_size = 3829
+        #
+        # Step 1: Expand the value set and verify the expansion
+        #
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.custom_rxnorm_value_set_version
+        )
+        value_set_version.expand(force_new=True)
+
+        self.assertEqual(expected_value_set_size, len(value_set_version.expansion))
+
+        expected_subset_codes = ["2584864", "845182", "2637048"]
+        actual_codes = [code.code for code in value_set_version.expansion]
+        # Check that each expected code in the subset is present in the actual codes
+        for expected_code in expected_subset_codes:
+            self.assertIn(expected_code, actual_codes)
+
+        #
+        # Step 2: Test loading the expansion from the database
+        #
+        del value_set_version
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.custom_rxnorm_value_set_version
+        )
+        self.assertTrue(value_set_version.expansion_already_exists())
+
+        value_set_version.load_current_expansion()
+        current_expansion = value_set_version.expansion
+
+        self.assertEqual(len(current_expansion), expected_value_set_size)
+
+        #
+        # Step 3: Directly query the database and verify a complete row
+        #
+        expansion_uuid = value_set_version.expansion_uuid
+        code_to_check = "845182"
+
+        result = self.conn.execute(
+            text(
+                """
+                select * from value_sets.expansion_member_data
+                where expansion_uuid=:expansion_uuid
+                and code_simple=:code_to_check
+                """
+            ), {
+                "expansion_uuid": expansion_uuid,
+                "code_to_check": code_to_check
+            }
+        ).one_or_none()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(app.models.codes.RoninCodeSchemas.code.value, result.code_schema)
+        self.assertEqual(code_to_check, result.code_simple)
+        self.assertIsNone(result.code_jsonb)
+        self.assertEqual("http://www.nlm.nih.gov/research/umls/rxnorm", result.system)
+        self.assertEqual("2024-02-05", result.version)
+
+    def test_icd_10_cm_value_set(self):
+        """
+        Tests making a new expansion and loading the expansion for ICD-10 CM value set.
+        """
+        #
+        # Step 1: Expand the value set and verify the expansion
+        #
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.icd_10_cm_value_set_version
+        )
+        value_set_version.expand(force_new=True)
+
+        self.assertEqual(8, len(value_set_version.expansion))
+
+        expected_subset_codes = ["R05", "R04.2"]
+        actual_codes = [code.code for code in value_set_version.expansion]
+        # Check that each expected code in the subset is present in the actual codes
+        for expected_code in expected_subset_codes:
+            self.assertIn(expected_code, actual_codes)
+
+        #
+        # Step 2: Test loading the expansion from the database
+        #
+
+        del value_set_version
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.icd_10_cm_value_set_version
+        )
+        self.assertTrue(value_set_version.expansion_already_exists())
+        # value_set_version.expand()
+        value_set_version.load_current_expansion()
+        current_expansion = value_set_version.expansion
+
+        self.assertEqual(len(current_expansion), 8)
+
+        #
+        # Step 3: Directly query the database and verify a complete row
+        #
+        expansion_uuid = value_set_version.expansion_uuid
+        code_to_check = "R05"
+
+        result = self.conn.execute(
+            text(
+                """
+                select * from value_sets.expansion_member_data
+                where expansion_uuid=:expansion_uuid
+                and code_simple=:code_to_check
+                """
+            ), {
+                "expansion_uuid": expansion_uuid,
+                "code_to_check": code_to_check
+            }
+        ).one_or_none()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(app.models.codes.RoninCodeSchemas.code.value, result.code_schema)
+        self.assertEqual(code_to_check, result.code_simple)
+        self.assertIsNone(result.code_jsonb)
+        self.assertEqual("http://hl7.org/fhir/sid/icd-10-cm", result.system)
+        self.assertEqual("2024", result.version)
+
+    def test_fhir_terminology_value_set(self):
+        """
+        Tests making a new expansion and loading the expansion for FHIR Terminology value set.
+        """
+        #
+        # Step 1: Expand the value set and verify the expansion
+        #
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.fhir_terminology_value_set_version
+        )
+        value_set_version.expand(force_new=True)
+
+        self.assertEqual(7, len(value_set_version.expansion))
+
+        expected_subset_codes = ['sms', 'email', 'phone']
+        actual_codes = [code.code for code in value_set_version.expansion]
+        # Check that each expected code in the subset is present in the actual codes
+        for expected_code in expected_subset_codes:
+            self.assertIn(expected_code, actual_codes)
+
+        #
+        # Step 2: Test loading the expansion from the database
+        #
+
+        del value_set_version
+        value_set_version = app.value_sets.models.ValueSetVersion.load(
+            self.fhir_terminology_value_set_version
+        )
+        self.assertTrue(value_set_version.expansion_already_exists())
+        # value_set_version.expand()
+        value_set_version.load_current_expansion()
+        current_expansion = value_set_version.expansion
+
+        self.assertEqual(len(current_expansion), 7)
+
+        #
+        # Step 3: Directly query the database and verify a complete row
+        #
+        expansion_uuid = value_set_version.expansion_uuid
+        code_to_check = "sms"
+
+        result = self.conn.execute(
+            text(
+                """
+                select * from value_sets.expansion_member_data
+                where expansion_uuid=:expansion_uuid
+                and code_simple=:code_to_check
+                """
+            ), {
+                "expansion_uuid": expansion_uuid,
+                "code_to_check": code_to_check
+            }
+        ).one_or_none()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(app.models.codes.RoninCodeSchemas.code.value, result.code_schema)
+        self.assertEqual(code_to_check, result.code_simple)
+        self.assertIsNone(result.code_jsonb)
+        self.assertEqual("http://hl7.org/fhir/contact-point-system", result.system)
+        self.assertEqual("4.0.1", result.version)
+
     def test_value_set_not_found(self):
         with raises(NotFoundException) as e:
             app.value_sets.models.ValueSet.load(self.safe_term_uuid_dupl)
         result = e.value
-        assert result.message == f"No Value Set found with UUID: {self.safe_term_uuid_dupl}"
+        assert (
+            result.message
+            == f"No Value Set found with UUID: {self.safe_term_uuid_dupl}"
+        )
 
     def test_value_set_version_not_found(self):
         with raises(NotFoundException) as e:
             app.value_sets.models.ValueSetVersion.load(self.safe_term_uuid_dupl)
         result = e.value
-        assert result.message == f"No Value Set Version found with UUID: {self.safe_term_uuid_dupl}"
+        assert (
+            result.message
+            == f"No Value Set Version found with UUID: {self.safe_term_uuid_dupl}"
+        )
 
     def test_expansion_report(self):
         response = self.client.get(
             f"/ValueSets/expansions/{self.safe_value_set_uuid_auto_tool_expansion}/report"
         )
-        assert hashlib.md5(response.data).hexdigest() == "8cb508cafbae9fba542270698aa9db9e"
+        assert (
+            hashlib.md5(response.data).hexdigest() == "8cb508cafbae9fba542270698aa9db9e"
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

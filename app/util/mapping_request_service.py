@@ -1241,7 +1241,7 @@ class MappingRequestService:
             display=processed_display,
             system=None,
             version=None,
-            terminology_version_uuid=terminology_to_load_to.uuid,
+            terminology_version=terminology_to_load_to,
             custom_terminology_code_uuid=new_code_uuid,
             # todo: align with changes: now> input 4 str to Code(), soon> input 1 list of DependsOnData to Code()
             depends_on_system=depends_on.depends_on_system if depends_on else None,

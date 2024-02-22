@@ -9,6 +9,7 @@ from operator import itemgetter
 from typing import Optional, List
 from uuid import UUID
 import logging
+from enum import Enum
 
 from cachetools.func import ttl_cache
 from opensearchpy.helpers import bulk
@@ -16,6 +17,7 @@ from sqlalchemy import text
 
 import app.models.codes
 import app.models.data_ingestion_registry
+import app.value_sets.models
 from app.database import get_db, get_opensearch
 from app.errors import (
     BadRequestWithCode,
@@ -26,7 +28,7 @@ from app.errors import (
 from app.helpers.oci_helper import set_up_and_save_to_object_store, folder_path_for_oci
 from app.helpers.simplifier_helper import publish_to_simplifier
 from app.helpers.data_helper import OID_URL_CONVERSIONS
-from app.models.codes import Code
+import app.helpers.id_helper
 import app.models.data_ingestion_registry
 from app.terminologies.models import (
     Terminology,
@@ -459,9 +461,9 @@ class ConceptMap:
         conn.execute(
             text(
                 """
-                insert into concept_maps.source_concept
-                (uuid, code, display, system, map_status, concept_map_version_uuid, custom_terminology_uuid)
-                select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid, custom_terminology_uuid from value_sets.expansion_member
+                insert into concept_maps.source_concept_data
+                (uuid, code_schema, code_simple, code_jsonb, display, system_uuid, map_status, concept_map_version_uuid, custom_terminology_code_uuid)
+                select uuid_generate_v4(), code_schema, code_simple code_jsonb, display, tv.uuid, 'pending', :concept_map_version_uuid, custom_terminology_uuid from value_sets.expansion_member_data
                 join public.terminology_versions tv
                 on tv.fhir_uri=expansion_member.system
                 and tv.version=expansion_member.version
@@ -500,6 +502,8 @@ class ConceptMap:
                 terminology_version_uuid = terminology_version_uuid_lookup(
                     concept.system, concept.version
                 )
+                if isinstance(concept.code, app.models.codes.FHIRCodeableConcept):
+                    raise NotImplementedError("Indexing not implemented for codeable concepts to be used as target terminology in mapping")
                 document = {
                     "_id": (str(concept_map_version_uuid) + str(concept.code)),
                     "_index": "target_concepts_for_mapping",
@@ -541,6 +545,7 @@ class ConceptMap:
         previous_schema_version: int = None,
         new_schema_version: int = None,
     ):
+        # todo: does this need to be updated for CMv5?
         """
         Compares concept map versions to assert which mappings were removed and added between versions. For clarity of
         results, verifies that previous and new are versions of the same map and previous is earlier or the same as new.
@@ -695,6 +700,7 @@ class ConceptMap:
 
     @staticmethod
     def collect_and_sort_mappings_for_diff(serialized):
+        # todo: does this need to be updated for CMv5?
         """
         Collect mapping ids from the data - set up to sort diffs by source and target terminology and target code data
         @type serialized: object that the caller obtained from ConceptMapVersion.serialize() or get_data_from_oci()
@@ -783,7 +789,7 @@ class ConceptMapVersion:
         self.target_value_set_version_uuid = data.target_value_set_version_uuid
         self.load_allowed_target_terminologies()
         if load_mappings:
-            self.load_mappings()
+            self.load_reviewed_mappings()
         # self.generate_self_mappings()
 
     @classmethod
@@ -809,6 +815,7 @@ class ConceptMapVersion:
             return None
 
     def load_allowed_target_terminologies(self):
+        # todo: can this be deprecated
         """
         runs query to get target terminology related to concept map version, called from the load method above.
         Data returned is looped through and appended to the allowed_target_terminologies attribute list
@@ -832,7 +839,7 @@ class ConceptMapVersion:
                     Terminology.load_from_cache(terminology_version_uuid)
                 )
 
-    def load_mappings(self):
+    def load_reviewed_mappings(self):
         """
         Loads mappings between source and target concepts for a specific version of a concept map.
         This method queries the database to retrieve all reviewed mappings associated with the
@@ -842,32 +849,75 @@ class ConceptMapVersion:
         Raises:
             BadRequestWithCode: If a source concept in the concept map version is missing a source system.
         """
+
         conn = get_db()
         query = """
-            select concept_relationship.uuid as mapping_uuid, concept_relationship.author, concept_relationship.review_status, concept_relationship.mapping_comments,
-            source_concept.uuid as source_concept_uuid, source_concept.code as source_code, source_concept.display as source_display, source_concept.system as source_system, 
-            tv_source.version as source_version, tv_source.fhir_uri as source_fhir_uri,
-            source_concept.comments as source_comments, source_concept.additional_context as source_additional_context, source_concept.map_status as source_map_status,
-            source_concept.assigned_mapper as source_assigned_mapper, source_concept.assigned_reviewer as source_assigned_reviewer, source_concept.no_map,
-            source_concept.reason_for_no_map, source_concept.mapping_group as source_mapping_group, source_concept.previous_version_context as source_previous_version_context,
-            relationship_codes.code as relationship_code, source_concept.map_status,
-            concept_relationship.target_concept_code, concept_relationship.target_concept_display,
-            concept_relationship.target_concept_system_version_uuid as target_system,
-            tv_target.version as target_version, tv_target.fhir_uri as target_fhir_uri,
-            ctc.depends_on_property, ctc.depends_on_system, ctc.depends_on_value, ctc.depends_on_display
-            from concept_maps.source_concept
-            left join concept_maps.concept_relationship
-            on source_concept.uuid = concept_relationship.source_concept_uuid
-            left join custom_terminologies.code ctc
-            on source_concept.custom_terminology_uuid = ctc.uuid
+            select 
+                crd.mapping_id, 
+                crd.deduplication_hash as mapping_deduplication_hash,
+                crd.uuid as mapping_uuid, 
+                crd.mapped_by, 
+                crd.reviewed_by, 
+                crd.review_status, 
+                crd.mapping_comments,
+                crd.mapped_date_time,
+                crd.review_comments,
+                crd.reviewed_date_time,
+                crd.map_program_date_time,
+                crd.map_program_version,
+                crd.map_program_prediction_id,
+                crd.map_program_confidence_score,
+                crd.deleted_date_time,
+                crd.deleted_by,
+                scd.uuid as source_concept_uuid, 
+                scd.code_schema as source_code_schema, 
+                scd.code_simple as source_code_simple, 
+                scd.code_jsonb as source_code_jsonb,
+                scd.display as source_display, 
+                scd.system_uuid as source_system, 
+                tv_source.version as source_version, 
+                tv_source.fhir_uri as source_fhir_uri,
+                scd.comments as source_comments, 
+                scd.map_status as source_map_status,
+                scd.assigned_mapper as source_assigned_mapper, 
+                scd.assigned_reviewer as source_assigned_reviewer, 
+                scd.no_map,
+                scd.reason_for_no_map, 
+                scd.mapping_group as source_mapping_group, 
+                scd.previous_version_context as source_previous_version_context,
+                scd.custom_terminology_code_uuid,
+                relationship_codes.code as relationship_code, 
+                scd.map_status,
+                crd.target_concept_code, 
+                crd.target_concept_display,
+                crd.target_concept_terminology_version_uuid,
+                tv_target.version as target_version, 
+                tv_target.fhir_uri as target_fhir_uri,
+                cdo.depends_on_property, 
+                cdo.depends_on_system, 
+                cdo.depends_on_value_schema,
+                cdo.depends_on_value_simple,
+                cdo.depends_on_value_jsonb,
+                cdo.depends_on_display,
+                ctcd.code_id as source_code_id,
+                ctcd.deduplication_hash as source_deduplication_hash
+            from 
+                concept_maps.source_concept_data as scd
+            left join concept_maps.concept_relationship_data as crd
+                on scd.uuid = crd.source_concept_uuid
+            left join custom_terminologies.code_data ctcd
+                on scd.custom_terminology_code_uuid = ctcd.uuid
+            left join custom_terminologies.code_depends_on cdo
+                on scd.custom_terminology_code_uuid = cdo.code_uuid
             join concept_maps.relationship_codes
-            on relationship_codes.uuid = concept_relationship.relationship_code_uuid
+                on relationship_codes.uuid = crd.relationship_code_uuid
             join terminology_versions as tv_source
-            on cast(tv_source.uuid as uuid) = cast(source_concept.system as uuid)
+                on cast(tv_source.uuid as uuid) = cast(scd.system_uuid as uuid)
             join terminology_versions as tv_target
-            on tv_target.uuid = concept_relationship.target_concept_system_version_uuid
-            where source_concept.concept_map_version_uuid=:concept_map_version_uuid
-            and concept_relationship.review_status = 'reviewed'
+                on tv_target.uuid = crd.target_concept_terminology_version_uuid
+            where 
+                scd.concept_map_version_uuid=:concept_map_version_uuid
+                and crd.review_status = 'reviewed'
             """
 
         results = conn.execute(
@@ -877,71 +927,127 @@ class ConceptMapVersion:
             },
         )
 
-        # Terminology Local cache
-        # todo: study why ttl_cache, or other caching strategies, did not stop repeat loads from happening
-        terminology = dict()
+        # todo: consider changing from this self-made cache to a regular one
+        terminology_cache = dict()
 
         for item in results:
-
             # Get the system
             source_system = item.source_system
             if source_system is None:
                 raise BadRequestWithCode(
                     "ConceptMap.loadMappings.missingSystem",
-                    f"Concept map UUID: {self.concept_map.uuid} version {self.version} has no source system identified",
+                    f"Concept map UUID: {self.concept_map.uuid} version {self.version} has mapping with no source system identified",
                 )
 
             # Get the Terminology
-            if source_system not in terminology.keys():
-                terminology.update(
+            if source_system not in terminology_cache.keys():
+                terminology_cache.update(
                     {source_system: load_terminology_version_with_cache(source_system)}
                 )
 
+            # Initialize the code for the source code
+            source_code_schema = app.models.codes.RoninCodeSchemas(item.source_code_schema)
+            if source_code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
+                source_code_fhir_object = app.models.codes.FHIRCodeableConcept.deserialize(item.source_code_jsonb)
+                source_code_code = None
+                source_code_display = None
+            elif source_code_schema == app.models.codes.RoninCodeSchemas.code:
+                source_code_code = item.source_code_simple
+                source_code_display = item.source_display
+                source_code_fhir_object = None
+            else:
+                raise NotImplementedError("Only codeable concept and code schemas available for source concepts")
+
+            # Set up the depends on for the source concept
+            depends_on = None
+            if item.depends_on_property or item.depends_on_value_schema:
+                depends_on = app.models.codes.DependsOnData.setup_from_database_columns(
+                    depends_on_value_schema=item.depends_on_value_schema,
+                    depends_on_value_simple=item.depends_on_value_simple,
+                    depends_on_value_jsonb=item.depends_on_value_jsonb,
+                    depends_on_property=item.depends_on_property,
+                    depends_on_system=item.depends_on_system,
+                    depends_on_display=item.depends_on_display
+                )
+
+            source_code_code_object = app.models.codes.Code(
+                system=None,
+                version=None,
+                code_schema=source_code_schema,
+                code=source_code_code,
+                display=source_code_display,
+                code_object=source_code_fhir_object,
+                terminology_version=terminology_cache[source_system],
+                # from_fhir_terminology=None,  # In the future, we can check this if needed
+                from_custom_terminology=True if item.custom_terminology_code_uuid is not None else False,
+                custom_terminology_code_uuid=item.custom_terminology_code_uuid,
+                depends_on=depends_on,
+                custom_terminology_code_id=item.source_code_id,
+                stored_custom_terminology_deduplication_hash=item.source_deduplication_hash
+            )
+
+            # Set up assigned_mapper
+            assigned_mapper = ContentCreator.load_by_uuid_from_cache(item.source_assigned_mapper)
+
+            # Set up assigned_reviewer
+            assigned_reviewer = ContentCreator.load_by_uuid_from_cache(item.source_assigned_reviewer)
+
             # Create the SourceConcept
-            source_code = SourceConcept(
+            source_concept = SourceConcept(
                 uuid=item.source_concept_uuid,
-                code=item.source_code,
-                display=item.source_display,
-                system=terminology.get(source_system),
+                code=source_code_code_object,
                 comments=item.source_comments,
-                additional_context=item.source_additional_context,
                 map_status=item.source_map_status,
-                assigned_mapper=item.source_assigned_mapper,
-                assigned_reviewer=item.source_assigned_reviewer,
+                assigned_mapper=assigned_mapper,
+                assigned_reviewer=assigned_reviewer,
                 no_map=item.no_map,
                 reason_for_no_map=item.reason_for_no_map,
                 mapping_group=item.source_mapping_group,
                 previous_version_context=item.source_previous_version_context,
                 concept_map_version_uuid=self.uuid,
-                depends_on_property=item.depends_on_property,
-                depends_on_system=item.depends_on_system,
-                depends_on_value=item.depends_on_value,
-                depends_on_display=item.depends_on_display,
             )
-            target_code = Code(
-                item.target_fhir_uri,
-                item.target_version,
-                item.target_concept_code,
-                item.target_concept_display,
+            target_code = app.models.codes.Code(  # We only map to standards of code type
+                system=item.target_fhir_uri,
+                version=item.target_version,
+                code=item.target_concept_code,
+                display=item.target_concept_display,
+                from_custom_terminology=False  # we currently only map to standards
             )
             relationship = MappingRelationship.load_by_code_from_cache(
                 item.relationship_code
             )  # this needs optimization
 
+            mapped_by = ContentCreator.load_by_uuid_from_cache(item.mapped_by)
+            reviewed_by = ContentCreator.load_by_uuid_from_cache(item.reviewed_by)
+            deleted_by = ContentCreator.load_by_uuid_from_cache(item.deleted_by)
+
             mapping = Mapping(
-                source_code,
+                source_concept,
                 relationship,
                 target_code,
+                mapping_id=item.mapping_id,
+                _stored_deduplication_hash=item.mapping_deduplication_hash,
+                saved_to_db=True,
                 mapping_comments=item.mapping_comments,
-                author=item.author,
+                review_comments=item.review_comments,
+                mapped_by=mapped_by,
+                mapped_date_time=item.mapped_date_time,
+                reviewed_by=reviewed_by,
+                reviewed_date_time=item.reviewed_date_time,
                 uuid=item.mapping_uuid,
                 review_status=item.review_status,
-                reason_for_no_map=item.reason_for_no_map,
+                # reason_for_no_map=item.reason_for_no_map,  # todo: Why does this have this when the source_concept has it?
+                map_program_date_time=item.map_program_date_time,
+                map_program_version=item.map_program_version,
+                map_program_prediction_id=item.map_program_prediction_id,
+                map_program_confidence_score=item.map_program_confidence_score,
+                deleted_by=deleted_by,
+                deleted_date_time=item.deleted_date_time
             )
-            if source_code in self.mappings:
-                self.mappings[source_code].append(mapping)
+            if source_concept in self.mappings:
+                self.mappings[source_concept].append(mapping)
             else:
-                self.mappings[source_code] = [mapping]
+                self.mappings[source_concept] = [mapping]
 
     def mapping_draft(self):
         """
@@ -1127,12 +1233,13 @@ class ConceptMapVersion:
                                 source_code_code,
                             )
 
-                        # We want the text string array that is supposed to be json to be formatted correctly
-                        # If it's not an array it should return the original string
-                        if is_coding_array(source_code_code):
-                            source_code_code = transform_struct_string_to_json(
-                                source_code_code
-                            )
+                        # No longer needed in CMv5
+                        # # We want the text string array that is supposed to be json to be formatted correctly
+                        # # If it's not an array it should return the original string
+                        # if is_coding_array(source_code_code):
+                        #     source_code_code = transform_struct_string_to_json(
+                        #         source_code_code
+                        #     )
 
                         # Convert OIDs to URLs
                         for oid, uri in OID_URL_CONVERSIONS.items():
@@ -1366,7 +1473,7 @@ class ConceptMapVersion:
             "title": self.concept_map.title,
             "id": str(self.concept_map.uuid),
             "name": rcdm_name if self.concept_map.name is not None else None,
-            "contact": [{"name": self.concept_map.author}],
+            # "contact": [{"name": self.concept_map.mapped_by}],  # todo: we don't need serialization to work for migration
             "url": f"http://projectronin.io/fhir/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
             "purpose": self.get_use_case_description(),
@@ -1753,35 +1860,88 @@ class MappingRelationship:
         return {"uuid": self.uuid, "code": self.code, "display": self.display}
 
 
+class ContentCreatorType(Enum):
+    HUMAN = "human"
+    MODEL = "model"
+    ALGORITHM = "algorithm"
+
+
+@dataclass
+class ContentCreator:  # Unless we have a better name for mapper/reviewer that can be human or machine
+    uuid: UUID
+    first_last_name: str
+    type: Optional[ContentCreatorType] = ContentCreatorType.HUMAN
+
+    def __post_init__(self):
+        # todo: do this better, like load it from the table
+        if self.uuid == UUID('8990714d-8eeb-4acf-a5b7-abf92007a53a'):  # Automapping UUID
+            self.type = ContentCreatorType.ALGORITHM
+        elif self.uuid == UUID('8abf5747-121b-48e0-9edf-dbd820d397fb'):  # NLP UUID
+            self.type = ContentCreatorType.MODEL
+
+    @classmethod
+    def load_by_uuid(cls, uuid):
+        if uuid is None:
+            return None
+
+        conn = get_db()
+        result = conn.execute(
+            text(
+                """
+                select * from project_management."user"
+                where uuid=:uuid
+                """
+            ), {
+                "uuid": uuid
+            }
+        ).one()
+        return cls(
+            uuid=result.uuid,
+            first_last_name=result.first_last_name
+        )
+
+    @classmethod
+    @ttl_cache()
+    def load_by_uuid_from_cache(cls, uuid):
+        return cls.load_by_uuid(uuid)
+
+
 @dataclass
 class SourceConcept:
     uuid: UUID
-    code: str
-    display: str
-    system: Terminology
+    code: app.models.codes.Code
+    concept_map_version_uuid: UUID
     comments: Optional[str] = None
-    additional_context: Optional[str] = None
     map_status: Optional[str] = None
-    assigned_mapper: Optional[UUID] = None
-    assigned_reviewer: Optional[UUID] = None
+    assigned_mapper: Optional[ContentCreator] = None
+    assigned_reviewer: Optional[ContentCreator] = None
     no_map: Optional[bool] = None
     reason_for_no_map: Optional[str] = None
     mapping_group: Optional[str] = None
     previous_version_context: Optional[dict] = None
-    concept_map_version_uuid: Optional[UUID] = None
-    depends_on_property: Optional[str] = None
-    depends_on_system: Optional[str] = None
-    depends_on_value: Optional[str] = None
-    depends_on_display: Optional[str] = None
+    save_for_discussion: Optional[bool] = None
 
-    def __post_init__(self):
-        self.code_object = Code(
-            uuid=self.uuid,
-            code=self.code,
-            display=self.display,
-            system=self.system.fhir_uri,
-            version=self.system.version,
-        )
+    @property
+    def display(self):
+        return self.code.display
+
+    @property
+    def system(self):
+        return self.code.terminology_version
+
+    @property
+    def code_object(self):  # Alias for backwards compatability
+        return self.code
+
+    # def __post_init__(self):
+    #     self.code_object = app.models.codes.Code(
+    #         custom_terminology_code_uuid=self.uuid,
+    #         code=self.code,
+    #         display=self.display,
+    #         system=self.system.fhir_uri,
+    #         version=self.system.version,
+    #         from_custom_terminology=True
+    #     )
 
     def __hash__(self):
         return hash(
@@ -1790,15 +1950,16 @@ class SourceConcept:
                 self.code,
                 self.display,
                 self.system,
-                self.depends_on_property,
-                self.depends_on_system,
-                self.depends_on_value,
-                self.depends_on_display,
+                self.code.depends_on.depends_on_property if self.code.depends_on else None,
+                self.code.depends_on.depends_on_system if self.code.depends_on else None,
+                self.code.depends_on.depends_on_value if self.code.depends_on else None,
+                self.code.depends_on.depends_on_display if self.code.depends_on else None,
             )
         )
 
     @property
     def id(self):
+        # todo: do we need this still? Where is it used?
         """
         Calculates a unique MD5 hash for the current instance.
 
@@ -1820,32 +1981,43 @@ class SourceConcept:
         conn = get_db()
         query = text(
             """
-                SELECT uuid, code, display, system, comments,
-                       additional_context, map_status, assigned_mapper,
-                       assigned_reviewer, no_map, reason_for_no_map,
-                       mapping_group, previous_version_context, concept_map_version_uuid
-                FROM concept_maps.source_concept
+                SELECT 
+                    *
+                FROM concept_maps.source_concept_data
                 WHERE uuid = :uuid
             """
         )
         result = conn.execute(query, {"uuid": str(source_concept_uuid)}).fetchone()
 
         if result:
+            if result.custom_terminology_code_uuid:
+                code_object = app.models.codes.Code.load_from_custom_terminology(result.custom_terminology_code_uuid)
+            else:
+                # Verify the code_schema is "code" since it's not a custom terminology
+                if app.models.codes.RoninCodeSchemas(result.code_schema) != app.models.codes.RoninCodeSchemas.code:
+                    raise NotImplementedError("SourceConcept.load only supports 'code' schema for non-custom terminologies")
+                code_object = app.models.codes.Code(
+                    code_schema=app.models.codes.RoninCodeSchemas.code,
+                    code=result.code_simple,
+                    display=result.display,
+                    terminology_version_uuid=result.system_uuid,
+                    system=None,
+                    version=None,
+                    from_custom_terminology=False
+                )
             return cls(
                 uuid=result.uuid,
-                code=result.code,
-                display=result.display,
-                system=Terminology.load(result.system),
+                code=code_object,
+                concept_map_version_uuid=result.concept_map_version_uuid,
                 comments=result.comments,
-                additional_context=result.additional_context,
                 map_status=result.map_status,
-                assigned_mapper=result.assigned_mapper,
-                assigned_reviewer=result.assigned_reviewer,
+                assigned_mapper=ContentCreator.load_by_uuid_from_cache(result.assigned_mapper),
+                assigned_reviewer=ContentCreator.load_by_uuid_from_cache(result.assigned_reviewer),
                 no_map=result.no_map,
                 reason_for_no_map=result.reason_for_no_map,
                 mapping_group=result.mapping_group,
                 previous_version_context=result.previous_version_context,
-                concept_map_version_uuid=result.concept_map_version_uuid,
+                save_for_discussion=result.save_for_discussion
             )
         else:
             raise ValueError(f"No source concept found with UUID {source_concept_uuid}")
@@ -1853,14 +2025,14 @@ class SourceConcept:
     def update(
         self,
         comments: Optional[str] = None,
-        additional_context: Optional[str] = None,
         map_status: Optional[str] = None,
-        assigned_mapper: Optional[UUID] = None,
-        assigned_reviewer: Optional[UUID] = None,
+        assigned_mapper: Optional[ContentCreator] = None,
+        assigned_reviewer: Optional[ContentCreator] = None,
         no_map: Optional[bool] = None,
         reason_for_no_map: Optional[str] = None,
         mapping_group: Optional[str] = None,
         previous_version_context: Optional[str] = None,
+        save_for_discussion: Optional[bool] = None
     ):
         conn = get_db()
         # Create a dictionary to store the column names and their corresponding new values
@@ -1869,17 +2041,14 @@ class SourceConcept:
         if comments is not None:
             updates["comments"] = comments
 
-        if additional_context is not None:
-            updates["additional_context"] = additional_context
-
         if map_status is not None:
             updates["map_status"] = map_status
 
         if assigned_mapper is not None:
-            updates["assigned_mapper"] = str(assigned_mapper)
+            updates["assigned_mapper"] = str(assigned_mapper.uuid)
 
         if assigned_reviewer is not None:
-            updates["assigned_reviewer"] = str(assigned_reviewer)
+            updates["assigned_reviewer"] = str(assigned_reviewer.uuid)
 
         if no_map is not None:
             updates["no_map"] = no_map
@@ -1893,6 +2062,9 @@ class SourceConcept:
         if previous_version_context is not None:
             updates["previous_version_context"] = previous_version_context
 
+        if save_for_discussion is not None:
+            updates["save_for_discussion"] = save_for_discussion
+
         # Generate the SQL query
         query = f"UPDATE concept_maps.source_concept SET "
         query += ", ".join(f"{column} = :{column}" for column in updates)
@@ -1904,21 +2076,25 @@ class SourceConcept:
 
         # Update the instance attributes
         for column, value in updates.items():
-            setattr(self, column, value)
+            if column not in ['assigned_mapper', 'assigned_reviewer']:
+                setattr(self, column, value)
+            elif column == 'assigned_mapper':
+                self.assigned_mapper = assigned_mapper
+            elif column == 'assigned_reviewer':
+                self.assigned_reviewer = assigned_reviewer
 
     def serialize(self) -> dict:
         serialized_data = {
             "uuid": str(self.uuid),
-            "code": self.code,
+            "code": self.code.serialize(),
             "display": self.display,
             "system": self.system.serialize(),
             "comments": self.comments,
-            "additional_context": self.additional_context,
             "map_status": self.map_status,
-            "assigned_mapper": str(self.assigned_mapper)
+            "assigned_mapper": str(self.assigned_mapper.first_last_name)
             if self.assigned_mapper
             else None,
-            "assigned_reviewer": str(self.assigned_reviewer)
+            "assigned_reviewer": str(self.assigned_reviewer.first_last_name)
             if self.assigned_reviewer
             else None,
             "no_map": self.no_map,
@@ -1934,59 +2110,91 @@ class Mapping:
     """
     Represents a mapping relationship between two codes, and provides methods to load, save and use the relationships.
     """
-
     source: SourceConcept
     relationship: MappingRelationship
-    target: Code
+    target: app.models.codes.Code
+    saved_to_db: bool
     uuid: Optional[UUID] = None
+    mapped_by: ContentCreator = None
+    mapped_date_time: Optional[datetime.datetime] = None
     mapping_comments: Optional[str] = None
-    author: Optional[str] = None
-    conn: Optional[None] = None
     review_status: str = "ready for review"
-    created_date: Optional[datetime.datetime] = None
-    reviewed_date: Optional[datetime.datetime] = None
-    review_comment: Optional[str] = None
-    reviewed_by: Optional[str] = None
-    reason_for_no_map: Optional[str] = None
+    reviewed_by: Optional[ContentCreator] = None
+    reviewed_date_time: Optional[datetime.datetime] = None
+    review_comments: Optional[str] = None
+    map_program_date_time: Optional[datetime.datetime] = None
+    map_program_version: Optional[str] = None
+    map_program_prediction_id: Optional[str] = None
+    map_program_confidence_score: Optional[str] = None
+    deleted_date_time: Optional[datetime.datetime] = None
+    deleted_by: Optional[ContentCreator] = None
+    mapping_id: Optional[str] = None
+    conn: Optional[None] = None
+    _stored_deduplication_hash: Optional[str] = None
 
     def __post_init__(self):
         self.conn = get_db()
-        self.uuid = uuid.uuid4()
+        if self.uuid is None:
+            self.uuid = uuid.uuid4()
+
+        if self.saved_to_db:
+            if not self.mapping_id:
+                raise ValueError("mapping_id must be provided if loading Mapping from database")
+            if not self._stored_deduplication_hash:
+                raise ValueError("_stored_deduplication_hash must be provided if loading Mapping from database")
+
+        # todo: add warning if deleted data is populated but status is not deleted
+
+    # @property
+    # def id(self):
+    #     # todo: investigate what to do here
+    #     """
+    #     Generates and returns an MD5 hash as a hexadecimal string.
+    #
+    #     The hash is created using the following attributes:
+    #     - source.id
+    #     - relationship.code
+    #     - target.code
+    #     - target.display
+    #     - target.system
+    #
+    #     This method does not take any arguments, and it returns a string representing the hexadecimal value of the MD5 hash.
+    #
+    #     :return: a string of hexadecimal digits representing an MD5 hash
+    #     """
+    #     # concatenate the required attributes into a string
+    #     concat_str = (
+    #         str(self.source.id)
+    #         # + str(self.source.depends_on_property).strip()
+    #         # + str(self.source.depends_on_system).strip()
+    #         # + str(self.source.depends_on_value).strip()
+    #         # + str(self.source.depends_on_display).strip()
+    #         + self.relationship.code
+    #         + self.target.code
+    #         + self.target.display
+    #         + self.target.system
+    #     )
+    #     # create a new md5 hash object
+    #     hash_object = hashlib.md5()
+    #     # update the hash object with the bytes-like object
+    #     hash_object.update(concat_str.encode("utf-8"))
+    #     # return the hexadecimal representation of the hash
+    #     return hash_object.hexdigest()
 
     @property
-    def id(self):
-        """
-        Generates and returns an MD5 hash as a hexadecimal string.
-
-        The hash is created using the following attributes:
-        - source.id
-        - relationship.code
-        - target.code
-        - target.display
-        - target.system
-
-        This method does not take any arguments, and it returns a string representing the hexadecimal value of the MD5 hash.
-
-        :return: a string of hexadecimal digits representing an MD5 hash
-        """
-        # concatenate the required attributes into a string
-        concat_str = (
-            str(self.source.id)
-            + str(self.source.depends_on_property).strip()
-            + str(self.source.depends_on_system).strip()
-            + str(self.source.depends_on_value).strip()
-            + str(self.source.depends_on_display).strip()
-            + self.relationship.code
-            + self.target.code
-            + self.target.display
-            + self.target.system
+    def deduplication_hash(self):
+        deduplication_hash = app.helpers.id_helper.generate_mapping_id_with_source_code_id(
+            source_code_id=self.source.code.code_id,
+            relationship_code=self.relationship.code,
+            target_concept_code=self.target.code,  # Don't need to handle codeable concepts so long as we don't map to them
+            target_concept_display=self.target.display,
+            target_concept_system=self.target.terminology_version.fhir_uri
         )
-        # create a new md5 hash object
-        hash_object = hashlib.md5()
-        # update the hash object with the bytes-like object
-        hash_object.update(concat_str.encode("utf-8"))
-        # return the hexadecimal representation of the hash
-        return hash_object.hexdigest()
+
+        if self._stored_deduplication_hash:
+            if deduplication_hash != self._stored_deduplication_hash:
+                logging.warning(f"Stored deduplication hash does not match calculated one for Mapping. Mapping UUID: {self.uuid}")
+        return deduplication_hash
 
     @classmethod
     def load(cls, uuid):
@@ -1995,29 +2203,84 @@ class Mapping:
 
     def save(self):
         """Saves the mapping relationship instance to the database."""
+        if self.saved_to_db:
+            raise Exception("Mapping already saved to database; cannot save again.")
+
         self.conn.execute(
             text(
                 """
-                INSERT INTO concept_maps.concept_relationship(
-                uuid, review_status, source_concept_uuid, relationship_code_uuid, target_concept_code, 
-                target_concept_display, target_concept_system_version_uuid, mapping_comments, author, created_date
-                ) VALUES (
-                :uuid, :review_status, :source_concept_uuid, :relationship_code_uuid, :target_concept_code, 
-                :target_concept_display, :target_concept_system_version_uuid, :mapping_comments, :author, :created_date
+                INSERT INTO concept_maps.concept_relationship_data
+                (
+                    uuid, 
+                    mapping_id,
+                    deduplication_hash,
+                    source_concept_uuid, 
+                    target_concept_code, 
+                    target_concept_display, 
+                    target_concept_terminology_version_uuid, 
+                    mapping_comments,
+                    mapped_date_time,
+                    mapped_by,
+                    relationship_code_uuid,
+                    review_status, 
+                    reviewed_by,
+                    reviewed_date_time,
+                    review_comments,
+                    map_program_date_time,
+                    map_program_version,
+                    map_program_prediction_id,
+                    map_program_confidence_score,
+                    deleted_date_time,
+                    deleted_by
+                ) 
+                VALUES 
+                (
+                    :uuid, 
+                    :mapping_id,
+                    :deduplication_hash,
+                    :source_concept_uuid, 
+                    :target_concept_code, 
+                    :target_concept_display, 
+                    :target_concept_terminology_version_uuid, 
+                    :mapping_comments,
+                    :mapped_date_time,
+                    :mapped_by,
+                    :relationship_code_uuid,
+                    :review_status, 
+                    :reviewed_by,
+                    :reviewed_date_time,
+                    :review_comments,
+                    :map_program_date_time,
+                    :map_program_version,
+                    :map_program_prediction_id,
+                    :map_program_confidence_score,
+                    :deleted_date_time,
+                    :deleted_by
                 );
                 """
             ),
             {
                 "uuid": self.uuid,
-                "review_status": self.review_status,
+                "mapping_id": self.deduplication_hash,
+                "deduplication_hash": self.deduplication_hash,
                 "source_concept_uuid": self.source.uuid,
-                "relationship_code_uuid": self.relationship.uuid,
                 "target_concept_code": self.target.code,
                 "target_concept_display": self.target.display,
-                "target_concept_system_version_uuid": self.target.terminology_version_uuid,
+                "target_concept_terminology_version_uuid": self.target.terminology_version.uuid,
                 "mapping_comments": self.mapping_comments,
-                "author": self.author,
-                "created_date": datetime.datetime.now(),
+                "mapped_date_time": datetime.datetime.utcnow(),
+                "mapped_by": self.mapped_by.uuid,
+                "relationship_code_uuid": self.relationship.uuid,
+                "review_status": self.review_status,
+                "reviewed_by": self.reviewed_by.uuid if self.reviewed_by else None,
+                "reviewed_date_time": self.reviewed_date_time,
+                "review_comments": self.review_comments,
+                "map_program_date_time": self.map_program_date_time,
+                "map_program_version": self.map_program_version,
+                "map_program_prediction_id": self.map_program_prediction_id,
+                "map_program_confidence_score": self.map_program_confidence_score,
+                "deleted_date_time": self.deleted_date_time,
+                "deleted_by": self.deleted_by,
             },
         )
 
@@ -2030,6 +2293,8 @@ class Mapping:
         if concept_map_settings.auto_advance_after_mapping:
             self.source.update(map_status="ready for review")
 
+        self.saved_to_db = True
+
     def serialize(self):
         """Prepares a JSON representation of the Mapping instance to return to the API."""
         return {
@@ -2037,7 +2302,7 @@ class Mapping:
             "relationship": self.relationship.serialize(),
             "target": self.target.serialize(),
             "mapping_comments": self.mapping_comments,
-            "author": self.author,
+            "mapped_by": self.mapped_by.first_last_name,
             "uuid": self.uuid,
             "review_status": self.review_status,
         }
@@ -2061,13 +2326,14 @@ class Mapping:
         )
 
 
+# todo: can we deprecate this?
 @dataclass
 class MappingSuggestion:
     """A class representing a mapping suggestion."""
 
     uuid: UUID
     source_concept_uuid: UUID
-    code: Code
+    code: app.models.codes.Code
     suggestion_source: str
     confidence: float
     timestamp: datetime.datetime = None
@@ -2109,70 +2375,70 @@ class MappingSuggestion:
         }
 
 
-# TODO: This is a temporary function to solve a short term problem we have
-def transform_struct_string_to_json(struct_string):
-    # Handle case where we have a single code and the code is null
-    if struct_string.startswith("{null, ") and struct_string.endswith("}"):
-        return json.dumps({"code": None, "display": struct_string[7:-1]})
-
-    # Parse the coding elements and the text that trails at the end
-    # Handle different start/end characters
-    if struct_string.startswith("{") and struct_string.endswith("}"):
-        # Remove the outer curly braces
-        input_str = struct_string[1:-1]
-        # Split on '],'
-        tuple_str, text_string = input_str.rsplit("],", 1)
-        text_string = text_string.strip()
-    elif struct_string.startswith("[") and struct_string.endswith("]"):
-        # Remove the outer square brackets
-        tuple_str = struct_string[1:-1]
-        text_string = None
-    else:
-        raise ValueError("Invalid input string format")
-
-    # Find the tuples using a regular expression
-    tuple_pattern = r"\{([^}]+)\}"
-    tuple_matches = re.findall(tuple_pattern, tuple_str)
-
-    # Convert each matched tuple into a dictionary
-    # We are hard coding added dictionary keys that were lost in the original transformation process
-    coding_array = []
-    for match in tuple_matches:
-        items = match.split(", ")
-        d = {
-            "code": items[0],
-            "display": None
-            if len(items) < 2 or items[1] == "null"
-            else ", ".join(items[1:-1]),
-            "system": items[-1],
-        }
-
-        # Code for special case of PSJ DocumentReference imported in Spark format
-        if ", urn:oid:" in str(d.get("display")):
-            display = d.get("display")
-            find_index = display.index(", urn:oid:")
-            new_display = display[:find_index]
-            new_system = display[find_index + 2 :]
-            d["display"] = new_display
-            d["system"] = new_system
-
-        if ", http:" in str(d.get("display")):
-            display = d.get("display")
-            find_index = display.index(", http:")
-            new_display = display[:find_index]
-            new_system = display[find_index + 2 :]
-            d["display"] = new_display
-            d["system"] = new_system
-
-        coding_array.append(d)
-
-    result = {"coding": coding_array}
-
-    if text_string is not None:
-        result["text"] = text_string
-
-    # Convert the dictionary into a JSON string
-    return json.dumps(result)
+# # TODO: This is a temporary function to solve a short term problem we have
+# def transform_struct_string_to_json(struct_string):
+#     # Handle case where we have a single code and the code is null
+#     if struct_string.startswith("{null, ") and struct_string.endswith("}"):
+#         return json.dumps({"code": None, "display": struct_string[7:-1]})
+#
+#     # Parse the coding elements and the text that trails at the end
+#     # Handle different start/end characters
+#     if struct_string.startswith("{") and struct_string.endswith("}"):
+#         # Remove the outer curly braces
+#         input_str = struct_string[1:-1]
+#         # Split on '],'
+#         tuple_str, text_string = input_str.rsplit("],", 1)
+#         text_string = text_string.strip()
+#     elif struct_string.startswith("[") and struct_string.endswith("]"):
+#         # Remove the outer square brackets
+#         tuple_str = struct_string[1:-1]
+#         text_string = None
+#     else:
+#         raise ValueError("Invalid input string format")
+#
+#     # Find the tuples using a regular expression
+#     tuple_pattern = r"\{([^}]+)\}"
+#     tuple_matches = re.findall(tuple_pattern, tuple_str)
+#
+#     # Convert each matched tuple into a dictionary
+#     # We are hard coding added dictionary keys that were lost in the original transformation process
+#     coding_array = []
+#     for match in tuple_matches:
+#         items = match.split(", ")
+#         d = {
+#             "code": items[0],
+#             "display": None
+#             if len(items) < 2 or items[1] == "null"
+#             else ", ".join(items[1:-1]),
+#             "system": items[-1],
+#         }
+#
+#         # Code for special case of PSJ DocumentReference imported in Spark format
+#         if ", urn:oid:" in str(d.get("display")):
+#             display = d.get("display")
+#             find_index = display.index(", urn:oid:")
+#             new_display = display[:find_index]
+#             new_system = display[find_index + 2 :]
+#             d["display"] = new_display
+#             d["system"] = new_system
+#
+#         if ", http:" in str(d.get("display")):
+#             display = d.get("display")
+#             find_index = display.index(", http:")
+#             new_display = display[:find_index]
+#             new_system = display[find_index + 2 :]
+#             d["display"] = new_display
+#             d["system"] = new_system
+#
+#         coding_array.append(d)
+#
+#     result = {"coding": coding_array}
+#
+#     if text_string is not None:
+#         result["text"] = text_string
+#
+#     # Convert the dictionary into a JSON string
+#     return json.dumps(result)
 
 
 def update_comments_source_concept(source_concept_uuid, comments):
@@ -2187,41 +2453,6 @@ def update_comments_source_concept(source_concept_uuid, comments):
         ),
         {"source_concept_uuid": source_concept_uuid, "comments": comments},
     )
-
-
-def make_author_assigned_mapper(source_concept_uuid, author):
-    conn = get_db()
-    user_uuid_query = conn.execute(
-        text(
-            """  
-            select uuid from project_management.user  
-            where first_last_name = :author
-            """
-        ),
-        {
-            "author": author,
-        },
-    ).first()
-
-    if user_uuid_query:
-        assigned_mapper_update = (
-            conn.execute(
-                text(
-                    """  
-                update concept_maps.source_concept  
-                set assigned_mapper = :user_uuid  
-                where uuid = :source_concept_uuid  
-                """
-                ),
-                {
-                    "user_uuid": user_uuid_query.uuid,
-                    "source_concept_uuid": source_concept_uuid,
-                },
-            ),
-        )
-        return "ok"
-    else:
-        return "Author not found"
 
 
 def get_concepts_for_assignment(version_uuid):

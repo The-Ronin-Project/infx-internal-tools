@@ -99,15 +99,16 @@ class ConceptMapVersionCreator:
             list: A list of new SourceConcept instances.
         """
         # Populate all the sources with a status of pending
+        # Todo: Columns need to be renamed for expansion_member_data table
         self.conn.execute(
             text(
                 """
                 insert into concept_maps.source_concept
                 (uuid, code, display, system, map_status, concept_map_version_uuid, custom_terminology_uuid)
-                select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid, custom_terminology_uuid from value_sets.expansion_member
+                select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid, custom_terminology_uuid from value_sets.expansion_member_data
                 join public.terminology_versions tv
-                on tv.fhir_uri=expansion_member.system
-                and tv.version=expansion_member.version
+                on tv.fhir_uri=expansion_member_data.system
+                and tv.version=expansion_member_data.version
                 where expansion_uuid in (
                     select uuid from value_sets.expansion
                     where vs_version_uuid=:new_source_value_set_version_uuid
@@ -861,11 +862,11 @@ class ConceptMapVersionCreator:
             "target_code": previous_mapping.target.code,
             "target_display": previous_mapping.target.display,
             "mapping_comments": previous_mapping.mapping_comments,
-            "author": previous_mapping.author,
+            "author": previous_mapping.mapped_by,
             "review_status": previous_mapping.review_status,
-            "created_date": previous_mapping.created_date,
-            "reviewed_date": previous_mapping.created_date,
-            "review_comment": previous_mapping.review_comment,
+            "created_date": previous_mapping.mapped_date_time,
+            "reviewed_date": previous_mapping.mapped_date_time,
+            "review_comment": previous_mapping.review_comments,
             "reviewed_by": previous_mapping.reviewed_by,
         }
         new_source_concept.update(
@@ -899,11 +900,11 @@ class ConceptMapVersionCreator:
             relationship=relationship,
             target=target_code,
             mapping_comments=previous_mapping.mapping_comments,
-            author=previous_mapping.author,
+            author=previous_mapping.mapped_by,
             review_status=previous_mapping.review_status,
-            created_date=previous_mapping.created_date,
-            reviewed_date=previous_mapping.reviewed_date,
-            review_comment=previous_mapping.review_comment,
+            created_date=previous_mapping.mapped_date_time,
+            reviewed_date=previous_mapping.reviewed_date_time,
+            review_comment=previous_mapping.review_comments,
             reviewed_by=previous_mapping.reviewed_by,
         )
 
@@ -939,10 +940,10 @@ class ConceptMapVersionCreator:
             relationship=relationship,
             target=target_code,
             mapping_comments=previous_mapping.mapping_comments,
-            author=previous_mapping.author,
+            author=previous_mapping.mapped_by,
             review_status="ready for review",
-            created_date=previous_mapping.created_date,
-            review_comment=previous_mapping.review_comment,  # todo: how to handle this
+            created_date=previous_mapping.mapped_date_time,
+            review_comment=previous_mapping.review_comments,  # todo: how to handle this
         )
 
         new_mapping.save()

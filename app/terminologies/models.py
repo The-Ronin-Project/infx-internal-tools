@@ -83,6 +83,10 @@ class Terminology:
     def __repr__(self):
         return f"Terminology(uuid={self.uuid}, name={self.terminology}, version={self.version})"
 
+    @property
+    def is_custom_terminology(self):
+        return self.fhir_terminology is False and self.is_standard is False
+
     @classmethod
     def load(cls, terminology_version_uuid):
         """
@@ -146,7 +150,7 @@ class Terminology:
 
     def load_content(self):
         """
-        Loads the content of a FHIR terminology into the Terminology instance.
+        Loads the content of a FHIR terminology or Custom terminology into the Terminology instance.
 
         Raises:
             NotImplementedError: If the Terminology instance is not a FHIR terminology.
@@ -163,22 +167,61 @@ class Terminology:
                 ),
                 {"terminology_version_uuid": self.uuid},
             )
+            for item in content_data:
+                self.codes.append(
+                    app.models.codes.Code(
+                        system=self.fhir_uri,
+                        version=self.version,
+                        code=item.code,
+                        display=item.display,
+                        fhir_terminology_code_uuid=item.uuid,
+                        from_fhir_terminology=True,
+                        terminology_version=self,
+                    )
+                )
+        elif self.is_custom_terminology is True:
+            conn = get_db()
+            content_data = conn.execute(
+                text(  # todo: change to final table instead of code_poc
+                    """
+                    select * from custom_terminologies.code_data
+                    where terminology_version_uuid=:terminology_version_uuid
+                    """
+                ),
+                {"terminology_version_uuid": self.uuid},
+            )
+            for code_data in content_data:
+                code_schema_raw = code_data.code_schema
+                code_schema = app.models.codes.RoninCodeSchemas(code_schema_raw)
+                code = None
+                display = None
+
+                code_object = None
+                if code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
+                    code_object = app.models.codes.FHIRCodeableConcept.deserialize(
+                        code_data.code_jsonb
+                    )
+                elif code_schema == app.models.codes.RoninCodeSchemas.code:
+                    code = code_data.code_simple
+                    display = code_data.display
+
+                new_code = app.models.codes.Code(
+                    system=None,
+                    version=None,
+                    code=code,
+                    display=display,
+                    terminology_version_uuid=code_data.terminology_version_uuid,
+                    custom_terminology_code_uuid=code_data.uuid,
+                    from_custom_terminology=True,
+                    code_object=code_object,
+                    code_schema=code_schema,
+                    stored_custom_terminology_deduplication_hash=code_data.deduplication_hash,
+                    custom_terminology_code_id=code_data.code_id
+                )
+                self.codes.append(new_code)
         else:
             raise NotImplementedError(
-                "Loading content for non-FHIR terminologies is not supported."
-            )
-
-        for item in content_data:
-            self.codes.append(
-                app.models.codes.Code(
-                    system=self.fhir_uri,
-                    version=self.version,
-                    code=item.code,
-                    display=item.display,
-                    uuid=item.uuid,
-                    system_name=self.terminology,
-                    terminology_version=self,
-                )
+                "Loading content only supported for FHIR Terminologies and Custom Terminologies"
             )
 
     @classmethod
@@ -215,7 +258,7 @@ class Terminology:
                 x.effective_end,
                 x.fhir_uri,
                 x.fhir_terminology,
-                x.is_standard
+                x.is_standard,
             )
             for x in term_data
         }
@@ -522,52 +565,14 @@ class Terminology:
 
         total_count_inserted = 0
         for code in codes:
-            serialized_code = code.code
-            if type(serialized_code) == dict:
-                serialized_code = json.dumps(serialized_code)
+            actually_saved = code.save()
+            if actually_saved:
+                total_count_inserted += 1
 
-            # Insert new code into the database
-            query_text = """
-                    INSERT INTO custom_terminologies.code (uuid, code, display, additional_data, terminology_version_uuid, depends_on_value, depends_on_display, depends_on_property, depends_on_system)
-                    VALUES (:uuid, :code, :display, :additional_data, :terminology_version_uuid, :depends_on_value, :depends_on_display, :depends_on_property, :depends_on_system)
-                """
-            if on_conflict_do_nothing:
-                query_text += """ on conflict do nothing
-                """
-            query_text += """ returning uuid"""
-            try:
-                result = conn.execute(
-                    text(query_text),
-                    {
-                        "uuid": code.custom_terminology_code_uuid
-                        if code.custom_terminology_code_uuid is not None
-                        else uuid.uuid4(),
-                        "code": serialized_code,
-                        "display": code.display,
-                        "terminology_version_uuid": code.terminology_version_uuid,
-                        "depends_on_value": code.depends_on_value
-                        if code.depends_on_value
-                        else "",
-                        "depends_on_display": code.depends_on_display
-                        if code.depends_on_display
-                        else "",
-                        "depends_on_property": code.depends_on_property
-                        if code.depends_on_property
-                        else "",
-                        "depends_on_system": code.depends_on_system
-                        if code.depends_on_system
-                        else "",
-                        "additional_data": json.dumps(code.additional_data),
-                    },
-                ).fetchall()
-            except Exception as e:
-                conn.rollback()
-                raise e
-            count_inserted = len(result)
-            total_count_inserted += count_inserted
         return total_count_inserted
 
     def get_recent_codes(self, comparison_date):
+        # todo: adjust for CMv5
         conn = get_db()
         recent_codes_data = conn.execute(
             text(
