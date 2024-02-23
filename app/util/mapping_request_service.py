@@ -1800,19 +1800,19 @@ def reprocess_errors_for_published_concept_maps():
         text(
             """
             SELECT distinct esi.resource_uuid FROM   
-            concept_maps.concept_relationship cr  
+            concept_maps.concept_relationship_data cr  
         JOIN   
-            concept_maps.source_concept sc ON cr.source_concept_uuid = sc.uuid  
+            concept_maps.source_concept_data sc ON cr.source_concept_uuid = sc.uuid  
         JOIN   
             concept_maps.concept_map_version cmv ON sc.concept_map_version_uuid = cmv.uuid  
         JOIN   
-            custom_terminologies.error_service_issue esi ON sc.custom_terminology_uuid = esi.custom_terminology_code_uuid  
+            custom_terminologies.error_service_issue esi ON sc.custom_terminology_code_uuid = esi.custom_terminology_code_uuid  
         WHERE   
             cmv.status = 'active'
             AND esi.status = 'pending'  
             AND EXISTS (  
                 SELECT 1  
-                FROM concept_maps.concept_relationship cr_exist  
+                FROM concept_maps.concept_relationship_data cr_exist  
                 WHERE cr_exist.source_concept_uuid = sc.uuid  
             )  
     """

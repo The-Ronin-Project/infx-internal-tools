@@ -454,10 +454,10 @@ class ConceptMap:
         This function gets and inserts the codes, displays and systems from the source value set version AND a concept map version uuid, into the source_concept table for mapping.
         :param cmv_uuid: uuid concept map version
         :param source_value_set_version_uuid: uuid source value set version
-        :return: none, the items are simply inserted into the concept_maps.source_concepts table
+        :return: none, the items are simply inserted into the concept_maps.source_concept_data table
         """
         conn = get_db()
-        # Populate concept_maps.source_concept
+        # Populate concept_maps.source_concept_data
         conn.execute(
             text(
                 """
@@ -1058,8 +1058,8 @@ class ConceptMapVersion:
         conn = get_db()
         query = """  
             SELECT sc.*, cr.*, rc.display as relationship_display  
-            FROM concept_maps.source_concept sc  
-            LEFT JOIN concept_maps.concept_relationship cr ON sc.uuid = cr.source_concept_uuid  
+            FROM concept_maps.source_concept_data sc  
+            LEFT JOIN concept_maps.concept_relationship_data cr ON sc.uuid = cr.source_concept_uuid  
             LEFT JOIN concept_maps.relationship_codes rc ON rc.uuid = cr.relationship_code_uuid  
             WHERE sc.concept_map_version_uuid = :concept_map_version_uuid  
         """
@@ -1704,7 +1704,7 @@ class ConceptMapVersion:
         issues_resources_query = text(
             """
             SELECT e.issue_uuid, e.resource_uuid FROM 
-            concept_maps.source_concept as sc JOIN custom_terminologies.error_service_issue as e
+            concept_maps.source_concept_data as sc JOIN custom_terminologies.error_service_issue as e
             ON
             sc.custom_terminology_uuid = e.custom_terminology_code_uuid 
             WHERE
@@ -1714,7 +1714,7 @@ class ConceptMapVersion:
             AND
             sc.uuid in (
                 select source_concept_uuid 
-                from concept_maps.concept_relationship 
+                from concept_maps.concept_relationship_data 
                 where review_status = 'reviewed'
             )
             """
@@ -2066,7 +2066,7 @@ class SourceConcept:
             updates["save_for_discussion"] = save_for_discussion
 
         # Generate the SQL query
-        query = f"UPDATE concept_maps.source_concept SET "
+        query = f"UPDATE concept_maps.source_concept_data SET "
         query += ", ".join(f"{column} = :{column}" for column in updates)
         query += f" WHERE uuid = :uuid"
 
@@ -2314,7 +2314,7 @@ class Mapping:
         conn.execute(
             text(
                 """  
-                UPDATE concept_maps.concept_relationship  
+                UPDATE concept_maps.concept_relationship_data 
                 SET relationship_code_uuid = :new_relationship_code_uuid  
                 WHERE uuid = :mapping_uuid;  
                 """
@@ -2446,7 +2446,7 @@ def update_comments_source_concept(source_concept_uuid, comments):
     conn.execute(
         text(
             """
-            update concept_maps.source_concept
+            update concept_maps.source_concept_data
             set comments=:comments
             where uuid=:source_concept_uuid
             """
@@ -2461,7 +2461,7 @@ def get_concepts_for_assignment(version_uuid):
         text(
             """
             SELECT *, sc.code as source_code, sc.display as source_display, sc.uuid as source_uuid, pmu.uuid as mapper_uuid, pmu.first_last_name as assigned_mapper, pmu2.uuid as reviewer_uuid, pmu2.first_last_name as assigned_reviewer, ctc.additional_data->>'count_of_resources_affected' as count_of_resources_affected  
-            FROM concept_maps.source_concept sc  
+            FROM concept_maps.source_concept_data sc  
             LEFT JOIN project_management.user pmu ON pmu.uuid = sc.assigned_mapper  
             LEFT JOIN project_management.user pmu2 ON sc.assigned_reviewer = pmu2.uuid  
             LEFT JOIN custom_terminologies.code ctc ON sc.custom_terminology_uuid = ctc.uuid  
