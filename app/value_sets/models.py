@@ -1390,7 +1390,8 @@ class ValueSet:
 
     """
 
-    database_schema_version = 2
+    database_schema_version = 2  # We have been outputting v4, v3, and v2 ValueSet models to the v2 folder name
+    # todo: when updating v5/v6 change these lines to: database_schema_version = 5 and next_schema_version = 6
     next_schema_version = 5
     object_storage_folder_name = "ValueSets"
 
@@ -3170,7 +3171,9 @@ class ValueSetVersion:
         if not use_case_coding:
             use_case_coding = [{"code": "unknown"}]
 
-        extension_value_string = "5" if is_schema_version_5_or_later else "2"
+        # we output the v4 model to the "v2" folder (we output the v5 model to the "v5" folder)
+        # todo: when updating v5/v6 change the below line to: extension_value_string = str(schema_version)
+        extension_value_string = str(schema_version) if is_schema_version_5_or_later else "4"
 
         serialized = {
             "resourceType": "ValueSet",
@@ -3197,38 +3200,37 @@ class ValueSetVersion:
         # if else for descriptions, depending on the schema version
         if is_schema_version_5_or_later:
             serialized["description"] = self.value_set.description or ""
-            serialized["versionDescription"] = self.description or ""
-            serialized["useContext"] = [
-                [
+            if self.description is not None and self.description != "":
+                serialized.update(
                     {
-                        "code": {
-                            "system": "http://terminology.hl7.org/CodeSystem/usage-context-type",  # static value
-                            "code": "workflow",  # static value
-                            "display": "Workflow Setting",
-                        },
-                        "valueCodeableConcept": {
-                            "coding": use_case_coding,
-                        },
+                        "_description": {
+                            "extension": [
+                                {
+                                    "url": "http://projectronin.io/fhir/StructureDefinition/extension/versionDescription",
+                                    "valueMarkdown": self.description
+                                }
+                            ]
+                        }
                     }
-                ]
-            ]
-
+                )
         else:
             serialized["description"] = (
                 (self.value_set.description or "") + " " + (self.description or "")
             )
-            serialized["useContext"] = [
-                {
-                    "code": {
-                        "system": "http://terminology.hl7.org/CodeSystem/usage-context-type",
-                        "code": "workflow",
-                        "display": "Workflow Setting",
-                    },
-                    "valueCodeableConcept": {
-                        "coding": use_case_coding,
-                    },
-                }
-            ]
+
+        # useContext became a list in v4
+        serialized["useContext"] = [
+            {
+                "code": {
+                    "system": "http://terminology.hl7.org/CodeSystem/usage-context-type",
+                    "code": "workflow",
+                    "display": "Workflow Setting",
+                },
+                "valueCodeableConcept": {
+                    "coding": use_case_coding,
+                },
+            }
+        ]
 
         # continue with the rest of the dictionary
         serialized["immutable"] = self.value_set.immutable
@@ -3364,7 +3366,7 @@ class ValueSetVersion:
         serialized.pop("immutable")
         serialized.pop("contact")
         serialized.pop("publisher")
-        initial_path = f"{ValueSet.object_storage_folder_name}/v{schema_version}"
+        initial_path = f"{ValueSet.object_storage_folder_name}/v{schema_version}" # For v4 output we put into v2 folder
 
         return serialized, initial_path
 

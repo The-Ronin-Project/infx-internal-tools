@@ -21,13 +21,15 @@ class ValueSetVersionSerializationTests(unittest.TestCase):
 
     def test_serialize_schema_version_2(self):
         """
-        Test serialization of a ValueSetVersion instance using schema version 2.
+        Test serialization of a ValueSetVersion to schema version 2. This outputs the v4 model to the v2 folder.
         """
         serialized_data = self.mock_value_set_version.serialize(schema_version=2)
         self.assertEqual(
             serialized_data["description"],
             "no map + diabetes Updated for ICD-10 CM, 2024  update",
         )
+        self.assertFalse("_description" in serialized_data)
+        self.assertFalse("versionDescription" in serialized_data)
         self.assertEqual(
             serialized_data["useContext"],
             [
@@ -42,30 +44,36 @@ class ValueSetVersionSerializationTests(unittest.TestCase):
                     },
                 }
             ],
-        )  #
-        self.assertEqual(serialized_data["extension"][0]["valueString"], "2")
+        )
+        self.assertEqual(serialized_data["extension"][0]["valueString"], "4")  # output complies with v4 model
 
     def test_serialize_schema_version_5(self):
         """
-        Test serialization of a ValueSetVersion instance using schema version 5.
+        Test serialization of a ValueSetVersion to schema version 5. This outputs the v5 model to the v5 folder.
         """
         serialized_data = self.mock_value_set_version.serialize(schema_version=5)
         self.assertEqual(serialized_data["description"], "no map + diabetes")
+        self.assertFalse("versionDescription" in serialized_data)
+        self.assertEqual(
+            first=serialized_data["_description"]["extension"][0],
+            second={
+                "url": "http://projectronin.io/fhir/StructureDefinition/extension/versionDescription",
+                "valueMarkdown":  "Updated for ICD-10 CM, 2024  update"
+            }
+        )
         self.assertEqual(
             serialized_data["useContext"],
             [
-                [
-                    {
-                        "code": {
-                            "code": "workflow",
-                            "display": "Workflow Setting",
-                            "system": "http://terminology.hl7.org/CodeSystem/usage-context-type",
-                        },
-                        "valueCodeableConcept": {
-                            "coding": [{"code": "Testing"}, {"code": "test edit"}]
-                        },
-                    }
-                ]
+                {
+                    "code": {
+                        "code": "workflow",
+                        "display": "Workflow Setting",
+                        "system": "http://terminology.hl7.org/CodeSystem/usage-context-type",
+                    },
+                    "valueCodeableConcept": {
+                        "coding": [{"code": "Testing"}, {"code": "test edit"}]
+                    },
+                }
             ],
         )
         self.assertEqual(serialized_data["extension"][0]["valueString"], "5")
