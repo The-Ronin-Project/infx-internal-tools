@@ -1880,6 +1880,32 @@ class ContentCreator:  # Unless we have a better name for mapper/reviewer that c
             self.type = ContentCreatorType.MODEL
 
     @classmethod
+    def load_by_full_name(cls, full_name):
+        if full_name is None:
+            return None
+
+        conn = get_db()
+        result = conn.execute(
+            text(
+                """
+                select * from project_management."user"
+                where first_last_name=:full_name
+                """
+            ), {
+                "full_name": full_name
+            }
+        ).one()
+        return cls(
+            uuid=result.uuid,
+            first_last_name=result.first_last_name
+        )
+
+    @classmethod
+    @ttl_cache
+    def load_by_full_name_from_cache(cls, full_name):
+        return cls.load_by_full_name(full_name)
+
+    @classmethod
     def load_by_uuid(cls, uuid):
         if uuid is None:
             return None
