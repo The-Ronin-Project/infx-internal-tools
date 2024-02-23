@@ -3830,6 +3830,7 @@ class ExplicitlyIncludedCode:
 
 
 # Clarification: this stand-alone method is deliberately not part of the above class
+# todo: it may be time to update or remove this
 def execute_rules(rules_json):
     """
     This function will receive a single JSON encoded rule group and execute it to provide output. It can be used on the front end to preview the output of a rule group

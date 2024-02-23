@@ -20,4 +20,4 @@ class ValueSetsForSystems(Enum):
     "e49af176-189f-4536-8231-e58a261ed36d"	"Test ONLY: Concept Map Versioning Target"...   made up target concepts and inactive codes" (has no ValueSetVersion)
     ```
     """
-    SURVEY_CANCER_ASSIGNMENT_VALUE_SETS = "a3fe57fd-ad6e-4cd6-850d-de7a0e680174"
+
