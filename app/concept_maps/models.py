@@ -1858,7 +1858,7 @@ class SourceConcept:
             updates["save_for_discussion"] = save_for_discussion
 
         # Generate the SQL query
-        query = f"UPDATE concept_maps.source_concept SET "
+        query = f"UPDATE concept_maps.source_concept_data SET "
         query += ", ".join(f"{column} = :{column}" for column in updates)
         query += f" WHERE uuid = :uuid"
 
