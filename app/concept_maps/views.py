@@ -335,7 +335,7 @@ def create_mappings():
         )
 
         if mapped_by_full_name:
-            mapped_by = ContentCreator.load_by_uuid_from_cache(mapped_by_full_name)
+            mapped_by = ContentCreator.load_by_full_name_from_cache(mapped_by_full_name)
         elif mapped_by_uuid:
             mapped_by = ContentCreator.load_by_uuid_from_cache(mapped_by_uuid)
         else:
