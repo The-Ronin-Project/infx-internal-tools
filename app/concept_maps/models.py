@@ -1880,6 +1880,32 @@ class ContentCreator:  # Unless we have a better name for mapper/reviewer that c
             self.type = ContentCreatorType.MODEL
 
     @classmethod
+    def load_by_full_name(cls, full_name):
+        if full_name is None:
+            return None
+
+        conn = get_db()
+        result = conn.execute(
+            text(
+                """
+                select * from project_management."user"
+                where first_last_name=:full_name
+                """
+            ), {
+                "full_name": full_name
+            }
+        ).one()
+        return cls(
+            uuid=result.uuid,
+            first_last_name=result.first_last_name
+        )
+
+    @classmethod
+    @ttl_cache
+    def load_by_full_name_from_cache(cls, full_name):
+        return cls.load_by_full_name(full_name)
+
+    @classmethod
     def load_by_uuid(cls, uuid):
         if uuid is None:
             return None
@@ -2070,18 +2096,19 @@ class SourceConcept:
         query += ", ".join(f"{column} = :{column}" for column in updates)
         query += f" WHERE uuid = :uuid"
 
-        # Execute the SQL query
-        updates["uuid"] = str(self.uuid)
-        conn.execute(text(query), updates)
+        if updates:
+            # Execute the SQL query
+            updates["uuid"] = str(self.uuid)
+            conn.execute(text(query), updates)
 
-        # Update the instance attributes
-        for column, value in updates.items():
-            if column not in ['assigned_mapper', 'assigned_reviewer']:
-                setattr(self, column, value)
-            elif column == 'assigned_mapper':
-                self.assigned_mapper = assigned_mapper
-            elif column == 'assigned_reviewer':
-                self.assigned_reviewer = assigned_reviewer
+            # Update the instance attributes
+            for column, value in updates.items():
+                if column not in ['assigned_mapper', 'assigned_reviewer']:
+                    setattr(self, column, value)
+                elif column == 'assigned_mapper':
+                    self.assigned_mapper = assigned_mapper
+                elif column == 'assigned_reviewer':
+                    self.assigned_reviewer = assigned_reviewer
 
     def serialize(self) -> dict:
         serialized_data = {

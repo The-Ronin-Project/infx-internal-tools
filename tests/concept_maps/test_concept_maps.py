@@ -6,6 +6,31 @@ import app.concept_maps.models
 import app.models.codes
 
 
+class ContentCreatorTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.conn = get_db()
+        self.app = app.app.create_app()
+        self.app.config.update({
+            "TESTING": True,
+        })
+        self.client = self.app.test_client()
+
+    def tearDown(self) -> None:
+        self.conn.rollback()
+        self.conn.close()
+
+    def test_load_by_full_name(self):
+        user = app.concept_maps.models.ContentCreator.load_by_full_name("Rey Johnson")
+        self.assertIsNotNone(user)
+        self.assertEqual("Rey Johnson", user.first_last_name)
+        self.assertEqual("951d32b4-06a1-4b86-842e-57b8bef9bcd8", str(user.uuid))
+
+        user_from_cache = app.concept_maps.models.ContentCreator.load_by_full_name_from_cache("Rey Johnson")
+        self.assertIsNotNone(user_from_cache)
+        self.assertEqual("Rey Johnson", user_from_cache.first_last_name)
+        self.assertEqual("951d32b4-06a1-4b86-842e-57b8bef9bcd8", str(user_from_cache.uuid))
+
+
 class ConceptMapTests(unittest.TestCase):
     """
     There are 21 concept_maps.concept_map rows safe to use in tests.

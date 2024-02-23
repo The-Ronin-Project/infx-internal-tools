@@ -314,6 +314,7 @@ def create_mappings():
         )
         mapping_comments = request.json.get("mapping_comments")
         mapped_by_uuid = request.json.get("mapped_by_uuid")
+        mapped_by_full_name = request.json.get("mapped_by_full_name")
         review_status = request.json.get("review_status")
 
         # metadata for mapping via programs (algorithms or models)
@@ -333,7 +334,15 @@ def create_mappings():
             from_custom_terminology=False  # We do not currently support mapping to custom terminologies
         )
 
-        mapped_by = ContentCreator.load_by_uuid_from_cache(mapped_by_uuid)
+        if mapped_by_full_name:
+            mapped_by = ContentCreator.load_by_uuid_from_cache(mapped_by_full_name)
+        elif mapped_by_uuid:
+            mapped_by = ContentCreator.load_by_uuid_from_cache(mapped_by_uuid)
+        else:
+            raise BadRequestWithCode(
+                code='Mapping.new.mapped_by',
+                description='POST /mappings/ requires either a mapped_by_uuid or mapped_by_full_name'
+            )
 
         new_mappings = []
         for source_concept_uuid in source_concept_uuids:
