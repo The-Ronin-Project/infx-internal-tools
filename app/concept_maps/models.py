@@ -2070,18 +2070,19 @@ class SourceConcept:
         query += ", ".join(f"{column} = :{column}" for column in updates)
         query += f" WHERE uuid = :uuid"
 
-        # Execute the SQL query
-        updates["uuid"] = str(self.uuid)
-        conn.execute(text(query), updates)
+        if updates:
+            # Execute the SQL query
+            updates["uuid"] = str(self.uuid)
+            conn.execute(text(query), updates)
 
-        # Update the instance attributes
-        for column, value in updates.items():
-            if column not in ['assigned_mapper', 'assigned_reviewer']:
-                setattr(self, column, value)
-            elif column == 'assigned_mapper':
-                self.assigned_mapper = assigned_mapper
-            elif column == 'assigned_reviewer':
-                self.assigned_reviewer = assigned_reviewer
+            # Update the instance attributes
+            for column, value in updates.items():
+                if column not in ['assigned_mapper', 'assigned_reviewer']:
+                    setattr(self, column, value)
+                elif column == 'assigned_mapper':
+                    self.assigned_mapper = assigned_mapper
+                elif column == 'assigned_reviewer':
+                    self.assigned_reviewer = assigned_reviewer
 
     def serialize(self) -> dict:
         serialized_data = {
