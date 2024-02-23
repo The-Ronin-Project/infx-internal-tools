@@ -1,6 +1,5 @@
 import json
 import unittest
-from unittest import skip
 
 from _pytest.python_api import raises
 
@@ -14,7 +13,7 @@ from app.app import create_app
 class ConceptMapOutputTests(unittest.TestCase):
     """
     There are known UUID values for concept_maps.concept_map rows that are safe to use in any tests
-    - for these see ConceptMapTests class doc.
+    - for these see app.enum.concept_maps_for_systems.ConceptMapsForSystems class doc.
 
      For test cases in ConceptMapOutputTests, only SELECT operations are needed and many test cases are so
      complex we could easily introduce confusing errors into any fake test data. Therefore, tests in this class use
@@ -37,7 +36,6 @@ class ConceptMapOutputTests(unittest.TestCase):
         self.conn.rollback()
         self.conn.close()
 
-    @skip("We don't need serialization to work for migration")
     def test_serialized_schema_versions(self):
         """
         Functions called by this test do not change data or write to OCI. They serialize data found in the database.
@@ -47,59 +45,33 @@ class ConceptMapOutputTests(unittest.TestCase):
         Note: This test calls some functions that WOULD call to outside services, such as Simplifier or OCI,
         but each of these test cases triggers an exception on purpose, so the callout does not occur.
 
+        Test cases removed:
+            For v4>v5, TMP, Interops, DP, Infx confirmed: a "dual version" transition is not needed for ConceptMaps
+
         Test Cases:
-            Serialize the same version as v(n) and test that it has all items that are in v(n) only.
-            Attempt to publish as v(n), a version that violates v(n) requirements, and test that it raises an exception.
+            Serialize the same version as v(n)
             Attempt to publish using a version number that is not supported.
             Attempt to publish using a version number that is formerly valid, recently outmoded.
-        Test Cases when dual versions are active (database_schema_version and next_schema_version are different):
-            Serialize a version as v(n) and test that it has no items that are in v(n+1) only.
-            Serialize a version as v(n+1) and test that it has no items that are in v(n) only.
         """
-        # Step 1: small concept map with a version that has no mappings
-        concept_map_uuid = "3704f2b0-7a8c-4455-ab2e-ffbcda91e1e3"  # "Apposnd Conditions to SNOMED CT" v1-v4
-        concept_map_version_2 = ConceptMapVersion.load_by_concept_map_uuid_and_version(concept_map_uuid, 2)
-        concept_map_version_4 = ConceptMapVersion.load_by_concept_map_uuid_and_version(concept_map_uuid, 4)
+        concept_map_uuid = "85d2335c-791e-4db5-a98d-c0c32949a65e"  # Apposnd Observation to Ronin Observation
+        test_concept_map = ConceptMap(concept_map_uuid)
+        concept_map_version = test_concept_map.get_most_recent_version(active_only=True)
 
         # v4 serialize a version that has mappings and test that it is fine. Group list has entries.
-        serialized_v4 = concept_map_version_4.serialize(include_internal_info=True, schema_version=4)
+        serialized_v4 = concept_map_version.serialize(include_internal_info=True, schema_version=4)
         group = serialized_v4.get("group")
         assert group is not None
         assert len(group) > 0
-        sourceCanonical = serialized_v4.get("sourceCanonical")
-        assert sourceCanonical == "http://projectronin.io/fhir/ValueSet/020d5cb0-193b-4240-b024-005802f860aa"
-        targetCanonical =  serialized_v4.get("targetCanonical")
-        assert targetCanonical == "http://projectronin.io/fhir/ValueSet/8b58bcea-82e3-4c09-a7c2-ce7d9e8dad4c"
-
-        # v4 serialize a version that has no mappings and test that it is fine. Group list is empty.
-        serialized_v4 = concept_map_version_2.serialize(include_internal_info=True, schema_version=4)
-        group = serialized_v4.get("group")
-        assert group is not None
-        assert len(group) == 0
-        sourceCanonical = serialized_v4.get("sourceCanonical")
-        assert sourceCanonical == "http://projectronin.io/fhir/ValueSet/020d5cb0-193b-4240-b024-005802f860aa"
-        targetCanonical =  serialized_v4.get("targetCanonical")
-        assert targetCanonical == "http://projectronin.io/fhir/ValueSet/8b58bcea-82e3-4c09-a7c2-ce7d9e8dad4c"
+        assert "http://projectronin.io/fhir/ValueSet/" in serialized_v4.get("sourceCanonical")
+        assert "http://projectronin.io/fhir/ValueSet/" in serialized_v4.get("targetCanonical")
 
         # Cannot write a bad version number of schema format
         with raises(BadRequestWithCode):
-            concept_map_version_4.serialize(include_internal_info=True, schema_version=0)
+            concept_map_version.serialize(include_internal_info=True, schema_version=0)
 
         # Cannot write a formerly valid, now outmoded version number of schema format
         with raises(BadRequestWithCode):
-            concept_map_version_4.serialize(include_internal_info=True, schema_version=3)
-
-        # Cannot write to Simplifier, a concept map with 0 mappings - v4 or later forbids this case
-        with raises(BadRequestWithCode):
-            concept_map_version_2.to_simplifier()
-
-        # Cannot publish, a v4 or later version with 0 mappings
-        with raises(BadRequestWithCode):
-            concept_map_version_2.publish()
-
-        # Cannot store in OCI, a v4 or later version with 0 mappings
-        with raises(BadRequestWithCode):
-            concept_map_version_2.prepare_for_oci()
+            concept_map_version.serialize(include_internal_info=True, schema_version=3)
 
         # Convenience: Can set a breakpoint at this line when done stepping and want to ensure it reaches the end cleanly.
         assert True

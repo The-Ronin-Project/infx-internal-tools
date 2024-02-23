@@ -151,7 +151,9 @@ class DataMigrationTests(unittest.TestCase):
 'ae61ee9b-3f55-4d3c-96e7-8c7194b53767',
 'c7d0f5d3-8e94-4985-8bac-9793c36605a2',
 'c9644018-ba8c-41b6-92f1-15568bb679c4',
-'f469524c-83fa-461c-976d-4e4a818713f8'
+'f469524c-83fa-461c-976d-4e4a818713f8',
+'e94578e1-1545-4955-8e62-7788b9a1cac0',
+'27570634-1f4a-4c05-b8e3-c6e8fc226056'
 )"""
 
     def test_get_concept_map_uuids_in_4_blocks_for_parallel_process_happy(self):

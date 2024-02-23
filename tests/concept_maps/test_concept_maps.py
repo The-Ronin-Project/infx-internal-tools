@@ -34,7 +34,7 @@ class ContentCreatorTests(unittest.TestCase):
 class ConceptMapTests(unittest.TestCase):
     """
     There are 21 concept_maps.concept_map rows safe to use in tests.
-    For the list, see app.util.enum.concept_maps_for_systems.ConceptMapsForSystems
+    For the list, see app.util.enum.concept_maps_for_systems.ConceptMapsForSystems class doc
 
     You may wish to choose a concept map based on its source_value_set_uuid or target_value_set_uuid.
     Here is an example of a query you can run:

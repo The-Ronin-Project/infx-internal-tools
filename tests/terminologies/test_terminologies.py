@@ -15,7 +15,7 @@ from pytest import raises
 class TerminologyTests(unittest.TestCase):
     """
     There are 5 public.terminology_versions rows safe to use in tests that also pass checks to allow codes to be created
-    - for the list, see app.util.enum.terminologies_for_systems.TerminologiesForSystems
+    - for the list, see app.util.enum.terminologies_for_systems.TerminologiesForSystems class doc
     - for queries to discover some additional terminology rows, use steps below
 
     For some additional terminology rows, use this SQL query:

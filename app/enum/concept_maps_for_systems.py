@@ -6,7 +6,7 @@ class ConceptMapsForSystems(Enum):
     UUID values for concept maps for use by INFX Systems.
     Use these to generate dynamic lists of concept map version UUIDs, value set UUIDs, flexible registry UUIDs, etc.
 
-    There are 21 concept_maps.concept_map rows safe to use in tests.
+    There are 17 concept_maps.concept_map rows safe to use in tests.
     ```
     uuid                                   title                                  source_value_set_uuid
     "1109aaac-b4da-4df2-8e74-587cec6d13cf" "Test ONLY: Mirth Validation Obser"... "ca75b03c-1763-44fd-9bfa-4fe015ff809c"
@@ -24,6 +24,8 @@ class ConceptMapsForSystems(Enum):
     "c7d0f5d3-8e94-4985-8bac-9793c36605a2" "Test ONLY: infx-1376 custom termi"... "1aeebc8e-bb48-4da7-b3ed-08674f47f490"
     "c9644018-ba8c-41b6-92f1-15568bb679c4" "Test ONLY: INFX-1376 FHIR Test Ma"... "1aeebc8e-bb48-4da7-b3ed-08674f47f490"
     "f469524c-83fa-461c-976d-4e4a818713f8" "Test ONLY: Test 3 Nov 2022 3"         "0d4d231d-c686-459a-916e-93b064ef8c31"
+    "e94578e1-1545-4955-8e62-7788b9a1cac0"
+    "27570634-1f4a-4c05-b8e3-c6e8fc226056"
     ```
 
     ```
@@ -43,6 +45,8 @@ class ConceptMapsForSystems(Enum):
     "c7d0f5d3-8e94-4985-8bac-9793c36605a2" "d1bd136b-4972-460f-a479-ae8206ee33d6" "b06745a1-76de-4974-b795-2cd6413d7d46"
     "c9644018-ba8c-41b6-92f1-15568bb679c4" "d1bd136b-4972-460f-a479-ae8206ee33d6" "b06745a1-76de-4974-b795-2cd6413d7d46"
     "f469524c-83fa-461c-976d-4e4a818713f8" "ddcbf55b-312d-4dd9-965d-f72c4bc51ddc" "bf161bfc-05f2-4b02-bd05-6a51bb884065"
+    "e94578e1-1545-4955-8e62-7788b9a1cac0"
+    "27570634-1f4a-4c05-b8e3-c6e8fc226056"
     ```
     """
     TEST_ONLY_MIRTH_OBSERVATION = "1109aaac-b4da-4df2-8e74-587cec6d13cf"

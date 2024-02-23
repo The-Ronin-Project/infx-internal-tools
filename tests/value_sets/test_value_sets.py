@@ -17,7 +17,7 @@ from app.errors import NotFoundException
 class ValueSetTests(unittest.TestCase):
     """
     There are 8 value_sets.value_set rows safe to use in tests.
-    - for the list, see app.util.enum.value_sets_for_systems.ValueSetsForSystems
+    - for the list, see app.util.enum.value_sets_for_systems.ValueSetsForSystems class doc
 
     You may want various status of value sets for different test cases. To find those with active status:
     ```

@@ -192,7 +192,7 @@ class CodeAPITests(unittest.TestCase):
     These tests test the Code class via mocked API calls.
 
     There are 5 public.terminology_versions rows safe to use in tests that also pass checks to allow codes to be created
-    - for the list, see app.util.enum.terminologies_for_systems.TerminologiesForSystems
+    - for the list, see app.util.enum.terminologies_for_systems.TerminologiesForSystems class doc
     - for queries to discover some additional terminology rows, use steps in tests/terminologies/test_terminologies.py
 
     How to check for values being written by tests in this file - in case cleanup is not done properly on Ctrl-C or Stop

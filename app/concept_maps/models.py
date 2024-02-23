@@ -22,12 +22,9 @@ from app.database import get_db, get_opensearch
 from app.errors import (
     BadRequestWithCode,
     NotFoundException,
-    BadSourceCodeError,
-    DuplicateTargetError,
 )
 from app.helpers.oci_helper import set_up_and_save_to_object_store, folder_path_for_oci
 from app.helpers.simplifier_helper import publish_to_simplifier
-from app.helpers.data_helper import OID_URL_CONVERSIONS
 import app.helpers.id_helper
 import app.models.data_ingestion_registry
 from app.terminologies.models import (
@@ -36,97 +33,6 @@ from app.terminologies.models import (
     load_terminology_version_with_cache,
 )
 import app.tasks
-
-
-# Function for checking if we have a coding array string that used to be JSON
-def is_coding_array(source_code_string):
-    return (
-        source_code_string.strip().startswith("[{")
-        or source_code_string.strip().startswith("{[{")
-        or source_code_string.strip().startswith("{null, ")
-    )
-
-
-# This is from when we used `scrappyMaps`. It's used for mapping inclusions and
-# can be removed as soon as that has been ported to the new maps.
-# TODO remove this after Alex and Ben have updated the ED model to use concept mapps for ED utilization
-# Todo: wait until we've updated (or deprecated) mapping inclusions in value sets to disable this
-class DeprecatedConceptMap:
-    def __init__(self, uuid, relationship_types, concept_map_name):
-        self.uuid = uuid
-        self.relationship_types = relationship_types
-
-        self.concept_map_name = concept_map_name
-
-        self.mappings = []
-        self.load_mappings()
-
-    def load_mappings(self):
-        conn = get_db()
-        mapping_query = conn.execute(
-            text(
-                """
-                select *
-                from "scrappyMaps".map_table
-                where "mapsetName" = :map_set_name
-                and "targetConceptDisplay" != 'null'
-                """
-            ),
-            {
-                "map_set_name": self.concept_map_name,
-                # 'relationship_codes': self.relationship_types
-            },
-        )
-        source_system = None
-        source_version = None
-        target_system = None
-        target_version = None
-        self.mappings = [
-            (
-                app.models.codes.Code(
-                    source_system,
-                    source_version,
-                    x.sourceConceptCode,
-                    x.sourceConceptDisplay,
-                ),
-                app.models.codes.Code(
-                    target_system,
-                    target_version,
-                    x.targetConceptCode,
-                    x.targetConceptDisplay,
-                ),
-                x.relationshipCode,
-            )
-            for x in mapping_query
-        ]
-
-    @property
-    def source_code_to_target_map(self):
-        result = {}
-        for item in self.mappings:
-            if item[2] not in self.relationship_types:
-                continue
-            code = item[0].code.strip()
-            mapped_code_object = item[1]
-            if code not in result:
-                result[code] = [mapped_code_object]
-            else:
-                result[code].append(mapped_code_object)
-        return result
-
-    @property
-    def target_code_to_source_map(self):
-        result = {}
-        for item in self.mappings:
-            if item[2] not in self.relationship_types:
-                continue
-            code = item[1].code.strip()
-            mapped_code_object = item[0]
-            if code not in result:
-                result[code] = [mapped_code_object]
-            else:
-                result[code].append(mapped_code_object)
-        return result
 
 
 @dataclass
@@ -1126,14 +1032,6 @@ class ConceptMapVersion:
         and sets the status of 'pending', 'in progress', and 'reviewed' versions to 'obsolete'. This is
         based on the current instance of the concept map version's UUID and the associated concept map's UUID.
 
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         Raises
         ------
         Any exceptions raised by the database operation will propagate up to the caller.
@@ -1222,47 +1120,22 @@ class ConceptMapVersion:
 
                     # Only proceed if there are filtered_mappings for the current target_uri and target_version
                     if filtered_mappings:
-                        # Do relevant checks on the code and display
-                        source_code_code = source_code.code.rstrip()
-                        source_code_display = source_code.display.rstrip()
-
-                        # Checking to see if the display is a coding array TODO: INFX-2521 this is a temporary problem that we should fix in the future
-                        if is_coding_array(source_code_display):
-                            source_code_code, source_code_display = (
-                                source_code_display,
-                                source_code_code,
-                            )
-
-                        # No longer needed in CMv5
-                        # # We want the text string array that is supposed to be json to be formatted correctly
-                        # # If it's not an array it should return the original string
-                        # if is_coding_array(source_code_code):
-                        #     source_code_code = transform_struct_string_to_json(
-                        #         source_code_code
-                        #     )
-
-                        # Convert OIDs to URLs
-                        for oid, uri in OID_URL_CONVERSIONS.items():
-                            source_code_code = source_code_code.replace(oid, uri)
-
                         new_element = {
-                            "id": source_code.id,
-                            "code": source_code_code,
-                            "display": source_code_display,
+                            "code": source_code.code,
                             "target": [],
                         }
 
                         # Iterate through each mapping for the source and serialize it
                         for mapping in filtered_mappings:
+                            comment = None
                             if (
                                 mapping.target.code == "No map"
                                 and mapping.target.display == "No matching concept"
                             ):
-                                comment = mapping.reason_for_no_map
-                            else:
-                                comment = None
+                                # todo: INFX-5135 is fixing this serialization issue in a parallel PR
+                                # comment = mapping.reason_for_no_map
+                                pass  # todo: remove this placeholder after fix
                             target_serialized = {
-                                "id": mapping.id,
                                 "code": mapping.target.code,
                                 "display": mapping.target.display,
                                 "equivalence": mapping.relationship.code,
@@ -1270,26 +1143,23 @@ class ConceptMapVersion:
                             }
 
                             # Add dependsOn data
-                            if (
-                                source_code.depends_on_property
-                                or source_code.depends_on_value
-                            ):
-                                depends_on_value = source_code.depends_on_value
-                                if is_coding_array(depends_on_value):
-                                    depends_on_value = transform_struct_string_to_json(
-                                        depends_on_value
-                                    )
-                                depends_on = {
-                                    "property": source_code.depends_on_property,
-                                    "value": depends_on_value,
-                                }
-                                if source_code.depends_on_system:
-                                    depends_on["system"] = source_code.depends_on_system
-                                if source_code.depends_on_display:
-                                    depends_on[
-                                        "display"
-                                    ] = source_code.depends_on_display
-                                target_serialized["dependsOn"] = [depends_on]
+                            # todo: INFX-5135 is fixing this serialization issue in a parallel PR
+                            # if (
+                            #     source_code.depends_on_property
+                            #     or source_code.depends_on_value
+                            # ):
+                            #     depends_on_value = source_code.depends_on_value
+                            #     depends_on = {
+                            #         "property": source_code.depends_on_property,
+                            #         "value": depends_on_value,
+                            #     }
+                            #     if source_code.depends_on_system:
+                            #         depends_on["system"] = source_code.depends_on_system
+                            #     if source_code.depends_on_display:
+                            #         depends_on[
+                            #             "display"
+                            #         ] = source_code.depends_on_display
+                            #     target_serialized["dependsOn"] = [depends_on]
 
                             new_element["target"].append(target_serialized)
 
@@ -1321,92 +1191,6 @@ class ConceptMapVersion:
         if result is not None:
             return result.description
         return None
-
-    def check_formatting(self, concept_map):
-        """Checking the formatting for errors before exporting to OCI, we need to make sure the concept map doesn't have
-        any errors, so it will work for the DP concept map UDF, as well as for InterOps
-
-        Integrity Check 1: Check that all data in the code field is a valid string or JSON string
-        Integrity Check 2: Make sure there are no duplicate targets
-        """
-
-        bad_source_errors = []  # List to hold bad source code errors
-        duplicate_target_errors = []  # List to hold duplicate target errors
-
-        # Iterate over each dictionary in the 'group' list
-        for group in concept_map.get("group", []):
-            # Iterate over each dictionary in the 'element' list, with enumerate to keep track of the index
-            for index, element in enumerate(group.get("element", [])):
-                # Integrity Check 1: Check that all data in the code field is a valid string or JSON string
-                code = element.get("code")
-                if code is not None:
-                    # If string starts with curly brace
-                    if code.startswith("{") and code.endswith("}"):
-                        # If the string starts with either of the valid patterns
-                        try:
-                            # Check if the 'code' field is a valid JSON string
-                            json.loads(code)
-                        except ValueError:
-                            bad_source_errors.append(
-                                f"Invalid JSON string in the code field at element index {index}: {code}; element: {element}"
-                            )
-
-                    # TODO: This SHOULD be the way that this works, there are instances where that is not the case
-                    # What are the times when it would be valid for the code to just be a string?
-                    # In the case of this being a string element.code and element.display should match
-                    # else:
-                    #     # If the string doesn't start with a curly brace
-                    #     display = element.get('display')
-                    #     # Check if element.code and the element.display match
-                    #     if code != display:
-                    #         errors.append(f"Code string: {code}, does not match display: {display}, at index {index}")
-
-                else:
-                    bad_source_errors.append(
-                        f"'code' key is missing in the element at index {index}; element: {element}"
-                    )
-
-                # Integrity Check 2: Make sure there are no duplicate targets
-                # TODO: at some point this will need to handle more than one target for some concept maps but not most
-                target_values = set()
-                targets = element.get("target", [])
-                if targets:
-                    for target in targets:
-                        target_code = target.get("code")
-                        if target_code:
-                            if target_code in target_values:
-                                duplicate_target_errors.append(
-                                    f"Duplicated target elements found at element index {index}: {target_code}; element: {element}"
-                                )
-                            target_values.add(target_code)
-                        else:
-                            duplicate_target_errors.append(
-                                f"'code' key is missing in the target at element index {index}; element: {element}"
-                            )
-                else:
-                    duplicate_target_errors.append(
-                        f"'target' key is missing in the element at index {index}; element: {element}"
-                    )
-
-        if bad_source_errors:
-            errors_str = "\n".join([f"  - {error}" for error in bad_source_errors])
-            formatted_errors = f"Bad Source Code Errors:\n{errors_str}"
-            raise BadSourceCodeError(
-                code="BadSourceCode",
-                description=f"Bad source code errors found in ConceptMap. {bad_source_errors}",
-                errors=formatted_errors,
-            )
-
-        if duplicate_target_errors:
-            errors_str = "\n".join(
-                [f"  - {error}" for error in duplicate_target_errors]
-            )
-            formatted_errors = f"Duplicate Target Errors:\n{errors_str}"
-            raise DuplicateTargetError(
-                code="DuplicateTarget",
-                description=f"Duplicate target errors found in ConceptMap. {duplicate_target_errors}",
-                errors=formatted_errors,
-            )
 
     def serialize(
         self,
@@ -1477,7 +1261,6 @@ class ConceptMapVersion:
             "url": f"http://projectronin.io/fhir/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
             "description": self.concept_map.description,
             "purpose": self.get_use_case_description(),
-            "publisher": self.concept_map.publisher,
             "experimental": self.concept_map.experimental,
             "status": self.status,
             "date": self.published_date.strftime("%Y-%m-%d")
@@ -1532,7 +1315,6 @@ class ConceptMapVersion:
         serialized = self.serialize(
             include_internal_info=False, schema_version=schema_version
         )
-        self.check_formatting(serialized)
 
         if schema_v4_or_later and len(serialized.get("group")) == 0:
             raise BadRequestWithCode(
@@ -1578,9 +1360,10 @@ class ConceptMapVersion:
         }
 
         serialized.update(oci_serialized)  # Merge oci_serialized into serialized
-        serialized.pop("contact")
-        serialized.pop("publisher")
-        serialized.pop("title")
+        # todo: INFX-5135 is fixing this serialization issue in a parallel PR
+        # serialized.pop("contact")
+        # serialized.pop("publisher")
+        # serialized.pop("title")
         initial_path = f"{ConceptMap.object_storage_folder_name}/v{schema_version}"
 
         return serialized, initial_path
@@ -1613,6 +1396,7 @@ class ConceptMapVersion:
         self.version_set_status_active()
         self.set_publication_date()
         self.retire_and_obsolete_previous_version()
+        # todo: INFX-4734 must fix serialization to Simplifier - need a newer serialize function for JSONCode()
         try:
             self.to_simplifier()
         except:
@@ -1685,9 +1469,10 @@ class ConceptMapVersion:
 
                 for element in group["element"]:
                     if "target" in element:
-                        element["target"].sort(
-                            key=itemgetter("id", "code")
-                        )  # Sort list of dicts by 'id' and 'code'
+                        # todo: INFX-5135 is fixing this serialization issue in a parallel PR - RCDM removed these id attributes
+                        # element["target"].sort(
+                        #     key=itemgetter("id", "code")
+                        # )  # Sort list of dicts by 'id' and 'code'
                         element["target"] = list(
                             target for target, _ in itertools.groupby(element["target"])
                         )  # Remove duplicates
@@ -1982,25 +1767,6 @@ class SourceConcept:
                 self.code.depends_on.depends_on_display if self.code.depends_on else None,
             )
         )
-
-    @property
-    def id(self):
-        # todo: do we need this still? Where is it used?
-        """
-        Calculates a unique MD5 hash for the current instance.
-
-        This property combines `code` and `display` attributes, strips off any leading or trailing white spaces,
-        and then converts the combined string to an MD5 hash. Note that the combined string is encoded in UTF-8
-        before generating the hash.
-
-        Returns:
-            str: A hexadecimal string representing the MD5 hash of the `code` and `display` attributes.
-
-        Raises:
-            AttributeError: If the `code` or `display` attribute is not set for the instance.
-        """
-        combined = (self.code.strip() + self.display.strip()).encode("utf-8")
-        return hashlib.md5(combined).hexdigest()
 
     @classmethod
     def load(cls, source_concept_uuid: UUID) -> "SourceConcept":
@@ -2400,72 +2166,6 @@ class MappingSuggestion:
             "timestamp": self.timestamp,
             "accepted": self.accepted,
         }
-
-
-# # TODO: This is a temporary function to solve a short term problem we have
-# def transform_struct_string_to_json(struct_string):
-#     # Handle case where we have a single code and the code is null
-#     if struct_string.startswith("{null, ") and struct_string.endswith("}"):
-#         return json.dumps({"code": None, "display": struct_string[7:-1]})
-#
-#     # Parse the coding elements and the text that trails at the end
-#     # Handle different start/end characters
-#     if struct_string.startswith("{") and struct_string.endswith("}"):
-#         # Remove the outer curly braces
-#         input_str = struct_string[1:-1]
-#         # Split on '],'
-#         tuple_str, text_string = input_str.rsplit("],", 1)
-#         text_string = text_string.strip()
-#     elif struct_string.startswith("[") and struct_string.endswith("]"):
-#         # Remove the outer square brackets
-#         tuple_str = struct_string[1:-1]
-#         text_string = None
-#     else:
-#         raise ValueError("Invalid input string format")
-#
-#     # Find the tuples using a regular expression
-#     tuple_pattern = r"\{([^}]+)\}"
-#     tuple_matches = re.findall(tuple_pattern, tuple_str)
-#
-#     # Convert each matched tuple into a dictionary
-#     # We are hard coding added dictionary keys that were lost in the original transformation process
-#     coding_array = []
-#     for match in tuple_matches:
-#         items = match.split(", ")
-#         d = {
-#             "code": items[0],
-#             "display": None
-#             if len(items) < 2 or items[1] == "null"
-#             else ", ".join(items[1:-1]),
-#             "system": items[-1],
-#         }
-#
-#         # Code for special case of PSJ DocumentReference imported in Spark format
-#         if ", urn:oid:" in str(d.get("display")):
-#             display = d.get("display")
-#             find_index = display.index(", urn:oid:")
-#             new_display = display[:find_index]
-#             new_system = display[find_index + 2 :]
-#             d["display"] = new_display
-#             d["system"] = new_system
-#
-#         if ", http:" in str(d.get("display")):
-#             display = d.get("display")
-#             find_index = display.index(", http:")
-#             new_display = display[:find_index]
-#             new_system = display[find_index + 2 :]
-#             d["display"] = new_display
-#             d["system"] = new_system
-#
-#         coding_array.append(d)
-#
-#     result = {"coding": coding_array}
-#
-#     if text_string is not None:
-#         result["text"] = text_string
-#
-#     # Convert the dictionary into a JSON string
-#     return json.dumps(result)
 
 
 def update_comments_source_concept(source_concept_uuid, comments):

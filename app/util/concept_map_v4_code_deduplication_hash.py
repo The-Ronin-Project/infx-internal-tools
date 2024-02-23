@@ -41,7 +41,7 @@ def identify_duplicate_code_values_in_v4(
     - NOT an issue: any of the above, in a concept map that Informatics has identified as NOT using. See next paragraph.
 
     For a list of UUIDs for v4 concept maps that Informatics IS using, see 2 enum lists:
-    app.util.data_migration.ConceptMapsForContent and app.util.data_migration.ConceptMapsForSystems
+    app.enum.concept_maps_for_systems.ConceptMapsForContent and ConceptMapsForSystems
     Query the current clinical-content database for "active" and "pending" versions of each.
 
     identify_duplicate_code_values_in_v4() accomplishes a first step ("Step 1") towards resolving the above issues. It
