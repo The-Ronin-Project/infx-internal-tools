@@ -195,7 +195,7 @@ class ConceptMapVersionCreator:
                         cr.relationship_code_uuid AS concept_relationship_relationship_code_uuid,
                         cr.target_concept_terminology_version_uuid AS target_concept_system_version_uuid,
                         cr.review_comments AS concept_relationship_review_comment,
-                        cr.uuid AS concept_relationship_reviewed_by,
+                        cr.reviewed_by AS concept_relationship_reviewed_by,
                         ctc.depends_on_property,
                         ctc.depends_on_system,
                         ctc.depends_on_value,
