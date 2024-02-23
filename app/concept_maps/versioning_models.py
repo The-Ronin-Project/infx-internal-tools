@@ -92,7 +92,7 @@ class ConceptMapVersionCreator:
         Populates the concept_maps.source_concept table with the latest expansion of the new target value set version.
 
         This method inserts new records into the concept_maps.source_concept table by selecting the
-        latest expansion_members from the value_sets.expansion_member table. The new source concepts
+        latest expansion_members from the value_sets.expansion_member_data table. The new source concepts
         are created with a status of 'pending'.
 
         Returns:
@@ -104,7 +104,7 @@ class ConceptMapVersionCreator:
             text(
                 """
                 insert into concept_maps.source_concept
-                (uuid, code, display, system, map_status, concept_map_version_uuid, custom_terminology_uuid)
+                (uuid, code_schema, code_simple, code_jsonb, display, system_uuid, map_status, concept_map_version_uuid, custom_terminology_code_uuid)
                 select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid, custom_terminology_uuid from value_sets.expansion_member_data
                 join public.terminology_versions tv
                 on tv.fhir_uri=expansion_member_data.system
@@ -387,10 +387,10 @@ class ConceptMapVersionCreator:
         target_value_set_expansion = self.conn.execute(
             text(
                 """
-                select expansion_member.*, tv.uuid as terminology_uuid from value_sets.expansion_member
+                select expansion_member.*, tv.uuid as terminology_uuid from value_sets.expansion_member_data
                 join public.terminology_versions tv
-                on tv.fhir_uri=expansion_member.system
-                and tv.version=expansion_member.version
+                on tv.fhir_uri=expansion_member_data.system
+                and tv.version=expansion_member_data.version
                 where expansion_uuid in (
                     select uuid from value_sets.expansion
                     where vs_version_uuid=:vs_version_uuid
