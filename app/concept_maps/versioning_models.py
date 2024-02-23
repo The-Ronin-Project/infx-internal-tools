@@ -89,9 +89,9 @@ class ConceptMapVersionCreator:
 
     def populate_source_concepts(self):
         """
-        Populates the concept_maps.source_concept table with the latest expansion of the new target value set version.
+        Populates the concept_maps.source_concept_data table with the latest expansion of the new target value set version.
 
-        This method inserts new records into the concept_maps.source_concept table by selecting the
+        This method inserts new records into the concept_maps.source_concept_data table by selecting the
         latest expansion_members from the value_sets.expansion_member_data table. The new source concepts
         are created with a status of 'pending'.
 
@@ -103,7 +103,7 @@ class ConceptMapVersionCreator:
         self.conn.execute(
             text(
                 """
-                insert into concept_maps.source_concept
+                insert into concept_maps.source_concept_data
                 (uuid, code_schema, code_simple, code_jsonb, display, system_uuid, map_status, concept_map_version_uuid, custom_terminology_code_uuid)
                 select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid, custom_terminology_uuid from value_sets.expansion_member_data
                 join public.terminology_versions tv
@@ -187,24 +187,23 @@ class ConceptMapVersionCreator:
                         cr.uuid AS concept_relationship_uuid,
                         cr.target_concept_code AS target_concept_code,
                         cr.target_concept_display AS target_concept_display,
-                        cr.target_concept_system AS target_concept_system,
                         cr.mapping_comments AS mapping_comments,
                         cr.review_status AS review_status,
-                        cr.created_date AS concept_relationship_created_date,
-                        cr.reviewed_date AS concept_relationship_reviewed_date,
-                        cr.author AS concept_relationship_author,
+                        cr.mapped_date_time AS concept_relationship_created_date,
+                        cr.reviewed_date_time AS concept_relationship_reviewed_date,
+                        cr.mapped_by AS concept_relationship_author,
                         cr.relationship_code_uuid AS concept_relationship_relationship_code_uuid,
-                        cr.target_concept_system_version_uuid AS target_concept_system_version_uuid,
-                        cr.review_comment AS concept_relationship_review_comment,
-                        cr.reviewed_by AS concept_relationship_reviewed_by,
+                        cr.target_concept_terminology_version_uuid AS target_concept_system_version_uuid,
+                        cr.review_comments AS concept_relationship_review_comment,
+                        cr.uuid AS concept_relationship_reviewed_by,
                         ctc.depends_on_property,
                         ctc.depends_on_system,
                         ctc.depends_on_value,
                         ctc.depends_on_display
                     FROM
-                        concept_maps.concept_relationship cr
+                        concept_maps.concept_relationship_data cr
                     RIGHT JOIN
-                        concept_maps.source_concept sc
+                        concept_maps.source_concept_data sc
                     ON
                         sc.uuid = cr.source_concept_uuid
                     LEFT JOIN
@@ -525,7 +524,7 @@ class ConceptMapVersionCreator:
                 new_version_description=new_version_description
             )
 
-            # Populate concept_maps.source_concept table with the latest expansion of the new source value set version
+            # Populate concept_maps.source_concept_data table with the latest expansion of the new source value set version
             # Note: populate_source_concepts() calls load_all_sources_and_mappings() with the self.new_version_uuid.
             # This first time call to load_all_sources_and_mappings will have none in all the concept relationship columns.
             new_source_concepts = self.populate_source_concepts()
@@ -741,7 +740,7 @@ class ConceptMapVersionCreator:
         no_maps = self.conn.execute(
             text(
                 """
-                SELECT uuid FROM concept_maps.source_concept  
+                SELECT uuid FROM concept_maps.source_concept_data  
                 WHERE no_map=true AND concept_map_version_uuid=:new_concept_map_version;
                 """
             ),
