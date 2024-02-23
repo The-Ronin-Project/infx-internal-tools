@@ -942,7 +942,6 @@ class ConceptMapVersion:
                 reviewed_date_time=item.reviewed_date_time,
                 uuid=item.mapping_uuid,
                 review_status=item.review_status,
-                # reason_for_no_map=item.reason_for_no_map,  # todo: Why does this have this when the source_concept has it?
                 map_program_date_time=item.map_program_date_time,
                 map_program_version=item.map_program_version,
                 map_program_prediction_id=item.map_program_prediction_id,
@@ -963,11 +962,16 @@ class ConceptMapVersion:
         """
         conn = get_db()
         query = """  
-            SELECT sc.*, cr.*, rc.display as relationship_display  
-            FROM concept_maps.source_concept sc  
-            LEFT JOIN concept_maps.concept_relationship cr ON sc.uuid = cr.source_concept_uuid  
-            LEFT JOIN concept_maps.relationship_codes rc ON rc.uuid = cr.relationship_code_uuid  
-            WHERE sc.concept_map_version_uuid = :concept_map_version_uuid  
+            SELECT 
+                scd.*, 
+                crd.*, 
+                rc.display as relationship_display  
+            FROM concept_maps.source_concept_data scd  
+            LEFT JOIN concept_maps.concept_relationship_data crd 
+                ON scd.uuid = crd.source_concept_uuid  
+            LEFT JOIN concept_maps.relationship_codes rc 
+                ON rc.uuid = crd.relationship_code_uuid  
+            WHERE scd.concept_map_version_uuid = :concept_map_version_uuid
         """
         results = conn.execute(
             text(query),
@@ -1479,6 +1483,7 @@ class ConceptMapVersion:
         publish_to_simplifier(resource_type, resource_id, concept_map_to_json)
 
     def resolve_error_service_issues(self):
+        # todo: update for migration / mapping request service
         """
         After the ConceptMapVersion has been published, call this function to identify open Data Validation Service
         issues associated with codes in this new concept map version, marking those issues 'resolved' on our side and
@@ -2107,7 +2112,7 @@ class Mapping:
         conn.execute(
             text(
                 """  
-                UPDATE concept_maps.concept_relationship  
+                UPDATE concept_maps.concept_relationship_data  
                 SET relationship_code_uuid = :new_relationship_code_uuid  
                 WHERE uuid = :mapping_uuid;  
                 """
@@ -2173,7 +2178,7 @@ def update_comments_source_concept(source_concept_uuid, comments):
     conn.execute(
         text(
             """
-            update concept_maps.source_concept
+            update concept_maps.source_concept_data
             set comments=:comments
             where uuid=:source_concept_uuid
             """
@@ -2187,11 +2192,25 @@ def get_concepts_for_assignment(version_uuid):
     concepts = conn.execute(
         text(
             """
-            SELECT *, sc.code as source_code, sc.display as source_display, sc.uuid as source_uuid, pmu.uuid as mapper_uuid, pmu.first_last_name as assigned_mapper, pmu2.uuid as reviewer_uuid, pmu2.first_last_name as assigned_reviewer, ctc.additional_data->>'count_of_resources_affected' as count_of_resources_affected  
-            FROM concept_maps.source_concept sc  
-            LEFT JOIN project_management.user pmu ON pmu.uuid = sc.assigned_mapper  
-            LEFT JOIN project_management.user pmu2 ON sc.assigned_reviewer = pmu2.uuid  
-            LEFT JOIN custom_terminologies.code ctc ON sc.custom_terminology_uuid = ctc.uuid  
+            SELECT 
+                *, 
+                sc.code_schema as source_code_schema, 
+                sc.code_simple as source_code_simple, 
+                sc.code_jsonb as source_code_jsonb, 
+                sc.display as source_display, 
+                sc.uuid as source_uuid, 
+                pmu.uuid as mapper_uuid, 
+                pmu.first_last_name as assigned_mapper, 
+                pmu2.uuid as reviewer_uuid, 
+                pmu2.first_last_name as assigned_reviewer, 
+                ctc.additional_data->'count_of_resources_affected' as count_of_resources_affected  
+            FROM concept_maps.source_concept_data sc  
+            LEFT JOIN project_management.user pmu 
+                ON pmu.uuid = sc.assigned_mapper  
+            LEFT JOIN project_management.user pmu2 
+                ON sc.assigned_reviewer = pmu2.uuid  
+            LEFT JOIN custom_terminologies.code_data ctc 
+                ON sc.custom_terminology_code_uuid = ctc.uuid  
             WHERE sc.concept_map_version_uuid = :version_uuid
             """
         ),
