@@ -136,9 +136,15 @@ class FHIRCodeableConcept:
 
 
 class DependsOnSchemas(Enum):
+    """
+    IMPORTANT: "string" is already deprecated, but note:
+    - we have no dependsOn data as "string" in the CMv5 clinical-content database tables
+    - mapping_request_service.py allows no dependsOn data to be ingested as "string"
+    todo: STRING will be removed when we add dependsOn n-member lists in INFX-5133
+    """
     STRING = "string"
     CODEABLE_CONCEPT = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept"
-    # todo: add the rest in
+    RATIO = "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMapSourceCodeableConcept"
 
 
 class DependsOnData:
@@ -154,6 +160,7 @@ class DependsOnData:
                  depends_on_system: Optional[str] = None,
                  depends_on_display: Optional[str] = None,
                  saved_to_db: bool = True,
+                 sequence: int = 1,
                  ):
         self.depends_on_property = depends_on_property
         self.depends_on_system = depends_on_system

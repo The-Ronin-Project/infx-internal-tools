@@ -9,7 +9,7 @@ from app.helpers.format_helper import DataExtensionUrl, \
     prepare_code_and_display_for_storage_migration, \
     prepare_depends_on_value_for_storage, normalized_data_dictionary_string, normalized_codeable_concept_string, \
     prepare_depends_on_attributes_for_code_id_migration, prepare_depends_on_attributes_for_code_id
-from app.models.codes import DependsOnData
+from app.models.codes import DependsOnData, DependsOnSchemas
 
 
 class FormatHelperTests(unittest.TestCase):
@@ -304,16 +304,18 @@ class FormatHelperTests(unittest.TestCase):
         assert result[2] == normalized_value
         assert result[3] == normalized_value
 
-    @skip("This is for n-member lists")
     def test_depends_on_format_for_code_id(self):
         test_object_1 = DependsOnData(
             depends_on_value="a",
+            depends_on_value_schema=DependsOnSchemas.STRING,
             depends_on_property="b",
             depends_on_system="c",
             depends_on_display="d",
         )
         test_object_2 = DependsOnData(
-            depends_on_value="abcd"
+            depends_on_value="abcd",
+            depends_on_value_schema=DependsOnSchemas.STRING,
+            depends_on_property="",
         )
         result_1 = prepare_depends_on_attributes_for_code_id(test_object_1)
         result_2 = prepare_depends_on_attributes_for_code_id(test_object_2)

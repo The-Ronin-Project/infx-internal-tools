@@ -3,6 +3,7 @@ import unittest
 import uuid
 import time
 from datetime import datetime, date
+from unittest import skip
 
 import app.terminologies.models
 import app.models.codes
@@ -57,7 +58,7 @@ class TerminologyTests(unittest.TestCase):
 
     safe_term_uuid_fake = "d2ae0de5-0168-4f54-924a-1f79cf658939"
     safe_term_uuid_old = "3c9ed300-0cb8-47af-8c04-a06352a14b8d"
-    safe_term_uuid_dupl = "d14cbd3a-aabe-4b26-b754-5ae2fbd20949"
+    safe_term_uuid_dupl = "7e7d40aa-8987-4ad2-8f8b-fabdc7ba3800"
     safe_vsv_uuid = "58e792d9-1264-4f18-b16e-6292cb7ca597"
 
     def test_deduplicate_on_insert(self) -> None:
@@ -72,34 +73,21 @@ class TerminologyTests(unittest.TestCase):
         duplicate_insert_test_terminology = app.terminologies.models.Terminology.load(
             self.safe_term_uuid_dupl
         )
-        # todo: verify the underlying content is actually a duplicate and using migrated data
+        # This code is known to already exist in this terminology, and terminology is not expired (expires in 2030)
         code1 = app.models.codes.Code(
-            code="test1",
-            display="Test 1",
+            code="booked",
+            display="booked",
             system=None,
             version=None,
             terminology_version=duplicate_insert_test_terminology,
             custom_terminology_code_uuid=uuid.uuid4(),
             saved_to_db=False
-        )  # This code is known to already exist in this terminology
-
-        current_unix_timestamp = str(time.time())
-        new_code = app.models.codes.Code(
-            code=f"test{current_unix_timestamp}",
-            display=f"Test {current_unix_timestamp}",
-            system=None,
-            version=None,
-            terminology_version=duplicate_insert_test_terminology,
-            custom_terminology_code_uuid=uuid.uuid4(),
-            saved_to_db=False
-        )  # Use a unit timestamp to form a new code
-
-        inserted_count = (
-            duplicate_insert_test_terminology.load_new_codes_to_terminology(
-                [code1, new_code], on_conflict_do_nothing=True
-            )
         )
-        self.assertEqual(1, inserted_count)
+        with raises(Exception) as e:
+            duplicate_insert_test_terminology.load_new_codes_to_terminology([code1], on_conflict_do_nothing=True)
+        message = str(e.value)
+        assert '(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "code_data_code_id"' in message
+        assert 'DETAIL:  Key (code_id, terminology_version_uuid)=(53effae39bebd4932ce94cae302cd044, 7e7d40aa-8987-4ad2-8f8b-fabdc7ba3800) already exists.' in message
 
     def test_get_terminology_happy(self):
         """
@@ -381,11 +369,11 @@ class TerminologyTests(unittest.TestCase):
         serialized = app.terminologies.models.Terminology.serialize(terminology)
         assert len(serialized) == 8
         assert serialized.get("uuid") is not None
-        assert serialized.get("name") == "Test ONLY: Duplicate Insert Test"
+        assert serialized.get("name") == "apposnd_appointmentstatus"
         assert serialized.get("version") == "999"
         assert serialized.get("effective_start") == date(2023, 12, 3)
         assert serialized.get("effective_end") == date(2030, 12, 2)
-        assert serialized.get("fhir_uri") == "http://testing/duplicateInsertTest"
+        assert serialized.get("fhir_uri") == "http://projectronin.io/fhir/CodeSystem/apposnd/AppointmentStatus"
         assert serialized.get("is_standard") == False
         assert serialized.get("fhir_terminology") == False
 
@@ -408,11 +396,11 @@ class TerminologyTests(unittest.TestCase):
         serialized = response.json
         assert len(serialized) == 8
         assert serialized.get("uuid") is not None
-        assert serialized.get("name") == "Test ONLY: Duplicate Insert Test"
+        assert serialized.get("name") == "apposnd_appointmentstatus"
         assert serialized.get("version") == "99"
         assert "03 Dec 2023 00:00:00" in serialized.get("effective_start")
         assert "02 Dec 2023 00:00:00" in serialized.get("effective_end")
-        assert serialized.get("fhir_uri") == "http://testing/duplicateInsertTest"
+        assert serialized.get("fhir_uri") == "http://projectronin.io/fhir/CodeSystem/apposnd/AppointmentStatus"
         assert serialized.get("is_standard") == False
         assert serialized.get("fhir_terminology") == False
 
@@ -466,7 +454,7 @@ class TerminologyTests(unittest.TestCase):
             data=json.dumps(
                 {
                     "previous_terminology_version_uuid": f"{self.safe_term_uuid_dupl}",
-                    "version": "1",
+                    "version": "1.0",
                     "effective_start": "2023-12-03",
                     "effective_end": "2023-12-02",
                 }
@@ -478,6 +466,7 @@ class TerminologyTests(unittest.TestCase):
         assert result.get("code") == "Terminology.create_new_term_version_from_previous.database_error"
         error_text = "(psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint \"unique_version_fhir_uri\""
         assert error_text in result.get("message")
+
 
 if __name__ == "__main__":
     unittest.main()

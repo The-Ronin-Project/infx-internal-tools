@@ -2,6 +2,7 @@ import datetime
 import json
 import unittest
 import uuid
+from unittest import skip
 
 from pytest import raises
 from sqlalchemy import text
@@ -392,20 +393,16 @@ class CodeAPITests(unittest.TestCase):
 
     def test_create_code_not_unique(self):
         """
-        non-unique code value - the code "test code" already exists in the safe_term_uuid_fake Terminology
+        non-unique code value - the code "booked" already exists in the safe_term_uuid_dupl Terminology
         """
         response = self.client.post(
             "/terminology/new_code",
             data=json.dumps(
                 [
                     {
-                        "code": "test code",
-                        "display": "test display",
-                        "terminology_version_uuid": self.safe_term_uuid_fake,
-                        "depends_on_value": "a",
-                        "depends_on_display": "b",
-                        "depends_on_property": "c",
-                        "depends_on_system": "d",
+                        "code": "booked",
+                        "display": "booked",
+                        "terminology_version_uuid": self.safe_term_uuid_dupl,
                         "additional_data": {
                             "data": "sweet sweet json"
                         }

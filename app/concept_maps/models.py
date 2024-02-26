@@ -1943,42 +1943,6 @@ class Mapping:
 
         # todo: add warning if deleted data is populated but status is not deleted
 
-    # @property
-    # def id(self):
-    #     # todo: investigate what to do here
-    #     """
-    #     Generates and returns an MD5 hash as a hexadecimal string.
-    #
-    #     The hash is created using the following attributes:
-    #     - source.id
-    #     - relationship.code
-    #     - target.code
-    #     - target.display
-    #     - target.system
-    #
-    #     This method does not take any arguments, and it returns a string representing the hexadecimal value of the MD5 hash.
-    #
-    #     :return: a string of hexadecimal digits representing an MD5 hash
-    #     """
-    #     # concatenate the required attributes into a string
-    #     concat_str = (
-    #         str(self.source.id)
-    #         # + str(self.source.depends_on_property).strip()
-    #         # + str(self.source.depends_on_system).strip()
-    #         # + str(self.source.depends_on_value).strip()
-    #         # + str(self.source.depends_on_display).strip()
-    #         + self.relationship.code
-    #         + self.target.code
-    #         + self.target.display
-    #         + self.target.system
-    #     )
-    #     # create a new md5 hash object
-    #     hash_object = hashlib.md5()
-    #     # update the hash object with the bytes-like object
-    #     hash_object.update(concat_str.encode("utf-8"))
-    #     # return the hexadecimal representation of the hash
-    #     return hash_object.hexdigest()
-
     @property
     def deduplication_hash(self):
         deduplication_hash = app.helpers.id_helper.generate_mapping_id_with_source_code_id(
