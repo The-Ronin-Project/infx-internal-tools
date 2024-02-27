@@ -35,6 +35,27 @@ class FHIRCoding:
     system: Optional[str]
     version: Optional[str]
 
+    def __members(self):
+        return (
+                self.code,
+                self.display,
+                self.system,
+                self.version
+            )
+
+    def __hash__(self):
+        return hash(
+            self.__members()
+        )
+
+    def __eq__(self, other):
+        if not isinstance(other, FHIRCoding):
+            return False
+        if self.__members() == other.__members():
+            return True
+        else:
+            return False
+
     @classmethod
     def deserialize(cls, json_input_raw) -> 'FHIRCoding':
         if type(json_input_raw) == str:
@@ -85,6 +106,29 @@ class FHIRCodeableConcept:
     """
     coding: List[FHIRCoding]
     text: str
+
+    def __members(self):
+        # For the list, we need a strategy that will work regardless of order
+        # Let's hash every item, then order those hashes
+        # Finally, convert to tuple to preserve order and make immutable
+        hashed_codings = [hash(coding) for coding in self.coding]
+        sorted_hashes = sorted(hashed_codings)
+        coding_tuple = tuple(sorted_hashes)
+
+        return (
+            coding_tuple,
+            self.text
+        )
+
+    def __hash__(self):
+        return hash(self.__members())
+
+    def __eq__(self, other):
+        if not isinstance(other, FHIRCodeableConcept):
+            return False
+
+        if self.__members() == other.__members():
+            return True
 
     @classmethod
     def deserialize(cls, json_input_raw) -> 'FHIRCodeableConcept':
@@ -170,6 +214,32 @@ class DependsOnData:
             if not isinstance(depends_on_value, FHIRCodeableConcept):
                 raise ValueError(f"depends_on_value_schema declared as string, so depends_on_value must be FHIRCodeableConcept")
         self.depends_on_value = depends_on_value
+
+    def __members(self):
+        """
+        Since this is used for internal hashing, it is important we only return
+        hashable types, therefore we use the depends_on_value_string property
+        instead of calling depends_on_value directly
+        """
+        return (
+            self.depends_on_property,
+            self.depends_on_value_schema,
+            self.depends_on_value_string,
+            self.depends_on_system,
+            self.depends_on_display
+        )
+
+    def __hash__(self):
+        return hash(self.__members())
+
+    def __eq__(self, other):
+        if not isinstance(other, DependsOnData):
+            return False
+
+        if self.__members() == other.__members():
+            return True
+        else:
+            return False
 
     @property
     def depends_on_value_string(self):
@@ -571,9 +641,23 @@ class Code:
 
         return repr_string + ")"
 
+    def __members(self):
+        return (
+            self.code_schema,
+            self.code,
+            self.display,
+            self.terminology_version.uuid,
+            self.depends_on,
+            self.from_custom_terminology,
+            self.from_fhir_terminology,
+            self.custom_terminology_code_uuid,
+            self.custom_terminology_code_id,
+            self._stored_custom_terminology_deduplication_hash,
+        )
+
     def __hash__(self) -> int:  # todo: make it very clear why this is different from code_id and if it should be
         """
-        This method computes a hash value for the Code instance based on its string representation. It overrides the default hash method for the Code class.
+        This method computes a hash value for the Code instance based on its string representation.
 
         Returns:
         int: A hash value computed from the string representation of the Code instance.
@@ -582,11 +666,11 @@ class Code:
         To compute the hash value of a Code instance, use the following syntax:
         code_hash = hash(code)
         """
-        return hash(self.__repr__(include_additional_data=False))
+        return hash(self.__members())
 
     def __eq__(self, other: object) -> bool:
         """
-        This method checks if two Code instances are equal by comparing their code, display, system, version and the 'depends on' attributes. It overrides the default equality operator for the Code class.
+        This method checks if two Code instances are equal by comparing their code, display, system, version and the 'depends on' attributes.
 
         Args:
         other (object): The other object to compare with the current instance.
@@ -598,28 +682,13 @@ class Code:
         To compare two Code instances for equality, use the following syntax:
         are_equal = code1 == code2
         """
-        if isinstance(other, Code):
-            equal_check = (
-                (self.code == other.code)
-                and (self.display == other.display)
-                and (self.system == other.system)
-                and (self.version == other.version)
-            )
-            if equal_check is True:
-                if self.depends_on is None and other.depends_on is None:
-                    return True
-                elif self.depends_on is not None and other.depends_on is None:
-                    return False
-                elif self.depends_on is None and other.depends_on is not None:
-                    return False
-                else:
-                    return(
-                        (self.depends_on.depends_on_property == other.depends_on.depends_on_property)
-                        and (self.depends_on.depends_on_system == other.depends_on.depends_on_system)
-                        and (self.depends_on.depends_on_value == other.depends_on.depends_on_value)
-                        and (self.depends_on.depends_on_display == other.depends_on.depends_on_display)
-                    )
-        return False
+        if not isinstance(other, Code):
+            return False
+
+        if self.__members() == other.__members():
+            return True
+        else:
+            return False
 
     # @classmethod
     # def save_many(
