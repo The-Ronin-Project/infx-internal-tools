@@ -9,9 +9,9 @@ from sqlalchemy import text
 from app.database import get_db
 # import app.concept_maps.models
 import app.value_sets.models
-from app.errors import BadRequestWithCode, NotFoundException
-from app.models.codes import Code
+import app.models.codes
 from app.terminologies.models import load_terminology_version_with_cache
+from app.errors import BadRequestWithCode, NotFoundException
 from app.concept_maps.models import ConceptMap, ConceptMapVersion, SourceConcept, Mapping
 
 LOGGER = logging.getLogger()
@@ -241,7 +241,7 @@ class ConceptMapVersionCreator:
             {"vs_version_uuid": self.new_target_value_set_version_uuid},
         )
         target_value_set_lookup = {
-            (x.code, x.display, x.system): Code(
+            (x.code, x.display, x.system): app.models.codes.Code(
                 code=x.code, display=x.display, system=x.system, version=x.version
             )
             for x in target_value_set_expansion
@@ -583,59 +583,60 @@ class ConceptMapVersionCreator:
         # Return the new concept map version UUID
         return self.new_version_uuid
 
-    def create_no_map_mappings(self, new_concept_map_version):
-        """
-        Creates mappings for source concepts where no_map=True.
-        """
-        no_map_relationship_uuid = "dca7c556-82d9-4433-8971-0b7edb9c9661"
-        no_map_target_concept_code = "No map"
-        no_map_target_concept_display = "No matching concept"
-        no_map_target_system_version_uuid = "93ec9286-17cf-4837-a4dc-218ce3015de6"
-
-        no_maps = self.conn.execute(
-            text(
-                """
-                SELECT uuid FROM concept_maps.source_concept_data  
-                WHERE no_map=true AND concept_map_version_uuid=:new_concept_map_version;
-                """
-            ),
-            {"new_concept_map_version": new_concept_map_version},
-        )
-
-        # Iterate through the source uuids that are no maps
-        for row in no_maps:
-            source_uuid = row[0]
-            source_concept = app.concept_maps.models.SourceConcept.load(source_uuid)
-            # Create a new mapping between the source concept and the Ronin_No map terminology
-            mapping = app.concept_maps.models.Mapping(
-                source=source_concept,
-                relationship=app.concept_maps.models.MappingRelationship.load_by_uuid(
-                    no_map_relationship_uuid
-                ),
-                target=Code(
-                    code=no_map_target_concept_code,
-                    display=no_map_target_concept_display,
-                    system=None,
-                    version=None,
-                    terminology_version=load_terminology_version_with_cache(
-                        no_map_target_system_version_uuid
-                    ),
-                ),
-                mapping_comments="mapped no map",
-                author=None,
-                review_status="reviewed",
-                created_date=None,
-                reviewed_date=None,
-                review_comment=None,
-                reviewed_by=None,
-            )
-
-            mapping.save()
+    # todo: remove after we've verified all no maps were copied correctly
+    # def create_no_map_mappings(self, new_concept_map_version):
+    #     """
+    #     Creates mappings for source concepts where no_map=True.
+    #     """
+    #     no_map_relationship_uuid = "dca7c556-82d9-4433-8971-0b7edb9c9661"
+    #     no_map_target_concept_code = "No map"
+    #     no_map_target_concept_display = "No matching concept"
+    #     no_map_target_system_version_uuid = "93ec9286-17cf-4837-a4dc-218ce3015de6"
+    #
+    #     no_maps = self.conn.execute(
+    #         text(
+    #             """
+    #             SELECT uuid FROM concept_maps.source_concept_data
+    #             WHERE no_map=true AND concept_map_version_uuid=:new_concept_map_version;
+    #             """
+    #         ),
+    #         {"new_concept_map_version": new_concept_map_version},
+    #     )
+    #
+    #     # Iterate through the source uuids that are no maps
+    #     for row in no_maps:
+    #         source_uuid = row[0]
+    #         source_concept = app.concept_maps.models.SourceConcept.load(source_uuid)
+    #         # Create a new mapping between the source concept and the Ronin_No map terminology
+    #         mapping = Mapping(
+    #             source=source_concept,
+    #             relationship=app.concept_maps.models.MappingRelationship.load_by_uuid(
+    #                 no_map_relationship_uuid
+    #             ),
+    #             target=Code(
+    #                 code=no_map_target_concept_code,
+    #                 display=no_map_target_concept_display,
+    #                 system=None,
+    #                 version=None,
+    #                 terminology_version=load_terminology_version_with_cache(
+    #                     no_map_target_system_version_uuid
+    #                 ),
+    #             ),
+    #             mapping_comments="mapped no map",
+    #             author=None,
+    #             review_status="reviewed",
+    #             created_date=None,
+    #             reviewed_date=None,
+    #             review_comment=None,
+    #             reviewed_by=None,
+    #         )
+    #
+    #         mapping.save()
 
     def process_no_map(
         self,
-        previous_source_concept: "app.concept_maps.models.SourceConcept",
-        new_source_concept: "app.concept_maps.models.SourceConcept",
+        previous_source_concept: SourceConcept,
+        new_source_concept: SourceConcept,
         require_review_no_maps_not_in_target: bool,
         previous_contexts_list: list,
     ):
@@ -676,24 +677,11 @@ class ConceptMapVersionCreator:
             )
             return previous_context
         return None
-        # else:
-        #     # Copy over everything w/ no changes
-        #     new_source_concept.update(
-        #         conn=self.conn,
-        #         no_map=previous_source_concept.no_map,
-        #         comments=previous_source_concept.comments,
-        #         additional_context=previous_source_concept.additional_context,
-        #         map_status=previous_source_concept.map_status,
-        #         assigned_mapper=previous_source_concept.assigned_mapper,
-        #         assigned_reviewer=previous_source_concept.assigned_reviewer,
-        #         reason_for_no_map=previous_source_concept.reason_for_no_map,
-        #         mapping_group=previous_source_concept.mapping_group,
-        #     )
 
     def process_inactive_target_mapping(
         self,
-        new_source_concept: "app.concept_maps.models.SourceConcept",
-        previous_mapping: "app.concept_maps.models.Mapping",
+        new_source_concept: SourceConcept,
+        previous_mapping: Mapping,
     ):
         """
         Processes a mapping with an inactive target.
@@ -730,9 +718,9 @@ class ConceptMapVersionCreator:
 
     def copy_mapping_exact(
         self,
-        new_source_concept: "app.concept_maps.models.SourceConcept",
-        new_target_code: Code,
-        previous_mapping: "app.concept_maps.models.Mapping",
+        new_source_concept: SourceConcept,
+        new_target_code: app.models.codes.Code,
+        previous_mapping: Mapping,
     ):
         """
         Copies a mapping exactly from the previous version to the new version.
@@ -754,12 +742,19 @@ class ConceptMapVersionCreator:
             relationship=relationship,
             target=target_code,
             mapping_comments=previous_mapping.mapping_comments,
-            author=previous_mapping.mapped_by,
+            mapped_by=previous_mapping.mapped_by,
+            mapped_date_time=previous_mapping.mapped_date_time,
             review_status=previous_mapping.review_status,
-            created_date=previous_mapping.mapped_date_time,
-            reviewed_date=previous_mapping.reviewed_date_time,
-            review_comment=previous_mapping.review_comments,
             reviewed_by=previous_mapping.reviewed_by,
+            reviewed_date_time=previous_mapping.reviewed_date_time,
+            review_comments=previous_mapping.review_comments,
+            map_program_date_time=previous_mapping.map_program_date_time,
+            map_program_version=previous_mapping.map_program_version,
+            map_program_prediction_id=previous_mapping.map_program_prediction_id,
+            map_program_confidence_score=previous_mapping.map_program_confidence_score,
+            deleted_date_time=previous_mapping.deleted_date_time,
+            deleted_by=previous_mapping.deleted_by,
+            saved_to_db=False
         )
 
         new_mapping.save()
@@ -767,7 +762,7 @@ class ConceptMapVersionCreator:
     def copy_mapping_require_review(
         self,
         new_source_concept: "app.concept_maps.models.SourceConcept",
-        new_target_concept: Code,
+        new_target_concept: app.models.codes.Code,
         previous_mapping: "app.concept_maps.models.Mapping",
     ):
         """
@@ -794,10 +789,19 @@ class ConceptMapVersionCreator:
             relationship=relationship,
             target=target_code,
             mapping_comments=previous_mapping.mapping_comments,
-            author=previous_mapping.mapped_by,
-            review_status="ready for review",
-            created_date=previous_mapping.mapped_date_time,
-            review_comment=previous_mapping.review_comments,  # todo: how to handle this
+            mapped_by=previous_mapping.mapped_by,
+            mapped_date_time=previous_mapping.mapped_date_time,
+            review_status='ready for review',
+            reviewed_by=previous_mapping.reviewed_by,
+            reviewed_date_time=previous_mapping.reviewed_date_time,
+            review_comments=previous_mapping.review_comments,
+            map_program_date_time=previous_mapping.map_program_date_time,
+            map_program_version=previous_mapping.map_program_version,
+            map_program_prediction_id=previous_mapping.map_program_prediction_id,
+            map_program_confidence_score=previous_mapping.map_program_confidence_score,
+            deleted_date_time=previous_mapping.deleted_date_time,
+            deleted_by=previous_mapping.deleted_by,
+            saved_to_db=False
         )
 
         new_mapping.save()
