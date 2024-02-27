@@ -105,12 +105,12 @@ class ConceptMapVersionCreator:
                 """
                 insert into concept_maps.source_concept_data
                 (uuid, code_schema, code_simple, code_jsonb, display, system_uuid, map_status, concept_map_version_uuid, custom_terminology_code_uuid)
-                select uuid_generate_v4(), code, display, tv.uuid, 'pending', :concept_map_version_uuid, custom_terminology_uuid from value_sets.expansion_member_data
+                select uuid_generate_v4(), code_schema, code_simple, code_jsonb, display, tv.uuid, 'pending', :concept_map_version_uuid, custom_terminology_uuid from value_sets.expansion_member_data
                 join public.terminology_versions tv
                 on tv.fhir_uri=expansion_member_data.system
                 and tv.version=expansion_member_data.version
                 where expansion_uuid in (
-                    select uuid from value_sets.expansion
+                    select uuid from value_sets.expansion_member_data
                     where vs_version_uuid=:new_source_value_set_version_uuid
                     order by timestamp desc
                     limit 1
@@ -262,6 +262,54 @@ class ConceptMapVersionCreator:
                 )
             )
 
+            # TODO: stand up code object NEW FROM ANOTHER EXAMPLE
+            source_code_schema = app.models.codes.RoninCodeSchemas(row.source_code_schema)
+            if source_code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
+                source_code_fhir_object = app.models.codes.FHIRCodeableConcept.deserialize(row.source_code_jsonb)
+                source_code_code = None
+                source_code_display = None
+            elif source_code_schema == app.models.codes.RoninCodeSchemas.code:
+                source_code_code = row.source_code_simple
+                source_code_display = row.source_display
+                source_code_fhir_object = None
+            else:
+                raise NotImplementedError("Only codeable concept and code schemas available for source concepts")
+
+            # Set up the depends on for the source concept
+            depends_on = None
+            if row.depends_on_property or row.depends_on_value_schema:
+                depends_on = app.models.codes.DependsOnData.setup_from_database_columns(
+                    depends_on_value_schema=row.depends_on_value_schema,
+                    depends_on_value_simple=row.depends_on_value_simple,
+                    depends_on_value_jsonb=row.depends_on_value_jsonb,
+                    depends_on_property=row.depends_on_property,
+                    depends_on_system=row.depends_on_system,
+                    depends_on_display=row.depends_on_display
+                )
+
+            source_code_code_object = app.models.codes.Code(
+                system=None,
+                version=None,
+                code_schema=source_code_schema,
+                code=source_code_code,
+                display=source_code_display,
+                code_object=source_code_fhir_object,
+                terminology_version=terminology[source_system],
+                # from_fhir_terminology=None,  # In the future, we can check this if needed
+                from_custom_terminology=True if row.custom_terminology_code_uuid is not None else False,
+                custom_terminology_code_uuid=row.custom_terminology_code_uuid,
+                depends_on=depends_on,
+                custom_terminology_code_id=row.source_code_id,
+                stored_custom_terminology_deduplication_hash=row.source_deduplication_hash
+            )
+
+            # Set up assigned_mapper
+            assigned_mapper = app.models.ContentCreator.load_by_uuid_from_cache(row.source_assigned_mapper)
+
+            # Set up assigned_reviewer
+            assigned_reviewer = app.models.ContentCreator.load_by_uuid_from_cache(row.source_assigned_reviewer)
+
+            # TODO: standing up code object to put inside SourceConcept (here is the SourceConcept)
             # Create the SourceConcept
             source_concept = app.concept_maps.models.SourceConcept(
                 uuid=row.source_concept_uuid,
@@ -335,13 +383,17 @@ class ConceptMapVersionCreator:
                 )
 
             lookup_key = (
-                source_concept.code,
+                # source_concept.code,  # This now has three parts
+                source_concept.code_simple,
+                source_concept.code_jsonb,
+                source_concept.code_schema,
                 source_concept.display,
-                source_concept.system.fhir_uri,
-                source_concept.depends_on_display,
-                source_concept.depends_on_property,
-                source_concept.depends_on_system,
-                source_concept.depends_on_value,
+                source_concept.system.fhir_uri,  # Datatype has changed,now it's a uuid not a varchar with a FHIR uri
+                # new_source_concept.depends_on_display if source_concept.depends_on else None,
+                source_concept.depends_on.depends_on_display if source_concept.depends_on else None,
+                source_concept.depends_on.depends_on_property if source_concept.depends_on else None,
+                source_concept.depends_on.depends_on_system if source_concept.depends_on else None,
+                source_concept.depends_on.depends_on_value if source_concept.depends_on else None,
             )
 
             if is_mapped_no_map:
@@ -551,14 +603,18 @@ class ConceptMapVersionCreator:
 
             for new_source_concept in new_source_concepts:
                 # For each new_source_concept, create a source_lookup_key tuple using the source concept's properties
+                # This is the lookup key for new source concepts, so it can compare them against the lookup_key within
+                # the load_all_sources_and_mappings method
                 source_lookup_key = (
-                    new_source_concept.code,
+                    new_source_concept.code_simple,
+                    new_source_concept.code_jsonb,
+                    new_source_concept.code_schema,
                     new_source_concept.display,
                     new_source_concept.system.fhir_uri,
-                    new_source_concept.depends_on_display,
-                    new_source_concept.depends_on_property,
-                    new_source_concept.depends_on_system,
-                    new_source_concept.depends_on_value,
+                    new_source_concept.depends_on_display if new_source_concept.depends_on else None,
+                    new_source_concept.depends_on_property if new_source_concept.depends_on else None,
+                    new_source_concept.depends_on_system if new_source_concept.depends_on else None,
+                    new_source_concept.depends_on_value if new_source_concept.depends_on else None,
                 )
 
                 if source_lookup_key not in all_previous_sources_and_mappings:
@@ -596,11 +652,11 @@ class ConceptMapVersionCreator:
                         # b. get the previous_mapping
                         mapping = previous_mapping_data["mappings"][0]
                         previous_mapping = mapping
-                        no_map_target_concept = app.concept_maps.models.Code(
+                        no_map_target_concept = app.models.codes.Code(
                             code=previous_mapping.target.code,
                             display=previous_mapping.target.display,
                             system=previous_mapping.target.system,
-                            version=no_map_version,
+                            version=no_map_version
                         )
 
                         if require_review_for_non_equivalent_relationships:
@@ -631,11 +687,12 @@ class ConceptMapVersionCreator:
                             and not require_review_no_maps_not_in_target
                         ):
                             # e. Otherwise, copy the previous mapping exactly using the copy_mapping_exact method with the new_target_code set to "No map"
-                            no_map_code = app.concept_maps.models.Code(
+                            no_map_code = app.models.codes.Code(
                                 code=no_map_target_concept_code,
                                 display=no_map_target_concept_display,
                                 system=no_map_system,
                                 version=no_map_version,
+                                saved_to_db=True
                             )
 
                             self.copy_mapping_exact(

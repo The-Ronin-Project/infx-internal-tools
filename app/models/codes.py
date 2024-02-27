@@ -271,7 +271,7 @@ class Code:
         fhir_terminology_code_uuid: Optional[uuid.UUID] = None,
         code_object: FHIRCodeableConcept = None,
         code_schema: RoninCodeSchemas = RoninCodeSchemas.code,
-        from_custom_terminology: Optional[bool] = None,
+        from_custom_terminology: Optional[bool] = None,  # We want to determine if it is from a custom terminology
         from_fhir_terminology: Optional[bool] = None,
         saved_to_db: bool = True,
     ):
@@ -906,6 +906,27 @@ class Code:
             deduplicated_list = list(set(json_list))
             unjsoned_list = [load_json_string(x) for x in deduplicated_list]
             self.additional_data[key] = unjsoned_list[:5]
+
+    @classmethod
+    def from_database_columns(
+            cls,
+            system,
+            version,
+            terminology_version,
+            code_schema,
+            code_jsonb=None,
+            code_simple=None
+    ):
+        # Determine schema and deserialize if necessary
+        if code_schema == "codeable_concept":
+            # Deserialize codeable concept if code_jsonb is provided
+            #code_object = deserialize_codeable_concept(code_jsonb) # something like this???
+            # we have different ways that we create a code_object in concept_maps/models.py
+            return cls(system, version, None, None, terminology_version, code_schema=code_schema, code_jsonb=code_jsonb)
+        elif code_schema == "code":
+            return cls(system, version, code_simple, None, terminology_version, code_schema=code_schema, code_simple=code_simple)
+        else:
+            raise ValueError("Unsupported code schema")
 
 @dataclass
 class AdditionalData:

@@ -852,6 +852,8 @@ class ConceptMapVersion:
                 )
 
             # Initialize the code for the source code
+            # Todo: example for what to do for ticket
+            ########## this stuff ###########
             source_code_schema = app.models.codes.RoninCodeSchemas(item.source_code_schema)
             if source_code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
                 source_code_fhir_object = app.models.codes.FHIRCodeableConcept.deserialize(item.source_code_jsonb)
@@ -897,7 +899,9 @@ class ConceptMapVersion:
 
             # Set up assigned_reviewer
             assigned_reviewer = ContentCreator.load_by_uuid_from_cache(item.source_assigned_reviewer)
+            ########## this stuff ###########
 
+            ###### before doing this #######  in versioning where we are also initializing the same SourceConcept object
             # Create the SourceConcept
             source_concept = SourceConcept(
                 uuid=item.source_concept_uuid,
