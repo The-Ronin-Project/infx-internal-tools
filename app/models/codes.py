@@ -242,6 +242,28 @@ class DependsOnData:
         """
         return prepare_depends_on_attributes_for_code_id(self)
 
+    def serialize(self):
+        """
+        DependsOnData.depends_on_value may be any datatype supported by the class definition,
+        such as FHIRCodeableConcept.
+
+        Returns:
+        dict: A dictionary containing the serialized attributes of the DependsOnData instance.
+        """
+        if self.depends_on_value_schema == DependsOnSchemas.CODEABLE_CONCEPT:
+            depends_on_value = self.depends_on_value.serialize()
+        else:
+            depends_on_value = self.depends_on_value
+
+        serialized = {
+            "value": depends_on_value,
+            "property": self.depends_on_property,
+            "system": self.depends_on_system,
+            "display": self.depends_on_display,
+        }
+
+        return serialized
+
     @classmethod
     def new(cls):
         pass
