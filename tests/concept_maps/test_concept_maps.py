@@ -189,10 +189,10 @@ class ConceptMapTests(unittest.TestCase):
         self.assertEqual("7bfa2bdb-6632-47c8-9bab-aad107bc31bf", str(new_mapping_source.code.terminology_version.uuid))
 
         # Verify other data from concept_maps.source_concept
-        self.assertEqual("pending", new_mapping_source.map_status)  # todo: this should be "ready for review"
+        self.assertEqual("ready for review", new_mapping_source.map_status)  # todo: this should be "ready for review"
         # self.assertEqual("3534855d-e9f5-4514-9446-5a5d7b30edb4", str(new_mapping_source.concept_map_version_uuid))
         self.assertTrue(isinstance(new_mapping_source.assigned_mapper, app.concept_maps.models.ContentCreator))
-        self.assertEqual("Automap", str(new_mapping_source.assigned_mapper.first_last_name))
+        self.assertEqual("Rey Johnson", str(new_mapping_source.assigned_mapper.first_last_name))
         self.assertIsNone(new_mapping_source.assigned_reviewer)
         self.assertFalse(new_mapping_source.no_map)
         self.assertIsNone(new_mapping_source.reason_for_no_map)
