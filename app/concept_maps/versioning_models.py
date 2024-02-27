@@ -248,6 +248,56 @@ class ConceptMapVersionCreator:
         }
         return target_value_set_lookup
 
+    def validate_inputs_for_new_version_from_previous(
+            self,
+            previous_version_uuid: uuid.UUID,
+            new_source_value_set_version_uuid: uuid.UUID,
+            new_target_value_set_version_uuid: uuid.UUID,
+    ):
+        # Data integrity checks
+        # Make sure the previous version is the latest version; we don't want to version anything but the latest ever
+        input_previous_concept_map_version = ConceptMapVersion(previous_version_uuid)
+
+        if not input_previous_concept_map_version.is_latest_version():
+            raise BadRequestWithCode(
+                "ConceptMap.create_new_from_previous.previous_version_uuid",
+                f"Input concept map version with UUID {previous_version_uuid} is not the most recent version",
+            )
+
+        # Validate the input new_source_value_set_version_uuid refers to the active version
+        source_value_set_version = app.value_sets.models.ValueSetVersion.load(new_source_value_set_version_uuid)
+        active_source_value_set_version = (
+            app.value_sets.models.ValueSet.load_most_recent_active_version(
+                source_value_set_version.value_set.uuid
+            )
+        )
+        if active_source_value_set_version is None or (
+                str(active_source_value_set_version.uuid)
+                != str(new_source_value_set_version_uuid)
+        ):
+            raise BadRequestWithCode(
+                "ConceptMap.create_new_from_previous.new_source_value_set_version_uuid",
+                f"Input source value set with UUID {new_source_value_set_version_uuid} is not the most recent active",
+            )
+
+        # Validate the input new_target_value_set_version_uuid refers to the active version
+        target_value_set_version = app.value_sets.models.ValueSetVersion.load(
+            new_target_value_set_version_uuid
+        )
+        active_target_value_set_version = (
+            app.value_sets.models.ValueSet.load_most_recent_active_version(
+                target_value_set_version.value_set.uuid
+            )
+        )
+        if active_target_value_set_version is None or (
+                str(active_target_value_set_version.uuid)
+                != str(new_target_value_set_version_uuid)
+        ):
+            raise BadRequestWithCode(
+                "ConceptMap.create_new_from_previous.new_target_value_set_version_uuid",
+                f"Input target value set with UUID {new_target_value_set_version_uuid} is not the most recent active",
+            )
+
     def new_version_from_previous(
         self,
         previous_version_uuid: uuid.UUID,
@@ -280,50 +330,11 @@ class ConceptMapVersionCreator:
             require_review_for_non_equivalent_relationships (bool): Whether to require review for non-equivalent relationships.
             require_review_no_maps_not_in_target (bool): Whether to require review for no-maps not in the target.
         """
-
-        # Data integrity checks
-        # Make sure the previous version is the latest version; we don't want to version anything but the latest ever
-        input_previous_concept_map_version = ConceptMapVersion(previous_version_uuid)
-
-        if not input_previous_concept_map_version.is_latest_version():
-            raise BadRequestWithCode(
-                "ConceptMap.create_new_from_previous.previous_version_uuid",
-                f"Input concept map version with UUID {previous_version_uuid} is not the most recent version",
-            )
-
-        # Validate the input new_source_value_set_version_uuid
-        source_value_set_version = app.value_sets.models.ValueSetVersion.load(new_source_value_set_version_uuid)
-        active_source_value_set_version = (
-            app.value_sets.models.ValueSet.load_most_recent_active_version(
-                source_value_set_version.value_set.uuid
-            )
+        self.validate_inputs_for_new_version_from_previous(
+            previous_version_uuid=previous_version_uuid,
+            new_source_value_set_version_uuid=new_source_value_set_version_uuid,
+            new_target_value_set_version_uuid=new_target_value_set_version_uuid,
         )
-        if active_source_value_set_version is None or (
-            str(active_source_value_set_version.uuid)
-            != str(new_source_value_set_version_uuid)
-        ):
-            raise BadRequestWithCode(
-                "ConceptMap.create_new_from_previous.new_source_value_set_version_uuid",
-                f"Input source value set with UUID {new_source_value_set_version_uuid} is not the most recent active",
-            )
-
-        # Validate the input new_target_value_set_version_uuid
-        target_value_set_version = app.value_sets.models.ValueSetVersion.load(
-            new_target_value_set_version_uuid
-        )
-        active_target_value_set_version = (
-            app.value_sets.models.ValueSet.load_most_recent_active_version(
-                target_value_set_version.value_set.uuid
-            )
-        )
-        if active_target_value_set_version is None or (
-            str(active_target_value_set_version.uuid)
-            != str(new_target_value_set_version_uuid)
-        ):
-            raise BadRequestWithCode(
-                "ConceptMap.create_new_from_previous.new_target_value_set_version_uuid",
-                f"Input target value set with UUID {new_target_value_set_version_uuid} is not the most recent active",
-            )
 
         # todo: dated April 2023: do we want to re-expand the value_sets being passed in? Or put some data integrity checks to ensure the expansion is already done?
 
