@@ -1590,6 +1590,17 @@ class ConceptMapVersion:
         finally:
             conn.close()
 
+    def is_latest_version(self):
+        """
+        Check if this version is the latest version of a given Concept Map
+        """
+        latest_version = self.concept_map.get_most_recent_version(active_only=False)
+
+        if self.uuid == latest_version.uuid:
+            return True
+        else:
+            return False
+
 
 @dataclass
 class MappingRelationship:

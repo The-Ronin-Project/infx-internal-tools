@@ -2,15 +2,17 @@ import datetime
 import json
 import uuid
 from typing import Dict, List
+import logging
+
 from sqlalchemy import text
 
 from app.database import get_db
-import app.concept_maps.models
+# import app.concept_maps.models
+import app.value_sets.models
 from app.errors import BadRequestWithCode, NotFoundException
 from app.models.codes import Code
 from app.terminologies.models import load_terminology_version_with_cache
-import app.value_sets.models
-import logging
+from app.concept_maps.models import ConceptMap, ConceptMapVersion, SourceConcept, Mapping
 
 LOGGER = logging.getLogger()
 
@@ -178,8 +180,8 @@ class ConceptMapVersionCreator:
         #     stored_custom_terminology_deduplication_hash=e566fc0a3fe4cd1aaee97c2685c12c37
         # ) todo: or call load by uuid to load this
 
-        mapped_no_map: Dict[app.concept_maps.models.SourceConcept, List[app.concept_maps.models.Mapping]] = dict()
-        real_mappings: Dict[app.concept_maps.models.SourceConcept, List[app.concept_maps.models.Mapping]] = dict()  # This excludes no maps
+        mapped_no_map: Dict[SourceConcept, List[Mapping]] = dict()
+        real_mappings: Dict[SourceConcept, List[Mapping]] = dict()  # This excludes no maps
 
         # 1. Load the data
         all_mappings = app.concept_maps.models.ConceptMapVersion.load_mappings(
@@ -280,29 +282,17 @@ class ConceptMapVersionCreator:
         """
 
         # Data integrity checks
-        # make sure the previous version is the latest version; we don't want to version anything but the latest ever
-        input_previous_concept_map_version = app.concept_maps.models.ConceptMapVersion(
-            previous_version_uuid
-        )
-        concept_map = app.concept_maps.models.ConceptMap(
-            input_previous_concept_map_version.concept_map.uuid
-        )
-        concept_map_most_recent_version = concept_map.get_most_recent_version(
-            active_only=False
-        )
+        # Make sure the previous version is the latest version; we don't want to version anything but the latest ever
+        input_previous_concept_map_version = ConceptMapVersion(previous_version_uuid)
 
-        if concept_map_most_recent_version is None or str(
-            concept_map_most_recent_version.uuid
-        ) != str(previous_version_uuid):
+        if not input_previous_concept_map_version.is_latest_version():
             raise BadRequestWithCode(
                 "ConceptMap.create_new_from_previous.previous_version_uuid",
                 f"Input concept map version with UUID {previous_version_uuid} is not the most recent version",
             )
 
         # Validate the input new_source_value_set_version_uuid
-        source_value_set_version = app.value_sets.models.ValueSetVersion.load(
-            new_source_value_set_version_uuid
-        )
+        source_value_set_version = app.value_sets.models.ValueSetVersion.load(new_source_value_set_version_uuid)
         active_source_value_set_version = (
             app.value_sets.models.ValueSet.load_most_recent_active_version(
                 source_value_set_version.value_set.uuid
@@ -555,7 +545,7 @@ class ConceptMapVersionCreator:
 
         except BadRequestWithCode or NotFoundException as e:
             LOGGER.info(
-                f"create_new_from_previous missing data in concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
+                f"create_new_from_previous missing data in concept map UUID {input_previous_concept_map_version.concept_map.uuid} version UUID {input_previous_concept_map_version.uuid}"
             )
             self.conn.rollback()
             raise e
@@ -563,7 +553,7 @@ class ConceptMapVersionCreator:
         except Exception as e:  # uncaught exceptions can be so costly here, that a 'bare except' is acceptable, despite PEP 8: E722
 
             LOGGER.info(
-                f"create_new_from_previous unexpected error with concept map UUID {concept_map.uuid} version UUID {concept_map_most_recent_version.uuid}"
+                f"create_new_from_previous unexpected error with concept map UUID {input_previous_concept_map_version.concept_map.uuid} version UUID {input_previous_concept_map_version.uuid}"
             )
             self.conn.rollback()
             raise e
