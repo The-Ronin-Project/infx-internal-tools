@@ -1,6 +1,7 @@
 import datetime
 import json
 import uuid
+from typing import Dict, List
 from sqlalchemy import text
 
 from app.database import get_db
@@ -158,271 +159,56 @@ class ConceptMapVersionCreator:
         Returns:
             dict: A dictionary containing source concepts and their mappings.
         """
-        mapped_no_map_criteria = {
-            "relationship_code_uuid": "dca7c556-82d9-4433-8971-0b7edb9c9661",
-            "target_concept_code": "No map",
-            "target_concept_display": "No matching concept",
-        }
+        NO_MAP_RELATIONSHIP_CODE_UUID = uuid.UUID("dca7c556-82d9-4433-8971-0b7edb9c9661")  # Narrower Than
+        NO_MAP_TARGET_CODE = "No map"
+        NO_MAP_TARGET_DISPLAY = "No matching concept"
 
-        mapped_no_map = {}
-        all_mappings = {}
+        # todo: in the future, we would like to identify if something is no map by comparing the target code
+        # todo: to this no map code. However, we're not sure all the no map data is consistent, so for now
+        # todo: we will simply check code and display
+        # no_map_code = app.models.codes.Code(
+        #     system=None,
+        #     version=None,
+        #     code="No map",
+        #     display="No matching concept",
+        #     terminology_version_uuid="None", 93ec9286-17cf-4837-a4dc-218ce3015de6
+        #     from_custom_terminology=True,
+        #     custom_terminology_code_id=e566fc0a3fe4cd1aaee97c2685c12c37,
+        #     custom_terminology_code_uuid=3c233069-c5db-48ec-8d5a-6b87b24d8797,
+        #     stored_custom_terminology_deduplication_hash=e566fc0a3fe4cd1aaee97c2685c12c37
+        # ) todo: or call load by uuid to load this
 
-        all_data = self.conn.execute(
-            text(
-                """
-                    SELECT
-                        sc.uuid AS source_concept_uuid,
-                        sc.code AS source_concept_code,
-                        sc.display AS source_concept_display,
-                        sc.system AS source_concept_system,
-                        sc.comments AS source_concept_comments,
-                        sc.additional_context AS source_concept_additional_context,
-                        sc.map_status AS source_concept_map_status,
-                        sc.concept_map_version_uuid AS source_concept_map_version_uuid,
-                        sc.assigned_mapper AS source_concept_assigned_mapper,
-                        sc.assigned_reviewer AS source_concept_assigned_reviewer,
-                        sc.no_map AS source_concept_no_map,
-                        sc.reason_for_no_map AS source_concept_reason_for_no_map,
-                        sc.mapping_group AS source_concept_mapping_group,
-                        cr.uuid AS concept_relationship_uuid,
-                        cr.target_concept_code AS target_concept_code,
-                        cr.target_concept_display AS target_concept_display,
-                        cr.mapping_comments AS mapping_comments,
-                        cr.review_status AS review_status,
-                        cr.mapped_date_time AS concept_relationship_created_date,
-                        cr.reviewed_date_time AS concept_relationship_reviewed_date,
-                        cr.mapped_by AS concept_relationship_author,
-                        cr.relationship_code_uuid AS concept_relationship_relationship_code_uuid,
-                        cr.target_concept_terminology_version_uuid AS target_concept_system_version_uuid,
-                        cr.review_comments AS concept_relationship_review_comment,
-                        cr.reviewed_by AS concept_relationship_reviewed_by,
-                        ctc.depends_on_property,
-                        ctc.depends_on_system,
-                        ctc.depends_on_value,
-                        ctc.depends_on_display
-                    FROM
-                        concept_maps.concept_relationship_data cr
-                    RIGHT JOIN
-                        concept_maps.source_concept_data sc
-                    ON
-                        sc.uuid = cr.source_concept_uuid
-                    LEFT JOIN
-                        custom_terminologies.code ctc
-                    ON
-                        sc.custom_terminology_uuid = ctc.uuid
-                    WHERE
-                        sc.concept_map_version_uuid = :concept_map_version_uuid
-                    """
-            ),
-            {"concept_map_version_uuid": concept_map_version_uuid},
+        mapped_no_map: Dict[app.concept_maps.models.SourceConcept, List[app.concept_maps.models.Mapping]] = dict()
+        real_mappings: Dict[app.concept_maps.models.SourceConcept, List[app.concept_maps.models.Mapping]] = dict()  # This excludes no maps
+
+        # 1. Load the data
+        all_mappings = app.concept_maps.models.ConceptMapVersion.load_mappings(
+            concept_map_version_uuid=concept_map_version_uuid
         )
 
-        # Create a dict that lets you lookup a source and get both it's source_concept data and mappings
-        # For example:
-        # response[
-        #     (code, display, system) = {
-        #                                 "source_concept": SourceConcept(),
-        #                                 "mappings": [Mapping(), Mapping()]
-        #                                 "mappings": [Mapping(), Mapping()]
-        #                             }
-        # ]
-
-        # Terminology Local cache
-        # todo: study why ttl_cache, or other caching strategies, did not stop repeat loads from happening
-        terminology = dict()
-
-        for row in all_data:
-            # In the database, source_concept.system is a terminology_version_uuid, but we want the FHIR URL
-            # Get the system
-            source_system = row.source_concept_system
-            if source_system is None:
-                raise BadRequestWithCode(
-                    "ConceptMap.loadAllSourcesAndMappings.missingSystem",
-                    f"Concept map version UUID: {concept_map_version_uuid.version}, source concept UUID: {row.source_concept_uuid} has no source system identified",
-                )
-
-            # Get the Terminology
-            if source_system not in terminology.keys():
-                terminology.update(
-                    {source_system: load_terminology_version_with_cache(source_system)}
-                )
-
-            is_mapped_no_map = (
-                (
-                    str(row.concept_relationship_relationship_code_uuid)
-                    == mapped_no_map_criteria["relationship_code_uuid"]
-                )
-                and (
-                    row.target_concept_code
-                    == mapped_no_map_criteria["target_concept_code"]
-                )
-                and (
-                    row.target_concept_display
-                    == mapped_no_map_criteria["target_concept_display"]
-                )
-            )
-
-            # TODO: stand up code object NEW FROM ANOTHER EXAMPLE
-            source_code_schema = app.models.codes.RoninCodeSchemas(row.source_code_schema)
-            if source_code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
-                source_code_fhir_object = app.models.codes.FHIRCodeableConcept.deserialize(row.source_code_jsonb)
-                source_code_code = None
-                source_code_display = None
-            elif source_code_schema == app.models.codes.RoninCodeSchemas.code:
-                source_code_code = row.source_code_simple
-                source_code_display = row.source_display
-                source_code_fhir_object = None
-            else:
-                raise NotImplementedError("Only codeable concept and code schemas available for source concepts")
-
-            # Set up the depends on for the source concept
-            depends_on = None
-            if row.depends_on_property or row.depends_on_value_schema:
-                depends_on = app.models.codes.DependsOnData.setup_from_database_columns(
-                    depends_on_value_schema=row.depends_on_value_schema,
-                    depends_on_value_simple=row.depends_on_value_simple,
-                    depends_on_value_jsonb=row.depends_on_value_jsonb,
-                    depends_on_property=row.depends_on_property,
-                    depends_on_system=row.depends_on_system,
-                    depends_on_display=row.depends_on_display
-                )
-
-            source_code_code_object = app.models.codes.Code(
-                system=None,
-                version=None,
-                code_schema=source_code_schema,
-                code=source_code_code,
-                display=source_code_display,
-                code_object=source_code_fhir_object,
-                terminology_version=terminology[source_system],
-                # from_fhir_terminology=None,  # In the future, we can check this if needed
-                from_custom_terminology=True if row.custom_terminology_code_uuid is not None else False,
-                custom_terminology_code_uuid=row.custom_terminology_code_uuid,
-                depends_on=depends_on,
-                custom_terminology_code_id=row.source_code_id,
-                stored_custom_terminology_deduplication_hash=row.source_deduplication_hash
-            )
-
-            # Set up assigned_mapper
-            assigned_mapper = app.models.ContentCreator.load_by_uuid_from_cache(row.source_assigned_mapper)
-
-            # Set up assigned_reviewer
-            assigned_reviewer = app.models.ContentCreator.load_by_uuid_from_cache(row.source_assigned_reviewer)
-
-            # TODO: standing up code object to put inside SourceConcept (here is the SourceConcept)
-            # Create the SourceConcept
-            source_concept = app.concept_maps.models.SourceConcept(
-                uuid=row.source_concept_uuid,
-                code=row.source_concept_code,
-                display=row.source_concept_display,
-                system=terminology.get(source_system),
-                comments=row.source_concept_comments,
-                additional_context=row.source_concept_additional_context,
-                map_status=row.source_concept_map_status,
-                assigned_mapper=row.source_concept_assigned_mapper,
-                assigned_reviewer=row.source_concept_assigned_reviewer,
-                no_map=row.source_concept_no_map,
-                reason_for_no_map=row.source_concept_reason_for_no_map,
-                mapping_group=row.source_concept_mapping_group,
-                concept_map_version_uuid=row.source_concept_map_version_uuid,
-                # Matching behavior relies on depends on data defaulting to '' instead of null
-                depends_on_system=row.depends_on_system
-                if row.depends_on_system is not None
-                else "",
-                depends_on_property=row.depends_on_property
-                if row.depends_on_property is not None
-                else "",
-                depends_on_value=row.depends_on_value
-                if row.depends_on_value is not None
-                else "",
-                depends_on_display=row.depends_on_display
-                if row.depends_on_value is not None
-                else "",
-            )
-
-            mapping = None
-
-            # Check if the row has a mapping: when debugging, target values are in 1-based positions ~15, 16, 17, 24
-            if row.target_concept_code is not None:
-                mapping_relationship = (
-                    app.concept_maps.models.MappingRelationship.load_by_uuid(
-                        row.concept_relationship_relationship_code_uuid
-                    )
-                )
-
-                # if target_concept_system_version_uuid (position ~24) is None here, that is fine: do not load when None
-                if row.target_concept_system_version_uuid is None:
-                    target_system = None
+        # 2. For each row, flag if it is a no map
+        for source_concept, mappings in all_mappings.items():
+            for mapping in mappings:
+                if mapping.target.code.code == NO_MAP_TARGET_CODE and \
+                        mapping.target.code.display == NO_MAP_TARGET_DISPLAY and \
+                        mapping.relationship.uuid == NO_MAP_RELATIONSHIP_CODE_UUID:
+                    is_mapped_no_map = True
                 else:
-                    target_system = load_terminology_version_with_cache(
-                        row.target_concept_system_version_uuid
-                    )
+                    is_mapped_no_map = False
 
-                # make the target code
-                target_code = Code(
-                    code=row.target_concept_code,
-                    display=row.target_concept_display,
-                    system=None,
-                    version=None,
-                    terminology_version=target_system,
-                )
+                if is_mapped_no_map:
+                    if source_concept not in mapped_no_map:
+                        mapped_no_map[source_concept] = [mapping]
+                    else:
+                        mapped_no_map[source_concept].append(mapping)
 
-                # make the mapping
-                mapping = app.concept_maps.models.Mapping(
-                    uuid=row.concept_relationship_uuid,
-                    source=source_concept.code_object,
-                    relationship=mapping_relationship,
-                    target=target_code,
-                    mapping_comments=row.mapping_comments,
-                    author=row.concept_relationship_author,
-                    review_status=row.review_status,
-                    created_date=row.concept_relationship_created_date,
-                    reviewed_date=row.concept_relationship_reviewed_date,
-                    review_comment=row.concept_relationship_review_comment,
-                    reviewed_by=row.concept_relationship_reviewed_by,
-                )
+                else:  # Not a mapped not map, add to regular dict
+                    if source_concept not in real_mappings:
+                        real_mappings[source_concept] = [mapping]
+                    else:
+                        real_mappings[source_concept].append(mapping)
 
-            lookup_key = (
-                # source_concept.code,  # This now has three parts
-                source_concept.code_simple,
-                source_concept.code_jsonb,
-                source_concept.code_schema,
-                source_concept.display,
-                source_concept.system.fhir_uri,  # Datatype has changed,now it's a uuid not a varchar with a FHIR uri
-                # new_source_concept.depends_on_display if source_concept.depends_on else None,
-                source_concept.depends_on.depends_on_display if source_concept.depends_on else None,
-                source_concept.depends_on.depends_on_property if source_concept.depends_on else None,
-                source_concept.depends_on.depends_on_system if source_concept.depends_on else None,
-                source_concept.depends_on.depends_on_value if source_concept.depends_on else None,
-            )
-
-            if is_mapped_no_map:
-                if lookup_key not in mapped_no_map:
-                    mapped_no_map[lookup_key] = {
-                        "source_concept": source_concept,
-                        "mappings": [],
-                    }
-
-                    if mapping is not None:
-                        mapped_no_map[lookup_key]["mappings"].append(mapping)
-
-                else:
-                    mapped_no_map[lookup_key]["mappings"].append(mapping)
-
-            else:
-                if lookup_key not in all_mappings:
-                    all_mappings[lookup_key] = {
-                        "source_concept": source_concept,
-                        "mappings": [],
-                    }
-
-                    if mapping is not None:
-                        all_mappings[lookup_key]["mappings"].append(mapping)
-
-                else:
-                    all_mappings[lookup_key]["mappings"].append(mapping)
-
-        return mapped_no_map, all_mappings
+        return mapped_no_map, real_mappings
 
     def load_all_targets(self):
         """
