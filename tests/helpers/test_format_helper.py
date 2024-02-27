@@ -306,20 +306,20 @@ class FormatHelperTests(unittest.TestCase):
 
     def test_depends_on_format_for_code_id(self):
         test_object_1 = DependsOnData(
-            depends_on_value="a",
-            depends_on_value_schema=DependsOnSchemas.STRING,
+            depends_on_value={"coding":[{"code":"656065","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.772305"},{"code":"2827","display":"Globulin","system":"urn:oid:1.2.840.114350.1.13.297.3.7.2.768282"},{"code":"10015","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.532"},{"code":"GLOB","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.1130"},{"code":"GLOBULIN","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.506"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.311"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.539"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.43"},{"code":"10834-0","display":"Globulin [Mass/volume] in Serum by calculation","system":"http://loinc.org"}],"text":"Globulin"},
+            depends_on_value_schema=DependsOnSchemas.CODEABLE_CONCEPT,
             depends_on_property="b",
             depends_on_system="c",
             depends_on_display="d",
         )
         test_object_2 = DependsOnData(
-            depends_on_value="abcd",
-            depends_on_value_schema=DependsOnSchemas.STRING,
-            depends_on_property="",
+            depends_on_value={"coding":[{"code":"656065","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.772305"},{"code":"2827","display":"Globulin","system":"urn:oid:1.2.840.114350.1.13.297.3.7.2.768282"},{"code":"10015","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.532"},{"code":"GLOB","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.1130"},{"code":"GLOBULIN","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.506"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.311"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.539"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.43"},{"code":"10834-0","display":"Globulin [Mass/volume] in Serum by calculation","system":"http://loinc.org"}],"text":"Globulin"},
+            depends_on_value_schema=DependsOnSchemas.CODEABLE_CONCEPT,
+            depends_on_property="bcd",
         )
         result_1 = prepare_depends_on_attributes_for_code_id(test_object_1)
         result_2 = prepare_depends_on_attributes_for_code_id(test_object_2)
-        self.assertEquals("abcd", result_1)
+        self.assertEquals(result_1, '{"coding":[{"code":"10834-0","display":"Globulin [Mass/volume] in Serum by calculation","system":"http://loinc.org"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.43"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.539"},{"code":"2827","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.311"},{"code":"GLOBULIN","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.506"},{"code":"GLOB","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.1130"},{"code":"10015","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.532"},{"code":"2827","display":"Globulin","system":"urn:oid:1.2.840.114350.1.13.297.3.7.2.768282"},{"code":"656065","system":"urn:oid:1.2.840.114350.1.13.297.3.7.5.737384.772305"}],"text":"Globulin"}bcd')
         self.assertEquals(result_2, result_1)
 
     def test_depends_on_format_for_code_id_migration(self):

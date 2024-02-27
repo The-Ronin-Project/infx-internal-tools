@@ -13,6 +13,8 @@ import app.models.codes
 from app.app import create_app
 from app.database import get_db
 from app.errors import BadRequestWithCode
+from app.helpers.format_helper import prepare_depends_on_attributes_for_code_id, normalized_codeable_concept_string
+from app.helpers.id_helper import generate_code_id
 from app.terminologies.views import create_code_payload_to_code_list
 
 
@@ -186,6 +188,91 @@ class CodeClassTests(unittest.TestCase):
                 terminology_version=self.example_terminology,
                 from_custom_terminology=True
             )
+
+    def test_serialize_for_code_id_code(self):
+        """
+        Tests Code.serialize_for_code_id(),
+        format_helper.py normalized_codeable_concept_string().
+        """
+        test_code = self.example_codeable_concept
+        codeable_concept = app.models.codes.Code(
+            code_schema=app.models.codes.RoninCodeSchemas.codeable_concept,
+            system=None,
+            version=None,
+            code=None,
+            display=None,
+            code_object=self.example_codeable_concept,
+            terminology_version=self.example_terminology,
+            from_custom_terminology=True,
+            custom_terminology_code_uuid=uuid.uuid4(),
+            custom_terminology_code_id="md5hash",
+            stored_custom_terminology_deduplication_hash="md5hash"
+        )
+
+        self.assertEqual("Anemia, hemolytic, acquired (CMS/HCC)", codeable_concept.display)
+        self.assertEqual(2, len(codeable_concept.code_object.coding))
+        code_for_code_id = normalized_codeable_concept_string(test_code)
+        other_code_id = test_code.serialize_for_code_id()
+        assert code_for_code_id == '{"coding":[{"code":"D59.9","system":"http://hl7.org/fhir/sid/icd-10-cm"},{"code":"4854004","system":"http://snomed.info/sct"}],"text":"Anemia, hemolytic, acquired (CMS/HCC)"}'
+        assert other_code_id == code_for_code_id
+
+    def test_deduplication_hash_code_with_depends_on(self):
+        """
+        Tests Code.serialize_for_code_id(), Code.deduplication_hash,
+        DependsOnData.serialize_for_code_id(),
+        format_helper.py prepare_depends_on_attributes_for_code_id(),
+        format_helper.py normalized_codeable_concept_string().
+        """
+        test_code = self.example_codeable_concept
+        deduplication_hash = "9489980ae392b35d1ff88288267dcc93"
+        test_depends_on_value = """
+        {
+          "text": "FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - AGE AT DIAGNOSIS",
+          "coding": [
+            {
+              "code": "EPIC#31000073350",
+              "display": "age at diagnosis",
+              "system": "urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"
+            }
+          ]
+        }
+        """
+        new_depends_on = app.models.codes.DependsOnData.setup_from_database_columns(
+            depends_on_property="Observation.code",
+            depends_on_value_schema=app.models.codes.DependsOnSchemas.CODEABLE_CONCEPT.value,
+            depends_on_value_simple=None,
+            depends_on_value_jsonb=test_depends_on_value,
+            depends_on_system=None,
+            depends_on_display=None
+        )
+        codeable_concept = app.models.codes.Code(
+            code_schema=app.models.codes.RoninCodeSchemas.codeable_concept,
+            system=None,
+            version=None,
+            code=None,
+            display=None,
+            code_object=self.example_codeable_concept,
+            terminology_version=self.example_terminology,
+            depends_on=new_depends_on,
+            from_custom_terminology=True,
+            custom_terminology_code_uuid=uuid.uuid4(),
+            custom_terminology_code_id=deduplication_hash,
+            # specifically omit this so that it will be recalculated for the test
+            # stored_custom_terminology_deduplication_hash=deduplication_hash
+        )
+        self.assertEqual("Anemia, hemolytic, acquired (CMS/HCC)", codeable_concept.display)
+        self.assertEqual(2, len(codeable_concept.code_object.coding))
+        code_for_code_id_1 = normalized_codeable_concept_string(test_code)
+        code_for_code_id_2 = test_code.serialize_for_code_id()
+        assert code_for_code_id_1 == '{"coding":[{"code":"D59.9","system":"http://hl7.org/fhir/sid/icd-10-cm"},{"code":"4854004","system":"http://snomed.info/sct"}],"text":"Anemia, hemolytic, acquired (CMS/HCC)"}'
+        assert code_for_code_id_2 == code_for_code_id_1
+        depends_on_for_code_id_1 = prepare_depends_on_attributes_for_code_id(new_depends_on)
+        assert depends_on_for_code_id_1 == '{"coding":[{"code":"EPIC#31000073350","display":"age at diagnosis","system":"urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"}],"text":"FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - AGE AT DIAGNOSIS"}Observation.code'
+        depends_on_for_code_id_2 = new_depends_on.serialize_for_code_id()
+        assert depends_on_for_code_id_2 == depends_on_for_code_id_1
+        code_id = generate_code_id(code_for_code_id_1, codeable_concept.display, depends_on_for_code_id_1)
+        assert codeable_concept.deduplication_hash == deduplication_hash
+        assert deduplication_hash == code_id
 
 
 class CodeAPITests(unittest.TestCase):

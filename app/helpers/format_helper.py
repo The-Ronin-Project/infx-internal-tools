@@ -182,10 +182,14 @@ def prepare_depends_on_for_storage(depends_on: list = None) -> (str, list):
 def prepare_depends_on_attributes_for_code_id(input_object: 'app.models.codes.DependsOnData') -> str:
     """
     # todo: NOT USED during v5 migration. Fast-follow-on: replaces prepare_depends_on_attributes_for_code_id_migration()
-    Low-level helper to correctly combine the 4 DependsOnData string values into one string as input for a code_id.
+    Low-level helper to correctly combine DependsOnData values into one string as input for a code_id.
     """
+    if app.models.codes.DependsOnSchemas.CODEABLE_CONCEPT in input_object.depends_on_value_schema:
+        value_for_code_id = normalized_codeable_concept_string(input_object.depends_on_value)
+    else:
+        value_for_code_id = input_object.depends_on_value,
     return prepare_depends_on_attributes_for_code_id_migration(
-        input_object.depends_on_value,
+        value_for_code_id,
         input_object.depends_on_property,
         input_object.depends_on_system,
         input_object.depends_on_display,
@@ -692,6 +696,11 @@ def prepare_object_source_code_for_storage(code_object) -> (str, str, str, str):
 
 def normalized_codeable_concept_string(code_object) -> str:
     """
+    Top-level, standard function.
+
+    Returns a serialized RCDM CodeableConcept normalized for: JSON format, JSON key order, coding list member order.
+    If the CodeableConcept is paired with a display value, use normalized_codeable_concept_and_display() instead.
+
     @raise BadDataError if the value is not a CodeableConcept
     @return (str) serialized RCDM CodeableConcept normalized for: JSON format, JSON key order, coding list member order
     """

@@ -10,10 +10,11 @@ from sqlalchemy import text
 
 import app.terminologies.models
 from app.database import get_db
-from app.errors import BadRequestWithCode, NotFoundException
+from app.errors import NotFoundException
 import app.helpers.id_helper
 from app.helpers.data_helper import serialize_json_object, load_json_string
-from app.helpers.format_helper import normalized_codeable_concept_string, normalized_data_dictionary_string
+from app.helpers.format_helper import normalized_codeable_concept_string, normalized_data_dictionary_string, \
+    prepare_depends_on_attributes_for_code_id
 
 
 class RoninCodeSchemas(Enum):
@@ -75,6 +76,15 @@ class FHIRCoding:
             serialized["version"] = self.version
         return serialized
 
+    def __hash__(self):
+        return hash(
+            (
+                self.code,
+                self.display,
+                self.system,
+                self.version,
+            )
+        )
 
 @dataclass
 class FHIRCodeableConcept:
@@ -119,9 +129,7 @@ class FHIRCodeableConcept:
         """
         Any calculations for code_id or deduplication_hash MUST use this method and NOT the general serialize method
         """
-        return normalized_codeable_concept_string(
-            self.serialize()
-        )
+        return normalized_codeable_concept_string(self)
 
     def serialize(self):
         """
@@ -133,6 +141,14 @@ class FHIRCodeableConcept:
         if self.coding:
             serialized["coding"] = [coding.serialize() for coding in self.coding]
         return serialized
+
+    def __hash__(self):
+        return hash(
+            (
+                self.text,
+                "".join(str(c) for c in [coding.serialize() for coding in self.coding])
+            )
+        )
 
 
 class DependsOnSchemas(Enum):
@@ -220,6 +236,11 @@ class DependsOnData:
             saved_to_db=True  # since we are explicitly loading from database columns
         )
 
+    def serialize_for_code_id(self):
+        """
+        Any calculations for code_id or deduplication_hash MUST use this method and NOT the general serialize method
+        """
+        return prepare_depends_on_attributes_for_code_id(self)
 
     @classmethod
     def new(cls):
@@ -228,10 +249,21 @@ class DependsOnData:
     def save_to_db(self):
         pass
 
+    def __hash__(self):
+        return hash(
+            (
+                self.depends_on_property,
+                self.depends_on_value_schema,
+                self.depends_on_value,
+                self.depends_on_system,
+                self.depends_on_display,
+            )
+        )
+
 
 @dataclass
 class AdditionalData:
-    # todo: why is this a separate class just for a dict?
+    # todo: why a separate class just for a dict? allow for future INFX use cases that need more/better structuring
     """
     A simple data class to hold additional data for a code or concept which needs to be mapped.
     Internal use only, not part of FHIR or Ronin Common Data Model.
@@ -649,10 +681,7 @@ class Code:
         deduplication_hash = app.helpers.id_helper.generate_code_id(
             code_string=code_string,
             display_string=self.display,
-            depends_on_value_string=self.depends_on.depends_on_value_string if self.depends_on else None,
-            depends_on_property=self.depends_on.depends_on_property if self.depends_on else None,
-            depends_on_system=self.depends_on.depends_on_system if self.depends_on else None,
-            depends_on_display=self.depends_on.depends_on_display if self.depends_on else None
+            depends_on_value_string=self.depends_on.serialize_for_code_id() if self.depends_on else None
         )
 
         if self._stored_custom_terminology_deduplication_hash:
@@ -824,9 +853,10 @@ class Code:
         )
 
     def serialize(self, with_system_and_version=True):
-        # todo: this will need to support multiple types (string, code, CodeableConcept)
         """
         This method serializes the Code instance into a dictionary format, including the system, version, code, and display attributes. It provides options to include or exclude the system and version attributes and to include the system_name attribute.
+
+        Code.code may be any datatype supported by the class definition, such as FHIRCodeableConcept or FHIRCode
 
         Args:
         with_system_and_version (bool, optional): Whether to include the system and version attributes in the serialized output. Defaults to True.
@@ -836,13 +866,17 @@ class Code:
 
         Usage:
         To serialize a Code instance, use the following syntax:
-        serialized_code = code.serialize(with_system_and_version=True, with_system_name=False)
+        serialized_code = code.serialize(with_system_and_version=True)
         """
+        if self.code_schema == RoninCodeSchemas.codeable_concept:
+            code_value = self.code_object.serialize()
+        else:
+            code_value = self.code
 
         serialized = {
             "system": self.system,
             "version": self.version,
-            "code": self.code,
+            "code": code_value,
             "display": self.display,
         }
 

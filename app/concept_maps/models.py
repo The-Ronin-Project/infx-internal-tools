@@ -965,10 +965,13 @@ class ConceptMapVersion:
             SELECT 
                 scd.*, 
                 crd.*, 
-                rc.display as relationship_display  
+                cdo.*, 
+                rc.display as relationship_display    
             FROM concept_maps.source_concept_data scd  
             LEFT JOIN concept_maps.concept_relationship_data crd 
                 ON scd.uuid = crd.source_concept_uuid  
+            LEFT JOIN custom_terminologies.code_depends_on cdo
+                on scd.custom_terminology_code_uuid = cdo.code_uuid
             LEFT JOIN concept_maps.relationship_codes rc 
                 ON rc.uuid = crd.relationship_code_uuid  
             WHERE scd.concept_map_version_uuid = :concept_map_version_uuid
@@ -1766,10 +1769,7 @@ class SourceConcept:
                 self.code,
                 self.display,
                 self.system,
-                self.code.depends_on.depends_on_property if self.code.depends_on else None,
-                self.code.depends_on.depends_on_system if self.code.depends_on else None,
-                self.code.depends_on.depends_on_value if self.code.depends_on else None,
-                self.code.depends_on.depends_on_display if self.code.depends_on else None,
+                self.code.depends_on,
             )
         )
 

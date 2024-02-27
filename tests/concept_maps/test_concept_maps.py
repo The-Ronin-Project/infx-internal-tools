@@ -4,6 +4,8 @@ import app.app
 from app.database import get_db
 import app.concept_maps.models
 import app.models.codes
+from app.enum.concept_maps_for_content import ConceptMapsForContent
+from app.value_sets.views import get_most_recent_version
 
 
 class ContentCreatorTests(unittest.TestCase):
@@ -224,3 +226,11 @@ class ConceptMapTests(unittest.TestCase):
         self.assertIsNone(new_mapping.deleted_date_time)
         self.assertIsNone(new_mapping.deleted_by)
 
+    def test_get_concept_map_draft(self):
+        """
+        Show that when we get a "pending" (draft) concept map, it has all the expected data including depends_on
+        """
+        concept_map = app.concept_maps.models.ConceptMap(ConceptMapsForContent.MDA_OBSERVATION.value)
+        cm_version = concept_map.get_most_recent_version(active_only=False, load_mappings=False, pending_only=True)
+        (data, column_names) = cm_version.mapping_draft()
+        assert ", ".join(column_names._keys) == "uuid, code_schema, code_simple, code_jsonb, display, system_uuid, comments, map_status, concept_map_version_uuid, assigned_mapper, assigned_reviewer, no_map, reason_for_no_map, mapping_group, previous_version_context, custom_terminology_code_uuid, save_for_discussion, uuid, mapping_id, deduplication_hash, source_concept_uuid, target_concept_code, target_concept_display, target_concept_terminology_version_uuid, mapping_comments, mapped_date_time, mapped_by, relationship_code_uuid, review_status, reviewed_by, reviewed_date_time, review_comments, map_program_date_time, map_program_version, map_program_prediction_id, map_program_confidence_score, deleted_date_time, deleted_by, uuid, sequence, depends_on_property, depends_on_system, depends_on_display, depends_on_value_schema, depends_on_value_simple, depends_on_value_jsonb, code_uuid, relationship_display"

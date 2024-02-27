@@ -59,7 +59,9 @@ class SurveyExporter:
 
     def load_symptoms(self):
         """Load data from symptom table"""
-        symptom_query = self.conn.execute("select * from surveys.symptom")
+        symptom_query = self.conn.execute(
+            text("select * from surveys.symptom")
+        )
         symptoms = [x for x in symptom_query]
 
         self.symptom_uuid_to_symptom_map = {

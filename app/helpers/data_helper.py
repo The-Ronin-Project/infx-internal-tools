@@ -70,10 +70,15 @@ def serialize_json_object(json_object) -> str:
 
     @return (str) - a serialized JSON string, or "" (an empty string) if the input json_object was None
     """
+    from app.models.codes import FHIRCodeableConcept
     # Avoid returning the str value "null" which is what json.dumps() returns for a None json_object
     if json_object is None:
         return ""
-    return json.dumps(json_object, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    if type(json_object) is FHIRCodeableConcept:
+        input = json_object.serialize()
+    else:
+        input = json_object
+    return json.dumps(input, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
 def order_object_list(input_object_list) -> list:
@@ -274,16 +279,22 @@ def normalized_source_codeable_concept(input_object):
     shape the CodeableConcept attributes as needed to conform to the RCDM profile - remove the unsupported attributes -
     require required attributes - calls order_object_list() on "coding" list to ensure members are in consistent order
     """
+    from app.models.codes import FHIRCodeableConcept
     if input_object is None:
         return None
-    coding_list = input_object.get("coding")
-    text_value = input_object.get("text")
-    if coding_list is None and text_value is None:
+    if type(input_object) is FHIRCodeableConcept:
+        input = input_object.serialize()
+    else:
+        input = input_object
+
+    if "coding" not in input and "text" not in input:
         raise BadDataError(
             code="CodeableConcept.schema",
             description="CodeableConcept was expected, but the object has no coding or text attribute",
             errors="Invalid CodeableConcept"
         )
+    coding_list = input.get("coding")
+    text_value = input.get("text")
     if coding_list is not None:
         for coding in coding_list:
             if coding.get("id") is not None:
