@@ -972,6 +972,8 @@ class ConceptMapVersion:
             else:
                 mappings_to_return[source_concept] = [mapping]
 
+        return mappings_to_return
+
     def mapping_draft(self):
         """
         This function runs a query to retrieve concepts for an in-progress concept map. This should include everything,
