@@ -1793,7 +1793,7 @@ class SourceConcept:
             self.code,
         )
 
-    def __eq__(self, other:'SourceConcept'):
+    def __eq__(self, other: 'SourceConcept'):
         """
         This __eq__ function is deliberately version-independent.
 
