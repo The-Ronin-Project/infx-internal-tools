@@ -746,11 +746,22 @@ class ConceptMapVersion:
                 )
 
     def load_reviewed_mappings(self):
+        self.mappings = self.load_mappings(
+            concept_map_version_uuid=self.uuid,
+            filter_review_status="reviewed"
+        )
+
+    @classmethod
+    def load_mappings(
+            cls,
+            concept_map_version_uuid,
+            filter_review_status=None
+    ):
         """
         Loads mappings between source and target concepts for a specific version of a concept map.
-        This method queries the database to retrieve all reviewed mappings associated with the
-        concept map version, creates SourceConcept and Mapping objects, and stores them in the
-        self.mappings dictionary.
+        This method queries the database to retrieve all sources and mappings associated with the
+        concept map version, creates SourceConcept and Mapping objects, and returns them as a dictionary
+        with the source as the lookup key and a list of targets as the value.
 
         Raises:
             BadRequestWithCode: If a source concept in the concept map version is missing a source system.
@@ -823,18 +834,25 @@ class ConceptMapVersion:
                 on tv_target.uuid = crd.target_concept_terminology_version_uuid
             where 
                 scd.concept_map_version_uuid=:concept_map_version_uuid
-                and crd.review_status = 'reviewed'
             """
+
+        query_parameters = {
+            "concept_map_version_uuid": concept_map_version_uuid,
+        }
+
+        if filter_review_status:
+            query += " and crd.review_status = :review_status"
+            query_parameters["review_status"] = filter_review_status
 
         results = conn.execute(
             text(query),
-            {
-                "concept_map_version_uuid": self.uuid,
-            },
+            query_parameters,
         )
 
         # todo: consider changing from this self-made cache to a regular one
         terminology_cache = dict()
+
+        mappings_to_return = dict()
 
         for item in results:
             # Get the system
@@ -842,7 +860,7 @@ class ConceptMapVersion:
             if source_system is None:
                 raise BadRequestWithCode(
                     "ConceptMap.loadMappings.missingSystem",
-                    f"Concept map UUID: {self.concept_map.uuid} version {self.version} has mapping with no source system identified",
+                    f"Concept Map Version UUID: {concept_map_version_uuid} has mapping with no source system identified",
                 )
 
             # Get the Terminology
@@ -852,8 +870,6 @@ class ConceptMapVersion:
                 )
 
             # Initialize the code for the source code
-            # Todo: example for what to do for ticket
-            ########## this stuff ###########
             source_code_schema = app.models.codes.RoninCodeSchemas(item.source_code_schema)
             if source_code_schema == app.models.codes.RoninCodeSchemas.codeable_concept:
                 source_code_fhir_object = app.models.codes.FHIRCodeableConcept.deserialize(item.source_code_jsonb)
@@ -885,11 +901,11 @@ class ConceptMapVersion:
                 code=source_code_code,
                 display=source_code_display,
                 code_object=source_code_fhir_object,
+                depends_on=depends_on,
                 terminology_version=terminology_cache[source_system],
                 # from_fhir_terminology=None,  # In the future, we can check this if needed
                 from_custom_terminology=True if item.custom_terminology_code_uuid is not None else False,
                 custom_terminology_code_uuid=item.custom_terminology_code_uuid,
-                depends_on=depends_on,
                 custom_terminology_code_id=item.source_code_id,
                 stored_custom_terminology_deduplication_hash=item.source_deduplication_hash
             )
@@ -899,9 +915,7 @@ class ConceptMapVersion:
 
             # Set up assigned_reviewer
             assigned_reviewer = ContentCreator.load_by_uuid_from_cache(item.source_assigned_reviewer)
-            ########## this stuff ###########
 
-            ###### before doing this #######  in versioning where we are also initializing the same SourceConcept object
             # Create the SourceConcept
             source_concept = SourceConcept(
                 uuid=item.source_concept_uuid,
@@ -914,7 +928,7 @@ class ConceptMapVersion:
                 reason_for_no_map=item.reason_for_no_map,
                 mapping_group=item.source_mapping_group,
                 previous_version_context=item.source_previous_version_context,
-                concept_map_version_uuid=self.uuid,
+                concept_map_version_uuid=concept_map_version_uuid,
             )
             target_code = app.models.codes.Code(  # We only map to standards of code type
                 system=item.target_fhir_uri,
@@ -953,10 +967,10 @@ class ConceptMapVersion:
                 deleted_by=deleted_by,
                 deleted_date_time=item.deleted_date_time
             )
-            if source_concept in self.mappings:
-                self.mappings[source_concept].append(mapping)
+            if source_concept in mappings_to_return:
+                mappings_to_return[source_concept].append(mapping)
             else:
-                self.mappings[source_concept] = [mapping]
+                mappings_to_return[source_concept] = [mapping]
 
     def mapping_draft(self):
         """
@@ -1763,18 +1777,51 @@ class SourceConcept:
     #         from_custom_terminology=True
     #     )
 
+    def __members(self):
+        """
+        This __members function is deliberately version-independent.
+
+        Therefore, it does NOT check the equality of any metadata, just the
+        equality of the data within self.code
+
+        If two SourceCode objects are compared across different versions, containing the
+        same underlying code which needs to be mapped, they will return the same hash
+        and evaluate as equivalent. This behavior is **critical** for the functioning of the
+        versioning system.
+        """
+        return (
+            self.code,
+        )
+
+    def __eq__(self, other:'SourceConcept'):
+        """
+        This __eq__ function is deliberately version-independent.
+
+        Therefore, it does NOT check to see if self.uuid is equal to other.uuid
+
+        If two SourceCode objects are compared across different versions, containing the
+        same underlying code which needs to be mapped, they will return the same hash
+        and evaluate as equivalent. This behavior is **critical** for the functioning of the
+        versioning system.
+        """
+        if not isinstance(other, SourceConcept):
+            return False
+        if self.__members() == other.__members():
+            return True
+        else:
+            return False
+
     def __hash__(self):
+        """
+        This hash is deliberately version-independent.
+
+        If two SourceCode objects are compared across different versions, containing the
+        same underlying code which needs to be mapped, they will return the same hash
+        and evaluate as equivalent. This behavior is **critical** for the functioning of the
+        versioning system.
+        """
         return hash(
-            (
-                self.uuid,
-                self.code,
-                self.display,
-                self.system,
-                self.code.depends_on.depends_on_property if self.code.depends_on else None,
-                self.code.depends_on.depends_on_system if self.code.depends_on else None,
-                self.code.depends_on.depends_on_value if self.code.depends_on else None,
-                self.code.depends_on.depends_on_display if self.code.depends_on else None,
-            )
+            self.__members()
         )
 
     @classmethod
