@@ -45,10 +45,28 @@ def load_json_string(input_json_string: str):
     """
     The standard JSON deserialization function.
 
-    json.loads() options:
-    No options explicitly provided at present - uses defaults - this is a deliberate decision - defaults are documented.
+    Do not use json.loads() by itself. This function accommodates edge cases in our data and then calls json.loads().
     """
-    return json.loads(input_json_string)
+    output_object = None
+    try:
+        # temporary fix to '' issue while outputting JSON samples for internal review
+        if "''" in input_json_string:
+            input_json_string = input_json_string.replace("''", "'")
+
+        # normal case
+        output_object = json.loads(input_json_string)
+    except json.decoder.JSONDecodeError as e:
+        if "Invalid \escape" in str(e):
+            try:
+                # the rare str formation "micr.:leukocytes present" can be mistaken for SQL binding syntax
+                output_object = json.loads(unescape_sql_jsonb_value(input_json_string))
+            except Exception as e:
+                raise e
+        elif "Expecting value" in str(e):
+            raise ValueError("A code string value was input where a CodeableConcept object value was expected.")
+    except Exception as e:
+        raise e
+    return output_object
 
 
 def serialize_json_object(json_object) -> str:
@@ -221,6 +239,14 @@ def escape_sql_input_value(input_string: str) -> str:
     # double quotes, but unwrapped values, e.g. boolean, had sqlalchemy formatting errors. For CodeableConcept this
     # was resolved by RCDM not using userSelected, a boolean. Adding Ratio etc, we should beware numeric and boolean.
     # The split('".') used to find colon characters in content could also be handy to find cases like {"mine":true}
+
+
+def unescape_sql_jsonb_value(input_string: str) -> str:
+    """
+    Handle an edge case around SQL binding, example is the JSON Binary value {"text":"Urine micr.:leukocytes present"}
+    is being read from SELECT as a str {"text":"Urine micr.\:leukocytes present"} which breaks JSON Decode of the str.
+    """
+    return input_string.replace(".\\:", ".:")
 
 
 def normalized_source_ratio(input_object):

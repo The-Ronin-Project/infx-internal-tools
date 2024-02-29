@@ -1,0 +1,850 @@
+{
+  "_description": {
+    "extension": [
+      {
+        "url": "http://projectronin.io/fhir/StructureDefinition/extension/versionDescription",
+        "valueMarkdown": "Remove duplicates"
+      }
+    ]
+  },
+  "date": "2024-02-09T19:28:35.394999+00:00",
+  "description": "MDAOC condition, Code, for patient problems and health concerns normalized to SNOMED CT",
+  "experimental": false,
+  "extension": [
+    {
+      "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema",
+      "valueString": "5.0.0"
+    }
+  ],
+  "group": [
+    {
+      "element": [
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "0caefc8788851d01c7b49406aef4e897",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "I23.0",
+                      "display": "Other sequelae of myocardial infarction, not elsewhere classified",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    },
+                    {
+                      "code": "429.79",
+                      "display": "Other sequelae of myocardial infarction, not elsewhere classified",
+                      "system": "http://hl7.org/fhir/sid/icd-9-cm/diagnosis"
+                    }
+                  ],
+                  "text": "Other sequelae of myocardial infarction, not elsewhere classified"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "No map",
+              "comment": "Not in target code system source-is-narrower-than-target",
+              "display": "No matching concept",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:20:36.277714+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "007cef3d16a340be4eaa10039ed17b71"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "ee1c36edae7f9df991f25183b17391aa",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "Z86.001",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    }
+                  ],
+                  "text": "Personal history of cervical intraepithelial neoplasia III (CIN III)"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "No map",
+              "comment": "Not in target code system source-is-narrower-than-target",
+              "display": "No matching concept",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:20:42.881782+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "00ce36d0897ab47c7b534f8c01510a4c"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "e7a4b7700324dd7cc1f1d50b921e7300",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "J70.9",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    }
+                  ],
+                  "text": "Respiratory condition due to external agent"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "No map",
+              "comment": "Not in target code system source-is-narrower-than-target",
+              "display": "No matching concept",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:19:41.736355+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "013f7b56e5fe10ebc49421756a3335a9"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "cc965e26a1483fe448ccb78e5e9d3687",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "C38.2",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    }
+                  ],
+                  "text": "Small cell carcinoma, NOS of posterior mediastinum"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "No map",
+              "comment": "Not in target code system source-is-narrower-than-target",
+              "display": "No matching concept",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:20:33.198547+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "020ca4a63990a17b396c20d046fede3c"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "235440c07999d1cae0837c609f9950bf",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "410794002",
+                      "system": "http://snomed.info/sct"
+                    },
+                    {
+                      "code": "M06.1",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    }
+                  ],
+                  "text": "Still's disease with juvenile onset and/or adult onset"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "No map",
+              "comment": "Not in target code system source-is-narrower-than-target",
+              "display": "No matching concept",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:18:41.645030+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "77bf9b73d097a3eee81a7da02d423c24"
+            }
+          ]
+        }
+      ],
+      "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ConditionCode",
+      "sourceVersion": "12",
+      "target": "http://projectronin.io/fhir/CodeSystem/agnostic/nomap",
+      "targetVersion": "1.0"
+    },
+    {
+      "element": [
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "595d0026e287a4d539f82dba7995f350",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "031.8",
+                      "display": "Infection due to Mycobacterium mucogenicum",
+                      "system": "http://hl7.org/fhir/sid/icd-9-cm/diagnosis"
+                    },
+                    {
+                      "code": "373045009",
+                      "display": "Infection caused by Mycobacterium mucogenicum (disorder)",
+                      "system": "http://snomed.info/sct"
+                    },
+                    {
+                      "code": "A31.8",
+                      "display": "Infection due to Mycobacterium mucogenicum",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    }
+                  ],
+                  "text": "Infection due to Mycobacterium mucogenicum"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "373045009",
+              "display": "Infection caused by Mycobacterium mucogenicum (disorder)",
+              "equivalence": "equivalent",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "Automap"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:21:01.899436+00:00"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/version",
+                          "valueString": "c504f599-6bf6-4865-8220-bb199e3d1809|12|mapper|Automap"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/predictionId",
+                          "valueString": "c504f599-6bf6-4865-8220-bb199e3d1809|0000c0d3f6630131379ac97e463ad4a1|mapper|Automap"
+                        }
+                      ]
+                    },
+                    "name": "algorithm",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "0000c0d3f6630131379ac97e463ad4a1"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "9999b7141797e07947f65b6970e82028",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "Z13.89",
+                      "display": "Encounter for screening for other disorder",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    },
+                    {
+                      "code": "V77.5",
+                      "display": "Encounter for screening for other disorder",
+                      "system": "http://hl7.org/fhir/sid/icd-9-cm/diagnosis"
+                    }
+                  ],
+                  "text": "Encounter for screening for other disorder"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "312851005",
+              "comment": "source-is-narrower-than-target",
+              "display": "Screening for disorder (procedure)",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:18:24.850193+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "00062160dad9f354bdb8e7b52126b07a"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "c16f155693e5a16c36c4108bbb7cf8d6",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "745.8",
+                      "display": "Sinus venosus atrial septal defect",
+                      "system": "http://hl7.org/fhir/sid/icd-9-cm/diagnosis"
+                    },
+                    {
+                      "code": "Q21.1",
+                      "display": "Sinus venosus atrial septal defect",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    },
+                    {
+                      "code": "95268002",
+                      "display": "Sinus venosus atrial septal defect (disorder)",
+                      "system": "http://snomed.info/sct"
+                    }
+                  ],
+                  "text": "Sinus venosus atrial septal defect"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "95268002",
+              "display": "Sinus venosus atrial septal defect (disorder)",
+              "equivalence": "equivalent",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "Automap"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:18:33.376213+00:00"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/version",
+                          "valueString": "c504f599-6bf6-4865-8220-bb199e3d1809|12|mapper|Automap"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/predictionId",
+                          "valueString": "c504f599-6bf6-4865-8220-bb199e3d1809|0006daf4039ef7957aa2b8f2c044e719|mapper|Automap"
+                        }
+                      ]
+                    },
+                    "name": "algorithm",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "0006daf4039ef7957aa2b8f2c044e719"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "192f6670c308a5d989e170cd1a422804",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "B02.9",
+                      "display": "Zoster without complication, not otherwise specified",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    },
+                    {
+                      "code": "053.9",
+                      "display": "Zoster without complication, not otherwise specified",
+                      "system": "http://hl7.org/fhir/sid/icd-9-cm/diagnosis"
+                    }
+                  ],
+                  "text": "Zoster without complication, not otherwise specified"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "111859007",
+              "display": "Herpes zoster without complication (disorder)",
+              "equivalence": "equivalent",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:21:22.770449+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "000728d1867b696ba3f2794df4ecde1a"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "efa9a69b61c238e061fb3ae91b107889",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "37373007",
+                      "system": "http://snomed.info/sct"
+                    },
+                    {
+                      "code": "Q43.0",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    }
+                  ],
+                  "text": "Meckel's diverticulum"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "37373007",
+              "display": "Meckel's diverticulum (disorder)",
+              "equivalence": "equivalent",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "Automap"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:19:27.762510+00:00"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/version",
+                          "valueString": "c504f599-6bf6-4865-8220-bb199e3d1809|12|mapper|Automap"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/predictionId",
+                          "valueString": "c504f599-6bf6-4865-8220-bb199e3d1809|003a5074e83fd4475e8661d9d46f4531|mapper|Automap"
+                        }
+                      ]
+                    },
+                    "name": "algorithm",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "003a5074e83fd4475e8661d9d46f4531"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "b496a547926966a23ee6d497e5da6c68",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "555.9",
+                      "display": "Crohn's disease without complication, not otherwise specified",
+                      "system": "http://hl7.org/fhir/sid/icd-9-cm/diagnosis"
+                    },
+                    {
+                      "code": "K50.90",
+                      "display": "Crohn's disease without complication, not otherwise specified",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    }
+                  ],
+                  "text": "Crohn's disease without complication, not otherwise specified"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "34000006",
+              "display": "Crohn's disease (disorder)",
+              "equivalence": "equivalent",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:19:24.181387+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "038d3955bdfcadfceaf8379c0de03669"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "6ed0f3fc1f61dd8be1f7009c7de77231",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "202.80",
+                      "display": "Follicular non-Hodgkin's mixed small cleaved and large cell lymphoma",
+                      "system": "http://hl7.org/fhir/sid/icd-9-cm/diagnosis"
+                    },
+                    {
+                      "code": "C85.80",
+                      "display": "Follicular non-Hodgkin's mixed small cleaved and large cell lymphoma",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    },
+                    {
+                      "code": "188672005",
+                      "display": "Follicular non-Hodgkin's mixed small cleaved and large cell lymphoma (disorder)",
+                      "system": "http://snomed.info/sct"
+                    }
+                  ],
+                  "text": "Follicular non-Hodgkin's mixed small cleaved and large cell lymphoma"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "188672005",
+              "display": "Follicular non-Hodgkin's mixed small cleaved and large cell lymphoma (disorder)",
+              "equivalence": "equivalent",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "Automap"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:18:30.521920+00:00"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/version",
+                          "valueString": "c504f599-6bf6-4865-8220-bb199e3d1809|12|mapper|Automap"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/predictionId",
+                          "valueString": "c504f599-6bf6-4865-8220-bb199e3d1809|041ce4a233e9a80098dca3715fd30ed6|mapper|Automap"
+                        }
+                      ]
+                    },
+                    "name": "algorithm",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "041ce4a233e9a80098dca3715fd30ed6"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "8c8a2d6c93cf4135c3d37a20b14280f1",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "271350002",
+                      "display": "Urine microscopy: leukocytes present (finding)",
+                      "system": "http://snomed.info/sct"
+                    },
+                    {
+                      "code": "791.7",
+                      "display": "Urine micr.:leukocytes present",
+                      "system": "http://hl7.org/fhir/sid/icd-9-cm/diagnosis"
+                    },
+                    {
+                      "code": "R82.81",
+                      "display": "Urine micr.:leukocytes present",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    }
+                  ],
+                  "text": "Urine micr.:leukocytes present"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "271350002",
+              "display": "Urine microscopy: leukocytes present (finding)",
+              "equivalence": "equivalent",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "Automap"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-09T19:19:39.716755+00:00"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/version",
+                          "valueString": "c504f599-6bf6-4865-8220-bb199e3d1809|12|mapper|Automap"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/predictionId",
+                          "valueString": "c504f599-6bf6-4865-8220-bb199e3d1809|8ec9ceacc4f4d7d8f2e08cdef6bb731b|mapper|Automap"
+                        }
+                      ]
+                    },
+                    "name": "algorithm",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "8ec9ceacc4f4d7d8f2e08cdef6bb731b"
+            }
+          ]
+        }
+      ],
+      "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ConditionCode",
+      "sourceVersion": "12",
+      "target": "http://snomed.info/sct",
+      "targetVersion": "2023-09-01"
+    }
+  ],
+  "id": "c504f599-6bf6-4865-8220-bb199e3d1809",
+  "meta": {
+    "lastUpdated": "2024-02-09T19:28:35.394999+00:00",
+    "profile": [
+      "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMap"
+    ]
+  },
+  "name": "Mdaconditiontosnomedct",
+  "purpose": "The use case of normalizing the data within the data lake using the legacy systems from data platform.",
+  "resourceType": "ConceptMap",
+  "sourceCanonical": "http://projectronin.io/fhir/ValueSet/e3d3aa32-d3d7-45be-bbec-624649728560",
+  "status": "active",
+  "targetCanonical": "http://projectronin.io/fhir/ValueSet/8b58bcea-82e3-4c09-a7c2-ce7d9e8dad4c",
+  "url": "http://projectronin.io/fhir/ConceptMap/c504f599-6bf6-4865-8220-bb199e3d1809",
+  "version": 12
+}

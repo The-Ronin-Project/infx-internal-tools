@@ -23,6 +23,7 @@ from app.errors import (
     BadRequestWithCode,
     NotFoundException,
 )
+from app.helpers.data_helper import normalized_source_codeable_concept
 from app.helpers.oci_helper import set_up_and_save_to_object_store, folder_path_for_oci
 from app.helpers.simplifier_helper import publish_to_simplifier
 import app.helpers.id_helper
@@ -118,6 +119,11 @@ class ConceptMap:
         most_recent_active_version (str): The UUID of the most recent active version of the concept map.
         object_storage_folder_name (str): "ConceptMaps" folder name for OCI storage, for easy retrieval by utilities.
         database_schema_version (int): The current output schema version for concept maps stored as JSON files in OCI.
+        NOTE: The description of next_schema_version below, documents a "dual output" transition convention, used
+            to manage gradual cross-team adoption of a new schema by outputting both schemas at once. Interops, INFX,
+            and DP agreed that, given closer coordination, this transition period could be waived for v4 to v5.
+            Dual output is easily disabled by setting database_schema_version and next_schema_version to the same value.
+            The next_schema_version attribute is retained, should the need arise again for a longer transition.
         next_schema_version (int): The pending next output schema version number. When database_schema_version and
             next_schema_version are equal (such as 3 and 3), serialize and publish functions create and store output
             in OCI for this one schema only (in this case /ConceptMaps/v3). When different (such as 3 and 4), serialize
@@ -126,8 +132,8 @@ class ConceptMap:
             To cut off the old schema output, set database_schema_version to the next_schema_version (in this case 4).
     """
 
-    database_schema_version = 4
-    next_schema_version = 4
+    database_schema_version = 5
+    next_schema_version = 5
     object_storage_folder_name = "ConceptMaps"
 
     def __init__(self, uuid, load_mappings_for_most_recent_active: bool = True):
@@ -245,7 +251,7 @@ class ConceptMap:
         if version_data is None:
             return None
         else:
-            return ConceptMapVersion(version_data.uuid, load_mappings=load_mappings)
+            return ConceptMapVersion(version_data.uuid, load_mappings=load_mappings, concept_map=self)
 
     @classmethod
     def concept_map_metadata(cls, cm_uuid):
@@ -313,9 +319,6 @@ class ConceptMap:
             {
                 "uuid": cm_uuid,
                 "name": name,
-                "title": title,
-                "publisher": publisher,
-                "author": author,
                 "description": cm_description,
                 "created_date": datetime.datetime.now(),
                 "experimental": experimental,
@@ -411,7 +414,7 @@ class ConceptMap:
                 if isinstance(concept.code, app.models.codes.FHIRCodeableConcept):
                     raise NotImplementedError("Indexing not implemented for codeable concepts to be used as target terminology in mapping")
                 document = {
-                    "_id": (str(concept_map_version_uuid) + str(concept.code)),
+                    "_id": concept.code_id,
                     "_index": "target_concepts_for_mapping",
                     "code": concept.code,
                     "display": concept.display,
@@ -430,8 +433,6 @@ class ConceptMap:
         return {
             "uuid": str(self.uuid),
             "name": self.name,
-            "title": self.title,
-            "publisher": self.publisher,
             "author": self.author,
             "description": self.description,
             "created_date": self.created_date,
@@ -451,7 +452,7 @@ class ConceptMap:
         previous_schema_version: int = None,
         new_schema_version: int = None,
     ):
-        # todo: does this need to be updated for CMv5?
+        # todo: update for CMv5
         """
         Compares concept map versions to assert which mappings were removed and added between versions. For clarity of
         results, verifies that previous and new are versions of the same map and previous is earlier or the same as new.
@@ -606,38 +607,62 @@ class ConceptMap:
 
     @staticmethod
     def collect_and_sort_mappings_for_diff(serialized):
-        # todo: does this need to be updated for CMv5?
+        group_sorted = ConceptMap.sort_concept_map_groups_and_elements(serialized.get("group"))
+        if group_sorted is not None:
+            serialized["group"] = group_sorted
+        return serialized
+
+    @staticmethod
+    def sort_concept_map_groups_and_elements(serialized_group: dict):
         """
         Collect mapping ids from the data - set up to sort diffs by source and target terminology and target code data
         @type serialized: object that the caller obtained from ConceptMapVersion.serialize() or get_data_from_oci()
         @rtype: dict() with mapping ids as keys
         """
-        mappings = dict()
-        for g in serialized.get("group"):
+        if serialized_group is None:
+            return None
+
+        groups = dict()
+        for g in serialized_group:
+            mappings = dict()
+
             # these 4 values uniquely identify the mapping group that contains these mapping ids
             source = g.get("source")
             sourceVersion = g.get("sourceVersion")
             target = g.get("target")
             targetVersion = g.get("targetVersion")
+
+            # the mapping_id in group.element.target.id is unique in this concept map
             for e in g.get("element"):
-                # the mapping id is unique in this concept map and across all concept maps
-                mapping_id = e.get("id")
-                mappings.update(
-                    {
-                        mapping_id: {
-                            "source": source,
-                            "sourceVersion": sourceVersion,
-                            "target": target,
-                            "targetVersion": targetVersion,
-                            "element": e,
-                        }
+                mapping_id = e["target"][0]["id"]
+                mappings.update({mapping_id: e})
+
+            # sort mappings (so the display of diffs has consistent order across versions)
+            sorted_mappings = dict()
+            for i in sorted(mappings):
+                sorted_mappings.update({i: mappings[i]})
+            element_list = list(sorted_mappings.values())
+
+            # add sorted mappings back into group
+            groups.update(
+                {
+                    f"{source}{sourceVersion}{target}{targetVersion}": {
+                        "source": source,
+                        "sourceVersion": sourceVersion,
+                        "target": target,
+                        "targetVersion": targetVersion,
+                        "element": element_list
                     }
-                )
-        # sort by unique and immutable mapping id - so the display of diffs has consistent order across versions
-        sorted_mappings = dict()
-        for i in sorted(mappings):
-            sorted_mappings.update({i: mappings[i]})
-        return sorted_mappings
+                }
+            )
+
+        # sort groups (so the display of diffs has consistent order across versions)
+        sorted_groups = dict()
+        for i in sorted(groups):
+            sorted_groups.update({i: groups[i]})
+        group_list = list(sorted_groups.values())
+
+        return group_list
 
 
 class ConceptMapVersion:
@@ -864,7 +889,7 @@ class ConceptMapVersion:
             else:
                 raise NotImplementedError("Only codeable concept and code schemas available for source concepts")
 
-            # Set up the depends on for the source concept
+            # Set up the depends on data
             depends_on = None
             if item.depends_on_property or item.depends_on_value_schema:
                 depends_on = app.models.codes.DependsOnData.setup_from_database_columns(
@@ -917,6 +942,7 @@ class ConceptMapVersion:
                 version=item.target_version,
                 code=item.target_concept_code,
                 display=item.target_concept_display,
+                depends_on=depends_on,
                 from_custom_terminology=False  # we currently only map to standards
             )
             relationship = MappingRelationship.load_by_code_from_cache(
@@ -1090,7 +1116,7 @@ class ConceptMapVersion:
                   their versions, and a list of elements representing individual source codes and
                   their associated target codes.
         """
-        # Identify all the source terminology / target terminology pairings in the mappings
+        # Identify code_id and all the source terminology / target terminology pairings in the mappings
         source_target_pairs_set = set()
         for source_code, mappings in self.mappings.items():
             source_uri = source_code.system.fhir_uri
@@ -1110,7 +1136,7 @@ class ConceptMapVersion:
             source_uri,
             source_version,
             target_uri,
-            target_version,
+            target_version
         ) in source_target_pairs_set:
             elements = []
             for source_code, mappings in self.mappings.items():
@@ -1128,50 +1154,50 @@ class ConceptMapVersion:
                     # Only proceed if there are filtered_mappings for the current target_uri and target_version
                     if filtered_mappings:
                         new_element = {
-                            "code": source_code.code,
+                            "_code": self.serialize_source_code(source_code.code),
                             "target": [],
                         }
 
                         # Iterate through each mapping for the source and serialize it
                         for mapping in filtered_mappings:
-                            comment = None
-                            if (
-                                mapping.target.code == "No map"
-                                and mapping.target.display == "No matching concept"
-                            ):
-                                # todo: INFX-5135 is fixing this serialization issue in a parallel PR
-                                # comment = mapping.reason_for_no_map
-                                pass  # todo: remove this placeholder after fix
                             target_serialized = {
+                                "id": mapping.mapping_id,  # the "mapping_id" introduced in RCDM ConceptMap v5
                                 "code": mapping.target.code,
                                 "display": mapping.target.display,
                                 "equivalence": mapping.relationship.code,
-                                "comment": comment,
+                                "extension": self.serialize_contributor_extension(mapping)
                             }
 
-                            # Add dependsOn data
-                            # todo: INFX-5135 is fixing this serialization issue in a parallel PR
-                            # if (
-                            #     source_code.depends_on_property
-                            #     or source_code.depends_on_value
-                            # ):
-                            #     depends_on_value = source_code.depends_on_value
-                            #     depends_on = {
-                            #         "property": source_code.depends_on_property,
-                            #         "value": depends_on_value,
-                            #     }
-                            #     if source_code.depends_on_system:
-                            #         depends_on["system"] = source_code.depends_on_system
-                            #     if source_code.depends_on_display:
-                            #         depends_on[
-                            #             "display"
-                            #         ] = source_code.depends_on_display
-                            #     target_serialized["dependsOn"] = [depends_on]
+                            # add dependsOn
+                            depends_on = mapping.target.depends_on
+                            if depends_on and depends_on.depends_on_value:
+                                target_serialized["dependsOn"] = self.serialize_depends_on(depends_on)
 
+                            # comment and equivalence
+                            if mapping.target.code == "No map" and mapping.target.display == "No matching concept":
+                                target_serialized["comment"] = source_code.reason_for_no_map
+                            if target_serialized["equivalence"] == "source-is-narrower-than-target":
+                                target_serialized["equivalence"] = "wider"
+                                target_serialized["comment"] = (
+                                    f"{target_serialized.get('comment')} source-is-narrower-than-target"
+                                    if target_serialized.get('comment')
+                                    else "source-is-narrower-than-target"
+                                )
+                            elif target_serialized["equivalence"] == "source-is-broader-than-target":
+                                target_serialized["equivalence"] = "narrower"
+                                target_serialized["comment"] = (
+                                    f"{target_serialized.get('comment')} source-is-broader-than-target"
+                                    if target_serialized.get('comment')
+                                    else "source-is-broader-than-target"
+                                )
+
+                            # add target to target list
                             new_element["target"].append(target_serialized)
 
+                        # add element to element list
                         elements.append(new_element)
 
+            # add high-level attributes that apply to all elements
             groups.append(
                 {
                     "source": source_uri,
@@ -1183,6 +1209,224 @@ class ConceptMapVersion:
             )
 
         return groups
+
+    def serialize_source_code(self, code: app.models.codes.Code):
+        if app.models.codes.RoninCodeSchemas.codeable_concept == code.code_schema:
+            valueKey = "valueCodeableConcept"
+            valueValue = normalized_source_codeable_concept(code.code_object)
+        else:
+            valueKey = "valueCode"
+            valueValue = code.code
+        serialized = {
+            "extension": [
+                {
+                    "id": code.custom_terminology_code_id,  # the "code_id" introduced in RCDM ConceptMap v5
+                    "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                    valueKey: valueValue
+                }
+            ]
+        }
+        return serialized
+
+    def serialize_depends_on(self, depends_on: app.models.codes.DependsOnData):
+        if app.models.codes.DependsOnSchemas.CODEABLE_CONCEPT in depends_on.depends_on_value_schema:
+            valueKey = "valueCodeableConcept"
+            valueValue = normalized_source_codeable_concept(depends_on.depends_on_value)
+        # todo: Ratio for Medication - "valueRatio"
+        else:  # str case: deprecated
+            valueKey = "valueString"
+            valueValue = depends_on.depends_on_value
+        serialized = {
+            "property": depends_on.depends_on_property,
+            "_value": {
+                "extension": [
+                    {
+                        "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                        valueKey: valueValue
+                    }
+                ]
+            },
+        }
+        if depends_on.depends_on_system:
+            serialized.update({"system": depends_on.depends_on_system})
+        if depends_on.depends_on_display:
+            serialized.update({"display": depends_on.depends_on_display})
+        return serialized
+
+    def serialize_contributor_extension(self, mapping):
+        contributor = []
+        if mapping.mapped_by is not None:
+            role = "mapper"
+            contributor.append(
+                self.serialize_contributor_member(
+                    type=ContentCreatorType.AUTHOR.value,
+                    type_url="http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                    contributor=mapping.mapped_by,
+                    name_url=f"http://projectronin.io/fhir/StructureDefinition/Extension/{role}",
+                    date_time=mapping.mapped_date_time,
+                    confidence_score=mapping.map_program_confidence_score,
+                    prediction_id=mapping.map_program_prediction_id
+                        if mapping.map_program_prediction_id is not None
+                        else self.generate_program_prediction_id(mapping.mapping_id, role, mapping.mapped_by),
+                    version=mapping.map_program_version
+                        if mapping.map_program_version is not None
+                        else self.generate_program_version(role, mapping.mapped_by),
+                )
+            )
+        if mapping.reviewed_by is not None:
+            role = "reviewer"
+            contributor.append(
+                self.serialize_contributor_member(
+                    type=ContentCreatorType.REVIEWER.value,
+                    type_url="http://projectronin.io/fhir/StructureDefinition/Extension/wasReviewedBy",
+                    contributor=mapping.reviewed_by,
+                    name_url=f"http://projectronin.io/fhir/StructureDefinition/Extension/{role}",
+                    date_time=mapping.reviewed_date_time
+                        if mapping.reviewed_date_time is not None
+                        else mapping.mapped_date_time,
+                    confidence_score=mapping.map_program_confidence_score,
+                    prediction_id=mapping.map_program_prediction_id
+                        if mapping.map_program_prediction_id is not None
+                        else self.generate_program_prediction_id(mapping.mapping_id, role, mapping.reviewed_by),
+                    version=mapping.map_program_version
+                        if mapping.map_program_version is not None
+                        else self.generate_program_version(role, mapping.reviewed_by),
+                )
+            )
+        contributor.append(self.serialize_needs_example())
+        return contributor
+
+    def generate_program_prediction_id(self, mapping_id: str, role: str, contributor):
+        """
+        For legacy program-generated mappings, generate a predictionId by combining these 4 values using a | separator:
+        ConceptMap.id, the mapping_id, role "mapper" vs. "reviewer", and first_last_name from project_management."user".
+        Example: predictionId 8f648ad7-1dfb-46e1-872f-598ece845624|3e7d998df0a55dc513b8b9e05e8d2564|mapper|NLP combines
+        the PSJ Conditions ConceptMap.id | the unique mapping_id for one mapping in that map | the role | user label NLP
+        """
+        return f"{self.concept_map.uuid}|{mapping_id}|{role}|{contributor.first_last_name}"
+
+
+    def generate_program_version(self, role: str, contributor):
+        """
+        For legacy program-generated mappings, generate a version by combining these 4 values using a | separator:
+        ConceptMap.id, ConceptMap.version, role "mapper" vs. "reviewer", first_last_name from project_management."user".
+        Example: predictionId 8f648ad7-1dfb-46e1-872f-598ece845624|5|mapper|NLP combines
+        the PSJ Conditions ConceptMap.id | ConceptMap.version | the role | user label NLP
+        """
+        return f"{self.concept_map.uuid}|{self.version}|{role}|{contributor.first_last_name}"
+
+    def serialize_contributor_member(
+        self,
+        type: str,
+        type_url: str,
+        contributor,
+        name_url: str,
+        date_time: datetime,
+        confidence_score: Optional[float] = None,
+        prediction_id: Optional[str] = None,
+        version: Optional[str] = None,
+    ):
+        if contributor.name == ContentCreatorName.HUMAN:
+            name = ContentCreatorName.HUMAN.value
+            name_display = "INFX Content Team"
+        else:
+            name = contributor.name.value
+            name_display = contributor.first_last_name
+            confidence_score = confidence_score
+            prediction_id = prediction_id
+            version = version
+        return self.serialize_contributor_member_detail(
+            type,
+            type_url,
+            name,
+            name_url,
+            name_display,
+            date_time.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00"),
+            confidence_score,
+            prediction_id,
+            version
+        )
+
+    def serialize_contributor_member_detail(
+            self,
+            type: str,
+            type_url: str,
+            name: str,
+            name_url: str,
+            name_display: str,
+            date_time_display: Optional[str] = None,
+            confidence_score: Optional[float] = None,
+            prediction_id: Optional[str] = None,
+            version: Optional[str] = None,
+    ):
+        """
+        Provide details about the reviewer or mapper in an extension list.
+        @raise ValueError if conditions violate model constraints in RCDM ConceptMap Contributor. Examples:
+            if the mapping predictionId or version is None when the mapping name is "algorithm" or "model",
+            or if the confidenceScore is None when the mapping name is "algorithm".
+        """
+        extension_list = [
+            {
+                "url": name_url,
+                "valueCode": name_display
+            },
+            {
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                "valueDateTime": date_time_display
+            }
+        ]
+        if name == ContentCreatorName.ALGORITHM.value:
+            if prediction_id is None or version is None:
+                raise ValueError(
+                    "Contributor name 'algorithm' Requires a predictionId and version"
+                )
+        elif name == ContentCreatorName.MODEL.value:
+            if confidence_score is None or prediction_id is None or version is None:
+                raise ValueError(
+                    "Contributor name 'model' requires a confidenceScore, predictionId, and version"
+                )
+        if name == ContentCreatorName.ALGORITHM.value or name == ContentCreatorName.MODEL.value:
+            extension_list.append(
+                {
+                    "url": "http://projectronin.io/fhir/StructureDefinition/Extension/version",
+                    "valueString": version
+                }
+            )
+            extension_list.append(
+                {
+                    "url": "http://projectronin.io/fhir/StructureDefinition/Extension/predictionId",
+                    "valueString": prediction_id
+                }
+            )
+        if name == ContentCreatorName.MODEL.value:
+            extension_list.append(
+                {
+                    "url": "http://projectronin.io/fhir/StructureDefinition/Extension/confidenceScore",
+                    "valueDecimal": confidence_score
+                }
+            )
+        contributor_member = {
+            "url": type_url,
+            "valueContributor": {
+                "type": type,
+                "name": name,
+                "_name": {
+                    "extension": extension_list
+                }
+            }
+        }
+        return contributor_member
+
+    def serialize_needs_example(self):
+        """
+        Returns an extension with a boolean indicator that example data is needed before the mapper can make a decision.
+        The value will be calculated from the current state of the mapping data and is not stored in a database column.
+        Reserved for future use. Currently, always True.
+        """
+        return {
+            "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+            "valueBoolean": True
+        }
 
     def get_use_case_description(self):
         conn = get_db()
@@ -1221,7 +1465,6 @@ class ConceptMapVersion:
                 "ConceptMapVersion.serialize",
                 f"ConceptMap schema version {schema_version} is not supported.",
             )
-        schema_v4_or_later = schema_version >= 4
 
         # Transform the name based on the title
         pattern = r"[A-Z]([A-Za-z0-9_]){0,254}"  # name transformer
@@ -1237,66 +1480,56 @@ class ConceptMapVersion:
                 + self.concept_map.name[index + 1 :]
             )
 
-        serial_mappings = self.serialize_mappings()
-        for mapped_object in serial_mappings:
-            for nested in mapped_object["element"]:
-                for item in nested["target"]:
-                    if item["equivalence"] == "source-is-narrower-than-target":
-                        item["equivalence"] = "wider"
-                        # [on_true] if [expression] else [on_false]
-                        item["comment"] = (
-                            f"{item['comment']} source-is-narrower-than-target"
-                            if item["comment"]
-                            else "source-is-narrower-than-target"
-                        )
-                    elif item["equivalence"] == "source-is-broader-than-target":
-                        item["equivalence"] = "narrower"
-                        item["comment"] = (
-                            f"{item['comment']} source-is-broader-than-target"
-                            if item["comment"]
-                            else "source-is-broader-than-target"
-                        )
-                    # Conditionally remove the comment field if it is None or empty
-                    if item["comment"] is None or item["comment"] == "":
-                        item.pop("comment", None)
         serialized = {
             "resourceType": "ConceptMap",
-            "title": self.concept_map.title,
             "id": str(self.concept_map.uuid),
-            "name": rcdm_name if self.concept_map.name is not None else None,
-            # "contact": [{"name": self.concept_map.mapped_by}],  # todo: we don't need serialization to work for migration
+            "name": rcdm_name if self.concept_map.name is not None else "",
             "url": f"http://projectronin.io/fhir/StructureDefinition/ConceptMap/{self.concept_map.uuid}",
-            "description": self.concept_map.description,
+            "description": self.concept_map.description or "",
             "purpose": self.get_use_case_description(),
             "experimental": self.concept_map.experimental,
             "status": self.status,
-            "date": self.published_date.strftime("%Y-%m-%d")
+            "date": self.published_date.strftime(
+                "%Y-%m-%dT%H:%M:%S.%f+00:00"
+            )
             if self.published_date
-            else None,
+            else datetime.datetime.now().strftime(
+                "%Y-%m-%dT%H:%M:%S.%f+00:00"
+            ),
             "version": self.version,
-            "group": serial_mappings,
+            "group": self.serialize_mappings(),
             "extension": [
                 {
                     "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema",
                     "valueString": f"{schema_version}.0.0",
                 }
             ]
-            # For now, we are intentionally leaving out created_dates as they are not part of the FHIR spec and
-            # are not required for our use cases at this time
         }
+        if self.description is not None and self.description != "":
+            serialized.update(
+                {
+                    "_description": {
+                        "extension": [
+                            {
+                                "url": "http://projectronin.io/fhir/StructureDefinition/extension/versionDescription",
+                                "valueMarkdown": self.description
+                            }
+                        ]
+                    }
+                }
+            )
         if self.published_date is not None:
             serialized["meta"] = {
                 "lastUpdated": self.published_date.strftime(
                     "%Y-%m-%dT%H:%M:%S.%f+00:00"
                 )
             }
-        if schema_v4_or_later:
-            serialized[
-                "sourceCanonical"
-            ] = f"http://projectronin.io/fhir/ValueSet/{self.concept_map.source_value_set_uuid}"
-            serialized[
-                "targetCanonical"
-            ] = f"http://projectronin.io/fhir/ValueSet/{self.concept_map.target_value_set_uuid}"
+        serialized[
+            "sourceCanonical"
+        ] = f"http://projectronin.io/fhir/ValueSet/{self.concept_map.source_value_set_uuid}"
+        serialized[
+            "targetCanonical"
+        ] = f"http://projectronin.io/fhir/ValueSet/{self.concept_map.target_value_set_uuid}"
 
         if include_internal_info:
             serialized["internalData"] = {
@@ -1305,6 +1538,8 @@ class ConceptMapVersion:
                 "target_value_set_uuid": self.concept_map.target_value_set_uuid,
                 "target_value_set_version_uuid": self.target_value_set_version_uuid,
             }
+
+        serialized["group"] = ConceptMap.sort_concept_map_groups_and_elements(serialized.get("group"))
         return serialized
 
     def prepare_for_oci(self, schema_version: int = ConceptMap.next_schema_version):
@@ -1315,18 +1550,15 @@ class ConceptMapVersion:
         @raise BadRequestWithCode if the schema_version is v4 or later and there are no mappings in the concept map.
         @return: (serialized, initial_path) provides the serialized object and the correct starting path in OCI storage.
         """
-        # Prepare according to the version
-        schema_v4_or_later = schema_version >= 4
-
         # Serialize
         serialized = self.serialize(
             include_internal_info=False, schema_version=schema_version
         )
 
-        if schema_v4_or_later and len(serialized.get("group")) == 0:
+        if len(serialized.get("group")) == 0:
             raise BadRequestWithCode(
                 "ConceptMap.prepareForOci.missingMappings",
-                f"ConceptMap schema version 4 or later will not output a ConceptMap with no mappings defined.",
+                "Will not output a ConceptMap with no mappings defined.",
             )
 
         # Prepare for OCI
@@ -1342,35 +1574,34 @@ class ConceptMapVersion:
             rcdm_id = re.sub("([a-z])([A-Z])", r"\1-\2", rcdm_id).lower()
             rcdm_url = "http://hl7.org/fhir/ConceptMap/"
 
-        if (
-            self.status == "pending"
-        ):  # has a required binding (translate pending to draft)
+        # has required binding: (draft, active, retired, unknown) so change pending to draft
+        if self.status == "pending":
             rcdm_status = "draft"
         else:
             rcdm_status = self.status
 
-        rcdm_date_now = datetime.datetime.now()
-        rcdm_date = rcdm_date_now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
         oci_serialized = {
             "id": rcdm_id,
-            "url": f"{rcdm_url}{rcdm_id}",
-            # specific to the overall value set; suffix matching the id field exactly
+            "url": f"{rcdm_url}{rcdm_id}",  # specific to the concept map; suffix matching the id field exactly
             "status": rcdm_status,
-            # has a required binding (translate pending to draft)  (draft, active, retired, unknown)
-            "date": rcdm_date,  # the date the status was set to active
-            "meta": {
-                "profile": [
-                    "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMap"
-                ]
-            },
         }
 
         serialized.update(oci_serialized)  # Merge oci_serialized into serialized
-        # todo: INFX-5135 is fixing this serialization issue in a parallel PR
-        # serialized.pop("contact")
-        # serialized.pop("publisher")
-        # serialized.pop("title")
+        if serialized.get("meta") is not None:  # meta is None if we are serializing not-yet-published ConceptMap data
+            serialized["meta"].update(
+                {
+                    "profile": [
+                        "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMap"
+                    ]
+                }
+            )
+        else:
+            serialized["meta"] = {
+                "profile": [
+                    "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMap"
+                ]
+            }
+
         initial_path = f"{ConceptMap.object_storage_folder_name}/v{schema_version}"
 
         return serialized, initial_path
@@ -1474,15 +1705,6 @@ class ConceptMapVersion:
                     :50
                 ]  # Limit the 'element' list to the top 50 entries
 
-                for element in group["element"]:
-                    if "target" in element:
-                        # todo: INFX-5135 is fixing this serialization issue in a parallel PR - RCDM removed these id attributes
-                        # element["target"].sort(
-                        #     key=itemgetter("id", "code")
-                        # )  # Sort list of dicts by 'id' and 'code'
-                        element["target"] = list(
-                            target for target, _ in itertools.groupby(element["target"])
-                        )  # Remove duplicates
         publish_to_simplifier(resource_type, resource_id, concept_map_to_json)
 
     def resolve_error_service_issues(self):
@@ -1654,23 +1876,40 @@ class MappingRelationship:
 
 
 class ContentCreatorType(Enum):
+    """
+    FHIR Contributor.type values for a ConceptMap: author|reviewer
+    """
+    AUTHOR = "author"
+    REVIEWER = "reviewer"
+
+
+class ContentCreatorName(Enum):
+    """
+    FHIR Contributor.name values for a ConceptMap: human|algorithm|model
+    """
     HUMAN = "human"
     MODEL = "model"
     ALGORITHM = "algorithm"
 
 
 @dataclass
-class ContentCreator:  # Unless we have a better name for mapper/reviewer that can be human or machine
+class ContentCreator:
+    """
+    FHIR Contributor for a ConceptMap. RCDM defines an extension on Contributor called valueContributor.
+    """
     uuid: UUID
     first_last_name: str
-    type: Optional[ContentCreatorType] = ContentCreatorType.HUMAN
+    type: Optional[ContentCreatorType] = ContentCreatorType.AUTHOR
+    name: Optional[ContentCreatorName] = ContentCreatorName.HUMAN
 
     def __post_init__(self):
-        # todo: do this better, like load it from the table
-        if self.uuid == UUID('8990714d-8eeb-4acf-a5b7-abf92007a53a'):  # Automapping UUID
-            self.type = ContentCreatorType.ALGORITHM
-        elif self.uuid == UUID('8abf5747-121b-48e0-9edf-dbd820d397fb'):  # NLP UUID
-            self.type = ContentCreatorType.MODEL
+        """
+        UUID values from the project_management."user" table indicating "algorithm" or "model" for ContentCreatorName
+        """
+        if self.uuid == UUID('8990714d-8eeb-4acf-a5b7-abf92007a53a'):  # UUID where first_last_name is "Automap"
+            self.name = ContentCreatorName.ALGORITHM
+        elif self.uuid == UUID('8abf5747-121b-48e0-9edf-dbd820d397fb'):  # UUID where first_last_name is "NLP"
+            self.name = ContentCreatorName.MODEL
 
     @classmethod
     def load_by_full_name(cls, full_name):
@@ -1884,6 +2123,7 @@ class SourceConcept:
     def serialize(self) -> dict:
         serialized_data = {
             "uuid": str(self.uuid),
+            "id": self.code.code_id,
             "code": self.code.serialize(),
             "display": self.display,
             "system": self.system.serialize(),
@@ -1948,7 +2188,7 @@ class Mapping:
         deduplication_hash = app.helpers.id_helper.generate_mapping_id_with_source_code_id(
             source_code_id=self.source.code.code_id,
             relationship_code=self.relationship.code,
-            target_concept_code=self.target.code,  # Don't need to handle codeable concepts so long as we don't map to them
+            target_concept_code=self.target.code,  # Don't need to handle codeable concepts, since we don't map to them
             target_concept_display=self.target.display,
             target_concept_system=self.target.terminology_version.fhir_uri
         )

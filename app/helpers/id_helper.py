@@ -161,6 +161,10 @@ def prepare_code_string_for_code_id(code_string: str) -> str:
         if code_string.isnumeric():
            return f"{code_string}"
 
+        # a simple code
+        if not app.helpers.data_helper.is_json_format(code_string):
+            return code_string
+
         # an object value of a known schema, such as FHIR CodeableConcept
         json_object = app.helpers.data_helper.load_json_string(code_string)
 

@@ -5,7 +5,6 @@ from app.database import get_db
 import app.concept_maps.models
 import app.models.codes
 from app.enum.concept_maps_for_content import ConceptMapsForContent
-from app.value_sets.views import get_most_recent_version
 
 
 class ContentCreatorTests(unittest.TestCase):

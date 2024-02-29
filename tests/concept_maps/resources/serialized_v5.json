@@ -1,0 +1,704 @@
+{
+  "_description": {
+    "extension": [
+      {
+        "url": "http://projectronin.io/fhir/StructureDefinition/extension/versionDescription",
+        "valueMarkdown": "New version created for loading outstanding codes"
+      }
+    ]
+  },
+  "date": "2024-02-21T22:45:27.010444+00:00",
+  "description": "MDAOC observations, Code and componentCode, normalized to standard and/or custom terminologies",
+  "experimental": false,
+  "extension": [
+    {
+      "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema",
+      "valueString": "5.0.0"
+    }
+  ],
+  "group": [
+    {
+      "element": [
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "d6b3332431534330428987f9dd310b7c",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "9749",
+                      "system": "urn:oid:1.2.840.114350.1.13.412.2.7.5.737384.134"
+                    }
+                  ],
+                  "text": "Disclaimer"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "62364-5",
+              "display": "Test performance information in Specimen Narrative",
+              "equivalence": "equivalent",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-13T05:07:13.235040+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "685ffa8ac92ae4643ca43b41f1dd6971"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "df4018d93796bbbe50dccdc79ee737f2",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "text": "Line 1"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "11433-0",
+              "comment": "source-is-narrower-than-target",
+              "dependsOn": {
+                "_value": {
+                  "extension": [
+                    {
+                      "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "code": "EPIC#31000060855",
+                            "display": "testes",
+                            "system": "urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"
+                          }
+                        ],
+                        "text": "FINDINGS - PHYSICAL EXAM - ANATOMY AT BIRTH - TESTES"
+                      }
+                    }
+                  ]
+                },
+                "property": "Observation.code"
+              },
+              "display": "Physical findings of Male genitalia",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-13T05:07:18.484479+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "906a4c31339b57d596eab20233b6d026"
+            }
+          ]
+        }
+      ],
+      "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
+      "sourceVersion": "14",
+      "target": "http://loinc.org",
+      "targetVersion": "2.76"
+    },
+    {
+      "element": [
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "e3a1211ef9a23e67c3448f83dfce4d49",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "text": "Line 4"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "No map",
+              "comment": "Not in target code system source-is-narrower-than-target",
+              "dependsOn": {
+                "_value": {
+                  "extension": [
+                    {
+                      "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "code": "EPIC#31000073819",
+                            "display": "sites of metastasis",
+                            "system": "urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"
+                          }
+                        ],
+                        "text": "FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - PROGNOSTIC INDICATORS - SITES OF METASTASIS"
+                      }
+                    }
+                  ]
+                },
+                "property": "Observation.code"
+              },
+              "display": "No matching concept",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-15T15:32:18.869891+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasReviewedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/reviewer",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-15T15:32:18.869891+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "reviewer"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "3031e49ac51f160616bf3a661fee6db5"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "00ff3154e1780306f910b7f2b8e345dc",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "text": "Line 4"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "No map",
+              "comment": "Not in target code system source-is-narrower-than-target",
+              "dependsOn": {
+                "_value": {
+                  "extension": [
+                    {
+                      "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "code": "EPIC#42753",
+                            "display": "location of involved lymph nodes",
+                            "system": "urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"
+                          },
+                          {
+                            "code": "SNOMED#397440000",
+                            "system": "http://snomed.info/sct"
+                          }
+                        ],
+                        "text": "FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - PROGNOSTIC INDICATORS - LOCATION OF INVOLVED LYMPH NODES"
+                      }
+                    }
+                  ]
+                },
+                "property": "Observation.code"
+              },
+              "display": "No matching concept",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-15T15:31:30.084343+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasReviewedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/reviewer",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-15T15:31:30.084343+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "reviewer"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "773fe88abdc51449fa7070b6f9b17f1b"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "8e29f68b4b1945c1252855ee759a283a",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "text": "Line 3"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "No map",
+              "comment": "Not in target code system source-is-narrower-than-target",
+              "dependsOn": {
+                "_value": {
+                  "extension": [
+                    {
+                      "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "code": "EPIC#31000078920",
+                            "display": "clinical staging modalities",
+                            "system": "urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"
+                          }
+                        ],
+                        "text": "FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - CLINICAL STAGING MODALITIES"
+                      }
+                    }
+                  ]
+                },
+                "property": "Observation.code"
+              },
+              "display": "No matching concept",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-15T15:28:53.895844+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasReviewedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/reviewer",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-15T15:28:53.895844+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "reviewer"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "ad0f0b7a9638e4a23faa6a874abc7dd2"
+            }
+          ]
+        }
+      ],
+      "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
+      "sourceVersion": "14",
+      "target": "http://projectronin.io/fhir/CodeSystem/agnostic/nomap",
+      "targetVersion": "1.0"
+    },
+    {
+      "element": [
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "f0cecfb90a20bfad9fbcdcac97f38d88",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "text": "Line 1"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "761869008",
+              "comment": "source-is-broader-than-target",
+              "dependsOn": {
+                "_value": {
+                  "extension": [
+                    {
+                      "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "code": "EPIC#31000073818",
+                            "display": "Karnofsky performance status",
+                            "system": "urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"
+                          }
+                        ],
+                        "text": "FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - PROGNOSTIC INDICATORS - KARNOFSKY PERFORMANCE STATUS"
+                      }
+                    }
+                  ]
+                },
+                "property": "Observation.code"
+              },
+              "display": "Karnofsky Performance Status score (observable entity)",
+              "equivalence": "narrower",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-13T05:07:23.452711+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "21348901e5d40a3a6115c3f7dcbaf7f8"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "4ad5da97a0b93b2f7c736e2e6a9ee32f",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "text": "Line 1"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "1279897003",
+              "comment": "source-is-narrower-than-target",
+              "dependsOn": {
+                "_value": {
+                  "extension": [
+                    {
+                      "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "code": "SNOMED#126817006",
+                            "system": "http://snomed.info/sct"
+                          },
+                          {
+                            "code": "EPIC#49611",
+                            "display": "tumor location in esophagus",
+                            "system": "urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"
+                          }
+                        ],
+                        "text": "FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - PROGNOSTIC INDICATORS - TUMOR LOCATION IN ESOPHAGUS"
+                      }
+                    }
+                  ]
+                },
+                "property": "Observation.code"
+              },
+              "display": "Anatomic location of primary malignant gastrointestinal stromal tumor (observable entity)",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-13T05:07:17.808381+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "653d0d0276b16a26b95ecee739d3c0a0"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "20f9e090a112a239c9bf40bf815f3bf5",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "EPIC#42519",
+                      "display": "total nodes examined",
+                      "system": "urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"
+                    },
+                    {
+                      "code": "SNOMED#444025001",
+                      "system": "http://snomed.info/sct"
+                    }
+                  ],
+                  "text": "FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - TOTAL NODES EXAMINED"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "444025001",
+              "comment": "source-is-broader-than-target",
+              "display": "Number of lymph nodes examined by microscopy in excised specimen (observable entity)",
+              "equivalence": "narrower",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-13T05:07:12.603999+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "87cb279d3af095ca1ba5eca47180daf8"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "9d39eb7fdc475b0378229b9bb82f2f9d",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "text": "Line 1"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "371513001",
+              "comment": "source-is-narrower-than-target",
+              "dependsOn": {
+                "_value": {
+                  "extension": [
+                    {
+                      "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "code": "EPIC#42900",
+                            "display": "perineural invasion (PNI)",
+                            "system": "urn:oid:1.2.840.114350.1.13.412.2.7.2.727688"
+                          }
+                        ],
+                        "text": "FINDINGS - PHYSICAL EXAM - ONCOLOGY - STAGING - PROGNOSTIC INDICATORS - PERINEURAL INVASION (PNI)"
+                      }
+                    }
+                  ]
+                },
+                "property": "Observation.code"
+              },
+              "display": "Presence of direct invasion by primary malignant neoplasm to nerve (observable entity)",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2024-02-13T05:07:13.027685+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "eaeca8b800a747a675dbb0643de7d8b9"
+            }
+          ]
+        }
+      ],
+      "source": "http://projectronin.io/fhir/CodeSystem/mdaoc/ObservationCodeAndComponentCode",
+      "sourceVersion": "14",
+      "target": "http://snomed.info/sct",
+      "targetVersion": "2023-09-01"
+    }
+  ],
+  "id": "615434d9-7a4f-456d-affe-4c2d87845a37",
+  "meta": {
+    "lastUpdated": "2024-02-21T22:45:27.010444+00:00",
+    "profile": [
+      "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMap"
+    ]
+  },
+  "name": "Mdaobservationtoroninobservation",
+  "purpose": "The use case of normalizing the data within the data lake using the legacy systems from data platform.",
+  "resourceType": "ConceptMap",
+  "sourceCanonical": "http://projectronin.io/fhir/ValueSet/59dba9ed-7d74-472b-977d-ecc457597baa",
+  "status": "active",
+  "targetCanonical": "http://projectronin.io/fhir/ValueSet/c86bf3d2-b6ba-4f05-83dd-f08c48dcca8a",
+  "url": "http://projectronin.io/fhir/ConceptMap/615434d9-7a4f-456d-affe-4c2d87845a37",
+  "version": 23
+}

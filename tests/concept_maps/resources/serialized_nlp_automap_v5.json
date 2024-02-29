@@ -1,0 +1,274 @@
+{
+  "_description": {
+    "extension": [
+      {
+        "url": "http://projectronin.io/fhir/StructureDefinition/extension/versionDescription",
+        "valueMarkdown": "New version to fix formatting errors"
+      }
+    ]
+  },
+  "description": "PSJ condition, Code, for patient problems and health concerns normalized to SNOMED CT",
+  "experimental": false,
+  "extension": [
+    {
+      "url": "http://projectronin.io/fhir/StructureDefinition/Extension/ronin-conceptMapSchema",
+      "valueString": "5.0.0"
+    }
+  ],
+  "group": [
+    {
+      "element": [
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "c76cb2f64dded0191ed255369119557e",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "H49.11",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    },
+                    {
+                      "code": "20610004",
+                      "system": "http://snomed.info/sct"
+                    }
+                  ],
+                  "text": "Fourth cranial nerve palsy on examination, right"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "20610004",
+              "comment": "source-is-narrower-than-target",
+              "display": "Fourth nerve palsy (disorder)",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "NLP"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2023-12-15T21:50:45.336600+00:00"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/version",
+                          "valueString": "4"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/predictionId",
+                          "valueString": "8f648ad7-1dfb-46e1-872f-598ece845624|00100920a0fed43b60d80f2dc054a87f|mapper|NLP"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/confidenceScore",
+                          "valueDecimal": "0.9999999"
+                        }
+                      ]
+                    },
+                    "name": "model",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasReviewedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/reviewer",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2023-12-15T21:50:45.336600+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "reviewer"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "00100920a0fed43b60d80f2dc054a87f"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "d8dde30c86515edc02bc5b4aea2730c9",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "E28.319",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    },
+                    {
+                      "code": "373717006",
+                      "system": "http://snomed.info/sct"
+                    }
+                  ],
+                  "text": "Early menopause occurring in patient age younger than 45 years"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "373717006",
+              "comment": "source-is-narrower-than-target",
+              "display": "Premature menopause (finding)",
+              "equivalence": "wider",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "NLP"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2023-12-15T21:50:45.336600+00:00"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/version",
+                          "valueString": "4"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/predictionId",
+                          "valueString": "8f648ad7-1dfb-46e1-872f-598ece845624|002dafcc9031254ee901ab8b6a0c5ae8|mapper|NLP"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/confidenceScore",
+                          "valueDecimal": "1.0"
+                        }
+                      ]
+                    },
+                    "name": "model",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasReviewedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/reviewer",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2023-12-15T21:50:45.336600+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "reviewer"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "002dafcc9031254ee901ab8b6a0c5ae8"
+            }
+          ]
+        },
+        {
+          "_code": {
+            "extension": [
+              {
+                "id": "d195e0b0d8ae2af6717a380e110d72cf",
+                "url": "http://projectronin.io/fhir/StructureDefinition/Extension/canonicalSourceData",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "I48.91",
+                      "system": "http://hl7.org/fhir/sid/icd-10-cm"
+                    },
+                    {
+                      "code": "49436004",
+                      "system": "http://snomed.info/sct"
+                    }
+                  ],
+                  "text": "Atrial fibrillation (HCC)"
+                }
+              }
+            ]
+          },
+          "target": [
+            {
+              "code": "49436004",
+              "display": "Atrial fibrillation (disorder)",
+              "equivalence": "equivalent",
+              "extension": [
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/wasMappedBy",
+                  "valueContributor": {
+                    "_name": {
+                      "extension": [
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/mapper",
+                          "valueCode": "INFX Content Team"
+                        },
+                        {
+                          "url": "http://projectronin.io/fhir/StructureDefinition/Extension/date",
+                          "valueDateTime": "2023-11-16T06:19:31.225323+00:00"
+                        }
+                      ]
+                    },
+                    "name": "human",
+                    "type": "author"
+                  }
+                },
+                {
+                  "url": "http://projectronin.io/fhir/StructureDefinition/Extension/needsExampleData",
+                  "valueBoolean": true
+                }
+              ],
+              "id": "003c0230dd6d61042296849f9d6eabb8"
+            }
+          ]
+        }
+      ],
+      "source": "http://projectronin.io/fhir/CodeSytem/v7r1eczk/ConditionCode",
+      "sourceVersion": "1.0",
+      "target": "http://snomed.info/sct",
+      "targetVersion": "2023-09-01"
+    }
+  ],
+  "id": "8f648ad7-1dfb-46e1-872f-598ece845624",
+  "meta": {
+    "profile": [
+      "http://projectronin.io/fhir/StructureDefinition/ronin-conceptMap"
+    ]
+  },
+  "name": "Psjconditiontosnomedct",
+  "purpose": "FHIR Interops Concept Map",
+  "resourceType": "ConceptMap",
+  "sourceCanonical": "http://projectronin.io/fhir/ValueSet/f4c99ac7-3992-4803-a351-446b49fea31f",
+  "status": "draft",
+  "targetCanonical": "http://projectronin.io/fhir/ValueSet/8b58bcea-82e3-4c09-a7c2-ce7d9e8dad4c",
+  "url": "http://projectronin.io/fhir/ConceptMap/8f648ad7-1dfb-46e1-872f-598ece845624",
+  "version": 5
+}
